@@ -545,10 +545,12 @@ async function poll(){
     const fh = await dirHandle.getFileHandle(DATA_FILE, { create: true });
     const f = await fh.getFile();
     if (f.lastModified > lastMtime){
-      let remote = null;
-      try{ remote = JSON.parse(await f.text()); }catch(e){ /* escritura a medias: reintentar en el siguiente ciclo */ }
-      if (remote && remote.updatedAt === state.updatedAt){
-        // mismo contenido (OneDrive tocó el mtime en un roundtrip): no es conflicto
+      let remote = null, text = "";
+      try{ text = await f.text(); remote = JSON.parse(text); }catch(e){ /* escritura a medias: reintentar en el siguiente ciclo */ }
+      if (remote && text === JSON.stringify(state, null, 2)){
+        // contenido idéntico byte a byte (p. ej. OneDrive tocó el mtime): no es conflicto.
+        // Se compara el TEXTO, no updatedAt: una edición externa (un agente que no
+        // actualice updatedAt) se detecta siempre.
         lastMtime = f.lastModified;
       } else if (remote && !dirty){
         state = remote;
@@ -1267,7 +1269,12 @@ async function imgFromBlob(blob){
 }
 function bodyImg(w, el){
   const set = async blob => {
-    try{ w.data.img = await imgFromBlob(blob); paint(); markDirty(); }
+    try{
+      w.data.img = await imgFromBlob(blob); paint(); markDirty();
+      // aviso de tamaño agregado: cada autosave reescribe datos.json completo
+      const total = JSON.stringify(state).length;
+      if (total > 5000000) toast(`Tus datos ocupan ya ${(total / 1048576).toFixed(1)} MB (las imágenes pesan): la sincronización puede ir lenta. Considera quitar imágenes antiguas.`, true);
+    }
     catch(e){ toast(e.message || "No se pudo procesar la imagen", true); }
   };
   const paint = () => {

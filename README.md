@@ -61,10 +61,12 @@ python -m http.server 8765   # abrir http://localhost:8765
 
 El código es público pero no contiene ningún dato; los datos siempre quedan en tu navegador o en tu carpeta.
 
+**Tests:** `node tests/test.js` (sin dependencias).
+
 ## Integraciones
 
 - **Bandeja (`inbox.txt`)**: cualquier línea escrita por otro programa (una macro de teclado, un agente, el móvil vía OneDrive) aparece en la página para convertirla en nota/tarea/clip.
-- **Agentes**: `datos.json` es JSON legible/editable; la página recarga cambios externos en ≤4 s.
+- **Agentes**: `datos.json` es JSON legible/editable; la página detecta cambios externos por contenido (aunque no cambie `updatedAt`) y los recarga en ≤4 s.
 - **`?add=texto`**: añade a la bandeja (bookmarklets, accesos directos).
 - **Sincronización y conflictos**: guardado automático, vigilancia del archivo cada 4 s, barra de conflicto si dos equipos editan a la vez (gana quien tú decidas).
 

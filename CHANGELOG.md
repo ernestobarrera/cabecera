@@ -9,7 +9,9 @@
 - **Títulos de ventana editables** (doble clic en la barra de título; viajan en los packs como `t`).
 - **Packs en modo añadir**: casilla para sumar un pack al escritorio sin sustituirlo.
 - **Guía integrada** (qué es, cómo funciona por dentro, seguridad, atajos) y **píldora informativa** en la barra (semana ISO y día del año, tareas pendientes, consejos de uso).
-- `normalizePack` ampliada a los tipos nuevos, con tests automatizados.
+- **Detección de cambios por contenido**: la vigilancia compara el texto del archivo, no solo marcas de tiempo — una edición externa de `datos.json` (por ejemplo, de un agente) se detecta siempre, aunque no actualice `updatedAt`.
+- **Aviso de tamaño**: si los datos superan 5 MB (imágenes), la página avisa de que la sincronización puede ir lenta.
+- `normalizePack` ampliada a los tipos nuevos. **Suite de tests versionada** en `tests/test.js` (sin dependencias: sintaxis, XSS del Markdown, saneado de packs maliciosos y validación de los packs incluidos).
 
 ## [0.3.0] - 2026-07-04
 
