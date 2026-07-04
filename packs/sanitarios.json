@@ -1,0 +1,30 @@
+{
+  "cabeceraPack": 1,
+  "name": "Sanitario",
+  "description": "Escritorio de partida para profesionales sanitarios: consulta rápida, evidencia y herramientas.",
+  "settings": { "wallpaper": { "type": "preset", "value": 5 } },
+  "widgets": [
+    { "type": "links", "x": 40, "y": 40, "w": 300, "h": 320, "data": { "groups": [ { "name": "Consulta rápida", "links": [
+      { "t": "CIMA (AEMPS)", "u": "https://cima.aemps.es/" },
+      { "t": "Preevid", "u": "https://www.murciasalud.es/preevid" },
+      { "t": "GuíaSalud", "u": "https://portal.guiasalud.es/" },
+      { "t": "Fisterra", "u": "https://www.fisterra.com/" },
+      { "t": "Notas de seguridad AEMPS", "u": "https://www.aemps.gob.es/informa/notasinformativas/" }
+    ]}]}},
+    { "type": "links", "x": 40, "y": 380, "w": 300, "h": 250, "data": { "groups": [ { "name": "Evidencia", "links": [
+      { "t": "PubMed", "u": "https://pubmed.ncbi.nlm.nih.gov/" },
+      { "t": "Cochrane Library", "u": "https://www.cochranelibrary.com/" },
+      { "t": "Trip Database", "u": "https://www.tripdatabase.com/" },
+      { "t": "NICE", "u": "https://www.nice.org.uk/" }
+    ]}]}},
+    { "type": "links", "x": 360, "y": 40, "w": 290, "h": 230, "data": { "groups": [ { "name": "Herramientas", "links": [
+      { "t": "MedCheck", "u": "https://ernestobarrera.github.io/medcheck.html" },
+      { "t": "Herramientas clínicas (EB)", "u": "https://ernestobarrera.github.io/" },
+      { "t": "MDCalc", "u": "https://www.mdcalc.com/" }
+    ]}]}},
+    { "type": "notes", "x": 360, "y": 290, "w": 290, "h": 220, "data": { "text": "" } },
+    { "type": "todo", "x": 670, "y": 290, "w": 290, "h": 240, "data": { "items": [] } },
+    { "type": "clock", "x": 670, "y": 40, "w": 240, "h": 150, "data": {} },
+    { "type": "qr", "x": 930, "y": 40, "w": 250, "h": 330, "data": { "text": "" } }
+  ]
+}

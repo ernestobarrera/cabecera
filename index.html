@@ -1,0 +1,1291 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cabecera</title>
+<style>
+:root{
+  --glass: rgba(22,26,34,.72);
+  --glass-soft: rgba(22,26,34,.55);
+  --border: rgba(255,255,255,.13);
+  --border-soft: rgba(255,255,255,.08);
+  --text: #e8ecf3;
+  --text-dim: #9aa4b5;
+  --accent: #5aa9f7;
+  --accent-soft: rgba(90,169,247,.18);
+  --danger: #f36c6c;
+  --ok: #5fd08a;
+  --warn: #f0c25e;
+  --radius: 14px;
+  --shadow: 0 12px 40px rgba(0,0,0,.45);
+  --font: "Segoe UI", system-ui, -apple-system, sans-serif;
+}
+*{box-sizing:border-box; margin:0; padding:0}
+html,body{height:100%; overflow:hidden}
+body{font-family:var(--font); color:var(--text); background:#10131a}
+
+/* ---------- fondo ---------- */
+#wallpaper{position:fixed; inset:0; z-index:0; background:linear-gradient(135deg,#1b2735 0%,#090a0f 100%); background-size:cover; background-position:center; transition:background .4s}
+#wallpaper::after{content:""; position:absolute; inset:0; background:rgba(0,0,0,.18)}
+
+/* ---------- escritorio ---------- */
+#desktop{position:fixed; inset:0 0 46px 0; z-index:1; overflow:hidden}
+
+/* ---------- ventanas ---------- */
+.win{position:absolute; display:flex; flex-direction:column; min-width:220px; min-height:140px;
+  background:var(--glass); backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px);
+  border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow); overflow:hidden}
+.win.active{border-color:rgba(255,255,255,.22)}
+.win-title{display:flex; align-items:center; gap:8px; padding:8px 10px; cursor:grab; user-select:none;
+  background:rgba(255,255,255,.04); border-bottom:1px solid var(--border-soft); font-size:13px; font-weight:600}
+.win-title:active{cursor:grabbing}
+.win-title .ico{font-size:14px}
+.win-title .sp{flex:1}
+.win-btn{border:none; background:transparent; color:var(--text-dim); font-size:13px; width:24px; height:24px;
+  border-radius:6px; cursor:pointer; line-height:1}
+.win-btn:hover{background:rgba(255,255,255,.1); color:var(--text)}
+.win-btn.close:hover{background:var(--danger); color:#fff}
+.win-body{flex:1; overflow:auto; padding:10px; font-size:13.5px}
+.win-resize{position:absolute; right:0; bottom:0; width:16px; height:16px; cursor:nwse-resize; opacity:.5}
+.win-resize::after{content:""; position:absolute; right:4px; bottom:4px; width:8px; height:8px;
+  border-right:2px solid var(--text-dim); border-bottom:2px solid var(--text-dim); border-radius:2px}
+
+/* ---------- barra de tareas ---------- */
+#taskbar{position:fixed; left:0; right:0; bottom:0; height:46px; z-index:500; display:flex; align-items:center; gap:8px;
+  padding:0 12px; background:var(--glass); backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px);
+  border-top:1px solid var(--border-soft)}
+#btn-inicio{display:flex; align-items:center; gap:8px; padding:6px 14px; border:1px solid var(--border-soft);
+  background:rgba(255,255,255,.05); color:var(--text); border-radius:10px; cursor:pointer; font-size:13.5px; font-weight:600; font-family:var(--font)}
+#btn-inicio:hover{background:var(--accent-soft); border-color:var(--accent)}
+#tb-spacer{flex:1}
+.tb-item{display:flex; align-items:center; gap:6px; padding:5px 10px; border-radius:8px; font-size:12.5px; color:var(--text-dim); cursor:pointer; border:1px solid transparent}
+.tb-item:hover{background:rgba(255,255,255,.07); color:var(--text)}
+#tb-inbox{display:none}
+#tb-inbox.has{display:flex; color:var(--warn); border-color:rgba(240,194,94,.35); background:rgba(240,194,94,.08)}
+#tb-sync .dot{width:9px; height:9px; border-radius:50%; background:#777}
+#tb-sync .dot.ok{background:var(--ok)} #tb-sync .dot.saving{background:var(--warn)}
+#tb-sync .dot.err{background:var(--danger)} #tb-sync .dot.local{background:#8a8f9c}
+#tb-clock{text-align:right; line-height:1.15; cursor:default}
+#tb-clock .h{font-size:14px; font-weight:600; color:var(--text)}
+#tb-clock .d{font-size:10.5px; color:var(--text-dim); text-transform:capitalize}
+
+/* ---------- menú inicio ---------- */
+#menu{position:fixed; left:12px; bottom:54px; width:420px; max-height:70vh; z-index:600; display:none; flex-direction:column;
+  background:var(--glass); backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px);
+  border:1px solid var(--border); border-radius:16px; box-shadow:var(--shadow); overflow:hidden}
+#menu.open{display:flex}
+#menu-search{margin:12px; padding:9px 12px; border-radius:10px; border:1px solid var(--border-soft);
+  background:rgba(0,0,0,.25); color:var(--text); font-size:14px; font-family:var(--font); outline:none}
+#menu-search:focus{border-color:var(--accent)}
+#menu-results{overflow:auto; padding:0 12px 6px; display:none}
+#menu-results.has{display:block}
+.res-item{display:flex; align-items:center; gap:10px; padding:7px 9px; border-radius:9px; cursor:pointer; font-size:13.5px}
+.res-item:hover,.res-item.sel{background:var(--accent-soft)}
+.res-item .u{color:var(--text-dim); font-size:11.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1; text-align:right}
+#menu-widgets{padding:6px 12px 12px}
+#menu-widgets h4, #menu-actions h4{font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--text-dim); margin:8px 2px 8px}
+.wgrid{display:grid; grid-template-columns:repeat(3,1fr); gap:8px}
+.wcard{display:flex; flex-direction:column; align-items:center; gap:6px; padding:12px 6px; border-radius:12px;
+  border:1px solid var(--border-soft); background:rgba(255,255,255,.03); cursor:pointer; font-size:12.5px; color:var(--text)}
+.wcard:hover{background:var(--accent-soft); border-color:var(--accent)}
+.wcard .ico{font-size:22px}
+#menu-actions{padding:0 12px 14px; display:flex; gap:8px; flex-wrap:wrap}
+.act{padding:7px 11px; border-radius:9px; border:1px solid var(--border-soft); background:rgba(255,255,255,.04);
+  color:var(--text-dim); cursor:pointer; font-size:12.5px; font-family:var(--font)}
+.act:hover{color:var(--text); background:rgba(255,255,255,.09)}
+
+/* ---------- overlays / modales ---------- */
+.overlay{position:fixed; inset:0; z-index:900; display:none; align-items:center; justify-content:center; background:rgba(5,7,12,.72); backdrop-filter:blur(6px)}
+.overlay.open{display:flex}
+.modal{width:min(560px, 92vw); max-height:86vh; overflow:auto; background:var(--glass); border:1px solid var(--border);
+  border-radius:18px; box-shadow:var(--shadow); padding:26px}
+.modal h2{font-size:19px; margin-bottom:6px}
+.modal p{font-size:13.5px; color:var(--text-dim); line-height:1.55; margin-bottom:10px}
+.modal .row{display:flex; gap:10px; flex-wrap:wrap; margin-top:14px}
+.btn{padding:9px 16px; border-radius:10px; border:1px solid var(--border-soft); cursor:pointer; font-size:13.5px;
+  font-family:var(--font); background:rgba(255,255,255,.06); color:var(--text)}
+.btn:hover{background:rgba(255,255,255,.12)}
+.btn.primary{background:var(--accent); border-color:var(--accent); color:#0b1220; font-weight:600}
+.btn.primary:hover{filter:brightness(1.1)}
+.btn.danger{color:var(--danger); border-color:rgba(243,108,108,.4)}
+.hint{font-size:12px; color:var(--text-dim); margin-top:10px; line-height:1.5}
+
+/* fondos */
+.wp-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-top:8px}
+.wp-opt{height:64px; border-radius:10px; cursor:pointer; border:2px solid transparent; background-size:cover; background-position:center}
+.wp-opt:hover,.wp-opt.sel{border-color:var(--accent)}
+.field{display:flex; gap:8px; margin-top:10px}
+.field input{flex:1; padding:8px 11px; border-radius:9px; border:1px solid var(--border-soft); background:rgba(0,0,0,.25); color:var(--text); font-size:13px; font-family:var(--font); outline:none}
+.field input:focus{border-color:var(--accent)}
+
+/* ---------- toasts / conflicto ---------- */
+#toasts{position:fixed; right:14px; bottom:58px; z-index:950; display:flex; flex-direction:column; gap:8px}
+.toast{padding:10px 14px; border-radius:11px; background:var(--glass); border:1px solid var(--border); font-size:13px; box-shadow:var(--shadow); max-width:340px}
+.toast.err{border-color:rgba(243,108,108,.5)}
+#conflict{position:fixed; top:12px; left:50%; transform:translateX(-50%); z-index:960; display:none; align-items:center; gap:12px;
+  padding:10px 16px; border-radius:12px; background:var(--glass); border:1px solid rgba(240,194,94,.5); font-size:13px; box-shadow:var(--shadow)}
+#conflict.open{display:flex}
+
+/* ---------- contenido de widgets ---------- */
+textarea.notes{width:100%; height:100%; min-height:110px; resize:none; border:none; outline:none; background:transparent;
+  color:var(--text); font-family:var(--font); font-size:13.5px; line-height:1.55}
+.todo-add,.clip-add,.link-add{display:flex; gap:6px; margin-bottom:9px}
+.todo-add input,.clip-add input,.link-add input,.link-add select{flex:1; min-width:0; padding:7px 10px; border-radius:8px;
+  border:1px solid var(--border-soft); background:rgba(0,0,0,.22); color:var(--text); font-size:13px; font-family:var(--font); outline:none}
+.todo-add input:focus,.clip-add input:focus,.link-add input:focus{border-color:var(--accent)}
+.mini{padding:6px 10px; border-radius:8px; border:1px solid var(--border-soft); background:rgba(255,255,255,.05);
+  color:var(--text); cursor:pointer; font-size:12.5px; font-family:var(--font); white-space:nowrap}
+.mini:hover{background:var(--accent-soft); border-color:var(--accent)}
+.mini.warn:hover{background:rgba(243,108,108,.15); border-color:var(--danger)}
+ul.plain{list-style:none}
+.todo-it{display:flex; align-items:center; gap:9px; padding:6px 4px; border-radius:8px}
+.todo-it:hover{background:rgba(255,255,255,.04)}
+.todo-it input[type=checkbox]{width:16px; height:16px; accent-color:var(--accent); cursor:pointer; flex-shrink:0}
+.todo-it .t{flex:1; word-break:break-word}
+.todo-it.done .t{text-decoration:line-through; color:var(--text-dim)}
+.it-del{border:none; background:none; color:var(--text-dim); cursor:pointer; font-size:13px; padding:2px 6px; border-radius:6px; opacity:0; flex-shrink:0}
+.todo-it:hover .it-del,.clip-it:hover .it-del,.link-it:hover .it-del,.link-it:hover .it-act{opacity:1}
+.it-del:hover{color:var(--danger); background:rgba(243,108,108,.12)}
+.clip-it{display:flex; align-items:flex-start; gap:8px; padding:7px 8px; border-radius:9px; border:1px solid var(--border-soft); margin-bottom:7px; background:rgba(255,255,255,.02)}
+.clip-it .t{flex:1; word-break:break-word; white-space:pre-wrap; font-size:12.8px; max-height:76px; overflow:auto}
+.link-group{margin-bottom:12px}
+.link-group h5{font-size:11px; text-transform:uppercase; letter-spacing:.07em; color:var(--text-dim); margin:2px 2px 7px}
+.link-it{display:flex; align-items:center; gap:9px; padding:6px 7px; border-radius:9px; cursor:pointer}
+.link-it:hover{background:rgba(255,255,255,.06)}
+.link-tile{width:26px; height:26px; border-radius:7px; display:flex; align-items:center; justify-content:center;
+  font-size:12.5px; font-weight:700; color:#fff; flex-shrink:0}
+.link-it .t{flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.link-it .it-act{border:none; background:none; color:var(--text-dim); cursor:pointer; font-size:12.5px; padding:2px 5px; border-radius:6px; opacity:0}
+.link-it .it-act:hover{color:var(--text); background:rgba(255,255,255,.1)}
+.qr-box{display:flex; flex-direction:column; gap:10px; height:100%}
+.qr-box textarea{width:100%; height:56px; resize:vertical; padding:8px 10px; border-radius:9px; border:1px solid var(--border-soft);
+  background:rgba(0,0,0,.22); color:var(--text); font-size:13px; font-family:var(--font); outline:none}
+.qr-out{flex:1; display:flex; align-items:center; justify-content:center; background:#fff; border-radius:11px; min-height:130px; padding:10px}
+.qr-out svg{max-width:100%; max-height:100%; height:auto}
+.clock-face{height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px}
+.clock-face .h{font-size:44px; font-weight:200; letter-spacing:.03em}
+.clock-face .d{font-size:13.5px; color:var(--text-dim); text-transform:capitalize}
+.inbox-line{display:flex; align-items:flex-start; gap:8px; padding:8px; border-radius:9px; border:1px solid var(--border-soft); margin-bottom:8px}
+.inbox-line .t{flex:1; word-break:break-word; white-space:pre-wrap; font-size:13px}
+.empty{color:var(--text-dim); font-size:12.5px; padding:8px 4px}
+::-webkit-scrollbar{width:9px; height:9px}
+::-webkit-scrollbar-thumb{background:rgba(255,255,255,.14); border-radius:5px}
+::-webkit-scrollbar-track{background:transparent}
+</style>
+</head>
+<body>
+
+<div id="wallpaper"></div>
+<div id="desktop"></div>
+
+<div id="taskbar">
+  <button id="btn-inicio">⊞ Inicio</button>
+  <div id="tb-spacer"></div>
+  <div class="tb-item" id="tb-inbox" title="Hay texto nuevo en inbox.txt">📥 Bandeja <span id="tb-inbox-n"></span></div>
+  <div class="tb-item" id="tb-sync" title="Estado de sincronización"><span class="dot"></span><span id="tb-sync-t">—</span></div>
+  <div class="tb-item" id="tb-clock"><div><div class="h"></div><div class="d"></div></div></div>
+</div>
+
+<div id="menu">
+  <input id="menu-search" type="text" placeholder="Buscar en tus enlaces…  ( / )" autocomplete="off">
+  <div id="menu-results"></div>
+  <div id="menu-widgets">
+    <h4>Añadir widget</h4>
+    <div class="wgrid">
+      <div class="wcard" data-add="links"><span class="ico">🔗</span>Enlaces</div>
+      <div class="wcard" data-add="notes"><span class="ico">📝</span>Nota</div>
+      <div class="wcard" data-add="todo"><span class="ico">✅</span>Tareas</div>
+      <div class="wcard" data-add="clips"><span class="ico">📋</span>Portapapeles</div>
+      <div class="wcard" data-add="qr"><span class="ico">🔳</span>QR</div>
+      <div class="wcard" data-add="clock"><span class="ico">🕐</span>Reloj</div>
+    </div>
+  </div>
+  <div id="menu-actions">
+    <h4 style="width:100%">Configuración</h4>
+    <button class="act" id="act-packs">🧩 Packs</button>
+    <button class="act" id="act-wallpaper">🖼️ Fondo</button>
+    <button class="act" id="act-folder">📁 Sincronizar equipos</button>
+    <button class="act" id="act-export">⬇️ Exportar copia</button>
+    <button class="act" id="act-import">⬆️ Importar copia</button>
+    <button class="act" id="act-restore">♻️ Restaurar copia</button>
+  </div>
+</div>
+
+<!-- sincronización entre equipos -->
+<div class="overlay" id="ov-boot">
+  <div class="modal">
+    <h2>Sincronizar entre equipos</h2>
+    <p>Conecta una carpeta (idealmente de <b>OneDrive</b>) y tus datos vivirán en un archivo <b>datos.json</b> dentro de ella: el mismo escritorio en el trabajo y en casa. La ruta puede ser distinta en cada ordenador; cada uno elige su carpeta una sola vez.</p>
+    <p>Además, todo lo que cualquier programa (una macro de teclado, un agente, el móvil) escriba en <b>inbox.txt</b> de esa carpeta aparecerá aquí en la Bandeja.</p>
+    <div class="row">
+      <button class="btn primary" id="boot-pick">📁 Conectar carpeta</button>
+      <button class="btn" id="boot-close">Ahora no</button>
+    </div>
+    <div class="hint" id="boot-hint">Requiere Edge o Chrome. El navegador te pedirá permiso sobre esa carpeta; márcalo como "Permitir siempre" si te lo ofrece.</div>
+  </div>
+</div>
+
+<!-- packs -->
+<div class="overlay" id="ov-packs">
+  <div class="modal">
+    <h2>🧩 Packs de escritorio</h2>
+    <p>Un pack es un escritorio ya montado (enlaces, widgets, fondo) definido en un archivo JSON. Al aplicarlo se sustituye tu escritorio actual; antes se guarda una copia local automática.</p>
+    <div class="wgrid" style="grid-template-columns:1fr 1fr">
+      <div class="wcard" data-pack="sanitarios"><span class="ico">🩺</span>Sanitario<span class="empty" style="padding:0">CIMA, Preevid, PubMed…</span></div>
+      <div class="wcard" data-pack="basico"><span class="ico">🧰</span>Básico<span class="empty" style="padding:0">M365, notas, tareas</span></div>
+    </div>
+    <div class="field"><input id="pack-url" type="text" placeholder="https://… (URL de un pack.json)"><button class="mini" id="pack-url-go">Cargar</button></div>
+    <div class="row">
+      <button class="btn" id="pack-file">📄 Abrir pack desde archivo…</button>
+      <button class="btn" id="pack-follow">📡 Seguir pack compartido…</button>
+      <button class="btn" id="pack-check" style="display:none">🔄 Comprobar novedades</button>
+      <button class="btn" id="pack-unfollow" style="display:none">Dejar de seguir</button>
+      <button class="btn" id="pack-close">Cerrar</button>
+    </div>
+    <div class="hint">«Seguir» un pack: elige un pack.json de una carpeta compartida (OneDrive/Teams sincronizada). Cuando quien lo mantiene lo actualice, la cabecera te avisará para aplicar las novedades. Ideal para el escritorio de un equipo o de un centro.</div>
+  </div>
+</div>
+
+<!-- reconectar -->
+<div class="overlay" id="ov-reconnect">
+  <div class="modal">
+    <h2>Reconectar carpeta de datos</h2>
+    <p>El navegador necesita que confirmes el acceso a tu carpeta de datos (<span id="rc-name">…</span>).</p>
+    <div class="row">
+      <button class="btn primary" id="rc-go">Conceder acceso</button>
+      <button class="btn" id="rc-repick">Elegir otra carpeta</button>
+    </div>
+  </div>
+</div>
+
+<!-- fondo -->
+<div class="overlay" id="ov-wp">
+  <div class="modal">
+    <h2>Fondo de pantalla</h2>
+    <p>Elige un degradado, una imagen por URL, o deja un archivo <b>fondo.jpg</b> / <b>fondo.png</b> en tu carpeta de datos (así se sincroniza entre ordenadores).</p>
+    <div class="wp-grid" id="wp-presets"></div>
+    <div class="field"><input id="wp-url" type="text" placeholder="https://… (URL de imagen)"><button class="mini" id="wp-url-go">Usar</button></div>
+    <div class="row">
+      <button class="btn" id="wp-file">🖼️ Usar fondo.jpg de la carpeta</button>
+      <button class="btn" id="wp-close">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- bandeja -->
+<div class="overlay" id="ov-inbox">
+  <div class="modal">
+    <h2>📥 Bandeja de entrada</h2>
+    <p>Contenido de <b>inbox.txt</b>. Convierte cada línea en lo que necesites; al importarla se retira del archivo.</p>
+    <div id="inbox-list"></div>
+    <div class="row">
+      <button class="btn danger" id="inbox-clear">Vaciar todo</button>
+      <button class="btn" id="inbox-close">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<div id="conflict">
+  ⚠️ <b>datos.json</b> cambió en otro equipo mientras editabas aquí.
+  <button class="mini" id="cf-reload">Cargar lo remoto</button>
+  <button class="mini warn" id="cf-force">Mantener lo mío</button>
+</div>
+
+<div id="toasts"></div>
+
+<script src="qrcode.js"></script>
+<script>
+"use strict";
+/* ============================================================
+   Cabecera personal — página de inicio sincronizada por archivo
+   Datos: datos.json + inbox.txt en una carpeta local (OneDrive)
+   ============================================================ */
+
+const DATA_FILE = "datos.json";
+const INBOX_FILE = "inbox.txt";
+const POLL_MS = 4000;
+
+const $ = s => document.querySelector(s);
+const $$ = s => [...document.querySelectorAll(s)];
+const uid = () => Math.random().toString(36).slice(2, 10);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+/* ---------- estado ---------- */
+let state = null;
+let dirHandle = null;
+let backend = null;          // 'fs' | 'local'
+let lastMtime = 0;           // mtime de datos.json que ya tenemos cargado
+let dirty = false;
+let saveTimer = null;
+let conflictPending = false;
+let inboxLines = [];
+let zTop = 10;
+let isFirstRun = false;
+
+function defaultState(){
+  return {
+    version: 1,
+    updatedAt: Date.now(),
+    settings: { wallpaper: { type: "preset", value: 0 } },
+    widgets: [
+      { id: uid(), type: "links", x: 40,  y: 40,  w: 300, h: 340, z: 1,
+        data: { groups: [ { name: "General", links: [
+          { t: "PubMed", u: "https://pubmed.ncbi.nlm.nih.gov/" },
+          { t: "CIMA (AEMPS)", u: "https://cima.aemps.es/" }
+        ]}]}},
+      { id: uid(), type: "notes", x: 370, y: 40,  w: 300, h: 220, z: 2, data: { text: "" } },
+      { id: uid(), type: "todo",  x: 370, y: 290, w: 300, h: 240, z: 3, data: { items: [] } },
+      { id: uid(), type: "clock", x: 700, y: 40,  w: 240, h: 150, z: 4, data: {} }
+    ]
+  };
+}
+
+/* ---------- IndexedDB mínima (para recordar la carpeta) ---------- */
+function idb(){
+  return new Promise((ok, ko) => {
+    const rq = indexedDB.open("cabecera-personal", 1);
+    rq.onupgradeneeded = () => rq.result.createObjectStore("kv");
+    rq.onsuccess = () => ok(rq.result);
+    rq.onerror = () => ko(rq.error);
+  });
+}
+async function idbSet(k, v){ const db = await idb(); return new Promise((ok, ko) => {
+  const tx = db.transaction("kv", "readwrite"); tx.objectStore("kv").put(v, k);
+  tx.oncomplete = ok; tx.onerror = () => ko(tx.error); }); }
+async function idbGet(k){ const db = await idb(); return new Promise((ok, ko) => {
+  const rq = db.transaction("kv").objectStore("kv").get(k);
+  rq.onsuccess = () => ok(rq.result); rq.onerror = () => ko(rq.error); }); }
+async function idbDel(k){ const db = await idb(); return new Promise((ok, ko) => {
+  const tx = db.transaction("kv", "readwrite"); tx.objectStore("kv").delete(k);
+  tx.oncomplete = ok; tx.onerror = () => ko(tx.error); }); }
+
+/* ---------- toasts / sync UI ---------- */
+function toast(msg, err){
+  const el = document.createElement("div");
+  el.className = "toast" + (err ? " err" : "");
+  el.textContent = msg;
+  $("#toasts").appendChild(el);
+  setTimeout(() => el.remove(), 4200);
+}
+function toastAction(msg, label, fn){
+  const el = document.createElement("div");
+  el.className = "toast";
+  el.textContent = msg + " ";
+  const b = document.createElement("button");
+  b.className = "mini"; b.textContent = label; b.style.marginLeft = "6px";
+  b.addEventListener("click", () => { fn(); el.remove(); });
+  el.appendChild(b);
+  $("#toasts").appendChild(el);
+  setTimeout(() => el.remove(), 20000);
+}
+function syncUI(mode, txt){
+  const dot = $("#tb-sync .dot");
+  dot.className = "dot " + mode;
+  $("#tb-sync-t").textContent = txt;
+}
+
+/* ============================================================
+   Persistencia
+   ============================================================ */
+async function fsPerm(handle, ask){
+  try{
+    if ((await handle.queryPermission({ mode: "readwrite" })) === "granted") return true;
+    if (!ask) return false;
+    return (await handle.requestPermission({ mode: "readwrite" })) === "granted";
+  }catch(e){ return false; }
+}
+
+async function readDataFile(){
+  const fh = await dirHandle.getFileHandle(DATA_FILE, { create: true });
+  const f = await fh.getFile();
+  lastMtime = f.lastModified;
+  const text = await f.text();
+  if (!text.trim()) return null;
+  return JSON.parse(text);
+}
+
+async function writeDataFile(){
+  // con un conflicto abierto no se escribe NADA hasta decisión humana
+  if (conflictPending){ syncUI("err", "conflicto"); return false; }
+  const fh = await dirHandle.getFileHandle(DATA_FILE, { create: true });
+  // no pisar cambios remotos más nuevos que lo que tenemos cargado
+  const cur = await fh.getFile();
+  if (lastMtime && cur.lastModified > lastMtime){
+    conflictPending = true;
+    $("#conflict").classList.add("open");
+    syncUI("err", "conflicto");
+    return false;
+  }
+  const w = await fh.createWritable();
+  await w.write(JSON.stringify(state, null, 2));
+  await w.close();
+  lastMtime = (await fh.getFile()).lastModified;
+  return true;
+}
+
+function markDirty(){
+  dirty = true;
+  syncUI("saving", "guardando…");
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(saveNow, 700);
+}
+
+async function saveNow(){
+  state.updatedAt = Date.now();
+  try{
+    if (backend === "fs"){
+      const okWrite = await writeDataFile();
+      if (!okWrite) return;               // conflicto: no marcamos limpio
+    } else {
+      localStorage.setItem("cabecera-state", JSON.stringify(state));
+    }
+    dirty = false;
+    syncUI(backend === "fs" ? "ok" : "local", backend === "fs" ? "sincronizado" : "solo local");
+  }catch(e){
+    syncUI("err", "error al guardar");
+    toast("No se pudo guardar: " + e.message, true);
+  }
+}
+
+/* vigilancia de cambios externos + inbox */
+async function poll(){
+  if (backend !== "fs" || !dirHandle) return;
+  try{
+    const fh = await dirHandle.getFileHandle(DATA_FILE, { create: true });
+    const f = await fh.getFile();
+    if (f.lastModified > lastMtime){
+      if (dirty){
+        conflictPending = true;
+        $("#conflict").classList.add("open");
+      } else {
+        const text = await f.text();
+        if (text.trim()){
+          state = JSON.parse(text);
+          lastMtime = f.lastModified;
+          renderAll();
+          toast("Actualizado desde otro equipo");
+        }
+      }
+    }
+  }catch(e){ /* transitorio de OneDrive: se reintenta en el siguiente ciclo */ }
+  await pollInbox();
+}
+
+async function pollInbox(){
+  try{
+    let fh;
+    try{ fh = await dirHandle.getFileHandle(INBOX_FILE); }
+    catch(e){ inboxLines = []; renderInboxBadge(); return; }
+    const text = await (await fh.getFile()).text();
+    inboxLines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    renderInboxBadge();
+  }catch(e){ /* ignorar */ }
+}
+
+async function writeInboxRaw(lines){
+  const fh = await dirHandle.getFileHandle(INBOX_FILE, { create: true });
+  const w = await fh.createWritable();
+  await w.write(lines.join("\r\n") + (lines.length ? "\r\n" : ""));
+  await w.close();
+  inboxLines = lines;
+  renderInboxBadge();
+}
+
+/* re-lee el archivo justo antes de escribir: una línea que otro
+   programa haya añadido tras nuestro último poll no se pierde */
+async function mutateInbox(fn){
+  let fresh = [];
+  try{
+    const fh = await dirHandle.getFileHandle(INBOX_FILE);
+    fresh = (await (await fh.getFile()).text()).split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  }catch(e){ /* aún no existe */ }
+  await writeInboxRaw(fn(fresh));
+}
+
+function renderInboxBadge(){
+  const el = $("#tb-inbox");
+  el.classList.toggle("has", inboxLines.length > 0);
+  $("#tb-inbox-n").textContent = inboxLines.length ? "(" + inboxLines.length + ")" : "";
+}
+
+/* ============================================================
+   Arranque
+   ============================================================ */
+async function boot(){
+  startClock();
+  wireUI();
+
+  if (!window.showDirectoryPicker){
+    $("#boot-hint").innerHTML = "⚠️ Este navegador no soporta el acceso a carpetas (usa <b>Edge</b> o <b>Chrome</b>). Puedes continuar solo con almacenamiento local.";
+    $("#boot-pick").disabled = true;
+  }
+
+  const saved = await idbGet("dirHandle").catch(() => null);
+  if (saved){
+    dirHandle = saved;
+    if (await fsPerm(dirHandle, false)){
+      await startFS();
+    } else {
+      $("#rc-name").textContent = dirHandle.name || "carpeta";
+      $("#ov-reconnect").classList.add("open");
+    }
+    await handlePackParam();
+    await checkFollowedPack();
+    return;
+  }
+
+  // modo local por defecto: la página funciona desde el primer segundo
+  backend = "local";
+  const local = localStorage.getItem("cabecera-state");
+  if (local){
+    try{ state = JSON.parse(local); }
+    catch(e){ state = firstRunState(); }
+  } else {
+    isFirstRun = true;
+    state = firstRunState();
+    localStorage.setItem("cabecera-mode", "local");
+  }
+  syncUI("local", "solo local");
+  renderAll();
+  if (isFirstRun) saveNow();
+  await handlePackParam();
+  await checkFollowedPack();
+}
+
+function firstRunState(){
+  const s = defaultState();
+  s.widgets.push({ id: uid(), type: "intro", x: 700, y: 230, w: 350, h: 280, z: 9, data: {} });
+  return s;
+}
+
+async function startFS(){
+  const prev = state;                 // escritorio previo en modo local, si lo había
+  backend = "fs";
+  try{
+    const loaded = await readDataFile();
+    if (loaded){
+      state = loaded;
+      if (prev && prev.widgets && localStorage.getItem("cabecera-mode") === "local"){
+        localStorage.setItem("cabecera-local-prev", JSON.stringify(prev));
+        toast("Cargado el escritorio de la carpeta; tu versión local previa quedó guardada como copia");
+      }
+    } else {
+      state = prev || defaultState(); // carpeta vacía: se lleva lo que tuvieras
+      await writeDataFile();
+    }
+    localStorage.removeItem("cabecera-mode");
+    syncUI("ok", "sincronizado");
+  }catch(e){
+    syncUI("err", "datos.json ilegible");
+    toast("datos.json no se pudo leer (¿JSON corrupto?). Corrígelo o bórralo para empezar de cero.", true);
+    state = defaultState();   // en memoria; NO se sobreescribe el archivo hasta que el usuario edite
+  }
+  renderAll();
+  await handleAddParam();
+  await pollInbox();
+  setInterval(poll, POLL_MS);
+}
+
+async function pickFolder(){
+  try{
+    const h = await window.showDirectoryPicker({ mode: "readwrite" });
+    if (!(await fsPerm(h, true))){ toast("Permiso denegado", true); return; }
+    dirHandle = h;
+    await idbSet("dirHandle", h);
+    localStorage.removeItem("cabecera-mode");
+    $("#ov-boot").classList.remove("open");
+    $("#ov-reconnect").classList.remove("open");
+    await startFS();
+    toast("Carpeta conectada: " + h.name);
+  }catch(e){ /* cancelado */ }
+}
+
+/* ?add=texto → a la bandeja (integración con macros o agentes vía URL) */
+async function handleAddParam(){
+  const p = new URLSearchParams(location.search);
+  const t = (p.get("add") || "").trim();
+  if (!t) return;
+  history.replaceState(null, "", location.pathname);
+  if (backend === "fs"){
+    await mutateInbox(fresh => [...fresh, t]);
+    toast("Añadido a la bandeja");
+  }
+}
+
+/* ============================================================
+   Packs: escritorios preconfigurados y compartidos
+   ============================================================ */
+const BUILTIN_PACKS = { sanitarios: "packs/sanitarios.json", basico: "packs/basico.json" };
+
+/* Un pack es contenido NO confiable (puede venir de una URL ajena):
+   se normaliza con esquema estricto antes de tocar el estado.
+   - URLs: solo http/https (fuera javascript:, data:, etc.)
+   - dimensiones: solo números acotados (nada llega a cssText sin coerción)
+   - fondo: los packs solo pueden fijar preset o file, nunca URL remota (tracking) */
+function normalizePack(p){
+  if (!p || p.cabeceraPack !== 1 || !Array.isArray(p.widgets)) return null;
+  const num = (v, d, min, max) => { v = Number(v); return Number.isFinite(v) ? Math.min(max, Math.max(min, v)) : d; };
+  const txt = (v, max) => String(v ?? "").slice(0, max);
+  const safeUrl = u => {
+    try{ const x = new URL(String(u)); return (x.protocol === "https:" || x.protocol === "http:") ? x.href : null; }
+    catch(e){ return null; }
+  };
+  const widgets = [];
+  for (const w of p.widgets){
+    if (!WTYPES[w.type] || w.type === "intro") continue;
+    const d = w.data || {}, data = {};
+    if (w.type === "links"){
+      data.groups = (Array.isArray(d.groups) ? d.groups : []).map(g => ({
+        name: txt(g.name || "Grupo", 60),
+        links: (Array.isArray(g.links) ? g.links : []).map(l => {
+          const u = safeUrl(l.u);
+          return u ? { t: txt(l.t || u, 120), u } : null;
+        }).filter(Boolean)
+      })).filter(g => g.links.length);
+      if (!data.groups.length) continue;
+    }
+    else if (w.type === "notes") data.text = txt(d.text, 20000);
+    else if (w.type === "qr")    data.text = txt(d.text, 2000);
+    else if (w.type === "todo")  data.items = (Array.isArray(d.items) ? d.items : []).map(i => ({ t: txt(i.t, 300), done: !!i.done })).filter(i => i.t);
+    else if (w.type === "clips") data.items = (Array.isArray(d.items) ? d.items : []).map(i => ({ t: txt(i.t, 5000) })).filter(i => i.t);
+    widgets.push({
+      type: w.type,
+      x: num(w.x, 40, 0, 4000), y: num(w.y, 40, 0, 4000),
+      w: num(w.w, WTYPES[w.type].w, 220, 2000), h: num(w.h, WTYPES[w.type].h, 140, 2000),
+      data
+    });
+  }
+  if (!widgets.length) return null;
+  const settings = {};
+  const wp = p.settings && p.settings.wallpaper;
+  if (wp && wp.type === "preset") settings.wallpaper = { type: "preset", value: num(wp.value, 0, 0, WP_PRESETS.length - 1) };
+  else if (wp && wp.type === "file") settings.wallpaper = { type: "file" };
+  return { name: txt(p.name, 80), settings, widgets };
+}
+
+async function applyPack(pack, opts = {}){
+  const np = normalizePack(pack);
+  if (!np){ toast("El pack no es válido o no contiene widgets utilizables", true); return false; }
+  const ask = opts.ask !== false;
+  if (ask && !confirm(`¿Aplicar el pack "${np.name || "sin nombre"}"?\nSustituye tu escritorio actual (se guarda una copia local automática).`)) return false;
+  try{ localStorage.setItem("cabecera-backup-antes-pack", JSON.stringify(state)); }catch(e){}
+  let z = 0;
+  state = {
+    version: 1,
+    updatedAt: Date.now(),
+    settings: Object.assign({}, state && state.settings, np.settings),
+    widgets: np.widgets.map(w => ({ id: uid(), z: ++z, ...w }))
+  };
+  renderAll(); markDirty();
+  toast(`Pack "${np.name || ""}" aplicado`);
+  return true;
+}
+
+async function applyBuiltin(id, opts){
+  try{
+    const r = await fetch(BUILTIN_PACKS[id], { cache: "no-store" });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    return await applyPack(await r.json(), opts);
+  }catch(e){ toast("No se pudo cargar el pack: " + e.message, true); return false; }
+}
+
+/* ?pack=nombre | ?pack=https://…json */
+async function handlePackParam(){
+  const ref = (new URLSearchParams(location.search).get("pack") || "").trim();
+  if (!ref) return;
+  history.replaceState(null, "", location.pathname);
+  const opts = { ask: !isFirstRun };
+  if (/^https?:\/\//i.test(ref)){
+    try{
+      const r = await fetch(ref, { cache: "no-store" });
+      await applyPack(await r.json(), opts);
+    }catch(e){ toast("No se pudo cargar el pack de esa URL (¿CORS o JSON inválido?)", true); }
+  } else if (BUILTIN_PACKS[ref]){
+    await applyBuiltin(ref, opts);
+  } else toast("Pack desconocido: " + ref, true);
+}
+
+/* seguir un pack compartido: archivo en carpeta OneDrive/Teams sincronizada */
+async function followPackFile(){
+  if (!window.showOpenFilePicker){ toast("Esta función necesita Edge o Chrome", true); return; }
+  try{
+    const [h] = await window.showOpenFilePicker({ types: [{ description: "Pack JSON", accept: { "application/json": [".json"] } }] });
+    const f = await h.getFile();
+    const pack = JSON.parse(await f.text());
+    if (!(await applyPack(pack))) return;
+    await idbSet("packHandle", h);
+    await idbSet("packMtime", f.lastModified);
+    toast("Siguiendo el pack: te avisaré cuando cambie");
+  }catch(e){ /* cancelado o JSON inválido */ }
+}
+
+async function checkFollowedPack(interactive = false){
+  try{
+    const h = await idbGet("packHandle");
+    if (!h){ if (interactive) toast("No sigues ningún pack"); return; }
+    let perm = await h.queryPermission({ mode: "read" });
+    if (perm !== "granted" && interactive) perm = await h.requestPermission({ mode: "read" });
+    if (perm !== "granted"){ if (interactive) toast("Sin acceso al archivo del pack; vuelve a seguirlo desde Packs", true); return; }
+    const f = await h.getFile();
+    const known = (await idbGet("packMtime")) || 0;
+    if (f.lastModified <= known){ if (interactive) toast("El pack seguido no tiene novedades"); return; }
+    const pack = JSON.parse(await f.text());
+    toastAction(`El pack compartido "${pack.name || h.name}" tiene novedades.`, "Aplicar", async () => {
+      if (await applyPack(pack, { ask: false })) await idbSet("packMtime", f.lastModified);
+    });
+  }catch(e){ if (interactive) toast("No se pudo comprobar el pack: " + e.message, true); }
+}
+
+/* ============================================================
+   Render de escritorio y ventanas
+   ============================================================ */
+const WTYPES = {
+  links: { ico: "🔗", name: "Enlaces",      w: 300, h: 340 },
+  notes: { ico: "📝", name: "Nota",         w: 300, h: 220 },
+  todo:  { ico: "✅", name: "Tareas",       w: 300, h: 260 },
+  clips: { ico: "📋", name: "Portapapeles", w: 320, h: 300 },
+  qr:    { ico: "🔳", name: "QR",           w: 260, h: 330 },
+  clock: { ico: "🕐", name: "Reloj",        w: 240, h: 150 },
+  intro: { ico: "👋", name: "Bienvenida",   w: 350, h: 280 }
+};
+
+function renderAll(){
+  applyWallpaper();
+  const d = $("#desktop");
+  d.innerHTML = "";
+  zTop = 10;
+  for (const w of state.widgets){
+    zTop = Math.max(zTop, w.z || 1);
+    d.appendChild(buildWindow(w));
+  }
+}
+
+function buildWindow(w){
+  const t = WTYPES[w.type] || { ico: "❔", name: w.type };
+  const el = document.createElement("div");
+  el.className = "win";
+  el.dataset.id = w.id;
+  el.style.cssText = `left:${+w.x || 0}px; top:${+w.y || 0}px; width:${+w.w || 260}px; height:${+w.h || 180}px; z-index:${+w.z || 1}`;
+  el.innerHTML = `
+    <div class="win-title"><span class="ico">${t.ico}</span>${esc(t.name)}<span class="sp"></span>
+      <button class="win-btn close" title="Cerrar">✕</button></div>
+    <div class="win-body"></div>
+    <div class="win-resize"></div>`;
+  renderBody(w, el.querySelector(".win-body"));
+
+  el.addEventListener("pointerdown", () => {
+    w.z = ++zTop; el.style.zIndex = zTop; markDirty();
+    $$(".win").forEach(x => x.classList.toggle("active", x === el));
+  });
+  el.querySelector(".close").addEventListener("click", e => {
+    e.stopPropagation();
+    state.widgets = state.widgets.filter(x => x.id !== w.id);
+    el.remove(); markDirty();
+  });
+
+  // arrastrar
+  const title = el.querySelector(".win-title");
+  title.addEventListener("pointerdown", ev => {
+    if (ev.target.closest("button")) return;
+    ev.preventDefault();
+    const sx = ev.clientX - w.x, sy = ev.clientY - w.y;
+    const move = m => {
+      w.x = Math.max(0, Math.min(m.clientX - sx, innerWidth - 80));
+      w.y = Math.max(0, Math.min(m.clientY - sy, innerHeight - 110));
+      el.style.left = w.x + "px"; el.style.top = w.y + "px";
+    };
+    const up = () => { removeEventListener("pointermove", move); removeEventListener("pointerup", up); markDirty(); };
+    addEventListener("pointermove", move); addEventListener("pointerup", up);
+  });
+
+  // redimensionar
+  el.querySelector(".win-resize").addEventListener("pointerdown", ev => {
+    ev.preventDefault(); ev.stopPropagation();
+    const sw = w.w - ev.clientX, sh = w.h - ev.clientY;
+    const move = m => {
+      w.w = Math.max(220, sw + m.clientX);
+      w.h = Math.max(140, sh + m.clientY);
+      el.style.width = w.w + "px"; el.style.height = w.h + "px";
+    };
+    const up = () => { removeEventListener("pointermove", move); removeEventListener("pointerup", up); markDirty(); };
+    addEventListener("pointermove", move); addEventListener("pointerup", up);
+  });
+  return el;
+}
+
+function addWidget(type){
+  const t = WTYPES[type];
+  const w = { id: uid(), type, x: 60 + Math.random() * 120 | 0, y: 60 + Math.random() * 90 | 0,
+    w: t.w, h: t.h, z: ++zTop,
+    data: type === "links" ? { groups: [{ name: "General", links: [] }] }
+        : type === "notes" ? { text: "" }
+        : type === "todo"  ? { items: [] }
+        : type === "clips" ? { items: [] }
+        : type === "qr"    ? { text: "" } : {} };
+  state.widgets.push(w);
+  $("#desktop").appendChild(buildWindow(w));
+  markDirty();
+}
+
+function refreshWidget(w){
+  const el = document.querySelector(`.win[data-id="${w.id}"] .win-body`);
+  if (el) renderBody(w, el);
+}
+
+/* ============================================================
+   Cuerpos de widgets
+   ============================================================ */
+function renderBody(w, el){
+  ({ links: bodyLinks, notes: bodyNotes, todo: bodyTodo,
+     clips: bodyClips, qr: bodyQr, clock: bodyClock, intro: bodyIntro }[w.type] || (x => x))(w, el);
+}
+
+/* --- Bienvenida (solo primer arranque) --- */
+function bodyIntro(w, el){
+  el.innerHTML = `<div style="display:flex;flex-direction:column;gap:10px;line-height:1.55">
+    <p>Esta es tu <b>cabecera personal</b>: añade widgets desde el menú <b>⊞ Inicio</b>, arrástralos donde quieras y todo se guarda solo.</p>
+    <p>Puedes empezar desde un <b>pack</b> ya montado, o conectar una carpeta de <b>OneDrive</b> para tener lo mismo en todos tus ordenadores.</p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="mini pk">🩺 Pack sanitario</button>
+      <button class="mini pks">🧩 Ver packs</button>
+      <button class="mini sy">📁 Sincronizar equipos</button>
+    </div>
+    <p class="empty">Cuando no la necesites, cierra esta ventana con la ✕.</p></div>`;
+  el.querySelector(".pk").addEventListener("click", () => applyBuiltin("sanitarios"));
+  el.querySelector(".pks").addEventListener("click", () => $("#ov-packs").classList.add("open"));
+  el.querySelector(".sy").addEventListener("click", () => $("#ov-boot").classList.add("open"));
+}
+
+/* --- Nota --- */
+function bodyNotes(w, el){
+  el.innerHTML = `<textarea class="notes" placeholder="Escribe aquí…"></textarea>`;
+  const ta = el.querySelector("textarea");
+  ta.value = w.data.text || "";
+  ta.addEventListener("input", () => { w.data.text = ta.value; markDirty(); });
+}
+
+/* --- Tareas --- */
+function bodyTodo(w, el){
+  el.innerHTML = `
+    <div class="todo-add"><input type="text" placeholder="Nueva tarea…"><button class="mini">＋</button></div>
+    <ul class="plain"></ul>
+    <div style="margin-top:8px"><button class="mini warn done-clear" style="display:none">Limpiar completadas</button></div>`;
+  const inp = el.querySelector("input"), ul = el.querySelector("ul");
+  const add = () => {
+    const t = inp.value.trim(); if (!t) return;
+    w.data.items.push({ t, done: false }); inp.value = "";
+    paint(); markDirty();
+  };
+  el.querySelector(".todo-add .mini").addEventListener("click", add);
+  inp.addEventListener("keydown", e => { if (e.key === "Enter") add(); });
+  el.querySelector(".done-clear").addEventListener("click", () => {
+    w.data.items = w.data.items.filter(i => !i.done); paint(); markDirty();
+  });
+  const paint = () => {
+    ul.innerHTML = "";
+    if (!w.data.items.length) ul.innerHTML = `<div class="empty">Sin tareas pendientes.</div>`;
+    w.data.items.forEach((it, i) => {
+      const li = document.createElement("li");
+      li.className = "todo-it" + (it.done ? " done" : "");
+      li.innerHTML = `<input type="checkbox" ${it.done ? "checked" : ""}><span class="t">${esc(it.t)}</span><button class="it-del" title="Borrar">✕</button>`;
+      li.querySelector("input").addEventListener("change", e => { it.done = e.target.checked; paint(); markDirty(); });
+      li.querySelector(".it-del").addEventListener("click", () => { w.data.items.splice(i, 1); paint(); markDirty(); });
+      ul.appendChild(li);
+    });
+    el.querySelector(".done-clear").style.display = w.data.items.some(i => i.done) ? "" : "none";
+  };
+  paint();
+}
+
+/* --- Portapapeles --- */
+function bodyClips(w, el){
+  el.innerHTML = `
+    <div class="clip-add"><input type="text" placeholder="Nuevo fragmento…"><button class="mini add">＋</button><button class="mini paste" title="Pegar del portapapeles">📥 Pegar</button></div>
+    <div class="clip-list"></div>`;
+  const inp = el.querySelector("input"), list = el.querySelector(".clip-list");
+  const add = t => { t = (t || "").trim(); if (!t) return; w.data.items.unshift({ t }); paint(); markDirty(); };
+  el.querySelector(".add").addEventListener("click", () => { add(inp.value); inp.value = ""; });
+  inp.addEventListener("keydown", e => { if (e.key === "Enter"){ add(inp.value); inp.value = ""; } });
+  el.querySelector(".paste").addEventListener("click", async () => {
+    try{ add(await navigator.clipboard.readText()); }
+    catch(e){ toast("El navegador no permitió leer el portapapeles", true); }
+  });
+  const paint = () => {
+    list.innerHTML = w.data.items.length ? "" : `<div class="empty">Guarda aquí textos que uses a menudo: se copian con un clic.</div>`;
+    w.data.items.forEach((it, i) => {
+      const d = document.createElement("div");
+      d.className = "clip-it";
+      d.innerHTML = `<span class="t">${esc(it.t)}</span><button class="mini" title="Copiar">⧉</button><button class="it-del" title="Borrar">✕</button>`;
+      d.querySelector(".mini").addEventListener("click", async () => {
+        await navigator.clipboard.writeText(it.t); toast("Copiado");
+      });
+      d.querySelector(".it-del").addEventListener("click", () => { w.data.items.splice(i, 1); paint(); markDirty(); });
+      list.appendChild(d);
+    });
+  };
+  paint();
+}
+
+/* --- Enlaces --- */
+function hueOf(s){ let h = 0; for (const c of s) h = (h * 31 + c.charCodeAt(0)) % 360; return h; }
+function bodyLinks(w, el){
+  el.innerHTML = `
+    <div class="link-add"><input class="lt" type="text" placeholder="Título"><input class="lu" type="text" placeholder="https://…"><button class="mini">＋</button></div>
+    <div class="link-groups"></div>`;
+  const lt = el.querySelector(".lt"), lu = el.querySelector(".lu"), box = el.querySelector(".link-groups");
+  const add = () => {
+    let u = lu.value.trim(), t = lt.value.trim();
+    if (!u) return;
+    if (!/^[a-z]+:\/\//i.test(u)) u = "https://" + u;
+    if (!t){ try{ t = new URL(u).hostname.replace(/^www\./, ""); }catch(e){ t = u; } }
+    w.data.groups[0].links.push({ t, u });
+    lt.value = lu.value = "";
+    paint(); markDirty();
+  };
+  el.querySelector(".link-add .mini").addEventListener("click", add);
+  lu.addEventListener("keydown", e => { if (e.key === "Enter") add(); });
+  const paint = () => {
+    box.innerHTML = "";
+    for (const g of w.data.groups){
+      const gd = document.createElement("div");
+      gd.className = "link-group";
+      if (w.data.groups.length > 1 || g.name !== "General") gd.innerHTML = `<h5>${esc(g.name)}</h5>`;
+      if (!g.links.length) gd.innerHTML += `<div class="empty">Añade enlaces arriba. También se buscan desde el menú Inicio.</div>`;
+      g.links.forEach((l, i) => {
+        let host = ""; try{ host = new URL(l.u).hostname; }catch(e){}
+        const d = document.createElement("div");
+        d.className = "link-it";
+        d.title = l.u;
+        d.innerHTML = `<span class="link-tile" style="background:hsl(${hueOf(host || l.t)},55%,42%)">${esc((l.t || "?")[0].toUpperCase())}</span>
+          <span class="t">${esc(l.t)}</span>
+          <button class="it-act qr" title="Ver QR">🔳</button>
+          <button class="it-act cp" title="Copiar URL">⧉</button>
+          <button class="it-del" title="Borrar">✕</button>`;
+        d.addEventListener("click", e => { if (!e.target.closest("button")) window.open(l.u, "_blank", "noopener"); });
+        d.querySelector(".cp").addEventListener("click", async () => { await navigator.clipboard.writeText(l.u); toast("URL copiada"); });
+        d.querySelector(".qr").addEventListener("click", () => showQr(l.u));
+        d.querySelector(".it-del").addEventListener("click", () => { g.links.splice(i, 1); paint(); markDirty(); });
+        gd.appendChild(d);
+      });
+      box.appendChild(gd);
+    }
+  };
+  paint();
+}
+
+/* --- QR --- */
+function qrSvg(text){
+  try{
+    const q = qrcode(0, "M");
+    q.addData(text || " ");
+    q.make();
+    return q.createSvgTag({ cellSize: 4, margin: 2, scalable: true });
+  }catch(e){ return `<div style="color:#333;font-size:12px;padding:8px">Texto demasiado largo para un QR.</div>`; }
+}
+function bodyQr(w, el){
+  el.innerHTML = `
+    <div class="qr-box">
+      <textarea placeholder="Texto o URL para el QR…"></textarea>
+      <div class="qr-out"></div>
+      <div style="display:flex;gap:6px"><button class="mini cp">⧉ Copiar texto</button></div>
+    </div>`;
+  const ta = el.querySelector("textarea"), out = el.querySelector(".qr-out");
+  const paint = () => { out.innerHTML = w.data.text ? qrSvg(w.data.text) : `<div style="color:#666;font-size:12px">El QR aparecerá aquí</div>`; };
+  ta.value = w.data.text || "";
+  ta.addEventListener("input", () => { w.data.text = ta.value; paint(); markDirty(); });
+  el.querySelector(".cp").addEventListener("click", async () => { await navigator.clipboard.writeText(w.data.text || ""); toast("Copiado"); });
+  paint();
+}
+function showQr(text){
+  let w = state.widgets.find(x => x.type === "qr");
+  if (!w){ addWidget("qr"); w = state.widgets[state.widgets.length - 1]; }
+  w.data.text = text;
+  w.z = ++zTop;
+  refreshWidget(w);
+  const el = document.querySelector(`.win[data-id="${w.id}"]`);
+  if (el) el.style.zIndex = zTop;
+  markDirty();
+}
+
+/* --- Reloj --- */
+function bodyClock(w, el){
+  el.innerHTML = `<div class="clock-face"><div class="h"></div><div class="d"></div></div>`;
+  const paint = () => {
+    const n = new Date();
+    const h = el.querySelector(".h"), d = el.querySelector(".d");
+    if (!h){ clearInterval(iv); return; }
+    h.textContent = n.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
+    d.textContent = n.toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long" });
+  };
+  const iv = setInterval(paint, 5000);
+  paint();
+}
+
+/* ============================================================
+   Fondo de pantalla
+   ============================================================ */
+const WP_PRESETS = [
+  "linear-gradient(135deg,#1b2735 0%,#090a0f 100%)",
+  "linear-gradient(135deg,#0f2027 0%,#203a43 50%,#2c5364 100%)",
+  "linear-gradient(135deg,#232526 0%,#414345 100%)",
+  "linear-gradient(135deg,#42275a 0%,#734b6d 100%)",
+  "linear-gradient(135deg,#141e30 0%,#243b55 100%)",
+  "linear-gradient(160deg,#134e5e 0%,#1d976c 120%)"
+];
+let wpObjectUrl = null;
+async function applyWallpaper(){
+  const wp = state.settings.wallpaper || { type: "preset", value: 0 };
+  const el = $("#wallpaper");
+  if (wpObjectUrl){ URL.revokeObjectURL(wpObjectUrl); wpObjectUrl = null; }
+  if (wp.type === "preset"){
+    el.style.background = WP_PRESETS[wp.value % WP_PRESETS.length];
+  } else if (wp.type === "url"){
+    el.style.background = `url("${encodeURI(String(wp.value))}") center/cover no-repeat, #10131a`;
+  } else if (wp.type === "file" && backend === "fs"){
+    for (const name of ["fondo.jpg", "fondo.png", "fondo.jpeg", "fondo.webp"]){
+      try{
+        const fh = await dirHandle.getFileHandle(name);
+        wpObjectUrl = URL.createObjectURL(await fh.getFile());
+        el.style.background = `url("${wpObjectUrl}") center/cover no-repeat, #10131a`;
+        return;
+      }catch(e){ /* probar siguiente */ }
+    }
+    toast("No hay fondo.jpg / fondo.png en la carpeta de datos", true);
+    el.style.background = WP_PRESETS[0];
+  }
+}
+
+/* ============================================================
+   Menú inicio, búsqueda y acciones
+   ============================================================ */
+function allLinks(){
+  const out = [];
+  for (const w of state.widgets) if (w.type === "links")
+    for (const g of w.data.groups) for (const l of g.links) out.push(l);
+  return out;
+}
+let selIdx = 0;
+function renderResults(q){
+  const box = $("#menu-results");
+  q = q.trim().toLowerCase();
+  if (!q){ box.classList.remove("has"); box.innerHTML = ""; return; }
+  const hits = allLinks().filter(l => (l.t + " " + l.u).toLowerCase().includes(q)).slice(0, 8);
+  box.classList.add("has");
+  box.innerHTML = hits.length ? "" : `<div class="empty">Sin coincidencias.</div>`;
+  selIdx = 0;
+  hits.forEach((l, i) => {
+    const d = document.createElement("div");
+    d.className = "res-item" + (i === 0 ? " sel" : "");
+    let host = ""; try{ host = new URL(l.u).hostname; }catch(e){}
+    d.innerHTML = `<span class="link-tile" style="width:22px;height:22px;font-size:11px;background:hsl(${hueOf(host || l.t)},55%,42%)">${esc((l.t || "?")[0].toUpperCase())}</span><span>${esc(l.t)}</span><span class="u">${esc(host)}</span>`;
+    d.addEventListener("click", () => { window.open(l.u, "_blank", "noopener"); closeMenu(); });
+    box.appendChild(d);
+  });
+}
+function openMenu(){ $("#menu").classList.add("open"); $("#menu-search").value = ""; renderResults(""); setTimeout(() => $("#menu-search").focus(), 30); }
+function closeMenu(){ $("#menu").classList.remove("open"); }
+
+function wireUI(){
+  $("#btn-inicio").addEventListener("click", () => $("#menu").classList.contains("open") ? closeMenu() : openMenu());
+  document.addEventListener("click", e => {
+    if (!e.target.closest("#menu") && !e.target.closest("#btn-inicio")) closeMenu();
+  });
+  document.addEventListener("keydown", e => {
+    if (e.key === "/" && !e.target.closest("input,textarea")){ e.preventDefault(); openMenu(); }
+    if (e.key === "Escape") closeMenu();
+  });
+  $("#menu-search").addEventListener("input", e => renderResults(e.target.value));
+  $("#menu-search").addEventListener("keydown", e => {
+    const items = $$("#menu-results .res-item");
+    if (e.key === "ArrowDown" || e.key === "ArrowUp"){
+      e.preventDefault();
+      if (!items.length) return;
+      selIdx = (selIdx + (e.key === "ArrowDown" ? 1 : items.length - 1)) % items.length;
+      items.forEach((x, i) => x.classList.toggle("sel", i === selIdx));
+    }
+    if (e.key === "Enter" && items[selIdx]) items[selIdx].click();
+  });
+
+  $$("#menu .wcard").forEach(c => c.addEventListener("click", () => { addWidget(c.dataset.add); closeMenu(); }));
+
+  // fondo
+  const grid = $("#wp-presets");
+  WP_PRESETS.forEach((g, i) => {
+    const d = document.createElement("div");
+    d.className = "wp-opt"; d.style.background = g;
+    d.addEventListener("click", () => { state.settings.wallpaper = { type: "preset", value: i }; applyWallpaper(); markDirty(); });
+    grid.appendChild(d);
+  });
+  $("#act-wallpaper").addEventListener("click", () => { closeMenu(); $("#ov-wp").classList.add("open"); });
+  $("#wp-close").addEventListener("click", () => $("#ov-wp").classList.remove("open"));
+  $("#wp-url-go").addEventListener("click", () => {
+    const u = $("#wp-url").value.trim(); if (!u) return;
+    state.settings.wallpaper = { type: "url", value: u }; applyWallpaper(); markDirty();
+  });
+  $("#wp-file").addEventListener("click", () => {
+    if (backend !== "fs"){ toast("Necesitas una carpeta de datos conectada", true); return; }
+    state.settings.wallpaper = { type: "file" }; applyWallpaper(); markDirty();
+  });
+
+  // packs
+  $("#act-packs").addEventListener("click", async () => {
+    closeMenu();
+    const followed = await idbGet("packHandle").catch(() => null);
+    $("#pack-unfollow").style.display = followed ? "" : "none";
+    $("#pack-check").style.display = followed ? "" : "none";
+    $("#ov-packs").classList.add("open");
+  });
+  $("#pack-check").addEventListener("click", async () => {
+    $("#ov-packs").classList.remove("open");
+    await checkFollowedPack(true);
+  });
+  $("#pack-close").addEventListener("click", () => $("#ov-packs").classList.remove("open"));
+  $$("#ov-packs .wcard").forEach(c => c.addEventListener("click", async () => {
+    $("#ov-packs").classList.remove("open");
+    await applyBuiltin(c.dataset.pack);
+  }));
+  $("#pack-url-go").addEventListener("click", async () => {
+    const u = $("#pack-url").value.trim(); if (!u) return;
+    $("#ov-packs").classList.remove("open");
+    try{
+      const r = await fetch(u, { cache: "no-store" });
+      await applyPack(await r.json());
+    }catch(e){ toast("No se pudo cargar (¿CORS o JSON inválido?)", true); }
+  });
+  $("#pack-file").addEventListener("click", async () => {
+    if (!window.showOpenFilePicker){ toast("Esta función necesita Edge o Chrome", true); return; }
+    $("#ov-packs").classList.remove("open");
+    try{
+      const [h] = await window.showOpenFilePicker({ types: [{ description: "Pack JSON", accept: { "application/json": [".json"] } }] });
+      await applyPack(JSON.parse(await (await h.getFile()).text()));
+    }catch(e){ /* cancelado */ }
+  });
+  $("#pack-follow").addEventListener("click", async () => { $("#ov-packs").classList.remove("open"); await followPackFile(); });
+  $("#pack-unfollow").addEventListener("click", async () => {
+    await idbDel("packHandle"); await idbDel("packMtime");
+    $("#ov-packs").classList.remove("open"); toast("Ya no sigues ningún pack");
+  });
+
+  // carpeta / exportar / importar
+  $("#act-folder").addEventListener("click", () => { closeMenu(); $("#ov-boot").classList.add("open"); });
+  $("#act-export").addEventListener("click", () => {
+    closeMenu();
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([JSON.stringify(state, null, 2)], { type: "application/json" }));
+    a.download = "cabecera-copia-" + new Date().toISOString().slice(0, 10) + ".json";
+    a.click(); URL.revokeObjectURL(a.href);
+  });
+  $("#act-restore").addEventListener("click", () => {
+    closeMenu();
+    const tryRestore = (key, label) => {
+      const raw = localStorage.getItem(key);
+      if (!raw) return false;
+      if (!confirm(label)) return false;
+      try{ state = JSON.parse(raw); renderAll(); markDirty(); toast("Copia restaurada"); return true; }
+      catch(e){ toast("Esa copia está dañada", true); return false; }
+    };
+    if (tryRestore("cabecera-backup-antes-pack", "¿Restaurar el escritorio previo al último pack aplicado?")) return;
+    if (tryRestore("cabecera-local-prev", "¿Restaurar tu escritorio local previo a conectar la carpeta?")) return;
+    toast("No hay copias locales guardadas");
+  });
+  $("#act-import").addEventListener("click", () => {
+    closeMenu();
+    const inp = document.createElement("input");
+    inp.type = "file"; inp.accept = ".json";
+    inp.addEventListener("change", async () => {
+      try{
+        state = JSON.parse(await inp.files[0].text());
+        renderAll(); markDirty(); toast("Copia imcabecera");
+      }catch(e){ toast("JSON inválido", true); }
+    });
+    inp.click();
+  });
+
+  // sincronización / reconectar
+  $("#boot-pick").addEventListener("click", pickFolder);
+  $("#boot-close").addEventListener("click", () => $("#ov-boot").classList.remove("open"));
+  $("#rc-go").addEventListener("click", async () => {
+    if (await fsPerm(dirHandle, true)){ $("#ov-reconnect").classList.remove("open"); await startFS(); }
+    else toast("Permiso denegado", true);
+  });
+  $("#rc-repick").addEventListener("click", async () => { await idbDel("dirHandle"); location.reload(); });
+
+  // conflicto
+  $("#cf-reload").addEventListener("click", async () => {
+    conflictPending = false; dirty = false; $("#conflict").classList.remove("open");
+    lastMtime = 0; await startFS();
+  });
+  $("#cf-force").addEventListener("click", async () => {
+    conflictPending = false; $("#conflict").classList.remove("open");
+    lastMtime = Infinity;      // fuerza la siguiente escritura
+    await saveNow();
+    lastMtime = 0; const fh = await dirHandle.getFileHandle(DATA_FILE); lastMtime = (await fh.getFile()).lastModified;
+  });
+
+  // bandeja
+  $("#tb-inbox").addEventListener("click", openInbox);
+  $("#inbox-close").addEventListener("click", () => $("#ov-inbox").classList.remove("open"));
+  $("#inbox-clear").addEventListener("click", async () => {
+    // vacía solo lo que el usuario está viendo; una línea recién llegada sobrevive
+    const shown = [...inboxLines];
+    await mutateInbox(fresh => fresh.filter(l => {
+      const k = shown.indexOf(l);
+      if (k >= 0){ shown.splice(k, 1); return false; }
+      return true;
+    }));
+    paintInbox();
+  });
+}
+
+function openInbox(){ paintInbox(); $("#ov-inbox").classList.add("open"); }
+function paintInbox(){
+  const box = $("#inbox-list");
+  box.innerHTML = inboxLines.length ? "" : `<div class="empty">inbox.txt está vacío. Cualquier línea que otro programa, un agente o el móvil escriban ahí aparecerá aquí.</div>`;
+  inboxLines.forEach((line, i) => {
+    const d = document.createElement("div");
+    d.className = "inbox-line";
+    d.innerHTML = `<span class="t">${esc(line)}</span>
+      <button class="mini n">📝 Nota</button><button class="mini k">✅ Tarea</button><button class="mini c">📋 Clip</button><button class="it-del" style="opacity:1">✕</button>`;
+    const consume = async fn => {
+      fn(line);
+      await mutateInbox(fresh => { const k = fresh.indexOf(line); if (k >= 0) fresh.splice(k, 1); return fresh; });
+      paintInbox(); markDirty();
+    };
+    d.querySelector(".n").addEventListener("click", () => consume(t => {
+      let w = state.widgets.find(x => x.type === "notes");
+      if (!w){ addWidget("notes"); w = state.widgets[state.widgets.length - 1]; }
+      w.data.text = (w.data.text ? w.data.text + "\n" : "") + t; refreshWidget(w);
+    }));
+    d.querySelector(".k").addEventListener("click", () => consume(t => {
+      let w = state.widgets.find(x => x.type === "todo");
+      if (!w){ addWidget("todo"); w = state.widgets[state.widgets.length - 1]; }
+      w.data.items.push({ t, done: false }); refreshWidget(w);
+    }));
+    d.querySelector(".c").addEventListener("click", () => consume(t => {
+      let w = state.widgets.find(x => x.type === "clips");
+      if (!w){ addWidget("clips"); w = state.widgets[state.widgets.length - 1]; }
+      w.data.items.unshift({ t }); refreshWidget(w);
+    }));
+    d.querySelector(".it-del").addEventListener("click", async () => {
+      await mutateInbox(fresh => { const k = fresh.indexOf(line); if (k >= 0) fresh.splice(k, 1); return fresh; });
+      paintInbox();
+    });
+    box.appendChild(d);
+  });
+}
+
+/* ---------- reloj de la barra ---------- */
+function startClock(){
+  const paint = () => {
+    const n = new Date();
+    $("#tb-clock .h").textContent = n.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
+    $("#tb-clock .d").textContent = n.toLocaleDateString("es-ES", { weekday: "short", day: "numeric", month: "short" });
+  };
+  setInterval(paint, 10000); paint();
+}
+
+boot();
+</script>
+</body>
+</html>

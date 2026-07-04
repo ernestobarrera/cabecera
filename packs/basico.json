@@ -1,0 +1,17 @@
+{
+  "cabeceraPack": 1,
+  "name": "Básico",
+  "description": "Escritorio general: Microsoft 365, notas y tareas.",
+  "settings": { "wallpaper": { "type": "preset", "value": 1 } },
+  "widgets": [
+    { "type": "links", "x": 40, "y": 40, "w": 290, "h": 260, "data": { "groups": [ { "name": "Microsoft 365", "links": [
+      { "t": "Outlook", "u": "https://outlook.office.com/" },
+      { "t": "Teams", "u": "https://teams.microsoft.com/" },
+      { "t": "OneDrive", "u": "https://www.office.com/launch/onedrive" },
+      { "t": "Calendario", "u": "https://outlook.office.com/calendar/" }
+    ]}]}},
+    { "type": "notes", "x": 350, "y": 40, "w": 300, "h": 220, "data": { "text": "" } },
+    { "type": "todo", "x": 350, "y": 290, "w": 300, "h": 240, "data": { "items": [] } },
+    { "type": "clock", "x": 680, "y": 40, "w": 240, "h": 150, "data": {} }
+  ]
+}
