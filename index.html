@@ -83,7 +83,7 @@ body{font-family:var(--font); color:var(--text); background:#10131a}
 .res-item{display:flex; align-items:center; gap:10px; padding:7px 9px; border-radius:9px; cursor:pointer; font-size:13.5px}
 .res-item:hover,.res-item.sel{background:var(--accent-soft)}
 .res-item .u{color:var(--text-dim); font-size:11.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1; text-align:right}
-#menu-widgets{padding:6px 12px 12px}
+#menu-widgets{padding:6px 12px 12px; overflow:auto; min-height:0; flex:1}
 #menu-widgets h4, #menu-actions h4{font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--text-dim); margin:8px 2px 8px}
 .wgrid{display:grid; grid-template-columns:repeat(3,1fr); gap:8px}
 .wcard{display:flex; flex-direction:column; align-items:center; gap:6px; padding:12px 6px; border-radius:12px;
@@ -214,6 +214,22 @@ ul.plain{list-style:none}
 .aclk .hub{fill:var(--accent)}
 /* buscadores */
 .eng-list{margin-bottom:8px}
+/* calculadora */
+.calc{height:100%; display:flex; flex-direction:column; gap:8px; outline:none}
+.calc-dsp{background:rgba(0,0,0,.3); border:1px solid var(--border-soft); border-radius:10px; padding:10px 12px;
+  font-size:24px; text-align:right; overflow:hidden; white-space:nowrap; min-height:48px}
+.calc:focus .calc-dsp{border-color:var(--accent)}
+.calc-grid{flex:1; display:grid; grid-template-columns:repeat(4,1fr); gap:6px}
+.calc-k{border-radius:9px; border:1px solid var(--border-soft); background:rgba(255,255,255,.05); color:var(--text);
+  font-size:15px; cursor:pointer; font-family:var(--font)}
+.calc-k:hover{background:rgba(255,255,255,.12)}
+.calc-k.op{background:var(--accent-soft); border-color:rgba(90,169,247,.35)}
+.calc-k.op:hover{background:var(--accent); color:#0b1220}
+/* dictado */
+.dict{height:100%; display:flex; flex-direction:column; gap:8px}
+.dict-bar{display:flex; gap:6px; align-items:center; flex-wrap:wrap}
+.dict .notes{height:auto; flex:1; min-height:60px; border:1px solid var(--border-soft); border-radius:9px; padding:8px 10px; background:rgba(0,0,0,.18)}
+.dict-st{padding:0}
 /* píldora de la barra */
 #tb-pill{max-width:360px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
 /* grupos de enlaces */
@@ -256,6 +272,8 @@ ul.plain{list-style:none}
       <div class="wcard" data-add="timer"><span class="ico">⏱️</span>Temporizador</div>
       <div class="wcard" data-add="cal"><span class="ico">📅</span>Calendario</div>
       <div class="wcard" data-add="search"><span class="ico">🔎</span>Buscadores</div>
+      <div class="wcard" data-add="calc"><span class="ico">🧮</span>Calculadora</div>
+      <div class="wcard" data-add="dictado"><span class="ico">🎙️</span>Dictado</div>
     </div>
   </div>
   <div id="menu-actions">
@@ -365,7 +383,8 @@ ul.plain{list-style:none}
       — En un grupo de enlaces, «⇱ todo» abre todos a la vez (permite los pop-ups la primera vez).<br>
       — <b>inbox.txt</b> en tu carpeta de datos: cualquier línea (una macro de teclado, un agente, el móvil vía OneDrive) aparece en la Bandeja.<br>
       — <b>?add=texto</b> añade a la Bandeja; <b>?pack=nombre|URL</b> carga un escritorio completo.<br>
-      — Ctrl+V con una captura dentro del widget Imagen.</p>
+      — Ctrl+V con una captura dentro del widget Imagen.<br>
+      — El widget <b>Dictado</b> transcribe con tu micrófono (Edge/Chrome). Alternativa de Windows: <b>Win+H</b> dicta en cualquier cuadro de texto de la página.</p>
     </details>
     <div class="row"><button class="btn" id="guia-close">Cerrar</button></div>
   </div>
@@ -743,9 +762,10 @@ function normalizePack(p){
     else if (w.type === "notes") data.text = txt(d.text, 20000);
     else if (w.type === "qr")    data.text = txt(d.text, 2000);
     else if (w.type === "md"){   data.text = txt(d.text, 100000); data.view = "view"; }
+    else if (w.type === "dictado") data.text = txt(d.text, 100000);
     else if (w.type === "todo")  data.items = (Array.isArray(d.items) ? d.items : []).map(i => ({ t: txt(i.t, 300), done: !!i.done })).filter(i => i.t);
     else if (w.type === "clips") data.items = (Array.isArray(d.items) ? d.items : []).map(i => ({ t: txt(i.t, 5000) })).filter(i => i.t);
-    else if (w.type === "clock") data.analog = !!d.analog;
+    else if (w.type === "clock") data.analog = d.analog !== false;
     else if (w.type === "timer") data.min = num(d.min, 5, 1, 180);
     else if (w.type === "img"){
       const s = String(d.img || "");
@@ -871,6 +891,8 @@ const WTYPES = {
   timer: { ico: "⏱️", name: "Temporizador", w: 290, h: 210 },
   cal:   { ico: "📅", name: "Calendario",   w: 310, h: 300 },
   search:{ ico: "🔎", name: "Buscadores",   w: 300, h: 330 },
+  calc:  { ico: "🧮", name: "Calculadora",  w: 260, h: 340 },
+  dictado:{ ico: "🎙️", name: "Dictado",     w: 330, h: 300 },
   intro: { ico: "👋", name: "Bienvenida",   w: 350, h: 280 }
 };
 
@@ -957,6 +979,7 @@ function addWidget(type){
         : type === "todo"  ? { items: [] }
         : type === "clips" ? { items: [] }
         : type === "md"    ? { text: "", view: "edit" }
+        : type === "dictado" ? { text: "" }
         : type === "qr"    ? { text: "" } : {} };
   state.widgets.push(w);
   $("#desktop").appendChild(buildWindow(w));
@@ -974,7 +997,8 @@ function refreshWidget(w){
 function renderBody(w, el){
   ({ links: bodyLinks, notes: bodyNotes, todo: bodyTodo,
      clips: bodyClips, qr: bodyQr, clock: bodyClock, intro: bodyIntro,
-     md: bodyMd, img: bodyImg, timer: bodyTimer, cal: bodyCal, search: bodySearch }[w.type] || (x => x))(w, el);
+     md: bodyMd, img: bodyImg, timer: bodyTimer, cal: bodyCal, search: bodySearch,
+     calc: bodyCalc, dictado: bodyDictate }[w.type] || (x => x))(w, el);
 }
 
 /* --- Bienvenida (solo primer arranque) --- */
@@ -1175,7 +1199,7 @@ function showQr(text){
 
 /* --- Reloj (digital / analógico) --- */
 function bodyClock(w, el){
-  const analog = !!w.data.analog;
+  const analog = w.data.analog !== false;   // analógico por defecto
   if (analog){
     const ticks = [...Array(12)].map((_, i) => {
       const a = i * Math.PI / 6;
@@ -1194,20 +1218,21 @@ function bodyClock(w, el){
   }
   el.querySelector(".tg").addEventListener("click", () => { w.data.analog = !analog; refreshWidget(w); markDirty(); });
   const paint = () => {
-    if (!el.isConnected){ clearInterval(iv); return; }
     const n = new Date();
     if (analog){
-      const svg = el.querySelector(".aclk"); if (!svg){ clearInterval(iv); return; }
+      const svg = el.querySelector(".aclk"); if (!svg) return;
       const s = n.getSeconds(), m = n.getMinutes() + s / 60, h = (n.getHours() % 12) + m / 60;
       const rot = (q, deg) => svg.querySelector(q).setAttribute("transform", `rotate(${deg} 50 50)`);
       rot(".hh", h * 30); rot(".mh", m * 6); rot(".sh", s * 6);
     } else {
-      const hd = el.querySelector(".h"); if (!hd){ clearInterval(iv); return; }
+      const hd = el.querySelector(".h"); if (!hd) return;
       hd.textContent = n.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
       el.querySelector(".d").textContent = n.toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long" });
     }
   };
-  const iv = setInterval(paint, analog ? 1000 : 5000);
+  // el guard de ciclo de vida va SOLO en el tick: renderBody corre antes de
+  // insertar la ventana en el DOM y un guard en el primer paint mataba el reloj
+  const iv = setInterval(() => { if (!el.isConnected){ clearInterval(iv); return; } paint(); }, analog ? 1000 : 5000);
   paint();
 }
 
@@ -1724,6 +1749,122 @@ function paintInbox(){
   });
 }
 
+/* --- Calculadora (ejecución inmediata, sin eval) --- */
+function bodyCalc(w, el){
+  el.innerHTML = `<div class="calc" tabindex="0"><div class="calc-dsp">0</div><div class="calc-grid"></div></div>`;
+  const dsp = el.querySelector(".calc-dsp"), grid = el.querySelector(".calc-grid"), box = el.querySelector(".calc");
+  let acc = null, op = null, cur = "0", fresh = true;
+  const fmt = v => {
+    if (!Number.isFinite(v)) return "Error";
+    let s = String(Math.round(v * 1e10) / 1e10);
+    if (s.replace(/[-.]/g, "").length > 12) s = v.toExponential(6);
+    return s;
+  };
+  const apply = (a, b, o) => o === "+" ? a + b : o === "−" ? a - b : o === "×" ? a * b : b === 0 ? NaN : a / b;
+  const show = () => { dsp.textContent = cur; };
+  const digit = d => {
+    if (cur === "Error"){ cur = "0"; fresh = true; }
+    if (fresh){ cur = d === "." ? "0." : d; fresh = false; }
+    else if (d !== "." || !cur.includes(".")){
+      if (cur.replace(/[-.]/g, "").length >= 12) return;
+      cur = (cur === "0" && d !== ".") ? d : cur + d;
+    }
+    show();
+  };
+  const setOp = o => {
+    const n = parseFloat(cur);
+    if (op !== null && !fresh) acc = apply(acc, n, op);
+    else if (acc === null || fresh === false) acc = n;
+    cur = fmt(acc); op = o; fresh = true; show();
+  };
+  const equals = () => { if (op === null) return; cur = fmt(apply(acc, parseFloat(cur), op)); acc = null; op = null; fresh = true; show(); };
+  const clearAll = () => { acc = null; op = null; cur = "0"; fresh = true; show(); };
+  const back = () => { if (fresh || cur === "Error") return; cur = cur.length > 1 ? cur.slice(0, -1) : "0"; show(); };
+  const pct = () => { cur = fmt(parseFloat(cur) / 100); fresh = false; show(); };
+  const KEYS = [
+    ["C", clearAll], ["⌫", back], ["%", pct], ["÷", () => setOp("÷")],
+    ["7", () => digit("7")], ["8", () => digit("8")], ["9", () => digit("9")], ["×", () => setOp("×")],
+    ["4", () => digit("4")], ["5", () => digit("5")], ["6", () => digit("6")], ["−", () => setOp("−")],
+    ["1", () => digit("1")], ["2", () => digit("2")], ["3", () => digit("3")], ["+", () => setOp("+")],
+    ["±", () => { if (cur !== "0" && cur !== "Error"){ cur = cur.startsWith("-") ? cur.slice(1) : "-" + cur; show(); } }],
+    ["0", () => digit("0")], [".", () => digit(".")], ["=", equals]
+  ];
+  for (const [label, fn] of KEYS){
+    const b = document.createElement("button");
+    b.className = "calc-k" + ("÷×−+=".includes(label) ? " op" : "");
+    b.textContent = label;
+    b.addEventListener("click", () => { fn(); box.focus(); });
+    grid.appendChild(b);
+  }
+  // teclado: la ventana enfocada captura números y operadores
+  box.addEventListener("keydown", e => {
+    const k = e.key;
+    if (/^[0-9]$/.test(k)) digit(k);
+    else if (k === "." || k === ",") digit(".");
+    else if (k === "+") setOp("+");
+    else if (k === "-") setOp("−");
+    else if (k === "*") setOp("×");
+    else if (k === "/"){ e.preventDefault(); setOp("÷"); }
+    else if (k === "Enter" || k === "=") equals();
+    else if (k === "Backspace") back();
+    else if (k === "Escape") clearAll();
+    else if (k === "%") pct();
+    else return;
+    e.stopPropagation();
+  });
+  show();
+}
+
+/* --- Dictado por voz (Web Speech API; alternativa en Windows: Win+H) --- */
+function bodyDictate(w, el){
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  el.innerHTML = `
+    <div class="dict">
+      <div class="dict-bar"><button class="mini go">🎙️ Dictar</button><span class="dict-st empty">listo</span></div>
+      <textarea class="notes dict-out" placeholder="Pulsa Dictar y habla: el texto aparece aquí (y puedes editarlo)…"></textarea>
+      <div class="dict-bar"><button class="mini cp">⧉ Copiar</button><button class="mini nt">📝 → Nota</button><button class="mini warn cl">🧹 Limpiar</button></div>
+    </div>`;
+  const ta = el.querySelector(".dict-out"), st = el.querySelector(".dict-st"), go = el.querySelector(".go");
+  ta.value = w.data.text || "";
+  ta.addEventListener("input", () => { w.data.text = ta.value; markDirty(); });
+  el.querySelector(".cp").addEventListener("click", async () => { await navigator.clipboard.writeText(ta.value); toast("Copiado"); });
+  el.querySelector(".cl").addEventListener("click", () => { ta.value = ""; w.data.text = ""; markDirty(); });
+  el.querySelector(".nt").addEventListener("click", () => {
+    if (!ta.value.trim()) return;
+    let n = state.widgets.find(x => x.type === "notes");
+    if (!n){ addWidget("notes"); n = state.widgets[state.widgets.length - 1]; }
+    n.data.text = (n.data.text ? n.data.text + "\n" : "") + ta.value.trim();
+    refreshWidget(n); markDirty(); toast("Enviado a la nota");
+  });
+  if (!SR){
+    st.textContent = "sin dictado web en este navegador — usa Win+H de Windows sobre el cuadro";
+    go.disabled = true;
+    return;
+  }
+  let rec = null, listening = false, base = "";
+  go.addEventListener("click", () => {
+    if (listening){ try{ rec.stop(); }catch(e){} return; }
+    rec = new SR();
+    rec.lang = "es-ES"; rec.continuous = true; rec.interimResults = true;
+    base = ta.value ? ta.value.replace(/\s+$/, "") + " " : "";
+    rec.onstart = () => { listening = true; go.textContent = "⏹ Parar"; st.textContent = "escuchando…"; };
+    rec.onresult = ev => {
+      let done = "", interim = "";
+      for (const r of ev.results){ if (r.isFinal) done += r[0].transcript + " "; else interim += r[0].transcript; }
+      ta.value = base + done + interim;
+      w.data.text = base + done;
+      markDirty();
+    };
+    rec.onerror = ev => { st.textContent = ev.error === "not-allowed" ? "permiso de micrófono denegado" : "error: " + ev.error; };
+    rec.onend = () => {
+      listening = false; go.textContent = "🎙️ Dictar";
+      if (!/denegado|error/.test(st.textContent)) st.textContent = "listo";
+      w.data.text = ta.value; markDirty();
+    };
+    try{ rec.start(); }catch(e){ st.textContent = "no se pudo iniciar el dictado"; }
+  });
+}
+
 /* ---------- píldora informativa de la barra ---------- */
 const TIPS = [
   "Pulsa / para buscar en tus enlaces al instante",
@@ -1736,7 +1877,9 @@ const TIPS = [
   "fondo.jpg en tu carpeta de datos = fondo sincronizado entre equipos",
   "«⇱ todo» en un grupo de enlaces abre todos a la vez",
   "El calendario muestra la semana ISO (≈ semana epidemiológica)",
-  "Tus datos son un archivo tuyo: datos.json, legible y portable"
+  "Tus datos son un archivo tuyo: datos.json, legible y portable",
+  "El widget Dictado transcribe tu voz; Win+H de Windows también sirve",
+  "La calculadora acepta el teclado: números, + − * / y Enter"
 ];
 let pillIdx = 0;
 function pillMsgs(){
