@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.4.0] - 2026-07-04
+
+- **Corregido el aviso de conflicto recurrente**: la vigilancia no corre durante el propio guardado; un cambio de fecha del archivo con contenido idéntico (habitual con OneDrive) ya no cuenta como conflicto; al volver a la pestaña se comprueba de inmediato; y si la página está abierta en dos pestañas, avisa.
+- **5 widgets nuevos**: Markdown (editor + vista, con todo el HTML escapado antes de formatear), Imagen (pegar con Ctrl+V o arrastrar; se reescala y viaja en `datos.json`), Temporizador (cuenta atrás, cronómetro y alarma con aviso sonoro), Calendario (con semana ISO) y Buscadores (plantillas de URL con `%s`, ampliables).
+- **Reloj analógico** conmutable con el digital.
+- **Enlaces**: edición por enlace y «⇱ todo» para abrir el grupo completo.
+- **Títulos de ventana editables** (doble clic en la barra de título; viajan en los packs como `t`).
+- **Packs en modo añadir**: casilla para sumar un pack al escritorio sin sustituirlo.
+- **Guía integrada** (qué es, cómo funciona por dentro, seguridad, atajos) y **píldora informativa** en la barra (semana ISO y día del año, tareas pendientes, consejos de uso).
+- `normalizePack` ampliada a los tipos nuevos, con tests automatizados.
+
 ## [0.3.0] - 2026-07-04
 
 - El proyecto pasa a llamarse **Cabecera** ("tu página de cabecera"). Renombrado global, incluidas claves de almacenamiento (`cabecera-*`), base IndexedDB y campo de formato de packs (`cabeceraPack`).

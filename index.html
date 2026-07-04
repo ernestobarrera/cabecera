@@ -169,6 +169,57 @@ ul.plain{list-style:none}
 .inbox-line{display:flex; align-items:flex-start; gap:8px; padding:8px; border-radius:9px; border:1px solid var(--border-soft); margin-bottom:8px}
 .inbox-line .t{flex:1; word-break:break-word; white-space:pre-wrap; font-size:13px}
 .empty{color:var(--text-dim); font-size:12.5px; padding:8px 4px}
+/* markdown */
+.md-bar{display:flex; gap:6px; margin-bottom:8px}
+.md-view{font-size:13.5px; line-height:1.6}
+.md-view h3,.md-view h4,.md-view h5,.md-view h6{margin:10px 0 6px}
+.md-view p{margin:6px 0}
+.md-view ul,.md-view ol{margin:6px 0 6px 20px}
+.md-view pre{background:rgba(0,0,0,.3); padding:8px 10px; border-radius:8px; overflow:auto; font-size:12px; margin:8px 0; font-family:Consolas,monospace}
+.md-view code{background:rgba(255,255,255,.09); padding:1px 5px; border-radius:5px; font-size:12.5px; font-family:Consolas,monospace}
+.md-view blockquote{border-left:3px solid var(--accent); padding-left:10px; color:var(--text-dim); margin:6px 0}
+.md-view a{color:var(--accent)}
+.md-view hr{border:none; border-top:1px solid var(--border-soft); margin:10px 0}
+/* imagen */
+.dropzone{height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px;
+  border:2px dashed var(--border); border-radius:10px; color:var(--text-dim); font-size:12.5px; text-align:center; padding:10px; outline:none}
+.dropzone:focus{border-color:var(--accent)}
+.img-box{height:100%; display:flex; flex-direction:column; gap:6px}
+.img-box img{flex:1; min-height:0; object-fit:contain; width:100%; border-radius:8px}
+.img-bar{display:flex; gap:6px}
+/* temporizador */
+.tmr{display:flex; flex-direction:column; gap:10px; height:100%}
+.tmr-tabs{display:flex; gap:6px; flex-wrap:wrap}
+.mini.on{background:var(--accent-soft); border-color:var(--accent)}
+.tmr-big{font-size:38px; font-weight:200; text-align:center; letter-spacing:.04em; flex:1; display:flex; align-items:center; justify-content:center}
+.row0{display:flex; gap:8px; align-items:center; justify-content:center; flex-wrap:wrap; color:var(--text-dim); font-size:12.5px}
+.row0 input{padding:6px 8px; border-radius:8px; border:1px solid var(--border-soft); background:rgba(0,0,0,.22); color:var(--text); font-family:var(--font)}
+/* calendario */
+.cal-nav{display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; text-transform:capitalize; font-size:13px}
+.cal-grid{display:grid; grid-template-columns:auto repeat(7,1fr); gap:2px; text-align:center; font-size:12.5px}
+.cal-grid .hd{color:var(--text-dim); font-size:10.5px; padding:3px 0}
+.cal-grid .wk{color:var(--text-dim); font-size:9.5px; padding:5px 5px 0 0; text-align:right; opacity:.7}
+.cal-grid .d{padding:4px 0; border-radius:6px}
+.cal-grid .d.today{background:var(--accent); color:#0b1220; font-weight:700}
+/* reloj analógico */
+.clock-face{position:relative}
+.clock-face .tg{position:absolute; top:0; right:0; opacity:0}
+.clock-face:hover .tg{opacity:1}
+.aclk{flex:1; width:100%; min-height:0}
+.aclk .c0{fill:rgba(255,255,255,.04); stroke:var(--border)}
+.aclk .tick{stroke:var(--text-dim); stroke-width:1}
+.aclk .hh{stroke:var(--text); stroke-width:3; stroke-linecap:round}
+.aclk .mh{stroke:var(--text); stroke-width:2; stroke-linecap:round}
+.aclk .sh{stroke:var(--accent); stroke-width:1}
+.aclk .hub{fill:var(--accent)}
+/* buscadores */
+.eng-list{margin-bottom:8px}
+/* píldora de la barra */
+#tb-pill{max-width:360px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+/* grupos de enlaces */
+.link-group h5{display:flex; align-items:center; gap:8px; justify-content:space-between}
+.link-group .oa{opacity:0}
+.link-group:hover .oa{opacity:1}
 ::-webkit-scrollbar{width:9px; height:9px}
 ::-webkit-scrollbar-thumb{background:rgba(255,255,255,.14); border-radius:5px}
 ::-webkit-scrollbar-track{background:transparent}
@@ -182,6 +233,7 @@ ul.plain{list-style:none}
 <div id="taskbar">
   <button id="btn-inicio">⊞ Inicio</button>
   <div id="tb-spacer"></div>
+  <div class="tb-item" id="tb-pill" title="Píldora informativa — clic para cambiar"></div>
   <div class="tb-item" id="tb-inbox" title="Hay texto nuevo en inbox.txt">📥 Bandeja <span id="tb-inbox-n"></span></div>
   <div class="tb-item" id="tb-sync" title="Estado de sincronización"><span class="dot"></span><span id="tb-sync-t">—</span></div>
   <div class="tb-item" id="tb-clock"><div><div class="h"></div><div class="d"></div></div></div>
@@ -199,10 +251,16 @@ ul.plain{list-style:none}
       <div class="wcard" data-add="clips"><span class="ico">📋</span>Portapapeles</div>
       <div class="wcard" data-add="qr"><span class="ico">🔳</span>QR</div>
       <div class="wcard" data-add="clock"><span class="ico">🕐</span>Reloj</div>
+      <div class="wcard" data-add="md"><span class="ico">📄</span>Markdown</div>
+      <div class="wcard" data-add="img"><span class="ico">🖼️</span>Imagen</div>
+      <div class="wcard" data-add="timer"><span class="ico">⏱️</span>Temporizador</div>
+      <div class="wcard" data-add="cal"><span class="ico">📅</span>Calendario</div>
+      <div class="wcard" data-add="search"><span class="ico">🔎</span>Buscadores</div>
     </div>
   </div>
   <div id="menu-actions">
     <h4 style="width:100%">Configuración</h4>
+    <button class="act" id="act-ayuda">❓ Guía</button>
     <button class="act" id="act-packs">🧩 Packs</button>
     <button class="act" id="act-wallpaper">🖼️ Fondo</button>
     <button class="act" id="act-folder">📁 Sincronizar equipos</button>
@@ -236,6 +294,7 @@ ul.plain{list-style:none}
       <div class="wcard" data-pack="basico"><span class="ico">🧰</span>Básico<span class="empty" style="padding:0">M365, notas, tareas</span></div>
     </div>
     <div class="field"><input id="pack-url" type="text" placeholder="https://… (URL de un pack.json)"><button class="mini" id="pack-url-go">Cargar</button></div>
+    <label class="hint" style="display:flex; gap:7px; align-items:center; cursor:pointer"><input type="checkbox" id="pack-add" style="accent-color:var(--accent)"> Añadir al escritorio actual en lugar de sustituirlo</label>
     <div class="row">
       <button class="btn" id="pack-file">📄 Abrir pack desde archivo…</button>
       <button class="btn" id="pack-follow">📡 Seguir pack compartido…</button>
@@ -286,6 +345,32 @@ ul.plain{list-style:none}
   </div>
 </div>
 
+<!-- guía -->
+<div class="overlay" id="ov-guia">
+  <div class="modal">
+    <h2>Cabecera — tu página de cabecera</h2>
+    <p><b>Tus datos son un archivo tuyo.</b> Cabecera es una página de inicio de widgets sin cuentas, sin servidor y sin rastreo: el código es una web estática y todo lo que escribes vive en tu navegador o en un archivo <b>datos.json</b> de una carpeta que tú eliges. Si esa carpeta es de OneDrive, tienes el mismo escritorio en el trabajo y en casa.</p>
+    <details><summary>Cómo funciona por dentro (1 minuto)</summary>
+      <p class="hint">La página usa la File System Access API del navegador (Edge/Chrome): conectas una carpeta una vez, el navegador recuerda el permiso, y Cabecera guarda ahí <b>datos.json</b>, lo vigila cada 4 segundos y recarga lo que cambie (por ejemplo, lo que OneDrive sincronice desde tu otro ordenador). Nada viaja a ningún servidor propio: no hay cuentas, ni cookies de terceros, ni analítica. El código es abierto (MIT) y puede auditarse.</p>
+    </details>
+    <details><summary>Seguridad y buen uso</summary>
+      <p class="hint">— El almacenamiento no está cifrado: en un PC compartido usa un perfil de navegador propio.<br>
+      — No guardes datos de pacientes ni información sensible: Cabecera no es una historia clínica.<br>
+      — Los packs se validan antes de aplicarse (solo enlaces http/https, sin código), pero aplica packs solo de fuentes que conozcas.<br>
+      — Copias: menú Inicio → «Exportar copia»; y «Restaurar copia» si algo sale mal.</p>
+    </details>
+    <details><summary>Atajos e integraciones</summary>
+      <p class="hint">— <b>/</b> abre el buscador de tus enlaces; ↑↓ y Enter para abrir.<br>
+      — Doble clic en el título de una ventana para renombrarla.<br>
+      — En un grupo de enlaces, «⇱ todo» abre todos a la vez (permite los pop-ups la primera vez).<br>
+      — <b>inbox.txt</b> en tu carpeta de datos: cualquier línea (una macro de teclado, un agente, el móvil vía OneDrive) aparece en la Bandeja.<br>
+      — <b>?add=texto</b> añade a la Bandeja; <b>?pack=nombre|URL</b> carga un escritorio completo.<br>
+      — Ctrl+V con una captura dentro del widget Imagen.</p>
+    </details>
+    <div class="row"><button class="btn" id="guia-close">Cerrar</button></div>
+  </div>
+</div>
+
 <div id="conflict">
   ⚠️ <b>datos.json</b> cambió en otro equipo mientras editabas aquí.
   <button class="mini" id="cf-reload">Cargar lo remoto</button>
@@ -322,6 +407,7 @@ let conflictPending = false;
 let inboxLines = [];
 let zTop = 10;
 let isFirstRun = false;
+let saving = false;
 
 function defaultState(){
   return {
@@ -433,6 +519,7 @@ function markDirty(){
 
 async function saveNow(){
   state.updatedAt = Date.now();
+  saving = true;
   try{
     if (backend === "fs"){
       const okWrite = await writeDataFile();
@@ -445,27 +532,33 @@ async function saveNow(){
   }catch(e){
     syncUI("err", "error al guardar");
     toast("No se pudo guardar: " + e.message, true);
+  }finally{
+    saving = false;
   }
 }
 
 /* vigilancia de cambios externos + inbox */
 async function poll(){
   if (backend !== "fs" || !dirHandle) return;
-  try{
+  // no comprobar mientras escribimos nosotros: evita auto-conflictos falsos
+  if (!saving) try{
     const fh = await dirHandle.getFileHandle(DATA_FILE, { create: true });
     const f = await fh.getFile();
     if (f.lastModified > lastMtime){
-      if (dirty){
+      let remote = null;
+      try{ remote = JSON.parse(await f.text()); }catch(e){ /* escritura a medias: reintentar en el siguiente ciclo */ }
+      if (remote && remote.updatedAt === state.updatedAt){
+        // mismo contenido (OneDrive tocó el mtime en un roundtrip): no es conflicto
+        lastMtime = f.lastModified;
+      } else if (remote && !dirty){
+        state = remote;
+        lastMtime = f.lastModified;
+        renderAll();
+        toast("Actualizado desde otro equipo");
+      } else if (remote && dirty){
         conflictPending = true;
         $("#conflict").classList.add("open");
-      } else {
-        const text = await f.text();
-        if (text.trim()){
-          state = JSON.parse(text);
-          lastMtime = f.lastModified;
-          renderAll();
-          toast("Actualizado desde otro equipo");
-        }
+        syncUI("err", "conflicto");
       }
     }
   }catch(e){ /* transitorio de OneDrive: se reintenta en el siguiente ciclo */ }
@@ -647,14 +740,30 @@ function normalizePack(p){
     }
     else if (w.type === "notes") data.text = txt(d.text, 20000);
     else if (w.type === "qr")    data.text = txt(d.text, 2000);
+    else if (w.type === "md"){   data.text = txt(d.text, 100000); data.view = "view"; }
     else if (w.type === "todo")  data.items = (Array.isArray(d.items) ? d.items : []).map(i => ({ t: txt(i.t, 300), done: !!i.done })).filter(i => i.t);
     else if (w.type === "clips") data.items = (Array.isArray(d.items) ? d.items : []).map(i => ({ t: txt(i.t, 5000) })).filter(i => i.t);
-    widgets.push({
+    else if (w.type === "clock") data.analog = !!d.analog;
+    else if (w.type === "timer") data.min = num(d.min, 5, 1, 180);
+    else if (w.type === "img"){
+      const s = String(d.img || "");
+      if (!s.startsWith("data:image/") || s.length > 2500000) continue;
+      data.img = s;
+    }
+    else if (w.type === "search"){
+      data.engines = (Array.isArray(d.engines) ? d.engines : []).map(e => {
+        const u = String(e.u || "");
+        return (/^https?:\/\//i.test(u) && u.includes("%s")) ? { n: txt(e.n || "buscador", 40), u: u.slice(0, 500) } : null;
+      }).filter(Boolean);
+    }
+    const wo = {
       type: w.type,
       x: num(w.x, 40, 0, 4000), y: num(w.y, 40, 0, 4000),
       w: num(w.w, WTYPES[w.type].w, 220, 2000), h: num(w.h, WTYPES[w.type].h, 140, 2000),
       data
-    });
+    };
+    if (w.t) wo.t = txt(w.t, 60);
+    widgets.push(wo);
   }
   if (!widgets.length) return null;
   const settings = {};
@@ -667,18 +776,26 @@ function normalizePack(p){
 async function applyPack(pack, opts = {}){
   const np = normalizePack(pack);
   if (!np){ toast("El pack no es válido o no contiene widgets utilizables", true); return false; }
+  const add = !!opts.add;
   const ask = opts.ask !== false;
-  if (ask && !confirm(`¿Aplicar el pack "${np.name || "sin nombre"}"?\nSustituye tu escritorio actual (se guarda una copia local automática).`)) return false;
+  if (ask && !confirm(add
+    ? `¿Añadir los ${np.widgets.length} widgets del pack "${np.name || "sin nombre"}" a tu escritorio actual?`
+    : `¿Aplicar el pack "${np.name || "sin nombre"}"?\nSustituye tu escritorio actual (se guarda una copia local automática).`)) return false;
   try{ localStorage.setItem("cabecera-backup-antes-pack", JSON.stringify(state)); }catch(e){}
-  let z = 0;
-  state = {
-    version: 1,
-    updatedAt: Date.now(),
-    settings: Object.assign({}, state && state.settings, np.settings),
-    widgets: np.widgets.map(w => ({ id: uid(), z: ++z, ...w }))
-  };
+  if (add){
+    // se suma al escritorio, con un pequeño desplazamiento para verse; el fondo no se toca
+    for (const w of np.widgets) state.widgets.push({ id: uid(), z: ++zTop, ...w, x: w.x + 24, y: w.y + 24 });
+  } else {
+    let z = 0;
+    state = {
+      version: 1,
+      updatedAt: Date.now(),
+      settings: Object.assign({}, state && state.settings, np.settings),
+      widgets: np.widgets.map(w => ({ id: uid(), z: ++z, ...w }))
+    };
+  }
   renderAll(); markDirty();
-  toast(`Pack "${np.name || ""}" aplicado`);
+  toast(`Pack "${np.name || ""}" ${add ? "añadido" : "aplicado"}`);
   return true;
 }
 
@@ -746,7 +863,12 @@ const WTYPES = {
   todo:  { ico: "✅", name: "Tareas",       w: 300, h: 260 },
   clips: { ico: "📋", name: "Portapapeles", w: 320, h: 300 },
   qr:    { ico: "🔳", name: "QR",           w: 260, h: 330 },
-  clock: { ico: "🕐", name: "Reloj",        w: 240, h: 150 },
+  clock: { ico: "🕐", name: "Reloj",        w: 240, h: 170 },
+  md:    { ico: "📄", name: "Markdown",     w: 340, h: 320 },
+  img:   { ico: "🖼️", name: "Imagen",       w: 340, h: 280 },
+  timer: { ico: "⏱️", name: "Temporizador", w: 290, h: 210 },
+  cal:   { ico: "📅", name: "Calendario",   w: 310, h: 300 },
+  search:{ ico: "🔎", name: "Buscadores",   w: 300, h: 330 },
   intro: { ico: "👋", name: "Bienvenida",   w: 350, h: 280 }
 };
 
@@ -768,11 +890,21 @@ function buildWindow(w){
   el.dataset.id = w.id;
   el.style.cssText = `left:${+w.x || 0}px; top:${+w.y || 0}px; width:${+w.w || 260}px; height:${+w.h || 180}px; z-index:${+w.z || 1}`;
   el.innerHTML = `
-    <div class="win-title"><span class="ico">${t.ico}</span>${esc(t.name)}<span class="sp"></span>
+    <div class="win-title" title="Doble clic para renombrar"><span class="ico">${t.ico}</span><span class="tname">${esc(w.t || t.name)}</span><span class="sp"></span>
       <button class="win-btn close" title="Cerrar">✕</button></div>
     <div class="win-body"></div>
     <div class="win-resize"></div>`;
   renderBody(w, el.querySelector(".win-body"));
+
+  // renombrar ventana (título propio, ej. "Notas de sesión")
+  el.querySelector(".win-title").addEventListener("dblclick", e => {
+    if (e.target.closest("button")) return;
+    const v = prompt("Título de la ventana:", w.t || t.name);
+    if (v === null) return;
+    w.t = v.trim() || undefined;
+    el.querySelector(".tname").textContent = w.t || t.name;
+    markDirty();
+  });
 
   el.addEventListener("pointerdown", () => {
     w.z = ++zTop; el.style.zIndex = zTop; markDirty();
@@ -822,6 +954,7 @@ function addWidget(type){
         : type === "notes" ? { text: "" }
         : type === "todo"  ? { items: [] }
         : type === "clips" ? { items: [] }
+        : type === "md"    ? { text: "", view: "edit" }
         : type === "qr"    ? { text: "" } : {} };
   state.widgets.push(w);
   $("#desktop").appendChild(buildWindow(w));
@@ -838,7 +971,8 @@ function refreshWidget(w){
    ============================================================ */
 function renderBody(w, el){
   ({ links: bodyLinks, notes: bodyNotes, todo: bodyTodo,
-     clips: bodyClips, qr: bodyQr, clock: bodyClock, intro: bodyIntro }[w.type] || (x => x))(w, el);
+     clips: bodyClips, qr: bodyQr, clock: bodyClock, intro: bodyIntro,
+     md: bodyMd, img: bodyImg, timer: bodyTimer, cal: bodyCal, search: bodySearch }[w.type] || (x => x))(w, el);
 }
 
 /* --- Bienvenida (solo primer arranque) --- */
@@ -850,11 +984,13 @@ function bodyIntro(w, el){
       <button class="mini pk">🩺 Pack sanitario</button>
       <button class="mini pks">🧩 Ver packs</button>
       <button class="mini sy">📁 Sincronizar equipos</button>
+      <button class="mini gu">❓ Guía</button>
     </div>
     <p class="empty">Cuando no la necesites, cierra esta ventana con la ✕.</p></div>`;
   el.querySelector(".pk").addEventListener("click", () => applyBuiltin("sanitarios"));
   el.querySelector(".pks").addEventListener("click", () => $("#ov-packs").classList.add("open"));
   el.querySelector(".sy").addEventListener("click", () => $("#ov-boot").classList.add("open"));
+  el.querySelector(".gu").addEventListener("click", () => $("#ov-guia").classList.add("open"));
 }
 
 /* --- Nota --- */
@@ -950,8 +1086,24 @@ function bodyLinks(w, el){
     for (const g of w.data.groups){
       const gd = document.createElement("div");
       gd.className = "link-group";
-      if (w.data.groups.length > 1 || g.name !== "General") gd.innerHTML = `<h5>${esc(g.name)}</h5>`;
-      if (!g.links.length) gd.innerHTML += `<div class="empty">Añade enlaces arriba. También se buscan desde el menú Inicio.</div>`;
+      const h5 = document.createElement("h5");
+      h5.innerHTML = `<span>${esc(g.name)}</span>`;
+      if (g.links.length > 1){
+        const oa = document.createElement("button");
+        oa.className = "mini oa"; oa.title = "Abrir todos los enlaces del grupo"; oa.textContent = "⇱ todo";
+        oa.addEventListener("click", () => {
+          let blocked = false;
+          g.links.forEach(l => { if (!window.open(l.u, "_blank", "noopener")) blocked = true; });
+          if (blocked) toast("El navegador bloqueó ventanas: permite los pop-ups para este sitio y reintenta", true);
+        });
+        h5.appendChild(oa);
+      }
+      gd.appendChild(h5);
+      if (!g.links.length){
+        const em = document.createElement("div");
+        em.className = "empty"; em.textContent = "Añade enlaces arriba. También se buscan desde el menú Inicio.";
+        gd.appendChild(em);
+      }
       g.links.forEach((l, i) => {
         let host = ""; try{ host = new URL(l.u).hostname; }catch(e){}
         const d = document.createElement("div");
@@ -959,10 +1111,21 @@ function bodyLinks(w, el){
         d.title = l.u;
         d.innerHTML = `<span class="link-tile" style="background:hsl(${hueOf(host || l.t)},55%,42%)">${esc((l.t || "?")[0].toUpperCase())}</span>
           <span class="t">${esc(l.t)}</span>
+          <button class="it-act ed" title="Editar">✎</button>
           <button class="it-act qr" title="Ver QR">🔳</button>
           <button class="it-act cp" title="Copiar URL">⧉</button>
           <button class="it-del" title="Borrar">✕</button>`;
         d.addEventListener("click", e => { if (!e.target.closest("button")) window.open(l.u, "_blank", "noopener"); });
+        d.querySelector(".ed").addEventListener("click", () => {
+          const nt = prompt("Título:", l.t); if (nt === null) return;
+          let nu = prompt("URL:", l.u); if (nu === null) return;
+          nu = nu.trim();
+          if (nu && !/^[a-z]+:\/\//i.test(nu)) nu = "https://" + nu;
+          try{ const x = new URL(nu); if (x.protocol !== "https:" && x.protocol !== "http:") throw 0; }
+          catch(e){ toast("URL no válida", true); return; }
+          l.t = nt.trim() || l.t; l.u = nu;
+          paint(); markDirty();
+        });
         d.querySelector(".cp").addEventListener("click", async () => { await navigator.clipboard.writeText(l.u); toast("URL copiada"); });
         d.querySelector(".qr").addEventListener("click", () => showQr(l.u));
         d.querySelector(".it-del").addEventListener("click", () => { g.links.splice(i, 1); paint(); markDirty(); });
@@ -1008,17 +1171,273 @@ function showQr(text){
   markDirty();
 }
 
-/* --- Reloj --- */
+/* --- Reloj (digital / analógico) --- */
 function bodyClock(w, el){
-  el.innerHTML = `<div class="clock-face"><div class="h"></div><div class="d"></div></div>`;
+  const analog = !!w.data.analog;
+  if (analog){
+    const ticks = [...Array(12)].map((_, i) => {
+      const a = i * Math.PI / 6;
+      const x1 = 50 + 41 * Math.sin(a), y1 = 50 - 41 * Math.cos(a);
+      const x2 = 50 + 45 * Math.sin(a), y2 = 50 - 45 * Math.cos(a);
+      return `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" class="tick"/>`;
+    }).join("");
+    el.innerHTML = `<div class="clock-face"><svg class="aclk" viewBox="0 0 100 100">
+      <circle cx="50" cy="50" r="47" class="c0"/>${ticks}
+      <line class="hh" x1="50" y1="50" x2="50" y2="28"/><line class="mh" x1="50" y1="50" x2="50" y2="18"/><line class="sh" x1="50" y1="50" x2="50" y2="14"/>
+      <circle cx="50" cy="50" r="2.2" class="hub"/></svg>
+      <button class="mini tg" title="Cambiar a digital">🔁</button></div>`;
+  } else {
+    el.innerHTML = `<div class="clock-face"><div class="h"></div><div class="d"></div>
+      <button class="mini tg" title="Cambiar a analógico">🔁</button></div>`;
+  }
+  el.querySelector(".tg").addEventListener("click", () => { w.data.analog = !analog; refreshWidget(w); markDirty(); });
   const paint = () => {
+    if (!el.isConnected){ clearInterval(iv); return; }
     const n = new Date();
-    const h = el.querySelector(".h"), d = el.querySelector(".d");
-    if (!h){ clearInterval(iv); return; }
-    h.textContent = n.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
-    d.textContent = n.toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long" });
+    if (analog){
+      const svg = el.querySelector(".aclk"); if (!svg){ clearInterval(iv); return; }
+      const s = n.getSeconds(), m = n.getMinutes() + s / 60, h = (n.getHours() % 12) + m / 60;
+      const rot = (q, deg) => svg.querySelector(q).setAttribute("transform", `rotate(${deg} 50 50)`);
+      rot(".hh", h * 30); rot(".mh", m * 6); rot(".sh", s * 6);
+    } else {
+      const hd = el.querySelector(".h"); if (!hd){ clearInterval(iv); return; }
+      hd.textContent = n.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
+      el.querySelector(".d").textContent = n.toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long" });
+    }
   };
-  const iv = setInterval(paint, 5000);
+  const iv = setInterval(paint, analog ? 1000 : 5000);
+  paint();
+}
+
+/* --- Markdown (renderizador propio: se escapa TODO antes de aplicar formato) --- */
+function mdToHtml(src){
+  const lines = esc(src).split(/\r?\n/);
+  const out = [];
+  let inCode = false, inList = null;
+  const closeList = () => { if (inList){ out.push(`</${inList}>`); inList = null; } };
+  const inline = s => s
+    .replace(/`([^`]+)`/g, "<code>$1</code>")
+    .replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>")
+    .replace(/\*([^*]+)\*/g, "<i>$1</i>")
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+  for (const l of lines){
+    if (l.startsWith("```")){ closeList(); inCode = !inCode; out.push(inCode ? "<pre>" : "</pre>"); continue; }
+    if (inCode){ out.push(l); continue; }
+    let m;
+    if ((m = l.match(/^(#{1,4})\s+(.*)/))){ closeList(); const n = m[1].length + 2; out.push(`<h${n}>${inline(m[2])}</h${n}>`); continue; }
+    if ((m = l.match(/^\s*[-*]\s+(.*)/))){ if (inList !== "ul"){ closeList(); out.push("<ul>"); inList = "ul"; } out.push(`<li>${inline(m[1])}</li>`); continue; }
+    if ((m = l.match(/^\s*\d+[.)]\s+(.*)/))){ if (inList !== "ol"){ closeList(); out.push("<ol>"); inList = "ol"; } out.push(`<li>${inline(m[1])}</li>`); continue; }
+    closeList();
+    if (/^\s*(---+|\*\*\*+)\s*$/.test(l)){ out.push("<hr>"); continue; }
+    if ((m = l.match(/^&gt;\s?(.*)/))){ out.push(`<blockquote>${inline(m[1])}</blockquote>`); continue; }
+    if (l.trim() === ""){ continue; }
+    out.push(`<p>${inline(l)}</p>`);
+  }
+  closeList();
+  if (inCode) out.push("</pre>");
+  return out.join("\n");
+}
+function bodyMd(w, el){
+  const view = w.data.view !== "edit";
+  el.innerHTML = `
+    <div class="md-bar"><button class="mini tg">${view ? "✏️ Editar" : "👁️ Vista"}</button><button class="mini cp" title="Copiar el Markdown">⧉</button></div>
+    ${view ? `<div class="md-view"></div>` : `<textarea class="notes md-src" placeholder="Escribe Markdown… (#, **, -, [texto](url), \`\`\`)"></textarea>`}`;
+  if (view){
+    el.querySelector(".md-view").innerHTML = mdToHtml(w.data.text || "*Vacío. Pulsa Editar.*");
+  } else {
+    const ta = el.querySelector(".md-src");
+    ta.value = w.data.text || "";
+    ta.addEventListener("input", () => { w.data.text = ta.value; markDirty(); });
+  }
+  el.querySelector(".tg").addEventListener("click", () => { w.data.view = view ? "edit" : "view"; refreshWidget(w); markDirty(); });
+  el.querySelector(".cp").addEventListener("click", async () => { await navigator.clipboard.writeText(w.data.text || ""); toast("Markdown copiado"); });
+}
+
+/* --- Imagen (pegar, arrastrar; se reescala y guarda en datos.json) --- */
+async function imgFromBlob(blob){
+  const bmp = await createImageBitmap(blob);
+  const MAX = 1400;
+  const k = Math.min(1, MAX / Math.max(bmp.width, bmp.height));
+  const cv = document.createElement("canvas");
+  cv.width = Math.round(bmp.width * k); cv.height = Math.round(bmp.height * k);
+  cv.getContext("2d").drawImage(bmp, 0, 0, cv.width, cv.height);
+  const url = cv.toDataURL("image/jpeg", 0.85);
+  if (url.length > 2500000) throw new Error("Imagen demasiado grande incluso reescalada");
+  return url;
+}
+function bodyImg(w, el){
+  const set = async blob => {
+    try{ w.data.img = await imgFromBlob(blob); paint(); markDirty(); }
+    catch(e){ toast(e.message || "No se pudo procesar la imagen", true); }
+  };
+  const paint = () => {
+    if (w.data.img){
+      el.innerHTML = `<div class="img-box"><img src="${w.data.img}" alt=""><div class="img-bar"><button class="mini rm">✕ Quitar</button></div></div>`;
+      el.querySelector(".rm").addEventListener("click", () => { w.data.img = null; paint(); markDirty(); });
+    } else {
+      el.innerHTML = `<div class="dropzone" tabindex="0">Pega una imagen (Ctrl+V) o suéltala aquí<br>
+        <button class="mini pi">📋 Pegar del portapapeles</button>
+        <span class="empty">Se reescala y viaja dentro de datos.json</span></div>`;
+      el.querySelector(".pi").addEventListener("click", async () => {
+        try{
+          for (const it of await navigator.clipboard.read())
+            for (const t of it.types) if (t.startsWith("image/")) return set(await it.getType(t));
+          toast("El portapapeles no contiene una imagen", true);
+        }catch(e){ toast("El navegador no permitió leer el portapapeles", true); }
+      });
+    }
+  };
+  el.addEventListener("paste", e => {
+    const it = [...(e.clipboardData?.items || [])].find(i => i.type.startsWith("image/"));
+    if (it){ e.preventDefault(); set(it.getAsFile()); }
+  });
+  el.addEventListener("dragover", e => e.preventDefault());
+  el.addEventListener("drop", e => {
+    e.preventDefault();
+    const f = [...e.dataTransfer.files].find(f => f.type.startsWith("image/"));
+    if (f) set(f);
+  });
+  paint();
+}
+
+/* --- Temporizador / Cronómetro / Alarma --- */
+function bodyTimer(w, el){
+  el.innerHTML = `<div class="tmr">
+    <div class="tmr-tabs"><button data-t="cd" class="mini">⏳ Cuenta atrás</button><button data-t="sw" class="mini">⏱ Cronómetro</button><button data-t="al" class="mini">⏰ Alarma</button></div>
+    <div class="tmr-body" style="flex:1;display:flex;flex-direction:column;gap:8px"></div></div>`;
+  const body = el.querySelector(".tmr-body");
+  let iv = null, mode = w.data.tab || "cd";
+  const stop = () => { if (iv){ clearInterval(iv); iv = null; } };
+  const guard = () => { if (!el.isConnected){ stop(); return false; } return true; };
+  const beep = () => {
+    try{
+      const ac = new (window.AudioContext || window.webkitAudioContext)();
+      const o = ac.createOscillator(), g = ac.createGain();
+      o.connect(g); g.connect(ac.destination);
+      o.frequency.value = 880; g.gain.value = .22; o.start();
+      let n = 0;
+      const rep = setInterval(() => { g.gain.value = g.gain.value ? 0 : .22; if (++n > 7){ clearInterval(rep); o.stop(); ac.close(); } }, 240);
+    }catch(e){}
+  };
+  const fmt = ms => { const s = Math.max(0, Math.round(ms / 1000)); return String(Math.floor(s / 60)).padStart(2, "0") + ":" + String(s % 60).padStart(2, "0"); };
+  const paint = () => {
+    stop(); w.data.tab = mode;
+    if (mode === "cd"){
+      body.innerHTML = `<div class="tmr-big">--:--</div><div class="row0"><input class="min" type="number" min="1" max="180" value="${+w.data.min || 5}" style="width:64px"> min <button class="mini go">▶</button><button class="mini st">⏹</button></div>`;
+      const big = body.querySelector(".tmr-big");
+      body.querySelector(".go").addEventListener("click", () => {
+        w.data.min = Math.min(180, Math.max(1, +body.querySelector(".min").value || 5)); markDirty();
+        const end = Date.now() + w.data.min * 60000;
+        stop();
+        iv = setInterval(() => { if (!guard()) return;
+          const r = end - Date.now(); big.textContent = fmt(r);
+          if (r <= 0){ stop(); big.textContent = "00:00"; beep(); toast("⏳ Tiempo cumplido"); } }, 250);
+      });
+      body.querySelector(".st").addEventListener("click", () => { stop(); big.textContent = "--:--"; });
+    } else if (mode === "sw"){
+      body.innerHTML = `<div class="tmr-big">00:00</div><div class="row0"><button class="mini go">▶</button><button class="mini pa">⏸</button><button class="mini st">⟲</button></div>`;
+      const big = body.querySelector(".tmr-big");
+      let acc = 0, t0 = 0;
+      body.querySelector(".go").addEventListener("click", () => { if (iv) return; t0 = Date.now();
+        iv = setInterval(() => { if (guard()) big.textContent = fmt(acc + Date.now() - t0); }, 250); });
+      body.querySelector(".pa").addEventListener("click", () => { if (!iv) return; acc += Date.now() - t0; stop(); });
+      body.querySelector(".st").addEventListener("click", () => { stop(); acc = 0; big.textContent = "00:00"; });
+    } else {
+      body.innerHTML = `<div class="tmr-big al-big">—</div><div class="row0"><input class="at" type="time"><button class="mini go">Activar</button><button class="mini st">Quitar</button></div>`;
+      const big = body.querySelector(".al-big");
+      body.querySelector(".go").addEventListener("click", () => {
+        const v = body.querySelector(".at").value; if (!v) return;
+        const [H, M] = v.split(":").map(Number);
+        const t = new Date(); t.setHours(H, M, 0, 0);
+        if (t <= new Date()) t.setDate(t.getDate() + 1);
+        big.textContent = "⏰ " + v;
+        stop();
+        iv = setInterval(() => { if (!guard()) return;
+          if (Date.now() >= t){ stop(); beep(); big.textContent = "—"; toast("⏰ Alarma: " + v); } }, 1000);
+      });
+      body.querySelector(".st").addEventListener("click", () => { stop(); big.textContent = "—"; });
+    }
+    el.querySelectorAll(".tmr-tabs .mini").forEach(b => b.classList.toggle("on", b.dataset.t === mode));
+  };
+  el.querySelectorAll(".tmr-tabs .mini").forEach(b => b.addEventListener("click", () => { mode = b.dataset.t; paint(); markDirty(); }));
+  paint();
+}
+
+/* --- Calendario (semana ISO ≈ semana epidemiológica) --- */
+function isoWeek(d){
+  const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const day = t.getUTCDay() || 7;
+  t.setUTCDate(t.getUTCDate() + 4 - day);
+  const y0 = new Date(Date.UTC(t.getUTCFullYear(), 0, 1));
+  return Math.ceil(((t - y0) / 86400000 + 1) / 7);
+}
+function bodyCal(w, el){
+  let ym = null;
+  const paint = () => {
+    const now = new Date();
+    if (!ym) ym = { y: now.getFullYear(), m: now.getMonth() };
+    const first = new Date(ym.y, ym.m, 1);
+    const start = (first.getDay() + 6) % 7;      // lunes = 0
+    const days = new Date(ym.y, ym.m + 1, 0).getDate();
+    let html = `<div class="cal-nav"><button class="mini pv">‹</button><b>${first.toLocaleDateString("es-ES", { month: "long", year: "numeric" })}</b><button class="mini nx">›</button></div>
+      <div class="cal-grid"><span class="wk"></span>${["L","M","X","J","V","S","D"].map(d => `<span class="hd">${d}</span>`).join("")}`;
+    let day = 1;
+    for (let r = 0; day <= days && r < 7; r++){
+      html += `<span class="wk">${isoWeek(new Date(ym.y, ym.m, day))}</span>`;
+      for (let c = 0; c < 7; c++){
+        if (r * 7 + c < start || day > days){ html += "<span></span>"; }
+        else {
+          const isToday = day === now.getDate() && ym.m === now.getMonth() && ym.y === now.getFullYear();
+          html += `<span class="d${isToday ? " today" : ""}">${day++}</span>`;
+        }
+      }
+    }
+    el.innerHTML = html + "</div>";
+    el.querySelector(".pv").addEventListener("click", () => { ym.m--; if (ym.m < 0){ ym.m = 11; ym.y--; } paint(); });
+    el.querySelector(".nx").addEventListener("click", () => { ym.m++; if (ym.m > 11){ ym.m = 0; ym.y++; } paint(); });
+  };
+  paint();
+}
+
+/* --- Buscadores (plantillas de URL con %s; tus bookmarklets-buscador viven aquí) --- */
+const DEFAULT_ENGINES = [
+  { n: "PubMed", u: "https://pubmed.ncbi.nlm.nih.gov/?term=%s" },
+  { n: "MDCalc", u: "https://www.mdcalc.com/search?q=%s" },
+  { n: "Google", u: "https://www.google.com/search?q=%s" },
+  { n: "Wikipedia", u: "https://es.wikipedia.org/wiki/Special:Search?search=%s" },
+  { n: "Scholar", u: "https://scholar.google.com/scholar?q=%s" }
+];
+function bodySearch(w, el){
+  if (!Array.isArray(w.data.engines) || !w.data.engines.length) w.data.engines = JSON.parse(JSON.stringify(DEFAULT_ENGINES));
+  el.innerHTML = `
+    <div class="clip-add"><input class="q" type="text" placeholder="Buscar… (⏎ = primero de la lista)"></div>
+    <div class="eng-list"></div>
+    <div class="link-add"><input class="en" type="text" placeholder="Nombre"><input class="eu" type="text" placeholder="https://…%s"><button class="mini">＋</button></div>`;
+  const q = el.querySelector(".q"), list = el.querySelector(".eng-list");
+  const go = e => {
+    const t = q.value.trim(); if (!t) return;
+    window.open(e.u.replace("%s", encodeURIComponent(t)), "_blank", "noopener");
+  };
+  const paint = () => {
+    list.innerHTML = "";
+    w.data.engines.forEach((e, i) => {
+      const d = document.createElement("div");
+      d.className = "link-it";
+      d.title = e.u;
+      d.innerHTML = `<span class="link-tile" style="background:hsl(${hueOf(e.n)},55%,42%)">${esc(e.n[0].toUpperCase())}</span><span class="t">${esc(e.n)}</span><button class="it-del" title="Borrar">✕</button>`;
+      d.addEventListener("click", ev => { if (!ev.target.closest("button")) go(e); });
+      d.querySelector(".it-del").addEventListener("click", () => { w.data.engines.splice(i, 1); paint(); markDirty(); });
+      list.appendChild(d);
+    });
+  };
+  q.addEventListener("keydown", ev => { if (ev.key === "Enter" && w.data.engines[0]) go(w.data.engines[0]); });
+  el.querySelector(".link-add .mini").addEventListener("click", () => {
+    const n = el.querySelector(".en").value.trim(), u = el.querySelector(".eu").value.trim();
+    if (!n || !/^https?:\/\/.+/i.test(u) || !u.includes("%s")){ toast("La URL debe empezar por http(s) y contener %s donde va la búsqueda", true); return; }
+    w.data.engines.push({ n, u });
+    el.querySelector(".en").value = el.querySelector(".eu").value = "";
+    paint(); markDirty();
+  });
   paint();
 }
 
@@ -1141,24 +1560,28 @@ function wireUI(){
     await checkFollowedPack(true);
   });
   $("#pack-close").addEventListener("click", () => $("#ov-packs").classList.remove("open"));
+  const packAdd = () => ({ add: $("#pack-add").checked });
   $$("#ov-packs .wcard").forEach(c => c.addEventListener("click", async () => {
+    const opts = packAdd();
     $("#ov-packs").classList.remove("open");
-    await applyBuiltin(c.dataset.pack);
+    await applyBuiltin(c.dataset.pack, opts);
   }));
   $("#pack-url-go").addEventListener("click", async () => {
     const u = $("#pack-url").value.trim(); if (!u) return;
+    const opts = packAdd();
     $("#ov-packs").classList.remove("open");
     try{
       const r = await fetch(u, { cache: "no-store" });
-      await applyPack(await r.json());
+      await applyPack(await r.json(), opts);
     }catch(e){ toast("No se pudo cargar (¿CORS o JSON inválido?)", true); }
   });
   $("#pack-file").addEventListener("click", async () => {
     if (!window.showOpenFilePicker){ toast("Esta función necesita Edge o Chrome", true); return; }
+    const opts = packAdd();
     $("#ov-packs").classList.remove("open");
     try{
       const [h] = await window.showOpenFilePicker({ types: [{ description: "Pack JSON", accept: { "application/json": [".json"] } }] });
-      await applyPack(JSON.parse(await (await h.getFile()).text()));
+      await applyPack(JSON.parse(await (await h.getFile()).text()), opts);
     }catch(e){ /* cancelado */ }
   });
   $("#pack-follow").addEventListener("click", async () => { $("#ov-packs").classList.remove("open"); await followPackFile(); });
@@ -1196,7 +1619,7 @@ function wireUI(){
     inp.addEventListener("change", async () => {
       try{
         state = JSON.parse(await inp.files[0].text());
-        renderAll(); markDirty(); toast("Copia imcabecera");
+        renderAll(); markDirty(); toast("Copia importada");
       }catch(e){ toast("JSON inválido", true); }
     });
     inp.click();
@@ -1222,6 +1645,25 @@ function wireUI(){
     await saveNow();
     lastMtime = 0; const fh = await dirHandle.getFileHandle(DATA_FILE); lastMtime = (await fh.getFile()).lastModified;
   });
+
+  // guía
+  $("#act-ayuda").addEventListener("click", () => { closeMenu(); $("#ov-guia").classList.add("open"); });
+  $("#guia-close").addEventListener("click", () => $("#ov-guia").classList.remove("open"));
+
+  // al volver a la pestaña, comprobar cambios de inmediato (no esperar al ciclo)
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) poll(); });
+
+  // avisar si Cabecera ya está abierta en otra pestaña del mismo navegador
+  try{
+    const bc = new BroadcastChannel("cabecera-tab");
+    bc.onmessage = e => {
+      if (e.data === "ping") bc.postMessage("pong");
+      else if (e.data === "pong") toast("Cabecera está abierta en otra pestaña: usa solo una para evitar conflictos de guardado", true);
+    };
+    bc.postMessage("ping");
+  }catch(e){ /* navegador sin BroadcastChannel */ }
+
+  startPill();
 
   // bandeja
   $("#tb-inbox").addEventListener("click", openInbox);
@@ -1273,6 +1715,42 @@ function paintInbox(){
     });
     box.appendChild(d);
   });
+}
+
+/* ---------- píldora informativa de la barra ---------- */
+const TIPS = [
+  "Pulsa / para buscar en tus enlaces al instante",
+  "Doble clic en el título de una ventana para renombrarla",
+  "inbox.txt: escribe desde el móvil (OneDrive) y aparece en la Bandeja",
+  "?pack=URL comparte tu escritorio con quien quieras",
+  "Exporta una copia de seguridad desde el menú Inicio",
+  "El widget Imagen acepta Ctrl+V con una captura",
+  "En Packs puedes añadir sin sustituir: marca la casilla",
+  "fondo.jpg en tu carpeta de datos = fondo sincronizado entre equipos",
+  "«⇱ todo» en un grupo de enlaces abre todos a la vez",
+  "El calendario muestra la semana ISO (≈ semana epidemiológica)",
+  "Tus datos son un archivo tuyo: datos.json, legible y portable"
+];
+let pillIdx = 0;
+function pillMsgs(){
+  const out = [];
+  const now = new Date();
+  const dayOfYear = Math.ceil((now - new Date(now.getFullYear(), 0, 0)) / 86400000);
+  out.push(`📆 Semana ${isoWeek(now)} · día ${dayOfYear} del año`);
+  if (state){
+    const pend = state.widgets.filter(x => x.type === "todo")
+      .reduce((a, x) => a + (x.data.items || []).filter(i => !i.done).length, 0);
+    if (pend) out.push(`✅ ${pend} tarea${pend === 1 ? "" : "s"} pendiente${pend === 1 ? "" : "s"}`);
+  }
+  out.push("💡 " + TIPS[(pillIdx + Math.floor(Date.now() / 3600000)) % TIPS.length]);
+  return out;
+}
+function startPill(){
+  const el = $("#tb-pill");
+  const paint = () => { const m = pillMsgs(); el.textContent = m[pillIdx % m.length]; };
+  el.addEventListener("click", () => { pillIdx++; paint(); });
+  setInterval(() => { pillIdx++; paint(); }, 45000);
+  paint();
 }
 
 /* ---------- reloj de la barra ---------- */

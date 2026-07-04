@@ -1,6 +1,6 @@
 # Cabecera
 
-**Tu página de cabecera.** Página de inicio personalizable estilo "escritorio de widgets": enlaces con buscador, notas, tareas, portapapeles de fragmentos, generador QR y reloj, sobre fondo personalizable. Un solo `index.html` sin build, sin cuentas, sin servidor de datos y sin telemetría.
+**Tu página de cabecera.** Página de inicio personalizable estilo "escritorio de widgets": enlaces con buscador-lanzador, notas, tareas, portapapeles de fragmentos, QR, reloj digital/analógico, editor-visor Markdown, imágenes pegadas (Ctrl+V), temporizador/cronómetro/alarma, calendario con semana ISO y buscadores parametrizables — sobre fondo personalizable, con títulos de ventana editables y una píldora informativa en la barra. Un solo `index.html` sin build, sin cuentas, sin servidor de datos y sin telemetría.
 
 **Principio de diseño: tus datos son un archivo tuyo.** El código se sirve como página estática; los datos viven donde tú decidas — en el navegador, o en un `datos.json` dentro de una carpeta tuya (idealmente de OneDrive, para tener el mismo escritorio en el trabajo y en casa).
 
@@ -36,7 +36,7 @@ Antes de aplicar cualquier pack se guarda copia automática del escritorio actua
 }
 ```
 
-`type` ∈ `links | notes | todo | clips | qr | clock`. Posición y tamaño opcionales.
+`type` ∈ `links | notes | todo | clips | qr | clock | md | img | timer | cal | search`. Posición, tamaño y título (`t`) opcionales. Los packs pueden **sustituir** el escritorio o **añadirse** a él (casilla en el diálogo de Packs).
 
 ## Archivos
 
