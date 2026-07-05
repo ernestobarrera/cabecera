@@ -1178,11 +1178,7 @@ function bodyLinks(w, el){
       if (g.links.length > 1){
         const oa = document.createElement("button");
         oa.className = "mini oa"; oa.title = "Abrir todos los enlaces del grupo"; oa.textContent = "⇱ todo";
-        oa.addEventListener("click", () => {
-          let blocked = false;
-          g.links.forEach(l => { if (!window.open(l.u, "_blank", "noopener")) blocked = true; });
-          if (blocked) toast("El navegador bloqueó ventanas: permite los pop-ups para este sitio y reintenta", true);
-        });
+        oa.addEventListener("click", () => openGroup(g.links));
         h5.appendChild(oa);
       }
       gd.appendChild(h5);
@@ -1639,7 +1635,14 @@ function focusWidget(id){
   flashWidget({ id });
 }
 
-// Todas las entradas de la paleta: contenido + saltos + comandos
+// Abrir todos los enlaces de un grupo de una vez (rutina); avisa si el navegador bloquea pop-ups
+function openGroup(links){
+  let blocked = false;
+  (links || []).forEach(l => { if (!window.open(l.u, "_blank", "noopener")) blocked = true; });
+  if (blocked) toast("El navegador bloqueó ventanas: permite los pop-ups para este sitio y reintenta", true);
+}
+
+// Todas las entradas de la paleta: contenido + saltos + comandos + rutinas
 function paletteEntries(){
   const E = [];
   const add = (icon, label, sub, run, hay) => E.push({ icon, label, sub, run, hay: (hay || (label + " " + sub)).toLowerCase() });
@@ -1647,9 +1650,13 @@ function paletteEntries(){
     const name = w.t || (WTYPES[w.type] || {}).name || w.type;
     const ico = (WTYPES[w.type] || {}).ico || "❔";
     if (w.type === "links"){
-      for (const g of w.data.groups || []) for (const l of g.links || []){
-        let host = ""; try{ host = new URL(l.u).hostname; }catch(e){}
-        add("🔗", l.t || l.u, host, () => { window.open(l.u, "_blank", "noopener"); closeMenu(); }, (l.t || "") + " " + (l.u || ""));
+      for (const g of w.data.groups || []){
+        for (const l of g.links || []){
+          let host = ""; try{ host = new URL(l.u).hostname; }catch(e){}
+          add("🔗", l.t || l.u, host, () => { window.open(l.u, "_blank", "noopener"); closeMenu(); }, (l.t || "") + " " + (l.u || ""));
+        }
+        if ((g.links || []).length > 1)
+          add("▶", "Abrir grupo: " + (g.name || "enlaces"), g.links.length + " pestañas", () => { closeMenu(); openGroup(g.links); }, "abrir todo grupo rutina " + (g.name || ""));
       }
     } else {
       const text = widgetText(w);
