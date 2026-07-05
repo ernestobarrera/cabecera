@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Guía de Cabecera — cómo funciona</title>
+<meta name="description" content="Cómo funciona Cabecera: widgets, espacios, etiquetas, sincronización y atajos. Tu página de inicio personalizable, sin cuentas ni servidor.">
+<style>
+  :root{
+    --bg:#0c0f15; --glass:rgba(22,26,34,.72); --border:rgba(255,255,255,.13); --border-soft:rgba(255,255,255,.08);
+    --text:#e8ecf3; --dim:#9aa4b5; --accent:#5aa9f7; --accent-soft:rgba(90,169,247,.14); --ok:#5fd08a; --warn:#f0c25e;
+    --radius:14px; --font:"Segoe UI",system-ui,-apple-system,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0; font-family:var(--font); color:var(--text); line-height:1.6;
+    background:radial-gradient(1200px 600px at 70% -10%,rgba(90,169,247,.10),transparent 60%),linear-gradient(160deg,#0f1520,#0a0c11);}
+  a{color:var(--accent)}
+  .wrap{max-width:920px; margin:0 auto; padding:0 20px}
+  header{padding:56px 0 34px; text-align:center}
+  .logo{font-size:13px; letter-spacing:.22em; text-transform:uppercase; color:var(--accent); font-weight:600}
+  h1{font-size:clamp(30px,6vw,46px); margin:10px 0 8px; letter-spacing:-.02em}
+  .sub{color:var(--dim); font-size:clamp(15px,3.5vw,18px); max-width:620px; margin:0 auto 24px}
+  .cta{display:inline-flex; align-items:center; gap:9px; background:var(--accent); color:#0b1220; font-weight:700;
+    padding:12px 24px; border-radius:12px; text-decoration:none; font-size:15px}
+  .cta:hover{filter:brightness(1.08)}
+  .cta.ghost{background:transparent; color:var(--text); border:1px solid var(--border)}
+  .ctas{display:flex; gap:12px; justify-content:center; flex-wrap:wrap}
+  nav.toc{display:flex; flex-wrap:wrap; gap:8px; justify-content:center; margin:30px 0 10px}
+  nav.toc a{font-size:12.5px; color:var(--dim); text-decoration:none; border:1px solid var(--border-soft);
+    padding:5px 11px; border-radius:20px}
+  nav.toc a:hover{border-color:var(--accent); color:var(--text)}
+  section{background:var(--glass); border:1px solid var(--border-soft); border-radius:var(--radius);
+    padding:24px 26px; margin:16px 0}
+  section h2{font-size:20px; margin:0 0 6px; display:flex; align-items:center; gap:10px}
+  section h2 .ic{font-size:22px}
+  section .lead{color:var(--dim); margin:0 0 16px}
+  .grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:12px}
+  .card{background:rgba(255,255,255,.03); border:1px solid var(--border-soft); border-radius:11px; padding:13px 15px}
+  .card b{display:block; margin-bottom:2px}
+  .card span{color:var(--dim); font-size:13.5px}
+  ul.steps{margin:0; padding:0; list-style:none; counter-reset:s}
+  ul.steps li{counter-increment:s; position:relative; padding:8px 0 8px 40px; border-bottom:1px solid var(--border-soft)}
+  ul.steps li:last-child{border-bottom:none}
+  ul.steps li::before{content:counter(s); position:absolute; left:0; top:8px; width:26px; height:26px;
+    background:var(--accent-soft); color:var(--accent); border-radius:50%; display:grid; place-items:center; font-weight:700; font-size:13px}
+  kbd{background:rgba(255,255,255,.08); border:1px solid var(--border); border-bottom-width:2px; border-radius:6px;
+    padding:1px 7px; font-family:var(--font); font-size:12.5px; white-space:nowrap}
+  table{width:100%; border-collapse:collapse; font-size:14px}
+  th,td{text-align:left; padding:9px 8px; border-bottom:1px solid var(--border-soft)}
+  th{color:var(--dim); font-weight:600; font-size:12.5px; text-transform:uppercase; letter-spacing:.04em}
+  .pill{display:inline-block; background:var(--accent-soft); color:var(--accent); border-radius:20px; padding:1px 9px; font-size:12px; font-weight:600}
+  .note{border-left:3px solid var(--accent); padding:6px 0 6px 14px; color:var(--dim); margin:14px 0 0}
+  footer{text-align:center; color:var(--dim); font-size:13px; padding:36px 0 60px}
+  .tag{display:inline-block; background:rgba(255,255,255,.05); border:1px solid var(--border-soft); border-radius:20px;
+    padding:1px 9px; font-size:12px; color:var(--dim); margin:0 2px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="logo">Cabecera</div>
+  <h1>Tu página de cabecera</h1>
+  <p class="sub">Una página de inicio personalizable estilo escritorio de widgets: enlaces, notas, tareas, calendario, QR y más. Sin cuentas, sin servidor, sin rastreo. <b>Tus datos son un archivo tuyo.</b></p>
+  <div class="ctas">
+    <a class="cta" href="./">Abrir Cabecera →</a>
+    <a class="cta ghost" href="#empezar">Cómo empezar</a>
+  </div>
+  <nav class="toc">
+    <a href="#empezar">Empezar</a>
+    <a href="#widgets">Widgets</a>
+    <a href="#espacios">Espacios</a>
+    <a href="#etiquetas">Etiquetas</a>
+    <a href="#buscar">Buscar</a>
+    <a href="#movil">Móvil</a>
+    <a href="#packs">Packs</a>
+    <a href="#sync">Sincronizar</a>
+    <a href="#atajos">Atajos</a>
+    <a href="#privacidad">Privacidad</a>
+  </nav>
+</header>
+
+<section id="empezar">
+  <h2><span class="ic">🚀</span> Empezar en 10 segundos</h2>
+  <p class="lead">No hay registro ni instalación. Abres la página y ya funciona.</p>
+  <ul class="steps">
+    <li><b>Entra.</b> Por defecto trabaja en <span class="pill">modo local</span>: todo se guarda en tu navegador. Vale para cualquier equipo.</li>
+    <li><b>Añade widgets.</b> Botón <b>⊞ Inicio</b> (abajo) → «Añadir widget», o pulsa <kbd>Ctrl</kbd>+<kbd>K</kbd> y escribe «Añadir…».</li>
+    <li><b>Colócalos.</b> Arrastra por la barra de título; redimensiona por la esquina.</li>
+    <li><b>(Opcional) Sincroniza.</b> Inicio → «Sincronizar equipos» y eliges una carpeta (p. ej. de OneDrive) para tener el mismo escritorio en el trabajo y en casa. <a href="#sync">Ver más ↓</a></li>
+  </ul>
+</section>
+
+<section id="widgets">
+  <h2><span class="ic">🧩</span> Widgets</h2>
+  <p class="lead">Cada ventana es un widget. Añádelos desde Inicio o con <kbd>Ctrl</kbd>+<kbd>K</kbd>.</p>
+  <div class="grid">
+    <div class="card"><b>🔗 Enlaces</b><span>Accesos agrupados. Con «⇱ N» abres todo el grupo de una vez.</span></div>
+    <div class="card"><b>📝 Nota</b><span>Texto libre; puedes darle color tipo post-it.</span></div>
+    <div class="card"><b>✅ Tareas</b><span>Lista de pendientes con casillas.</span></div>
+    <div class="card"><b>📋 Portapapeles</b><span>Fragmentos de texto reutilizables.</span></div>
+    <div class="card"><b>📄 Markdown</b><span>Editor + vista con formato.</span></div>
+    <div class="card"><b>🖼️ Imagen</b><span>Pega con <kbd>Ctrl</kbd>+<kbd>V</kbd> o arrastra.</span></div>
+    <div class="card"><b>📅 Calendario</b><span>Con semana ISO y festivos de España.</span></div>
+    <div class="card"><b>⏱️ Temporizador</b><span>Cuenta atrás, cronómetro y alarma.</span></div>
+    <div class="card"><b>🔎 Buscadores</b><span>Plantillas de URL con %s (PubMed, etc.).</span></div>
+    <div class="card"><b>🧮 Calculadora</b><span>Con teclado completo.</span></div>
+    <div class="card"><b>🎙️ Dictado</b><span>Transcribe tu voz y lo envía a una nota.</span></div>
+    <div class="card"><b>🔳 QR · 🕐 Reloj</b><span>Código QR de un texto/URL y reloj analógico o digital.</span></div>
+  </div>
+  <p class="note">En la barra de título de cada widget: <b>🏷️</b> etiquetas · <b>▾</b> plegar a la cabecera · <b>✕</b> cerrar. Doble clic en el título para renombrar la ventana.</p>
+</section>
+
+<section id="espacios">
+  <h2><span class="ic">🗂️</span> Espacios (escritorios)</h2>
+  <p class="lead">Varios escritorios independientes, uno por especialidad, proyecto o contexto. Están en la barra, junto a Inicio.</p>
+  <ul class="steps">
+    <li><b>Crear:</b> el botón <b>＋</b> añade un escritorio nuevo.</li>
+    <li><b>Cambiar:</b> un clic en la pestaña. <b>Renombrar:</b> doble clic. <b>Eliminar:</b> la <b>✕</b> de la pestaña activa.</li>
+    <li><b>Mover un widget:</b> arrástralo por su título y suéltalo <b>sobre otra pestaña</b> (se resalta) para llevarlo a ese espacio.</li>
+    <li>Cada espacio tiene su <b>propio fondo</b>. La búsqueda mira en todos.</li>
+  </ul>
+  <p class="note">Plegar todo con <b>⊟</b> en la barra deja cada espacio ordenado de un vistazo.</p>
+</section>
+
+<section id="etiquetas">
+  <h2><span class="ic">🏷️</span> Etiquetas</h2>
+  <p class="lead">Un segundo eje de organización, transversal a los espacios.</p>
+  <ul class="steps">
+    <li>Pon etiquetas a una ventana con el botón <b>🏷️</b> de su barra (separadas por comas).</li>
+    <li>Haz clic en una etiqueta —o búscala en <kbd>Ctrl</kbd>+<kbd>K</kbd>— para dejar a la vista <b>solo</b> los widgets con esa etiqueta, en cualquier espacio.</li>
+    <li>Quita el filtro desde el indicador <span class="tag">🏷️ …</span> de la barra inferior.</li>
+  </ul>
+</section>
+
+<section id="buscar">
+  <h2><span class="ic">⌨️</span> Buscar y ejecutar — la paleta</h2>
+  <p class="lead"><kbd>Ctrl</kbd>+<kbd>K</kbd> (o <kbd>/</kbd>) abre la paleta de comandos.</p>
+  <div class="grid">
+    <div class="card"><b>Busca en todo</b><span>Notas, tareas, enlaces, etiquetas… en todos los espacios; al elegir un resultado salta a ese widget.</span></div>
+    <div class="card"><b>Ejecuta comandos</b><span>«Añadir Nota», «Packs», «Fondo», «Exportar copia», «Filtrar por etiqueta: …».</span></div>
+    <div class="card"><b>Lanza rutinas</b><span>Un grupo de enlaces aparece como «Abrir grupo: …» y abre todas sus pestañas.</span></div>
+  </div>
+</section>
+
+<section id="movil">
+  <h2><span class="ic">📱</span> En el móvil</h2>
+  <p class="lead">La misma Cabecera, adaptada.</p>
+  <p>En pantallas pequeñas los widgets se <b>apilan a ancho completo</b> (misma información y edición, sin el escritorio libre). Pliega con <b>▾</b> los que no uses para navegar cómodo. El mismo archivo de datos sirve para el móvil y el escritorio.</p>
+</section>
+
+<section id="packs">
+  <h2><span class="ic">📦</span> Packs — escritorios compartibles</h2>
+  <p class="lead">Un pack es un escritorio ya montado, definido en un archivo JSON.</p>
+  <div class="grid">
+    <div class="card"><b>Incluidos</b><span>Inicio → Packs: «Sanitario», «Básico».</span></div>
+    <div class="card"><b>Por URL</b><span><code>?pack=sanitarios</code> o <code>?pack=https://…/mi.json</code>. Compartir un escritorio = compartir un enlace.</span></div>
+    <div class="card"><b>Seguir un pack</b><span>Un pack en una carpeta compartida (OneDrive/Teams): la página avisa cuando el responsable lo actualiza.</span></div>
+  </div>
+  <p class="note">Antes de aplicar cualquier pack se guarda una copia de tu escritorio actual.</p>
+</section>
+
+<section id="sync">
+  <h2><span class="ic">🔄</span> Sincronizar equipos</h2>
+  <p class="lead">Opcional, para tener el mismo escritorio en varios equipos.</p>
+  <ul class="steps">
+    <li>Inicio → «Sincronizar equipos» → eliges una carpeta (p. ej. <code>OneDrive\cabecera-datos</code>). Tus datos pasan a un <code>datos.json</code> en esa carpeta.</li>
+    <li>Cada equipo elige su carpeta una vez; la ruta puede ser distinta en cada uno.</li>
+    <li>Si dos equipos editan a la vez, la página avisa del conflicto y eliges con cuál quedarte.</li>
+    <li><b>Bandeja:</b> cualquier línea en <code>inbox.txt</code> (desde el móvil, una macro o un agente) aparece para convertirla en nota/tarea.</li>
+  </ul>
+  <p class="note">Requiere Edge o Chrome (acceso a carpetas del navegador). En cualquier otro caso, el modo local siempre funciona.</p>
+</section>
+
+<section id="atajos">
+  <h2><span class="ic">⚡</span> Atajos</h2>
+  <table>
+    <tr><th>Atajo</th><th>Qué hace</th></tr>
+    <tr><td><kbd>Ctrl</kbd>+<kbd>K</kbd> · <kbd>/</kbd></td><td>Abrir la paleta: buscar y ejecutar</td></tr>
+    <tr><td>Doble clic en el título</td><td>Renombrar la ventana</td></tr>
+    <tr><td><b>🏷️ / ▾ / ✕</b></td><td>Etiquetar / plegar / cerrar un widget</td></tr>
+    <tr><td><b>⊟</b> (barra)</td><td>Plegar o desplegar todos</td></tr>
+    <tr><td><b>＋</b> (barra)</td><td>Nuevo espacio</td></tr>
+    <tr><td>Arrastrar a una pestaña</td><td>Mover el widget a ese espacio</td></tr>
+    <tr><td><kbd>Ctrl</kbd>+<kbd>V</kbd> en Imagen · <kbd>Win</kbd>+<kbd>H</kbd></td><td>Pegar captura · dictado de Windows en cualquier cuadro</td></tr>
+  </table>
+</section>
+
+<section id="privacidad">
+  <h2><span class="ic">🔒</span> Privacidad y datos</h2>
+  <p>Cabecera es una página estática: <b>sin cuentas, sin servidor de datos y sin telemetría</b>. Tus datos viven donde tú decidas —en el navegador o en un <code>datos.json</code> dentro de una carpeta tuya— y son legibles y portables. Puedes exportar una copia cuando quieras desde Inicio.</p>
+  <p class="note"><b>Uso sanitario responsable:</b> no guardes datos identificables de pacientes. No es historia clínica ni soporte diagnóstico. En un equipo compartido, usa tu propio perfil de navegador.</p>
+</section>
+
+<footer>
+  <div class="ctas" style="margin-bottom:16px">
+    <a class="cta" href="./">Abrir Cabecera →</a>
+  </div>
+  Cabecera · página de inicio personalizable · <a href="https://github.com/ernestobarrera/cabecera">código en GitHub</a>
+</footer>
+
+</div>
+</body>
+</html>

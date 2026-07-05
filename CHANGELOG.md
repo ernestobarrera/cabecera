@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.16.0] - 2026-07-05
+
+- **Guía completa (`guia.html`).** Una página-manual independiente que explica cómo funciona todo: empezar, widgets, espacios, etiquetas, la paleta, móvil, packs, sincronización, atajos y privacidad. Se abre desde la Guía integrada, desde el widget de bienvenida y desde la paleta (Ctrl+K → «Guía completa»), y es compartible como enlace (`…/cabecera/guia.html`). No es una portada-puerta: el escritorio sigue abriéndose directo.
+
 ## [0.15.0] - 2026-07-05
 
 - **Etiquetas (eje transversal).** Cada widget puede llevar etiquetas (botón **🏷️** en su barra de título). Al hacer clic en una etiqueta —o buscarla en Ctrl+K— la vista deja solo los widgets con esa etiqueta, **a través de todos los espacios**; un indicador en la barra permite quitar el filtro. Es el segundo eje de organización: espacios (pestañas) + etiquetas (transversal).

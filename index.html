@@ -141,7 +141,7 @@ body{font-family:var(--font); color:var(--text); background:#10131a}
 .modal p{font-size:13.5px; color:var(--text-dim); line-height:1.55; margin-bottom:10px}
 .modal .row{display:flex; gap:10px; flex-wrap:wrap; margin-top:14px}
 .btn{padding:9px 16px; border-radius:10px; border:1px solid var(--border-soft); cursor:pointer; font-size:13.5px;
-  font-family:var(--font); background:rgba(255,255,255,.06); color:var(--text)}
+  font-family:var(--font); background:rgba(255,255,255,.06); color:var(--text); text-decoration:none; display:inline-block}
 .btn:hover{background:rgba(255,255,255,.12)}
 .btn.primary{background:var(--accent); border-color:var(--accent); color:#0b1220; font-weight:600}
 .btn.primary:hover{filter:brightness(1.1)}
@@ -449,7 +449,7 @@ ul.plain{list-style:none}
       — Ctrl+V con una captura dentro del widget Imagen.<br>
       — El widget <b>Dictado</b> transcribe con tu micrófono (Edge/Chrome). Alternativa de Windows: <b>Win+H</b> dicta en cualquier cuadro de texto de la página.</p>
     </details>
-    <div class="row"><button class="btn" id="guia-close">Cerrar</button></div>
+    <div class="row" style="gap:8px"><a class="btn" href="guia.html" target="_blank" rel="noopener">📖 Guía completa</a><button class="btn" id="guia-close">Cerrar</button></div>
   </div>
 </div>
 
@@ -1365,6 +1365,7 @@ function bodyIntro(w, el){
       <button class="mini pks">🧩 Ver packs</button>
       <button class="mini sy">📁 Sincronizar equipos</button>
       <button class="mini gu">❓ Guía</button>
+      <a class="mini" href="guia.html" target="_blank" rel="noopener" style="text-decoration:none">📖 Cómo funciona</a>
     </div>
     <p class="empty">Cuando no la necesites, cierra esta ventana con la ✕.</p></div>`;
   el.querySelector(".pk").addEventListener("click", () => applyBuiltin("sanitarios"));
@@ -1975,6 +1976,7 @@ function paletteEntries(){
     add("🏷️", "Filtrar por etiqueta: " + tg, "etiqueta", () => { closeMenu(); setTagFilter(tg); }, "filtrar etiqueta tag " + tg);
   if (tagFilter)
     add("🏷️", "Quitar filtro de etiqueta", tagFilter, () => { closeMenu(); setTagFilter(null); }, "quitar limpiar filtro etiqueta");
+  add("📖", "Guía completa", "cómo funciona todo", () => { closeMenu(); window.open("guia.html", "_blank", "noopener"); }, "guia manual ayuda completa como funciona empezar");
   for (const [type, t] of Object.entries(WTYPES)) if (type !== "intro")
     add("➕", "Añadir " + t.name, "widget nuevo", () => { addWidget(type); closeMenu(); }, "añadir crear nuevo " + t.name);
   [["❓","Guía","act-ayuda"],["🧩","Packs","act-packs"],["🖼️","Fondo","act-wallpaper"],["📁","Sincronizar equipos","act-folder"],["⬇️","Exportar copia","act-export"],["⬆️","Importar copia","act-import"],["♻️","Restaurar copia","act-restore"]]
