@@ -76,6 +76,7 @@ body{font-family:var(--font); color:var(--text); background:#10131a}
 .space-tab{display:flex; align-items:center; gap:6px; background:transparent; border:1px solid var(--border-soft); color:var(--text-dim); border-radius:9px; padding:5px 10px; cursor:pointer; font-size:12.5px; font-family:var(--font); white-space:nowrap; flex-shrink:0}
 .space-tab:hover{background:rgba(255,255,255,.06); color:var(--text)}
 .space-tab.active{background:var(--accent-soft); border-color:var(--accent); color:var(--text)}
+.space-tab.drop-target{background:var(--accent); color:#0b1220; border-color:var(--accent); transform:translateY(-2px)}
 .space-tab .st-del{font-size:11px; line-height:1; opacity:.55; border-radius:4px; padding:0 2px}
 .space-tab .st-del:hover{opacity:1; color:#fff; background:var(--danger)}
 #space-add{background:transparent; border:1px dashed var(--border-soft); color:var(--text-dim); border-radius:9px; width:28px; height:28px; cursor:pointer; flex-shrink:0; font-size:15px; line-height:1}
@@ -410,9 +411,9 @@ ul.plain{list-style:none}
     </details>
     <details><summary>Atajos e integraciones</summary>
       <p class="hint">— <b>Ctrl+K</b> (o <b>/</b>) abre la paleta: busca en todos los espacios y ejecuta comandos; ↑↓ y Enter.<br>
-      — <b>Espacios</b>: usa <b>＋</b> en la barra para crear escritorios (uno por especialidad o proyecto); clic para cambiar, doble clic para renombrar, ✕ para eliminar. Cada espacio tiene su propio fondo.<br>
+      — <b>Espacios</b>: usa <b>＋</b> en la barra para crear escritorios (uno por especialidad o proyecto); clic para cambiar, doble clic para renombrar, ✕ para eliminar. Cada espacio tiene su propio fondo. <b>Arrastra una ventana sobre otra pestaña</b> para mover ese widget a ese espacio.<br>
+      — En un grupo de enlaces, el botón <b>⇱ N</b> abre los N enlaces de una vez (permite los pop-ups la primera vez). También desde la paleta: «Abrir grupo: …».<br>
       — Doble clic en el título de una ventana para renombrarla.<br>
-      — En un grupo de enlaces, «⇱ todo» abre todos a la vez (permite los pop-ups la primera vez).<br>
       — <b>inbox.txt</b> en tu carpeta de datos: cualquier línea (una macro de teclado, un agente, el móvil vía OneDrive) aparece en la Bandeja.<br>
       — <b>?add=texto</b> añade a la Bandeja; <b>?pack=nombre|URL</b> carga un escritorio completo.<br>
       — Ctrl+V con una captura dentro del widget Imagen.<br>
@@ -1096,6 +1097,18 @@ function deleteSpace(i){
   markDirty();
   renderAll();
 }
+function moveWidgetToSpace(id, ti){
+  const from = state.spaces[state.active];
+  const idx = from.widgets.findIndex(x => x.id === id);
+  if (idx < 0 || ti < 0 || ti >= state.spaces.length || ti === state.active) return;
+  const [wg] = from.widgets.splice(idx, 1);
+  state.spaces[ti].widgets.push(wg);
+  const el = document.querySelector(`.win[data-id="${id}"]`);
+  if (el) el.remove();
+  markDirty();
+  renderTabs();
+  toast(`Movido a «${state.spaces[ti].name}»`);
+}
 function renderTabs(){
   const box = $("#tb-spaces");
   if (!box || !state) return;
@@ -1151,18 +1164,33 @@ function buildWindow(w){
     el.remove(); markDirty();
   });
 
-  // arrastrar
+  // arrastrar (y soltar sobre otra pestaña de espacio para mover el widget allí)
   const title = el.querySelector(".win-title");
   title.addEventListener("pointerdown", ev => {
     if (ev.target.closest("button")) return;
     ev.preventDefault();
     const sx = ev.clientX - w.x, sy = ev.clientY - w.y;
+    let overTab = null;
+    el.style.pointerEvents = "none";   // para que elementFromPoint vea la barra bajo el cursor
     const move = m => {
       w.x = Math.max(0, Math.min(m.clientX - sx, innerWidth - 80));
       w.y = Math.max(0, Math.min(m.clientY - sy, innerHeight - 110));
       el.style.left = w.x + "px"; el.style.top = w.y + "px";
+      const under = document.elementFromPoint(m.clientX, m.clientY);
+      const tab = under && under.closest(".space-tab");
+      const cand = (tab && +tab.dataset.i !== state.active) ? tab : null;
+      if (cand !== overTab){
+        if (overTab) overTab.classList.remove("drop-target");
+        overTab = cand;
+        if (overTab) overTab.classList.add("drop-target");
+      }
     };
-    const up = () => { removeEventListener("pointermove", move); removeEventListener("pointerup", up); markDirty(); };
+    const up = () => {
+      removeEventListener("pointermove", move); removeEventListener("pointerup", up);
+      el.style.pointerEvents = "";
+      if (overTab){ const ti = +overTab.dataset.i; overTab.classList.remove("drop-target"); moveWidgetToSpace(w.id, ti); return; }
+      markDirty();
+    };
     addEventListener("pointermove", move); addEventListener("pointerup", up);
   });
 
@@ -1353,7 +1381,7 @@ function bodyLinks(w, el){
       h5.innerHTML = `<span>${esc(g.name)}</span>`;
       if (g.links.length > 1){
         const oa = document.createElement("button");
-        oa.className = "mini oa"; oa.title = "Abrir todos los enlaces del grupo"; oa.textContent = "⇱ todo";
+        oa.className = "mini oa"; oa.title = `Abrir de una vez los ${g.links.length} enlaces del grupo`; oa.textContent = "⇱ " + g.links.length;
         oa.addEventListener("click", () => openGroup(g.links));
         h5.appendChild(oa);
       }
@@ -2224,6 +2252,8 @@ function bodyDictate(w, el){
 const TIPS = [
   "Ctrl+K (o /) abre la paleta: busca en todos los espacios y ejecuta comandos",
   "Crea espacios (escritorios) con ＋ en la barra: uno por especialidad o proyecto",
+  "Arrastra una ventana sobre otra pestaña de espacio para moverla allí",
+  "En un grupo de enlaces, «⇱ N» abre los N enlaces de una vez",
   "Doble clic en el título de una ventana para renombrarla",
   "inbox.txt: escribe desde el móvil (OneDrive) y aparece en la Bandeja",
   "?pack=URL comparte tu escritorio con quien quieras",

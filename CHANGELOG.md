@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.12.0] - 2026-07-05
+
+- **Mover widgets entre espacios arrastrando**: arrastra una ventana por su barra de título y suéltala sobre la pestaña de otro espacio (se resalta al pasar por encima) para llevar ese widget allí.
+- **Botón «⇱ N» en los grupos de enlaces**: muestra cuántos enlaces abre de una vez, como recordatorio a la vista. Guía y consejos actualizados.
+
 ## [0.11.0] - 2026-07-05
 
 - **Espacios (escritorios múltiples).** En la barra, junto a Inicio, hay pestañas de espacios: **＋** crea uno nuevo, un **clic** cambia de espacio, **doble clic** lo renombra y **✕** lo elimina. Cada espacio tiene sus propios widgets y su propio fondo — ideal para separar por especialidad o proyecto. La búsqueda (Ctrl+K) mira en **todos** los espacios y salta al que corresponda.
