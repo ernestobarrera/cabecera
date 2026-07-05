@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.10.0] - 2026-07-05
+
+- **Nuevo formato interno de datos, preparado para escritorios múltiples.** Tu `datos.json` pasa a un formato con «espacios» (por ahora uno solo). La conversión es automática y transparente, y se guarda una copia del formato anterior por si acaso. No cambia nada visible todavía: es la base sobre la que llegarán las pestañas por especialidad, la vista móvil y los packs que se actualizan sin pisar tu trabajo. (Si tienes Cabecera abierta en varias pestañas, recárgalas tras actualizar.)
+- **Menos avisos de conflicto falsos**: si la carpeta sincronizada cambia la fecha del archivo sin cambiar su contenido (algo habitual con OneDrive), ya no se muestra aviso de conflicto.
+- Interno: reconectar la carpeta ya no acumula comprobaciones periódicas.
+
 ## [0.9.0] - 2026-07-05
 
 - **Rutinas de pestañas desde la paleta**: cualquier grupo de enlaces con más de un enlace aparece en la paleta (Ctrl+K) como «Abrir grupo: …» y abre todas sus pestañas de una vez. Es la forma de montar un ritual diario (p. ej. tu radar de noticias): agrupas los enlaces una vez y lo lanzas con dos teclas. (El botón «⇱ todo» del propio grupo sigue estando.)
