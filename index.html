@@ -43,7 +43,7 @@ body{font-family:var(--font); color:var(--text); background:#10131a}
 .win-btn.collapse{font-size:11px}
 .win-tags{display:flex; flex-wrap:wrap; gap:5px; padding:0 10px 8px}
 /* etiquetas solo al pasar el ratón (en táctil, sin hover, quedan visibles) */
-@media (hover:hover){ .win .win-tags{display:none} .win:hover .win-tags{display:flex} }
+@media (any-hover:hover){ .win .win-tags{display:none} .win:hover .win-tags{display:flex} }
 .win.collapsed .win-tags{display:none}
 .tag-chip{font-size:11px; padding:2px 8px; border-radius:20px; border:1px solid var(--border-soft); background:rgba(255,255,255,.05); color:var(--text-dim); cursor:pointer; font-family:var(--font)}
 .tag-chip:hover{border-color:var(--accent); color:var(--text)}
