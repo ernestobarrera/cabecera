@@ -449,6 +449,7 @@ let inboxLines = [];
 let zTop = 10;
 let isFirstRun = false;
 let saving = false;
+let pollTimer = null;
 
 function defaultState(){
   return {
@@ -503,13 +504,14 @@ function sanitizeWidgetShape(w){
   const t = WTYPES[w.type];
   return {
     ...w,
-    id: w.id || uid(),
+    id: (typeof w.id === "string" && w.id) ? w.id.slice(0, 64) : uid(),
     type: w.type,
     x: numOr(w.x, 40, 0, 8000), y: numOr(w.y, 40, 0, 8000),
     w: numOr(w.w, t.w, 120, 4000), h: numOr(w.h, t.h, 80, 4000),
     z: numOr(w.z, 1, 0, 1e6),
     data: (w.data && typeof w.data === "object") ? w.data : {},
-    source: (typeof w.source === "string" && /^(user|pack)/.test(w.source)) ? w.source : "user"
+    // exacto: "user" | "pack" | "pack:<slug acotado>" (para el futuro merge no destructivo)
+    source: (typeof w.source === "string" && /^(user|pack(:[a-zA-Z0-9._-]{1,40})?)$/.test(w.source)) ? w.source : "user"
   };
 }
 function sanitizeState(s){
@@ -517,8 +519,8 @@ function sanitizeState(s){
   if (!Array.isArray(s.spaces) || !s.spaces.length) s.spaces = [blankSpace()];
   s.spaces = s.spaces.map(sp => {
     sp = (sp && typeof sp === "object") ? sp : {};
-    if (!sp.id) sp.id = "s_" + uid();
-    if (typeof sp.name !== "string") sp.name = "Escritorio";
+    sp.id = (typeof sp.id === "string" && sp.id) ? sp.id.slice(0, 64) : "s_" + uid();
+    sp.name = (typeof sp.name === "string") ? sp.name.slice(0, 80) : "Escritorio";
     if (!sp.settings || typeof sp.settings !== "object") sp.settings = { wallpaper: { type: "preset", value: 0 } };
     sp.widgets = (Array.isArray(sp.widgets) ? sp.widgets : []).filter(w => w && WTYPES[w.type]).map(sanitizeWidgetShape);
     return sp;
@@ -635,10 +637,16 @@ async function writeDataFile(){
   // no pisar cambios remotos más nuevos que lo que tenemos cargado
   const cur = await fh.getFile();
   if (lastMtime && cur.lastModified > lastMtime){
-    conflictPending = true;
-    $("#conflict").classList.add("open");
-    syncUI("err", "conflicto");
-    return false;
+    let curText = "";
+    try{ curText = await cur.text(); }catch(e){}
+    if (curText === lastSavedText){
+      lastMtime = cur.lastModified;   // mismo contenido (OneDrive tocó el mtime): no es conflicto, seguimos
+    } else {
+      conflictPending = true;
+      $("#conflict").classList.add("open");
+      syncUI("err", "conflicto");
+      return false;
+    }
   }
   const w = await fh.createWritable();
   const payload = JSON.stringify(state, null, 2);
@@ -822,7 +830,8 @@ async function startFS(){
   renderAll();
   await handleAddParam();
   await pollInbox();
-  setInterval(poll, POLL_MS);
+  if (pollTimer) clearInterval(pollTimer);   // idempotente: reload/reconnect/conflicto no acumulan intervalos
+  pollTimer = setInterval(poll, POLL_MS);
 }
 
 async function pickFolder(){

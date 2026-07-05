@@ -128,6 +128,15 @@ const bad2 = sanitizeState(migrate({ version: 2, active: 0, spaces: [ { widgets:
 if (bad2.spaces[0].widgets.length !== 1) throw new Error('saneo: tipo desconocido no filtrado');
 if (typeof bad2.spaces[0].widgets[0].x !== 'number') throw new Error('saneo: dimensión no coercionada a número');
 if (typeof bad2.spaces[0].widgets[0].data !== 'object') throw new Error('saneo: data no normalizada a objeto');
-console.log('OK esquema v2 (migración, accesores no-enumerables, serialización, saneo estructural)');
+// source e id estrictos (endurecimiento para el futuro merge no destructivo)
+const src2 = t => sanitizeWidgetShape({ type: 'notes', source: t }).source;
+if (src2('user') !== 'user') throw new Error('source: "user" no preservado');
+if (src2('pack') !== 'pack') throw new Error('source: "pack" no preservado');
+if (src2('pack:centro-salud') !== 'pack:centro-salud') throw new Error('source: "pack:<slug>" no preservado');
+for (const bad of ['package', 'userland', 'pack:' + 'x'.repeat(50), 'evil', ''])
+  if (src2(bad) !== 'user') throw new Error('source laxo: "' + bad + '" debería caer a "user"');
+if (typeof sanitizeWidgetShape({ type: 'notes', id: { x: 1 } }).id !== 'string') throw new Error('id no coercionado a string');
+if (sanitizeWidgetShape({ type: 'notes', id: 'a'.repeat(200) }).id.length !== 64) throw new Error('id no acotado a 64');
+console.log('OK esquema v2 (migración, accesores no-enumerables, serialización, saneo estructural, source/id estrictos)');
 
 console.log('\nTODO EN VERDE');
