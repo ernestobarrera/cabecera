@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.17.0] - 2026-07-05
+
+- **Tour interactivo.** Un recorrido guiado con foco (coach-marks) que resalta cada zona y explica lo esencial: añadir widgets, espacios, plegar, la barra de cada widget y sincronizar. Aparece solo la primera vez, y puedes lanzarlo cuando quieras desde la Guía («▶ Hacer el tour»), desde la paleta (Ctrl+K → «Tour interactivo») o desde la guía completa. Termina enlazando a la guía.
+
 ## [0.16.1] - 2026-07-05
 
 - **Corregido: se había perdido el renombrar ventanas** (doble clic en el título). Al añadir el arrastre entre espacios, el widget se volvía «no clicable» nada más pulsar; ahora eso solo ocurre cuando de verdad empiezas a arrastrar, así que el doble clic para renombrar vuelve a funcionar.
