@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.14.0] - 2026-07-05
+
+- **Plegar widgets (minimizar).** Cada ventana tiene un chevron **▾** en su barra de título que la enrolla a solo la cabecera; el botón **⊟** de la barra inferior pliega o despliega todas de una vez. El estado plegado se guarda. Al saltar a un widget con la búsqueda, se despliega solo.
+- **Arreglada la vista móvil**: los widgets ya no se quedaban colapsados por dentro; ahora conservan su altura y son manejables (apilados a ancho completo). Pliégalos con ▾ para navegar cómodo en el móvil.
+
 ## [0.13.0] - 2026-07-05
 
 - **Vista móvil.** En pantallas pequeñas, los widgets se apilan a ancho completo (misma información y edición, sin el escritorio libre): pensada para consultar y usar Cabecera desde el móvil. En pantalla grande sigue el escritorio de ventanas de siempre. El mismo `datos.json` sirve para ambos.

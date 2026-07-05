@@ -37,6 +37,10 @@ body{font-family:var(--font); color:var(--text); background:#10131a}
   background:var(--glass); backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px);
   border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow); overflow:hidden}
 .win.active{border-color:rgba(255,255,255,.22)}
+.win.collapsed{height:auto !important; min-height:0 !important}
+.win.collapsed .win-body,.win.collapsed .win-resize{display:none}
+.win.collapsed .win-title{border-bottom:none}
+.win-btn.collapse{font-size:11px}
 .win-title{display:flex; align-items:center; gap:8px; padding:8px 10px; cursor:grab; user-select:none;
   background:rgba(255,255,255,.04); border-bottom:1px solid var(--border-soft); font-size:13px; font-weight:600}
 .win-title:active{cursor:grabbing}
@@ -70,6 +74,8 @@ body{font-family:var(--font); color:var(--text); background:#10131a}
 #btn-inicio{display:flex; align-items:center; gap:8px; padding:6px 14px; border:1px solid var(--border-soft);
   background:rgba(255,255,255,.05); color:var(--text); border-radius:10px; cursor:pointer; font-size:13.5px; font-weight:600; font-family:var(--font)}
 #btn-inicio:hover{background:var(--accent-soft); border-color:var(--accent)}
+#btn-fold{background:rgba(255,255,255,.05); border:1px solid var(--border-soft); color:var(--text-dim); border-radius:9px; width:32px; height:32px; cursor:pointer; font-size:14px; flex-shrink:0; font-family:var(--font)}
+#btn-fold:hover{background:var(--accent-soft); border-color:var(--accent); color:var(--text)}
 #tb-spacer{flex:1}
 #tb-spaces{display:flex; align-items:center; gap:4px; overflow-x:auto; max-width:42vw; scrollbar-width:thin}
 #tb-spaces::-webkit-scrollbar{height:0}
@@ -274,10 +280,10 @@ ul.plain{list-style:none}
 /* ---------- Vista móvil: proyección apilada del mismo estado (sin lienzo/drag) ---------- */
 @media (max-width: 700px){
   #desktop{overflow-y:auto; overflow-x:hidden; display:flex; flex-direction:column; gap:10px; padding:10px}
+  /* apilado a ancho completo conservando la altura natural (para que el layout flex interno funcione);
+     tope para los muy altos, con scroll del cuerpo. */
   .win{position:static !important; left:auto !important; top:auto !important;
-    width:100% !important; height:auto !important; min-width:0; min-height:0;
-    max-height:78vh; z-index:auto !important}
-  .win-body{max-height:62vh}
+    width:100% !important; min-width:0; max-height:82vh; z-index:auto !important; flex:0 0 auto}
   .win-resize{display:none}
   #tb-pill, #tb-sync{display:none}
   #tb-spaces{max-width:none; flex:1}
@@ -293,6 +299,7 @@ ul.plain{list-style:none}
 
 <div id="taskbar">
   <button id="btn-inicio">⊞ Inicio</button>
+  <button id="btn-fold" title="Plegar / desplegar todos los widgets">⊟</button>
   <div id="tb-spaces" title="Espacios (escritorios): clic para cambiar, doble clic para renombrar"></div>
   <div id="tb-spacer"></div>
   <div class="tb-item" id="tb-pill" title="Píldora informativa — clic para cambiar"></div>
@@ -427,7 +434,7 @@ ul.plain{list-style:none}
       <p class="hint">— <b>Ctrl+K</b> (o <b>/</b>) abre la paleta: busca en todos los espacios y ejecuta comandos; ↑↓ y Enter.<br>
       — <b>Espacios</b>: usa <b>＋</b> en la barra para crear escritorios (uno por especialidad o proyecto); clic para cambiar, doble clic para renombrar, ✕ para eliminar. Cada espacio tiene su propio fondo. <b>Arrastra una ventana sobre otra pestaña</b> para mover ese widget a ese espacio.<br>
       — En un grupo de enlaces, el botón <b>⇱ N</b> abre los N enlaces de una vez (permite los pop-ups la primera vez). También desde la paleta: «Abrir grupo: …».<br>
-      — Doble clic en el título de una ventana para renombrarla.<br>
+      — Doble clic en el título de una ventana para renombrarla. El chevron <b>▾</b> la pliega a su barra; <b>⊟</b> en la barra pliega/despliega todas.<br>
       — <b>inbox.txt</b> en tu carpeta de datos: cualquier línea (una macro de teclado, un agente, el móvil vía OneDrive) aparece en la Bandeja.<br>
       — <b>?add=texto</b> añade a la Bandeja; <b>?pack=nombre|URL</b> carga un escritorio completo.<br>
       — Ctrl+V con una captura dentro del widget Imagen.<br>
@@ -1112,6 +1119,11 @@ function deleteSpace(i){
   markDirty();
   renderAll();
 }
+function foldAll(){   // si hay alguno abierto, pliega todos; si todos plegados, los despliega
+  const anyOpen = state.widgets.some(w => !w.collapsed);
+  state.widgets.forEach(w => w.collapsed = anyOpen);
+  renderAll(); markDirty();
+}
 function moveWidgetToSpace(id, ti){
   const from = state.spaces[state.active];
   const idx = from.widgets.findIndex(x => x.id === id);
@@ -1148,9 +1160,17 @@ function buildWindow(w){
   const dictBtn = w.type === "notes" ? `<button class="win-btn dict-recv-btn" title="Recibir el dictado en esta nota">🎙️</button>` : "";
   el.innerHTML = `
     <div class="win-title" title="Doble clic para renombrar"><span class="ico">${t.ico}</span><span class="tname">${esc(w.t || t.name)}</span><span class="sp"></span>
-      ${dictBtn}<button class="win-btn close" title="Cerrar">✕</button></div>
+      ${dictBtn}<button class="win-btn collapse" title="Plegar / desplegar">${w.collapsed ? "▸" : "▾"}</button><button class="win-btn close" title="Cerrar">✕</button></div>
     <div class="win-body"></div>
     <div class="win-resize"></div>`;
+  if (w.collapsed) el.classList.add("collapsed");
+  el.querySelector(".collapse").addEventListener("click", e => {
+    e.stopPropagation();
+    w.collapsed = !w.collapsed;
+    el.classList.toggle("collapsed", w.collapsed);
+    e.currentTarget.textContent = w.collapsed ? "▸" : "▾";
+    markDirty();
+  });
   if (w.type === "notes" && state.dictTargetId === w.id) el.classList.add("dict-recv");
   const drb = el.querySelector(".dict-recv-btn");
   if (drb) drb.addEventListener("click", e => {
@@ -1846,6 +1866,10 @@ function focusWidget(id, si){
   if (typeof si === "number" && si !== state.active) setActive(si);   // salta al espacio del widget y re-renderiza
   const wi = state.widgets.find(x => x.id === id);
   const win = document.querySelector(`.win[data-id="${id}"]`);
+  if (wi && wi.collapsed){   // si estaba plegado, lo despliega al saltar
+    wi.collapsed = false;
+    if (win){ win.classList.remove("collapsed"); const cb = win.querySelector(".collapse"); if (cb) cb.textContent = "▾"; }
+  }
   if (wi){ wi.z = ++zTop; if (win) win.style.zIndex = zTop; markDirty(); }
   if (win) win.scrollIntoView({ block: "nearest", behavior: "smooth" });
   flashWidget({ id });
@@ -1916,6 +1940,7 @@ function closeMenu(){ $("#menu").classList.remove("open"); }
 
 function wireUI(){
   $("#btn-inicio").addEventListener("click", () => $("#menu").classList.contains("open") ? closeMenu() : openMenu());
+  $("#btn-fold").addEventListener("click", foldAll);
   document.addEventListener("click", e => {
     if (!e.target.closest("#menu") && !e.target.closest("#btn-inicio")) closeMenu();
   });
@@ -2270,6 +2295,7 @@ const TIPS = [
   "Ctrl+K (o /) abre la paleta: busca en todos los espacios y ejecuta comandos",
   "Crea espacios (escritorios) con ＋ en la barra: uno por especialidad o proyecto",
   "Arrastra una ventana sobre otra pestaña de espacio para moverla allí",
+  "Pliega un widget con ▾ en su barra, o todos con ⊟ en la barra inferior",
   "En un grupo de enlaces, «⇱ N» abre los N enlaces de una vez",
   "Doble clic en el título de una ventana para renombrarla",
   "inbox.txt: escribe desde el móvil (OneDrive) y aparece en la Bandeja",
