@@ -46,6 +46,12 @@ body{font-family:var(--font); color:var(--text); background:#10131a}
   border-radius:6px; cursor:pointer; line-height:1}
 .win-btn:hover{background:rgba(255,255,255,.1); color:var(--text)}
 .win-btn.close:hover{background:var(--danger); color:#fff}
+.win-btn.dict-recv-btn{opacity:.4}
+.win.dict-recv{border-color:var(--accent); box-shadow:0 0 0 1px var(--accent), var(--shadow)}
+.win.dict-recv .win-title{background:var(--accent-soft)}
+.win.dict-recv .dict-recv-btn{opacity:1; color:var(--accent)}
+.dict-dest{font-size:11px; color:var(--text-dim); padding:3px 2px 0}
+.dict-dest.warn{color:#d9822b}
 .win-body{flex:1; overflow:auto; padding:10px; font-size:13.5px}
 .win-resize{position:absolute; right:0; bottom:0; width:16px; height:16px; cursor:nwse-resize; opacity:.5}
 .win-resize::after{content:""; position:absolute; right:4px; bottom:4px; width:8px; height:8px;
@@ -200,7 +206,14 @@ ul.plain{list-style:none}
 .cal-grid .hd{color:var(--text-dim); font-size:10.5px; padding:3px 0}
 .cal-grid .wk{color:var(--text-dim); font-size:9.5px; padding:5px 5px 0 0; text-align:right; opacity:.7}
 .cal-grid .d{padding:4px 0; border-radius:6px}
+.cal-grid .d.sat{color:#d9822b}
+.cal-grid .d.sun{color:#e5484d}
+.cal-grid .hd.sat{color:#d9822b}
+.cal-grid .hd.sun{color:#e5484d}
+.cal-grid .d.holi{color:#e5484d; font-weight:700; cursor:help}
 .cal-grid .d.today{background:var(--accent); color:#0b1220; font-weight:700}
+.win.flash{animation:winflash 1.1s ease-out}
+@keyframes winflash{0%{box-shadow:0 0 0 3px var(--accent)}100%{box-shadow:0 0 0 0 transparent}}
 /* reloj analógico */
 .clock-face{position:relative}
 .clock-face .tg{position:absolute; top:0; right:0; opacity:0}
@@ -778,6 +791,13 @@ function normalizePack(p){
         return (/^https?:\/\//i.test(u) && u.includes("%s")) ? { n: txt(e.n || "buscador", 40), u: u.slice(0, 500) } : null;
       }).filter(Boolean);
     }
+    else if (w.type === "cal"){   // festivos locales que puede traer un pack (contenido no confiable → validado)
+      const local = (Array.isArray(d.local) ? d.local : []).map(f => {
+        const dd = String(f && f.d || "");
+        return /^(\d{4}-)?\d{1,2}-\d{1,2}$/.test(dd) ? { d: dd, n: txt((f && f.n) || "Festivo", 60) } : null;
+      }).filter(Boolean).slice(0, 60);
+      if (local.length) data.local = local;
+    }
     const wo = {
       type: w.type,
       x: num(w.x, 40, 0, 4000), y: num(w.y, 40, 0, 4000),
@@ -913,11 +933,18 @@ function buildWindow(w){
   el.className = "win";
   el.dataset.id = w.id;
   el.style.cssText = `left:${+w.x || 0}px; top:${+w.y || 0}px; width:${+w.w || 260}px; height:${+w.h || 180}px; z-index:${+w.z || 1}`;
+  const dictBtn = w.type === "notes" ? `<button class="win-btn dict-recv-btn" title="Recibir el dictado en esta nota">🎙️</button>` : "";
   el.innerHTML = `
     <div class="win-title" title="Doble clic para renombrar"><span class="ico">${t.ico}</span><span class="tname">${esc(w.t || t.name)}</span><span class="sp"></span>
-      <button class="win-btn close" title="Cerrar">✕</button></div>
+      ${dictBtn}<button class="win-btn close" title="Cerrar">✕</button></div>
     <div class="win-body"></div>
     <div class="win-resize"></div>`;
+  if (w.type === "notes" && state.dictTargetId === w.id) el.classList.add("dict-recv");
+  const drb = el.querySelector(".dict-recv-btn");
+  if (drb) drb.addEventListener("click", e => {
+    e.stopPropagation();
+    setDictTarget(state.dictTargetId === w.id ? null : w.id);
+  });
   renderBody(w, el.querySelector(".win-body"));
 
   // renombrar ventana (título propio, ej. "Notas de sesión")
@@ -989,6 +1016,21 @@ function addWidget(type){
 function refreshWidget(w){
   const el = document.querySelector(`.win[data-id="${w.id}"] .win-body`);
   if (el) renderBody(w, el);
+}
+
+function flashWidget(w){
+  const win = document.querySelector(`.win[data-id="${w.id}"]`);
+  if (!win) return;
+  win.classList.remove("flash"); void win.offsetWidth; win.classList.add("flash");
+  setTimeout(() => win.classList.remove("flash"), 1100);
+}
+
+// Marca qué nota recibe el dictado (una sola, global). null = ninguna.
+function setDictTarget(id){
+  state.dictTargetId = id || undefined;
+  $$(".win").forEach(win => win.classList.toggle("dict-recv", win.dataset.id === state.dictTargetId));
+  state.widgets.filter(x => x.type === "dictado").forEach(refreshWidget); // refresca el "Destino:"
+  markDirty();
 }
 
 /* ============================================================
@@ -1403,6 +1445,40 @@ function isoWeek(d){
   const y0 = new Date(Date.UTC(t.getUTCFullYear(), 0, 1));
   return Math.ceil(((t - y0) / 86400000 + 1) / 7);
 }
+// Domingo de Pascua (algoritmo de Gauss/computus) para calcular Viernes Santo
+function easterSunday(y){
+  const a = y % 19, b = Math.floor(y / 100), c = y % 100, d = Math.floor(b / 4), e = b % 4,
+    f = Math.floor((b + 8) / 25), g = Math.floor((b - f + 1) / 3),
+    h = (19 * a + b - d - g + 15) % 30, i = Math.floor(c / 4), k = c % 4,
+    l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451),
+    mo = Math.floor((h + l - 7 * m + 114) / 31), da = ((h + l - 7 * m + 114) % 31) + 1;
+  return new Date(y, mo - 1, da);
+}
+// Festivos nacionales de España (offline; los fijos + Viernes Santo). Clave "mesIndice-dia".
+function esHolidays(y){
+  const h = {}, add = (mo, da, n) => { h[mo + "-" + da] = n; };
+  add(0, 1, "Año Nuevo"); add(0, 6, "Epifanía del Señor");
+  add(4, 1, "Fiesta del Trabajo"); add(7, 15, "Asunción de la Virgen");
+  add(9, 12, "Fiesta Nacional de España"); add(10, 1, "Todos los Santos");
+  add(11, 6, "Día de la Constitución"); add(11, 8, "Inmaculada Concepción");
+  add(11, 25, "Natividad del Señor");
+  const gf = easterSunday(y); gf.setDate(gf.getDate() - 2);
+  h[gf.getMonth() + "-" + gf.getDate()] = "Viernes Santo";
+  return h;
+}
+// Festivos locales/autonómicos opcionales desde w.data.local: [{d:"MM-DD"|"AAAA-MM-DD", n:"…"}]
+function localHolidays(list, y){
+  const out = {};
+  (Array.isArray(list) ? list : []).forEach(f => {
+    if (!f || !f.d) return;
+    const p = String(f.d).split("-").map(Number);
+    let mo, da;
+    if (p.length === 3){ if (p[0] !== y) return; mo = p[1] - 1; da = p[2]; }
+    else { mo = p[0] - 1; da = p[1]; }
+    if (mo >= 0 && mo <= 11 && da >= 1 && da <= 31) out[mo + "-" + da] = f.n || "Festivo local";
+  });
+  return out;
+}
 function bodyCal(w, el){
   let ym = null;
   const paint = () => {
@@ -1411,8 +1487,9 @@ function bodyCal(w, el){
     const first = new Date(ym.y, ym.m, 1);
     const start = (first.getDay() + 6) % 7;      // lunes = 0
     const days = new Date(ym.y, ym.m + 1, 0).getDate();
+    const holis = esHolidays(ym.y), locals = localHolidays(w.data.local, ym.y);
     let html = `<div class="cal-nav"><button class="mini pv">‹</button><b>${first.toLocaleDateString("es-ES", { month: "long", year: "numeric" })}</b><button class="mini nx">›</button></div>
-      <div class="cal-grid"><span class="wk"></span>${["L","M","X","J","V","S","D"].map(d => `<span class="hd">${d}</span>`).join("")}`;
+      <div class="cal-grid"><span class="wk"></span>${["L","M","X","J","V","S","D"].map((d, i) => `<span class="hd${i === 6 ? " sun" : i === 5 ? " sat" : ""}">${d}</span>`).join("")}`;
     let day = 1;
     for (let r = 0; day <= days && r < 7; r++){
       html += `<span class="wk">${isoWeek(new Date(ym.y, ym.m, day))}</span>`;
@@ -1420,7 +1497,10 @@ function bodyCal(w, el){
         if (r * 7 + c < start || day > days){ html += "<span></span>"; }
         else {
           const isToday = day === now.getDate() && ym.m === now.getMonth() && ym.y === now.getFullYear();
-          html += `<span class="d${isToday ? " today" : ""}">${day++}</span>`;
+          const wknd = c === 6 ? " sun" : c === 5 ? " sat" : "";
+          const holi = holis[ym.m + "-" + day] || locals[ym.m + "-" + day];
+          const tip = holi ? ` title="${esc(holi)}"` : "";
+          html += `<span class="d${isToday ? " today" : ""}${wknd}${holi ? " holi" : ""}"${tip}>${day++}</span>`;
         }
       }
     }
@@ -1823,25 +1903,47 @@ function bodyDictate(w, el){
       <div class="dict-bar"><button class="mini go">🎙️ Dictar</button><span class="dict-st empty">listo</span></div>
       <textarea class="notes dict-out" placeholder="Pulsa Dictar y habla: el texto aparece aquí (y puedes editarlo)…"></textarea>
       <div class="dict-bar"><button class="mini cp">⧉ Copiar</button><button class="mini nt">📝 → Nota</button><button class="mini warn cl">🧹 Limpiar</button></div>
+      <div class="dict-dest"></div>
     </div>`;
-  const ta = el.querySelector(".dict-out"), st = el.querySelector(".dict-st"), go = el.querySelector(".go");
+  const ta = el.querySelector(".dict-out"), st = el.querySelector(".dict-st"), go = el.querySelector(".go"), dest = el.querySelector(".dict-dest");
+  let base = "";
   ta.value = w.data.text || "";
   ta.addEventListener("input", () => { w.data.text = ta.value; markDirty(); });
+
+  // Nota destino: la nota marcada con 🎙️ (state.dictTargetId); si no hay ninguna, la primera nota
+  const notesList = () => state.widgets.filter(x => x.type === "notes");
+  const noteName = n => n.t || ("Nota " + (notesList().indexOf(n) + 1));
+  const targetNote = () => {
+    const notes = notesList();
+    return (state.dictTargetId && notes.find(n => n.id === state.dictTargetId)) || notes[0] || null;
+  };
+  const showDest = () => {
+    const notes = notesList(), n = targetNote();
+    if (!n){ dest.textContent = "Destino: se creará una nota al enviar"; dest.classList.remove("warn"); return; }
+    const marked = state.dictTargetId && notes.some(x => x.id === state.dictTargetId);
+    dest.innerHTML = `Destino: <b>${esc(noteName(n))}</b>` + (notes.length > 1 && !marked ? " · marca una con 🎙️" : "");
+    dest.classList.toggle("warn", notes.length > 1 && !marked);
+  };
+  showDest();
+
   el.querySelector(".cp").addEventListener("click", async () => { await navigator.clipboard.writeText(ta.value); toast("Copiado"); });
-  el.querySelector(".cl").addEventListener("click", () => { ta.value = ""; w.data.text = ""; markDirty(); });
+  el.querySelector(".cl").addEventListener("click", () => { ta.value = ""; w.data.text = ""; base = ""; markDirty(); });
   el.querySelector(".nt").addEventListener("click", () => {
-    if (!ta.value.trim()) return;
-    let n = state.widgets.find(x => x.type === "notes");
-    if (!n){ addWidget("notes"); n = state.widgets[state.widgets.length - 1]; }
-    n.data.text = (n.data.text ? n.data.text + "\n" : "") + ta.value.trim();
-    refreshWidget(n); markDirty(); toast("Enviado a la nota");
+    const text = ta.value.trim();
+    if (!text) return;
+    let n = targetNote();
+    if (!n){ addWidget("notes"); n = state.widgets[state.widgets.length - 1]; setDictTarget(n.id); }
+    n.data.text = (n.data.text ? n.data.text + "\n" : "") + text;
+    refreshWidget(n);
+    ta.value = ""; w.data.text = ""; base = "";   // vaciar tras enviar: al reanudar no se reenvía lo ya mandado
+    markDirty(); flashWidget(n); toast("Enviado a " + noteName(n));
   });
   if (!SR){
     st.textContent = "sin dictado web en este navegador — usa Win+H de Windows sobre el cuadro";
     go.disabled = true;
     return;
   }
-  let rec = null, listening = false, base = "";
+  let rec = null, listening = false;
   go.addEventListener("click", () => {
     if (listening){ try{ rec.stop(); }catch(e){} return; }
     rec = new SR();
