@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.18.0] - 2026-07-05
+
+- **Tareas con vencimiento e histórico.** Cada tarea admite una fecha de vencimiento (📅), con aviso a la vista: <span>vencida</span> en rojo, «hoy» en ámbar, o la fecha si es futura; las pendientes se ordenan por fecha. Al completar una tarea ya no se pierde: pasa a un **histórico de hechas** (botón «🗂️ Hechas») con su propio buscador; desde ahí puedes restaurarla o borrarla. La barra inferior avisa de tareas vencidas o que vencen hoy.
+
 ## [0.17.0] - 2026-07-05
 
 - **Tour interactivo.** Un recorrido guiado con foco (coach-marks) que resalta cada zona y explica lo esencial: añadir widgets, espacios, plegar, la barra de cada widget y sincronizar. Aparece solo la primera vez, y puedes lanzarlo cuando quieras desde la Guía («▶ Hacer el tour»), desde la paleta (Ctrl+K → «Tour interactivo») o desde la guía completa. Termina enlazando a la guía.

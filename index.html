@@ -186,6 +186,17 @@ ul.plain{list-style:none}
 .todo-it.done .t{text-decoration:line-through; color:var(--text-dim)}
 .it-del{border:none; background:none; color:var(--text-dim); cursor:pointer; font-size:13px; padding:2px 6px; border-radius:6px; opacity:0; flex-shrink:0}
 .todo-it:hover .it-del,.clip-it:hover .it-del,.link-it:hover .it-del,.link-it:hover .it-act{opacity:1}
+.todo-it .due{font-size:10.5px; padding:1px 7px; border-radius:20px; white-space:nowrap; flex-shrink:0}
+.todo-it .due.overdue{background:rgba(243,108,108,.18); color:#f36c6c}
+.todo-it .due.today{background:rgba(240,194,94,.20); color:#f0c25e}
+.todo-it .due.future{background:rgba(255,255,255,.06); color:var(--text-dim)}
+.todo-it .it-due{border:none; background:none; color:var(--text-dim); cursor:pointer; font-size:12px; padding:2px 4px; border-radius:6px; opacity:0; flex-shrink:0}
+.todo-it:hover .it-due{opacity:.8}
+.todo-it .it-due:hover{opacity:1; color:var(--text)}
+.todo-foot{margin-top:8px; display:flex; gap:8px; align-items:center; flex-wrap:wrap}
+.todo-toggle{flex-shrink:0}
+.todo-search{flex:1; min-width:110px; padding:5px 9px; border-radius:8px; border:1px solid var(--border-soft); background:rgba(255,255,255,.05); color:var(--text); font-family:var(--font); font-size:13px}
+.todo-search:focus{border-color:var(--accent); outline:none}
 .it-del:hover{color:var(--danger); background:rgba(243,108,108,.12)}
 .clip-it{display:flex; align-items:flex-start; gap:8px; padding:7px 8px; border-radius:9px; border:1px solid var(--border-soft); margin-bottom:7px; background:rgba(255,255,255,.02)}
 .clip-it .t{flex:1; word-break:break-word; white-space:pre-wrap; font-size:12.8px; max-height:76px; overflow:auto}
@@ -1480,32 +1491,80 @@ function bodyNotes(w, el){
 function bodyTodo(w, el){
   el.innerHTML = `
     <div class="todo-add"><input type="text" placeholder="Nueva tarea…"><button class="mini">＋</button></div>
-    <ul class="plain"></ul>
-    <div style="margin-top:8px"><button class="mini warn done-clear" style="display:none">Limpiar completadas</button></div>`;
-  const inp = el.querySelector("input"), ul = el.querySelector("ul");
+    <ul class="plain todo-list"></ul>
+    <div class="todo-foot"><button class="mini todo-toggle"></button><input type="search" class="todo-search" placeholder="Buscar en hechas…" style="display:none"></div>`;
+  if (!Array.isArray(w.data.items)) w.data.items = [];
+  const inp = el.querySelector(".todo-add input"), ul = el.querySelector(".todo-list");
+  const toggle = el.querySelector(".todo-toggle"), search = el.querySelector(".todo-search");
+  let view = "pend";   // "pend" (pendientes) | "done" (histórico de hechas)
+
   const add = () => {
     const t = inp.value.trim(); if (!t) return;
     w.data.items.push({ t, done: false }); inp.value = "";
-    paint(); markDirty();
+    view = "pend"; paint(); markDirty();
   };
   el.querySelector(".todo-add .mini").addEventListener("click", add);
   inp.addEventListener("keydown", e => { if (e.key === "Enter") add(); });
-  el.querySelector(".done-clear").addEventListener("click", () => {
-    w.data.items = w.data.items.filter(i => !i.done); paint(); markDirty();
-  });
-  const paint = () => {
+  toggle.addEventListener("click", () => { view = view === "pend" ? "done" : "pend"; search.value = ""; paint(); });
+  search.addEventListener("input", paint);
+
+  const dueMeta = it => {
+    if (!it.due) return null;
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const days = Math.round((new Date(it.due + "T00:00:00") - today) / 86400000);
+    if (days < 0) return { cls: "overdue", label: "vencida" };
+    if (days === 0) return { cls: "today", label: "hoy" };
+    return { cls: "future", label: new Date(it.due + "T00:00:00").toLocaleDateString("es-ES", { day: "numeric", month: "short" }) };
+  };
+  const setDue = it => {
+    const v = prompt("Fecha de vencimiento (AAAA-MM-DD); vacío para quitar:", it.due || "");
+    if (v === null) return;
+    const s = v.trim();
+    if (!s) delete it.due;
+    else if (/^\d{4}-\d{2}-\d{2}$/.test(s)) it.due = s;
+    else { toast("Formato de fecha: AAAA-MM-DD", true); return; }
+    paint(); markDirty();
+  };
+
+  function paint(){
     ul.innerHTML = "";
-    if (!w.data.items.length) ul.innerHTML = `<div class="empty">Sin tareas pendientes.</div>`;
-    w.data.items.forEach((it, i) => {
+    const doneN = w.data.items.filter(i => i.done).length;
+    toggle.textContent = view === "pend" ? `🗂️ Hechas (${doneN})` : "‹ Pendientes";
+    search.style.display = view === "done" ? "" : "none";
+
+    let list;
+    if (view === "pend"){
+      list = w.data.items.filter(i => !i.done)
+        .sort((a, b) => (a.due ? 0 : 1) - (b.due ? 0 : 1) || String(a.due).localeCompare(String(b.due)));
+      if (!list.length) ul.innerHTML = `<div class="empty">Sin tareas pendientes.</div>`;
+    } else {
+      const q = search.value.trim().toLowerCase();
+      list = w.data.items.filter(i => i.done && (!q || i.t.toLowerCase().includes(q)))
+        .sort((a, b) => (b.doneAt || 0) - (a.doneAt || 0));
+      if (!list.length) ul.innerHTML = `<div class="empty">${q ? "Nada coincide." : "Aún no has completado tareas."}</div>`;
+    }
+
+    list.forEach(it => {
       const li = document.createElement("li");
       li.className = "todo-it" + (it.done ? " done" : "");
-      li.innerHTML = `<input type="checkbox" ${it.done ? "checked" : ""}><span class="t">${esc(it.t)}</span><button class="it-del" title="Borrar">✕</button>`;
-      li.querySelector("input").addEventListener("change", e => { it.done = e.target.checked; paint(); markDirty(); });
-      li.querySelector(".it-del").addEventListener("click", () => { w.data.items.splice(i, 1); paint(); markDirty(); });
+      const dm = dueMeta(it);
+      li.innerHTML = `<input type="checkbox" ${it.done ? "checked" : ""}><span class="t">${esc(it.t)}</span>`
+        + (dm ? `<span class="due ${dm.cls}">${dm.label}</span>` : "")
+        + `<button class="it-due" title="Vencimiento">📅</button><button class="it-del" title="Borrar">✕</button>`;
+      li.querySelector("input").addEventListener("change", e => {
+        it.done = e.target.checked;
+        it.doneAt = it.done ? Date.now() : undefined;
+        paint(); markDirty();
+      });
+      li.querySelector(".it-due").addEventListener("click", () => setDue(it));
+      li.querySelector(".it-del").addEventListener("click", () => {
+        const idx = w.data.items.indexOf(it);
+        if (idx >= 0) w.data.items.splice(idx, 1);
+        paint(); markDirty();
+      });
       ul.appendChild(li);
     });
-    el.querySelector(".done-clear").style.display = w.data.items.some(i => i.done) ? "" : "none";
-  };
+  }
   paint();
 }
 
@@ -2476,6 +2535,12 @@ function pillMsgs(){
     if (holi) out.push(`🎉 Hoy es festivo: ${holi}`);
     const todos = state.widgets.filter(x => x.type === "todo").flatMap(x => x.data.items || []);
     if (todos.length){ const done = todos.filter(i => i.done).length; out.push(`✅ ${done}/${todos.length} tarea${todos.length === 1 ? "" : "s"} hecha${done === 1 ? "" : "s"}`); }
+    const today0 = new Date(); today0.setHours(0, 0, 0, 0);
+    const pend = todos.filter(i => !i.done && i.due);
+    const overdue = pend.filter(i => new Date(i.due + "T00:00:00") < today0).length;
+    const dueToday = pend.filter(i => +new Date(i.due + "T00:00:00") === +today0).length;
+    if (overdue) out.push(`⏰ ${overdue} tarea${overdue === 1 ? "" : "s"} vencida${overdue === 1 ? "" : "s"}`);
+    if (dueToday) out.push(`📌 ${dueToday} tarea${dueToday === 1 ? "" : "s"} vence${dueToday === 1 ? "" : "n"} hoy`);
     const wc = state.widgets.length;
     const links = state.widgets.filter(x => x.type === "links").reduce((a, x) => a + (x.data.groups || []).reduce((s, g) => s + (g.links || []).length, 0), 0);
     const notes = state.widgets.filter(x => x.type === "notes").length;
