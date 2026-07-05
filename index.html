@@ -52,6 +52,12 @@ body{font-family:var(--font); color:var(--text); background:#10131a}
 .win.dict-recv .dict-recv-btn{opacity:1; color:var(--accent)}
 .dict-dest{font-size:11px; color:var(--text-dim); padding:3px 2px 0}
 .dict-dest.warn{color:#d9822b}
+.note-colors{display:flex; gap:6px; margin-bottom:7px; align-items:center}
+.swatch{width:16px; height:16px; border-radius:50%; border:1px solid var(--border); cursor:pointer; padding:0; flex-shrink:0}
+.swatch:hover{transform:scale(1.15)}
+.swatch.on{box-shadow:0 0 0 2px var(--accent)}
+.swatch.none{background:transparent; position:relative}
+.swatch.none::after{content:"∅"; position:absolute; inset:0; font-size:11px; line-height:14px; text-align:center; color:var(--text-dim)}
 .win-body{flex:1; overflow:auto; padding:10px; font-size:13.5px}
 .win-resize{position:absolute; right:0; bottom:0; width:16px; height:16px; cursor:nwse-resize; opacity:.5}
 .win-resize::after{content:""; position:absolute; right:4px; bottom:4px; width:8px; height:8px;
@@ -774,7 +780,7 @@ function normalizePack(p){
       })).filter(g => g.links.length);
       if (!data.groups.length) continue;
     }
-    else if (w.type === "notes") data.text = txt(d.text, 20000);
+    else if (w.type === "notes"){ data.text = txt(d.text, 20000); if (["amarillo","rosa","verde","azul","naranja"].includes(d.color)) data.color = d.color; }
     else if (w.type === "qr")    data.text = txt(d.text, 2000);
     else if (w.type === "md"){   data.text = txt(d.text, 100000); data.view = "view"; }
     else if (w.type === "dictado") data.text = txt(d.text, 100000);
@@ -1063,12 +1069,23 @@ function bodyIntro(w, el){
   el.querySelector(".gu").addEventListener("click", () => $("#ov-guia").classList.add("open"));
 }
 
-/* --- Nota --- */
+/* --- Nota (con color tipo post-it) --- */
+const NOTE_COLORS = { amarillo: "#e6c34a", rosa: "#e07a9c", verde: "#5ab98a", azul: "#5aa9f7", naranja: "#e0955a" };
+const hexA = (h, a) => { const n = parseInt(h.slice(1), 16); return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`; };
 function bodyNotes(w, el){
-  el.innerHTML = `<textarea class="notes" placeholder="Escribe aquí…"></textarea>`;
-  const ta = el.querySelector("textarea");
+  el.innerHTML = `<div class="note-colors"></div><textarea class="notes" placeholder="Escribe aquí…"></textarea>`;
+  const ta = el.querySelector("textarea"), bar = el.querySelector(".note-colors");
   ta.value = w.data.text || "";
   ta.addEventListener("input", () => { w.data.text = ta.value; markDirty(); });
+  const apply = () => { const win = el.closest(".win"); if (win){ const c = NOTE_COLORS[w.data.color]; win.style.background = c ? hexA(c, .16) : ""; } };
+  const swatches = [""].concat(Object.keys(NOTE_COLORS));
+  bar.innerHTML = swatches.map(k => `<button class="swatch${k ? "" : " none"}${(w.data.color || "") === k ? " on" : ""}" data-c="${k}" title="${k || "sin color"}"${k ? ` style="background:${NOTE_COLORS[k]}"` : ""}></button>`).join("");
+  bar.querySelectorAll(".swatch").forEach(b => b.addEventListener("click", () => {
+    w.data.color = b.dataset.c || undefined;
+    bar.querySelectorAll(".swatch").forEach(x => x.classList.toggle("on", x.dataset.c === (w.data.color || "")));
+    apply(); markDirty();
+  }));
+  apply();
 }
 
 /* --- Tareas --- */
@@ -2043,9 +2060,14 @@ function pillMsgs(){
   const dayOfYear = Math.ceil((now - new Date(now.getFullYear(), 0, 0)) / 86400000);
   out.push(`📆 Semana ${isoWeek(now)} · día ${dayOfYear} del año`);
   if (state){
-    const pend = state.widgets.filter(x => x.type === "todo")
-      .reduce((a, x) => a + (x.data.items || []).filter(i => !i.done).length, 0);
-    if (pend) out.push(`✅ ${pend} tarea${pend === 1 ? "" : "s"} pendiente${pend === 1 ? "" : "s"}`);
+    const holi = esHolidays(now.getFullYear())[now.getMonth() + "-" + now.getDate()];
+    if (holi) out.push(`🎉 Hoy es festivo: ${holi}`);
+    const todos = state.widgets.filter(x => x.type === "todo").flatMap(x => x.data.items || []);
+    if (todos.length){ const done = todos.filter(i => i.done).length; out.push(`✅ ${done}/${todos.length} tarea${todos.length === 1 ? "" : "s"} hecha${done === 1 ? "" : "s"}`); }
+    const wc = state.widgets.length;
+    const links = state.widgets.filter(x => x.type === "links").reduce((a, x) => a + (x.data.groups || []).reduce((s, g) => s + (g.links || []).length, 0), 0);
+    const notes = state.widgets.filter(x => x.type === "notes").length;
+    out.push(`🧩 ${wc} widget${wc === 1 ? "" : "s"}` + (links ? ` · ${links} enlace${links === 1 ? "" : "s"}` : "") + (notes ? ` · ${notes} nota${notes === 1 ? "" : "s"}` : ""));
   }
   out.push("💡 " + TIPS[(pillIdx + Math.floor(Date.now() / 3600000)) % TIPS.length]);
   return out;

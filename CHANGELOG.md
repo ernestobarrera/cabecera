@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.8.0] - 2026-07-05
+
+- **Notas de colores (post-it)**: cada nota tiene una fila de colores para teñirla (amarillo, rosa, verde, azul, naranja) o dejarla sin color. El color viaja en los datos y en los packs.
+- **Analítica ambiental en la barra**: la píldora informativa añade el recuento de widgets y enlaces, el progreso de tareas (hechas/total) y un aviso cuando hoy es festivo. Todo se calcula en local; no se envía nada a ningún sitio.
+
 ## [0.7.0] - 2026-07-05
 
 - **Paleta de comandos (Ctrl+K)**: el buscador del menú Inicio pasa de buscar solo enlaces a buscar en **todo** —notas, tareas, fragmentos, Markdown, dictado, buscadores— y a **ejecutar comandos** (añadir cualquier widget, abrir Packs, Fondo, Exportar, etc.). Búsqueda por varias palabras; al elegir un resultado de contenido, salta a ese widget, lo trae al frente y lo destella. Se abre con `Ctrl+K` (o con `/` como antes).
