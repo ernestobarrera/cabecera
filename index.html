@@ -71,6 +71,15 @@ body{font-family:var(--font); color:var(--text); background:#10131a}
   background:rgba(255,255,255,.05); color:var(--text); border-radius:10px; cursor:pointer; font-size:13.5px; font-weight:600; font-family:var(--font)}
 #btn-inicio:hover{background:var(--accent-soft); border-color:var(--accent)}
 #tb-spacer{flex:1}
+#tb-spaces{display:flex; align-items:center; gap:4px; overflow-x:auto; max-width:42vw; scrollbar-width:thin}
+#tb-spaces::-webkit-scrollbar{height:0}
+.space-tab{display:flex; align-items:center; gap:6px; background:transparent; border:1px solid var(--border-soft); color:var(--text-dim); border-radius:9px; padding:5px 10px; cursor:pointer; font-size:12.5px; font-family:var(--font); white-space:nowrap; flex-shrink:0}
+.space-tab:hover{background:rgba(255,255,255,.06); color:var(--text)}
+.space-tab.active{background:var(--accent-soft); border-color:var(--accent); color:var(--text)}
+.space-tab .st-del{font-size:11px; line-height:1; opacity:.55; border-radius:4px; padding:0 2px}
+.space-tab .st-del:hover{opacity:1; color:#fff; background:var(--danger)}
+#space-add{background:transparent; border:1px dashed var(--border-soft); color:var(--text-dim); border-radius:9px; width:28px; height:28px; cursor:pointer; flex-shrink:0; font-size:15px; line-height:1}
+#space-add:hover{border-color:var(--accent); color:var(--text)}
 .tb-item{display:flex; align-items:center; gap:6px; padding:5px 10px; border-radius:8px; font-size:12.5px; color:var(--text-dim); cursor:pointer; border:1px solid transparent}
 .tb-item:hover{background:rgba(255,255,255,.07); color:var(--text)}
 #tb-inbox{display:none}
@@ -269,6 +278,7 @@ ul.plain{list-style:none}
 
 <div id="taskbar">
   <button id="btn-inicio">⊞ Inicio</button>
+  <div id="tb-spaces" title="Espacios (escritorios): clic para cambiar, doble clic para renombrar"></div>
   <div id="tb-spacer"></div>
   <div class="tb-item" id="tb-pill" title="Píldora informativa — clic para cambiar"></div>
   <div class="tb-item" id="tb-inbox" title="Hay texto nuevo en inbox.txt">📥 Bandeja <span id="tb-inbox-n"></span></div>
@@ -399,7 +409,8 @@ ul.plain{list-style:none}
       — Copias: menú Inicio → «Exportar copia»; y «Restaurar copia» si algo sale mal.</p>
     </details>
     <details><summary>Atajos e integraciones</summary>
-      <p class="hint">— <b>/</b> abre el buscador de tus enlaces; ↑↓ y Enter para abrir.<br>
+      <p class="hint">— <b>Ctrl+K</b> (o <b>/</b>) abre la paleta: busca en todos los espacios y ejecuta comandos; ↑↓ y Enter.<br>
+      — <b>Espacios</b>: usa <b>＋</b> en la barra para crear escritorios (uno por especialidad o proyecto); clic para cambiar, doble clic para renombrar, ✕ para eliminar. Cada espacio tiene su propio fondo.<br>
       — Doble clic en el título de una ventana para renombrarla.<br>
       — En un grupo de enlaces, «⇱ todo» abre todos a la vez (permite los pop-ups la primera vez).<br>
       — <b>inbox.txt</b> en tu carpeta de datos: cualquier línea (una macro de teclado, un agente, el móvil vía OneDrive) aparece en la Bandeja.<br>
@@ -1045,6 +1056,59 @@ function renderAll(){
     zTop = Math.max(zTop, w.z || 1);
     d.appendChild(buildWindow(w));
   }
+  renderTabs();
+}
+
+/* ---------- espacios (escritorios/pestañas) ---------- */
+function nextActiveAfterDelete(active, removed, len){   // len = nº de espacios TRAS borrar
+  if (active > removed) return active - 1;
+  return Math.min(active, len - 1);
+}
+function setActive(i){
+  if (i < 0 || i >= state.spaces.length || i === state.active) return;
+  state.active = i;          // los accesores state.widgets/state.settings ya apuntan al nuevo espacio
+  markDirty();
+  renderAll();
+}
+function addSpace(){
+  const sp = blankSpace();
+  sp.name = "Escritorio " + (state.spaces.length + 1);
+  state.spaces.push(sp);
+  state.active = state.spaces.length - 1;
+  markDirty();
+  renderAll();
+}
+function renameSpace(i){
+  const sp = state.spaces[i]; if (!sp) return;
+  const v = prompt("Nombre del espacio:", sp.name || "Escritorio");
+  if (v === null) return;
+  sp.name = v.trim().slice(0, 80) || sp.name;
+  markDirty();
+  renderTabs();
+}
+function deleteSpace(i){
+  if (state.spaces.length <= 1){ toast("No puedes eliminar el único espacio", true); return; }
+  const sp = state.spaces[i]; if (!sp) return;
+  const n = (sp.widgets || []).length;
+  if (!confirm(`¿Eliminar el espacio "${sp.name}"${n ? " y sus " + n + " widgets" : ""}?`)) return;
+  state.spaces.splice(i, 1);
+  state.active = nextActiveAfterDelete(state.active, i, state.spaces.length);
+  markDirty();
+  renderAll();
+}
+function renderTabs(){
+  const box = $("#tb-spaces");
+  if (!box || !state) return;
+  const multi = state.spaces.length > 1;
+  box.innerHTML = state.spaces.map((sp, i) =>
+    `<button class="space-tab${i === state.active ? " active" : ""}" data-i="${i}" title="${esc(sp.name || "Escritorio")}"><span class="st-name">${esc(sp.name || "Escritorio")}</span>${i === state.active && multi ? `<span class="st-del" title="Eliminar este espacio">✕</span>` : ""}</button>`
+  ).join("") + `<button id="space-add" title="Nuevo espacio">＋</button>`;
+  box.querySelectorAll(".space-tab").forEach(t => {
+    const i = +t.dataset.i;
+    t.addEventListener("click", e => { if (e.target.closest(".st-del")){ deleteSpace(i); return; } setActive(i); });
+    t.addEventListener("dblclick", e => { if (!e.target.closest(".st-del")) renameSpace(i); });
+  });
+  $("#space-add").addEventListener("click", addSpace);
 }
 
 function buildWindow(w){
@@ -1717,12 +1781,6 @@ async function applyWallpaper(){
 /* ============================================================
    Menú inicio, búsqueda y acciones
    ============================================================ */
-function allLinks(){
-  const out = [];
-  for (const w of state.widgets) if (w.type === "links")
-    for (const g of w.data.groups) for (const l of g.links) out.push(l);
-  return out;
-}
 let selIdx = 0;
 
 // Texto buscable de un widget (para la paleta global)
@@ -1737,13 +1795,14 @@ function widgetText(w){
 }
 const snippet = s => { s = String(s).replace(/\s+/g, " ").trim(); return s.length > 64 ? s.slice(0, 64) + "…" : s; };
 
-// Traer una ventana al frente, hacerla visible y destellar
-function focusWidget(id){
+// Traer una ventana al frente (cambiando de espacio si hace falta), hacerla visible y destellar
+function focusWidget(id, si){
+  closeMenu();
+  if (typeof si === "number" && si !== state.active) setActive(si);   // salta al espacio del widget y re-renderiza
   const wi = state.widgets.find(x => x.id === id);
   const win = document.querySelector(`.win[data-id="${id}"]`);
   if (wi){ wi.z = ++zTop; if (win) win.style.zIndex = zTop; markDirty(); }
   if (win) win.scrollIntoView({ block: "nearest", behavior: "smooth" });
-  closeMenu();
   flashWidget({ id });
 }
 
@@ -1754,27 +1813,32 @@ function openGroup(links){
   if (blocked) toast("El navegador bloqueó ventanas: permite los pop-ups para este sitio y reintenta", true);
 }
 
-// Todas las entradas de la paleta: contenido + saltos + comandos + rutinas
+// Todas las entradas de la paleta: contenido + saltos + comandos + rutinas (en TODOS los espacios)
 function paletteEntries(){
   const E = [];
   const add = (icon, label, sub, run, hay) => E.push({ icon, label, sub, run, hay: (hay || (label + " " + sub)).toLowerCase() });
-  for (const w of state.widgets){
-    const name = w.t || (WTYPES[w.type] || {}).name || w.type;
-    const ico = (WTYPES[w.type] || {}).ico || "❔";
-    if (w.type === "links"){
-      for (const g of w.data.groups || []){
-        for (const l of g.links || []){
-          let host = ""; try{ host = new URL(l.u).hostname; }catch(e){}
-          add("🔗", l.t || l.u, host, () => { window.open(l.u, "_blank", "noopener"); closeMenu(); }, (l.t || "") + " " + (l.u || ""));
+  const multi = state.spaces.length > 1;
+  state.spaces.forEach((sp, si) => {
+    const tag = multi ? (sp.name || ("Espacio " + (si + 1))) : "";
+    for (const w of sp.widgets){
+      const name = w.t || (WTYPES[w.type] || {}).name || w.type;
+      const ico = (WTYPES[w.type] || {}).ico || "❔";
+      if (w.type === "links"){
+        for (const g of w.data.groups || []){
+          for (const l of g.links || []){
+            let host = ""; try{ host = new URL(l.u).hostname; }catch(e){}
+            add("🔗", l.t || l.u, host || tag, () => { window.open(l.u, "_blank", "noopener"); closeMenu(); }, (l.t || "") + " " + (l.u || "") + " " + tag);
+          }
+          if ((g.links || []).length > 1)
+            add("▶", "Abrir grupo: " + (g.name || "enlaces"), g.links.length + " pestañas", () => { closeMenu(); openGroup(g.links); }, "abrir todo grupo rutina " + (g.name || "") + " " + tag);
         }
-        if ((g.links || []).length > 1)
-          add("▶", "Abrir grupo: " + (g.name || "enlaces"), g.links.length + " pestañas", () => { closeMenu(); openGroup(g.links); }, "abrir todo grupo rutina " + (g.name || ""));
+      } else {
+        const text = widgetText(w);
+        const sub = (tag ? tag + (text ? " · " : "") : "") + (text ? snippet(text) : (tag ? "" : "ir al widget"));
+        add(ico, name, sub || "ir al widget", () => focusWidget(w.id, si), name + " " + text + " " + tag);
       }
-    } else {
-      const text = widgetText(w);
-      add(ico, name, text ? snippet(text) : "ir al widget", () => focusWidget(w.id), name + " " + text);
     }
-  }
+  });
   for (const [type, t] of Object.entries(WTYPES)) if (type !== "intro")
     add("➕", "Añadir " + t.name, "widget nuevo", () => { addWidget(type); closeMenu(); }, "añadir crear nuevo " + t.name);
   [["❓","Guía","act-ayuda"],["🧩","Packs","act-packs"],["🖼️","Fondo","act-wallpaper"],["📁","Sincronizar equipos","act-folder"],["⬇️","Exportar copia","act-export"],["⬆️","Importar copia","act-import"],["♻️","Restaurar copia","act-restore"]]
@@ -2158,7 +2222,8 @@ function bodyDictate(w, el){
 
 /* ---------- píldora informativa de la barra ---------- */
 const TIPS = [
-  "Ctrl+K (o /) abre la paleta: busca en todo y ejecuta comandos",
+  "Ctrl+K (o /) abre la paleta: busca en todos los espacios y ejecuta comandos",
+  "Crea espacios (escritorios) con ＋ en la barra: uno por especialidad o proyecto",
   "Doble clic en el título de una ventana para renombrarla",
   "inbox.txt: escribe desde el móvil (OneDrive) y aparece en la Bandeja",
   "?pack=URL comparte tu escritorio con quien quieras",

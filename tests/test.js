@@ -139,4 +139,12 @@ if (typeof sanitizeWidgetShape({ type: 'notes', id: { x: 1 } }).id !== 'string')
 if (sanitizeWidgetShape({ type: 'notes', id: 'a'.repeat(200) }).id.length !== 64) throw new Error('id no acotado a 64');
 console.log('OK esquema v2 (migración, accesores no-enumerables, serialización, saneo estructural, source/id estrictos)');
 
+// espacios: índice activo tras borrar
+eval('globalThis.nextActiveAfterDelete = ' + pickFn('nextActiveAfterDelete', 'active, removed, len'));
+if (nextActiveAfterDelete(2, 0, 3) !== 1) throw new Error('borrar espacio anterior al activo: active debe bajar');
+if (nextActiveAfterDelete(1, 2, 3) !== 1) throw new Error('borrar espacio posterior al activo: active no cambia');
+if (nextActiveAfterDelete(2, 2, 2) !== 1) throw new Error('borrar el activo (último): active se acota');
+if (nextActiveAfterDelete(0, 1, 2) !== 0) throw new Error('borrar posterior con active 0: sigue 0');
+console.log('OK espacios (índice activo tras borrar)');
+
 console.log('\nTODO EN VERDE');
