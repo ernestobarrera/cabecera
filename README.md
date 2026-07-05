@@ -74,7 +74,7 @@ El código es público pero no contiene ningún dato; los datos siempre quedan e
 
 - Modo sincronizado y packs-desde-archivo: solo Edge/Chrome (File System Access API) y por HTTP(S), no `file://`.
 - Sin fusión automática de conflictos (aviso y elección manual; con un solo usuario es raro).
-- v1 pensada para pantalla de escritorio; sin vista móvil.
+- En móvil, los widgets se apilan a ancho completo para consultar/editar (sin arrastrar ni redimensionar); el escritorio libre es para pantalla grande.
 - Sin RSS todavía: requiere un proxy (CORS) — decisión de fase posterior.
 
 ## Uso responsable en entorno sanitario

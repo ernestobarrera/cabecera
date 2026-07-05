@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.13.0] - 2026-07-05
+
+- **Vista móvil.** En pantallas pequeñas, los widgets se apilan a ancho completo (misma información y edición, sin el escritorio libre): pensada para consultar y usar Cabecera desde el móvil. En pantalla grande sigue el escritorio de ventanas de siempre. El mismo `datos.json` sirve para ambos.
+- El botón «⇱ N» de los grupos de enlaces ahora se ve siempre (antes solo al pasar el ratón), como recordatorio.
+
 ## [0.12.0] - 2026-07-05
 
 - **Mover widgets entre espacios arrastrando**: arrastra una ventana por su barra de título y suéltala sobre la pestaña de otro espacio (se resalta al pasar por encima) para llevar ese widget allí.

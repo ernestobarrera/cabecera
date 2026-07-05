@@ -265,11 +265,25 @@ ul.plain{list-style:none}
 #tb-pill{max-width:360px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
 /* grupos de enlaces */
 .link-group h5{display:flex; align-items:center; gap:8px; justify-content:space-between}
-.link-group .oa{opacity:0}
+.link-group .oa{opacity:.5}
 .link-group:hover .oa{opacity:1}
 ::-webkit-scrollbar{width:9px; height:9px}
 ::-webkit-scrollbar-thumb{background:rgba(255,255,255,.14); border-radius:5px}
 ::-webkit-scrollbar-track{background:transparent}
+
+/* ---------- Vista móvil: proyección apilada del mismo estado (sin lienzo/drag) ---------- */
+@media (max-width: 700px){
+  #desktop{overflow-y:auto; overflow-x:hidden; display:flex; flex-direction:column; gap:10px; padding:10px}
+  .win{position:static !important; left:auto !important; top:auto !important;
+    width:100% !important; height:auto !important; min-width:0; min-height:0;
+    max-height:78vh; z-index:auto !important}
+  .win-body{max-height:62vh}
+  .win-resize{display:none}
+  #tb-pill, #tb-sync{display:none}
+  #tb-spaces{max-width:none; flex:1}
+  #btn-inicio{padding:6px 11px}
+  #menu{left:10px; right:10px; width:auto; max-height:76vh}
+}
 </style>
 </head>
 <body>
@@ -446,6 +460,7 @@ const POLL_MS = 4000;
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
 const uid = () => Math.random().toString(36).slice(2, 10);
+const isMobile = () => matchMedia("(max-width: 700px)").matches;   // vista apilada: sin drag/resize
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 
 /* ---------- estado ---------- */
@@ -1155,6 +1170,7 @@ function buildWindow(w){
   });
 
   el.addEventListener("pointerdown", () => {
+    if (isMobile()) return;   // pila apilada: no hay "traer al frente"
     w.z = ++zTop; el.style.zIndex = zTop; markDirty();
     $$(".win").forEach(x => x.classList.toggle("active", x === el));
   });
@@ -1167,7 +1183,7 @@ function buildWindow(w){
   // arrastrar (y soltar sobre otra pestaña de espacio para mover el widget allí)
   const title = el.querySelector(".win-title");
   title.addEventListener("pointerdown", ev => {
-    if (ev.target.closest("button")) return;
+    if (ev.target.closest("button") || isMobile()) return;   // móvil: sin arrastre (scroll táctil)
     ev.preventDefault();
     const sx = ev.clientX - w.x, sy = ev.clientY - w.y;
     let overTab = null;
@@ -1196,6 +1212,7 @@ function buildWindow(w){
 
   // redimensionar
   el.querySelector(".win-resize").addEventListener("pointerdown", ev => {
+    if (isMobile()) return;
     ev.preventDefault(); ev.stopPropagation();
     const sw = w.w - ev.clientX, sh = w.h - ev.clientY;
     const move = m => {
