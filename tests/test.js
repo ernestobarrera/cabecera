@@ -137,7 +137,10 @@ for (const bad of ['package', 'userland', 'pack:' + 'x'.repeat(50), 'evil', ''])
   if (src2(bad) !== 'user') throw new Error('source laxo: "' + bad + '" debería caer a "user"');
 if (typeof sanitizeWidgetShape({ type: 'notes', id: { x: 1 } }).id !== 'string') throw new Error('id no coercionado a string');
 if (sanitizeWidgetShape({ type: 'notes', id: 'a'.repeat(200) }).id.length !== 64) throw new Error('id no acotado a 64');
-console.log('OK esquema v2 (migración, accesores no-enumerables, serialización, saneo estructural, source/id estrictos)');
+const wt = sanitizeWidgetShape({ type: 'notes', tags: ['Clínica', ' clinica ', '', 'x'.repeat(40), 'Clínica'] }).tags;
+if (!wt || wt.length !== 3 || wt[0] !== 'clínica' || wt[2].length !== 24) throw new Error('tags: normalización/dedupe/acotado incorrectos');
+if (sanitizeWidgetShape({ type: 'notes' }).tags !== undefined) throw new Error('tags vacío debe ser undefined');
+console.log('OK esquema v2 (migración, accesores no-enumerables, serialización, saneo estructural, source/id/tags estrictos)');
 
 // espacios: índice activo tras borrar
 eval('globalThis.nextActiveAfterDelete = ' + pickFn('nextActiveAfterDelete', 'active, removed, len'));

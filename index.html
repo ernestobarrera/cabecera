@@ -41,6 +41,13 @@ body{font-family:var(--font); color:var(--text); background:#10131a}
 .win.collapsed .win-body,.win.collapsed .win-resize{display:none}
 .win.collapsed .win-title{border-bottom:none}
 .win-btn.collapse{font-size:11px}
+.win-tags{display:flex; flex-wrap:wrap; gap:5px; padding:0 10px 8px}
+.tag-chip{font-size:11px; padding:2px 8px; border-radius:20px; border:1px solid var(--border-soft); background:rgba(255,255,255,.05); color:var(--text-dim); cursor:pointer; font-family:var(--font)}
+.tag-chip:hover{border-color:var(--accent); color:var(--text)}
+.tag-chip.on{background:var(--accent); color:#0b1220; border-color:var(--accent); font-weight:600}
+#tb-filter{color:var(--accent); border-color:var(--accent); background:var(--accent-soft); gap:8px}
+#tb-filter .tf-x{cursor:pointer; opacity:.7}
+#tb-filter .tf-x:hover{opacity:1; color:#fff}
 .win-title{display:flex; align-items:center; gap:8px; padding:8px 10px; cursor:grab; user-select:none;
   background:rgba(255,255,255,.04); border-bottom:1px solid var(--border-soft); font-size:13px; font-weight:600}
 .win-title:active{cursor:grabbing}
@@ -302,6 +309,7 @@ ul.plain{list-style:none}
   <button id="btn-fold" title="Plegar / desplegar todos los widgets">⊟</button>
   <div id="tb-spaces" title="Espacios (escritorios): clic para cambiar, doble clic para renombrar"></div>
   <div id="tb-spacer"></div>
+  <div class="tb-item" id="tb-filter" title="Filtro por etiqueta activo" style="display:none"></div>
   <div class="tb-item" id="tb-pill" title="Píldora informativa — clic para cambiar"></div>
   <div class="tb-item" id="tb-inbox" title="Hay texto nuevo en inbox.txt">📥 Bandeja <span id="tb-inbox-n"></span></div>
   <div class="tb-item" id="tb-sync" title="Estado de sincronización"><span class="dot"></span><span id="tb-sync-t">—</span></div>
@@ -433,6 +441,7 @@ ul.plain{list-style:none}
     <details><summary>Atajos e integraciones</summary>
       <p class="hint">— <b>Ctrl+K</b> (o <b>/</b>) abre la paleta: busca en todos los espacios y ejecuta comandos; ↑↓ y Enter.<br>
       — <b>Espacios</b>: usa <b>＋</b> en la barra para crear escritorios (uno por especialidad o proyecto); clic para cambiar, doble clic para renombrar, ✕ para eliminar. Cada espacio tiene su propio fondo. <b>Arrastra una ventana sobre otra pestaña</b> para mover ese widget a ese espacio.<br>
+      — <b>Etiquetas</b>: el botón <b>🏷️</b> de una ventana le pone etiquetas; haz clic en una etiqueta (o búscala en Ctrl+K) para dejar a la vista solo los widgets con esa etiqueta, en cualquier espacio.<br>
       — En un grupo de enlaces, el botón <b>⇱ N</b> abre los N enlaces de una vez (permite los pop-ups la primera vez). También desde la paleta: «Abrir grupo: …».<br>
       — Doble clic en el título de una ventana para renombrarla. El chevron <b>▾</b> la pliega a su barra; <b>⊟</b> en la barra pliega/despliega todas.<br>
       — <b>inbox.txt</b> en tu carpeta de datos: cualquier línea (una macro de teclado, un agente, el móvil vía OneDrive) aparece en la Bandeja.<br>
@@ -536,6 +545,9 @@ function migrate(s){
 // Garantiza spaces válido, active acotado, IDs, tipos conocidos, dimensiones numéricas, data objeto y source acotado.
 function sanitizeWidgetShape(w){
   const t = WTYPES[w.type];
+  const tags = Array.isArray(w.tags)
+    ? [...new Set(w.tags.map(x => String(x).trim().toLowerCase().slice(0, 24)).filter(Boolean))].slice(0, 8)
+    : [];
   return {
     ...w,
     id: (typeof w.id === "string" && w.id) ? w.id.slice(0, 64) : uid(),
@@ -545,7 +557,8 @@ function sanitizeWidgetShape(w){
     z: numOr(w.z, 1, 0, 1e6),
     data: (w.data && typeof w.data === "object") ? w.data : {},
     // exacto: "user" | "pack" | "pack:<slug acotado>" (para el futuro merge no destructivo)
-    source: (typeof w.source === "string" && /^(user|pack(:[a-zA-Z0-9._-]{1,40})?)$/.test(w.source)) ? w.source : "user"
+    source: (typeof w.source === "string" && /^(user|pack(:[a-zA-Z0-9._-]{1,40})?)$/.test(w.source)) ? w.source : "user",
+    tags: tags.length ? tags : undefined
   };
 }
 function sanitizeState(s){
@@ -1077,9 +1090,12 @@ function renderAll(){
   zTop = 10;
   for (const w of state.widgets){
     zTop = Math.max(zTop, w.z || 1);
-    d.appendChild(buildWindow(w));
+    const win = buildWindow(w);
+    if (tagFilter && !(w.tags || []).includes(tagFilter)) win.style.display = "none";   // filtro por etiqueta
+    d.appendChild(win);
   }
   renderTabs();
+  renderTagFilterBar();
 }
 
 /* ---------- espacios (escritorios/pestañas) ---------- */
@@ -1119,6 +1135,50 @@ function deleteSpace(i){
   markDirty();
   renderAll();
 }
+/* ---------- etiquetas (eje transversal) ---------- */
+let tagFilter = null;   // estado de vista (no se guarda): oculta los widgets sin esta etiqueta
+function normTags(str){
+  return [...new Set(String(str || "").split(",").map(s => s.trim().toLowerCase().slice(0, 24)).filter(Boolean))].slice(0, 8);
+}
+function editWidgetTags(w, el){
+  const v = prompt("Etiquetas del widget (separadas por comas):", (w.tags || []).join(", "));
+  if (v === null) return;
+  const tags = normTags(v);
+  w.tags = tags.length ? tags : undefined;
+  paintWinTags(el, w);
+  markDirty();
+}
+function paintWinTags(el, w){
+  const strip = el.querySelector(".win-tags");
+  if (!strip) return;
+  const tags = w.tags || [];
+  if (!tags.length){ strip.style.display = "none"; strip.innerHTML = ""; return; }
+  strip.style.display = "";
+  strip.innerHTML = tags.map(tg => `<button class="tag-chip${tagFilter === tg ? " on" : ""}" data-t="${esc(tg)}">${esc(tg)}</button>`).join("");
+  strip.querySelectorAll(".tag-chip").forEach(c => c.addEventListener("click", e => {
+    e.stopPropagation();
+    setTagFilter(c.dataset.t === tagFilter ? null : c.dataset.t);
+  }));
+}
+function allTags(){
+  const set = new Set();
+  state.spaces.forEach(sp => sp.widgets.forEach(w => (w.tags || []).forEach(t => set.add(t))));
+  return [...set].sort();
+}
+function setTagFilter(tag){
+  tagFilter = tag || null;
+  renderAll();
+}
+function renderTagFilterBar(){
+  const el = $("#tb-filter");
+  if (!el) return;
+  if (tagFilter){
+    el.style.display = "flex";
+    el.innerHTML = `🏷️ ${esc(tagFilter)} <span class="tf-x" title="Quitar filtro">✕</span>`;
+    el.querySelector(".tf-x").addEventListener("click", () => setTagFilter(null));
+  } else { el.style.display = "none"; el.innerHTML = ""; }
+}
+
 function foldAll(){   // si hay alguno abierto, pliega todos; si todos plegados, los despliega
   const anyOpen = state.widgets.some(w => !w.collapsed);
   state.widgets.forEach(w => w.collapsed = anyOpen);
@@ -1160,10 +1220,13 @@ function buildWindow(w){
   const dictBtn = w.type === "notes" ? `<button class="win-btn dict-recv-btn" title="Recibir el dictado en esta nota">🎙️</button>` : "";
   el.innerHTML = `
     <div class="win-title" title="Doble clic para renombrar"><span class="ico">${t.ico}</span><span class="tname">${esc(w.t || t.name)}</span><span class="sp"></span>
-      ${dictBtn}<button class="win-btn collapse" title="Plegar / desplegar">${w.collapsed ? "▸" : "▾"}</button><button class="win-btn close" title="Cerrar">✕</button></div>
+      ${dictBtn}<button class="win-btn tagbtn" title="Etiquetas">🏷️</button><button class="win-btn collapse" title="Plegar / desplegar">${w.collapsed ? "▸" : "▾"}</button><button class="win-btn close" title="Cerrar">✕</button></div>
+    <div class="win-tags"></div>
     <div class="win-body"></div>
     <div class="win-resize"></div>`;
   if (w.collapsed) el.classList.add("collapsed");
+  el.querySelector(".tagbtn").addEventListener("click", e => { e.stopPropagation(); editWidgetTags(w, el); });
+  paintWinTags(el, w);
   el.querySelector(".collapse").addEventListener("click", e => {
     e.stopPropagation();
     w.collapsed = !w.collapsed;
@@ -1902,12 +1965,16 @@ function paletteEntries(){
             add("▶", "Abrir grupo: " + (g.name || "enlaces"), g.links.length + " pestañas", () => { closeMenu(); openGroup(g.links); }, "abrir todo grupo rutina " + (g.name || "") + " " + tag);
         }
       } else {
-        const text = widgetText(w);
+        const text = widgetText(w), wtags = (w.tags || []).join(" ");
         const sub = (tag ? tag + (text ? " · " : "") : "") + (text ? snippet(text) : (tag ? "" : "ir al widget"));
-        add(ico, name, sub || "ir al widget", () => focusWidget(w.id, si), name + " " + text + " " + tag);
+        add(ico, name, sub || "ir al widget", () => focusWidget(w.id, si), name + " " + text + " " + tag + " " + wtags);
       }
     }
   });
+  for (const tg of allTags())
+    add("🏷️", "Filtrar por etiqueta: " + tg, "etiqueta", () => { closeMenu(); setTagFilter(tg); }, "filtrar etiqueta tag " + tg);
+  if (tagFilter)
+    add("🏷️", "Quitar filtro de etiqueta", tagFilter, () => { closeMenu(); setTagFilter(null); }, "quitar limpiar filtro etiqueta");
   for (const [type, t] of Object.entries(WTYPES)) if (type !== "intro")
     add("➕", "Añadir " + t.name, "widget nuevo", () => { addWidget(type); closeMenu(); }, "añadir crear nuevo " + t.name);
   [["❓","Guía","act-ayuda"],["🧩","Packs","act-packs"],["🖼️","Fondo","act-wallpaper"],["📁","Sincronizar equipos","act-folder"],["⬇️","Exportar copia","act-export"],["⬆️","Importar copia","act-import"],["♻️","Restaurar copia","act-restore"]]
@@ -2296,6 +2363,7 @@ const TIPS = [
   "Crea espacios (escritorios) con ＋ en la barra: uno por especialidad o proyecto",
   "Arrastra una ventana sobre otra pestaña de espacio para moverla allí",
   "Pliega un widget con ▾ en su barra, o todos con ⊟ en la barra inferior",
+  "Pon etiquetas a un widget con 🏷️ y filtra por ellas desde la paleta o al hacer clic",
   "En un grupo de enlaces, «⇱ N» abre los N enlaces de una vez",
   "Doble clic en el título de una ventana para renombrarla",
   "inbox.txt: escribe desde el móvil (OneDrive) y aparece en la Bandeja",
