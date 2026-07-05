@@ -82,4 +82,52 @@ for (const p of ['sanitarios', 'basico']){
 }
 console.log('OK packs incluidos (sanitarios, basico)');
 
+// --- esquema v2: migración, accesores no-enumerables, serialización y saneo ---
+globalThis.uid = () => 'u' + Math.random().toString(36).slice(2, 8);
+globalThis.numOr = function(v, d, min, max){ v = Number(v); return Number.isFinite(v) ? Math.min(max, Math.max(min, v)) : d; };
+globalThis.blankSpace = function(){ return { id: 's_' + uid(), name: 'Escritorio', settings: { wallpaper: { type: 'preset', value: 0 } }, widgets: [] }; };
+globalThis.defaultState = function(){ return { version: 1, updatedAt: Date.now(), settings: { wallpaper: { type: 'preset', value: 0 } }, widgets: [] }; };
+eval('globalThis.migrate = ' + pickFn('migrate', 's'));
+eval('globalThis.sanitizeWidgetShape = ' + pickFn('sanitizeWidgetShape', 'w'));
+eval('globalThis.sanitizeState = ' + pickFn('sanitizeState', 's'));
+eval('globalThis.bindSpace = ' + pickFn('bindSpace', 's'));
+
+// migración v1 -> v2
+const v1 = { version: 1, updatedAt: 123, settings: { wallpaper: { type: 'preset', value: 2 } },
+  widgets: [ { id: 'a', type: 'notes', x: 10, y: 20, w: 300, h: 200, data: { text: 'hola' } }, { type: 'todo', data: { items: [] } } ] };
+const m = sanitizeState(migrate(v1));
+if (m.version !== 2) throw new Error('migrate: version no es 2');
+if (!Array.isArray(m.spaces) || m.spaces.length !== 1) throw new Error('migrate: spaces mal formados');
+if (m.spaces[0].widgets.length !== 2) throw new Error('migrate: widgets perdidos');
+if (m.spaces[0].widgets[0].source !== 'user') throw new Error('migrate: source no asignado');
+if (!m.spaces[0].widgets[1].id) throw new Error('migrate: id no generado');
+if (m.spaces[0].settings.wallpaper.value !== 2) throw new Error('migrate: settings del espacio perdidos');
+
+// accesores no-enumerables + serialización v2 (sin duplicar widgets/settings en raíz)
+bindSpace(m);
+if (m.widgets !== m.spaces[0].widgets) throw new Error('bindSpace: widgets no apunta al espacio activo');
+m.widgets = m.widgets.filter(() => true);           // reasignación vía setter
+if (m.spaces[0].widgets !== m.widgets) throw new Error('bindSpace: el setter no escribe en el espacio');
+const json = JSON.parse(JSON.stringify(m));
+if (json.widgets !== undefined) throw new Error('serializacion: widgets NO debe estar en la raíz');
+if (json.settings !== undefined) throw new Error('serializacion: settings NO debe estar en la raíz');
+if (!json.spaces || !json.spaces[0].widgets) throw new Error('serializacion: spaces debe llevar los widgets');
+
+// ciclo real guardar -> recargar: el JSON serializado se re-adopta sin perder ni duplicar
+const reloaded = bindSpace(sanitizeState(migrate(json)));
+if (reloaded.widgets.length !== m.spaces[0].widgets.length) throw new Error('reload: widgets no preservados tras guardar+recargar');
+if (JSON.parse(JSON.stringify(reloaded)).widgets !== undefined) throw new Error('reload: widgets reaparecen en la raíz');
+
+// idempotencia sobre v2
+if (migrate(m) !== m) throw new Error('migrate no es idempotente sobre v2');
+
+// estado manipulado no debe romper
+const bad = sanitizeState(migrate({ version: 2, spaces: [], active: 99 }));
+if (!bad.spaces.length || bad.active !== 0) throw new Error('saneo: estado sin espacios / active fuera de rango no corregido');
+const bad2 = sanitizeState(migrate({ version: 2, active: 0, spaces: [ { widgets: [ { type: 'inventado' }, { type: 'notes', x: 'NaN', data: null } ] } ] }));
+if (bad2.spaces[0].widgets.length !== 1) throw new Error('saneo: tipo desconocido no filtrado');
+if (typeof bad2.spaces[0].widgets[0].x !== 'number') throw new Error('saneo: dimensión no coercionada a número');
+if (typeof bad2.spaces[0].widgets[0].data !== 'object') throw new Error('saneo: data no normalizada a objeto');
+console.log('OK esquema v2 (migración, accesores no-enumerables, serialización, saneo estructural)');
+
 console.log('\nTODO EN VERDE');

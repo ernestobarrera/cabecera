@@ -438,6 +438,7 @@ const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt
 
 /* ---------- estado ---------- */
 let state = null;
+let lastSavedText = null;    // texto crudo del último datos.json leído/escrito (detección de conflicto)
 let dirHandle = null;
 let backend = null;          // 'fs' | 'local'
 let lastMtime = 0;           // mtime de datos.json que ya tenemos cargado
@@ -465,6 +466,102 @@ function defaultState(){
       { id: uid(), type: "clock", x: 700, y: 40,  w: 240, h: 150, z: 4, data: {} }
     ]
   };
+}
+
+/* ============================================================
+   Esquema v2: espacios (spaces[]) + separación contenido/layout.
+   Ver ADR y plan en ia-config/actas/2026-07-05_*cabecera*v2*.
+   - v1 (widgets en raíz) se migra en memoria; NO se escribe al cargar.
+   - state.widgets / state.settings son accesores no-enumerables al
+     espacio activo: los ~30 usos existentes no cambian y JSON.stringify
+     emite la forma v2 canónica (spaces), sin duplicar.
+   ============================================================ */
+function numOr(v, d, min, max){ v = Number(v); return Number.isFinite(v) ? Math.min(max, Math.max(min, v)) : d; }
+function blankSpace(){ return { id: "s_" + uid(), name: "Escritorio", settings: { wallpaper: { type: "preset", value: 0 } }, widgets: [] }; }
+
+// v1 → v2 en memoria (idempotente si ya es v2)
+function migrate(s){
+  if (!s || typeof s !== "object") return null;
+  if (s.version === 2 && Array.isArray(s.spaces)) return s;
+  return {
+    version: 2,
+    updatedAt: typeof s.updatedAt === "number" ? s.updatedAt : Date.now(),
+    active: 0,
+    spaces: [{
+      id: "s_" + uid(),
+      name: "Escritorio",
+      settings: (s.settings && typeof s.settings === "object") ? s.settings : { wallpaper: { type: "preset", value: 0 } },
+      widgets: Array.isArray(s.widgets) ? s.widgets : []
+    }],
+    dictTargetId: s.dictTargetId
+  };
+}
+
+// Saneo ESTRUCTURAL del estado propio (no de contenido: eso es cosa de normalizePack para packs no confiables).
+// Garantiza spaces válido, active acotado, IDs, tipos conocidos, dimensiones numéricas, data objeto y source acotado.
+function sanitizeWidgetShape(w){
+  const t = WTYPES[w.type];
+  return {
+    ...w,
+    id: w.id || uid(),
+    type: w.type,
+    x: numOr(w.x, 40, 0, 8000), y: numOr(w.y, 40, 0, 8000),
+    w: numOr(w.w, t.w, 120, 4000), h: numOr(w.h, t.h, 80, 4000),
+    z: numOr(w.z, 1, 0, 1e6),
+    data: (w.data && typeof w.data === "object") ? w.data : {},
+    source: (typeof w.source === "string" && /^(user|pack)/.test(w.source)) ? w.source : "user"
+  };
+}
+function sanitizeState(s){
+  if (!s || typeof s !== "object") s = migrate(defaultState());
+  if (!Array.isArray(s.spaces) || !s.spaces.length) s.spaces = [blankSpace()];
+  s.spaces = s.spaces.map(sp => {
+    sp = (sp && typeof sp === "object") ? sp : {};
+    if (!sp.id) sp.id = "s_" + uid();
+    if (typeof sp.name !== "string") sp.name = "Escritorio";
+    if (!sp.settings || typeof sp.settings !== "object") sp.settings = { wallpaper: { type: "preset", value: 0 } };
+    sp.widgets = (Array.isArray(sp.widgets) ? sp.widgets : []).filter(w => w && WTYPES[w.type]).map(sanitizeWidgetShape);
+    return sp;
+  });
+  s.active = Math.min(Math.max(0, s.active | 0), s.spaces.length - 1);
+  s.version = 2;
+  if (typeof s.updatedAt !== "number") s.updatedAt = Date.now();
+  return s;
+}
+
+// Enlaza state.widgets / state.settings al espacio activo. No enumerables → no se serializan (evita duplicar).
+function bindSpace(s){
+  Object.defineProperty(s, "widgets", {
+    configurable: true, enumerable: false,
+    get(){ return s.spaces[s.active].widgets; },
+    set(v){ s.spaces[s.active].widgets = v; }
+  });
+  Object.defineProperty(s, "settings", {
+    configurable: true, enumerable: false,
+    get(){ return s.spaces[s.active].settings; },
+    set(v){ s.spaces[s.active].settings = v; }
+  });
+  return s;
+}
+
+// Respaldo único del v1 original antes de la primera escritura v2 (reversibilidad)
+function backupV1Once(raw){
+  try{
+    if (raw && raw.version !== 2 && Array.isArray(raw.widgets) && raw.widgets.length && !localStorage.getItem("cabecera-v1-backup"))
+      localStorage.setItem("cabecera-v1-backup", JSON.stringify(raw));
+  }catch(e){}
+}
+
+// CHOKE-POINT ÚNICO para asignar el estado: migra, respalda, sanea y enlaza accesores.
+// Regla: `state =` solo debe aparecer en la declaración y aquí dentro.
+function setState(raw, reason){
+  let s = migrate(raw);
+  if (!s) s = migrate(defaultState());
+  s = sanitizeState(s);
+  backupV1Once(raw);
+  bindSpace(s);
+  state = s;
+  return state;
 }
 
 /* ---------- IndexedDB mínima (para recordar la carpeta) ---------- */
@@ -528,7 +625,7 @@ async function readDataFile(){
   lastMtime = f.lastModified;
   const text = await f.text();
   if (!text.trim()) return null;
-  return JSON.parse(text);
+  return { data: JSON.parse(text), text };   // text crudo → lastSavedText (detección de conflicto)
 }
 
 async function writeDataFile(){
@@ -544,8 +641,10 @@ async function writeDataFile(){
     return false;
   }
   const w = await fh.createWritable();
-  await w.write(JSON.stringify(state, null, 2));
+  const payload = JSON.stringify(state, null, 2);
+  await w.write(payload);
   await w.close();
+  lastSavedText = payload;
   lastMtime = (await fh.getFile()).lastModified;
   return true;
 }
@@ -565,7 +664,9 @@ async function saveNow(){
       const okWrite = await writeDataFile();
       if (!okWrite) return;               // conflicto: no marcamos limpio
     } else {
-      localStorage.setItem("cabecera-state", JSON.stringify(state));
+      const payload = JSON.stringify(state);
+      localStorage.setItem("cabecera-state", payload);
+      lastSavedText = payload;
     }
     dirty = false;
     syncUI(backend === "fs" ? "ok" : "local", backend === "fs" ? "sincronizado" : "solo local");
@@ -587,13 +688,14 @@ async function poll(){
     if (f.lastModified > lastMtime){
       let remote = null, text = "";
       try{ text = await f.text(); remote = JSON.parse(text); }catch(e){ /* escritura a medias: reintentar en el siguiente ciclo */ }
-      if (remote && text === JSON.stringify(state, null, 2)){
-        // contenido idéntico byte a byte (p. ej. OneDrive tocó el mtime): no es conflicto.
-        // Se compara el TEXTO, no updatedAt: una edición externa (un agente que no
-        // actualice updatedAt) se detecta siempre.
+      if (remote && text === lastSavedText){
+        // idéntico al último texto que leímos/escribimos (p. ej. OneDrive tocó el mtime):
+        // no es conflicto. Se compara el TEXTO CRUDO, no una reserialización de state ni
+        // updatedAt: robusto ante formato y ante ediciones externas que no toquen updatedAt.
         lastMtime = f.lastModified;
       } else if (remote && !dirty){
-        state = remote;
+        setState(remote, "poll");   // adopta remoto (migra si venía v1)
+        lastSavedText = text;
         lastMtime = f.lastModified;
         renderAll();
         toast("Actualizado desde otro equipo");
@@ -674,11 +776,11 @@ async function boot(){
   backend = "local";
   const local = localStorage.getItem("cabecera-state");
   if (local){
-    try{ state = JSON.parse(local); }
-    catch(e){ state = firstRunState(); }
+    try{ setState(JSON.parse(local), "load-local"); lastSavedText = local; }
+    catch(e){ setState(firstRunState(), "default"); }
   } else {
     isFirstRun = true;
-    state = firstRunState();
+    setState(firstRunState(), "default");
     localStorage.setItem("cabecera-mode", "local");
   }
   syncUI("local", "solo local");
@@ -700,13 +802,14 @@ async function startFS(){
   try{
     const loaded = await readDataFile();
     if (loaded){
-      state = loaded;
+      setState(loaded.data, "load-fs");   // migra en memoria; NO escribe (migración perezosa)
+      lastSavedText = loaded.text;
       if (prev && prev.widgets && localStorage.getItem("cabecera-mode") === "local"){
         localStorage.setItem("cabecera-local-prev", JSON.stringify(prev));
         toast("Cargado el escritorio de la carpeta; tu versión local previa quedó guardada como copia");
       }
     } else {
-      state = prev || defaultState(); // carpeta vacía: se lleva lo que tuvieras
+      setState(prev || defaultState(), "default"); // carpeta vacía: se lleva lo que tuvieras
       await writeDataFile();
     }
     localStorage.removeItem("cabecera-mode");
@@ -714,7 +817,7 @@ async function startFS(){
   }catch(e){
     syncUI("err", "datos.json ilegible");
     toast("datos.json no se pudo leer (¿JSON corrupto?). Corrígelo o bórralo para empezar de cero.", true);
-    state = defaultState();   // en memoria; NO se sobreescribe el archivo hasta que el usuario edite
+    setState(defaultState(), "default");   // en memoria; NO se sobreescribe el archivo hasta que el usuario edite
   }
   renderAll();
   await handleAddParam();
@@ -833,16 +936,16 @@ async function applyPack(pack, opts = {}){
     : `¿Aplicar el pack "${np.name || "sin nombre"}"?\nSustituye tu escritorio actual (se guarda una copia local automática).`)) return false;
   try{ localStorage.setItem("cabecera-backup-antes-pack", JSON.stringify(state)); }catch(e){}
   if (add){
-    // se suma al escritorio, con un pequeño desplazamiento para verse; el fondo no se toca
-    for (const w of np.widgets) state.widgets.push({ id: uid(), z: ++zTop, ...w, x: w.x + 24, y: w.y + 24 });
+    // se suma al escritorio activo, con un pequeño desplazamiento para verse; el fondo no se toca
+    for (const w of np.widgets) state.widgets.push({ id: uid(), z: ++zTop, source: "pack", ...w, x: w.x + 24, y: w.y + 24 });
   } else {
     let z = 0;
-    state = {
+    setState({
       version: 1,
       updatedAt: Date.now(),
       settings: Object.assign({}, state && state.settings, np.settings),
-      widgets: np.widgets.map(w => ({ id: uid(), z: ++z, ...w }))
-    };
+      widgets: np.widgets.map(w => ({ id: uid(), z: ++z, source: "pack", ...w }))
+    }, "pack");
   }
   renderAll(); markDirty();
   toast(`Pack "${np.name || ""}" ${add ? "añadido" : "aplicado"}`);
@@ -1794,7 +1897,7 @@ function wireUI(){
       const raw = localStorage.getItem(key);
       if (!raw) return false;
       if (!confirm(label)) return false;
-      try{ state = JSON.parse(raw); renderAll(); markDirty(); toast("Copia restaurada"); return true; }
+      try{ setState(JSON.parse(raw), "restore"); renderAll(); markDirty(); toast("Copia restaurada"); return true; }
       catch(e){ toast("Esa copia está dañada", true); return false; }
     };
     if (tryRestore("cabecera-backup-antes-pack", "¿Restaurar el escritorio previo al último pack aplicado?")) return;
@@ -1807,7 +1910,7 @@ function wireUI(){
     inp.type = "file"; inp.accept = ".json";
     inp.addEventListener("change", async () => {
       try{
-        state = JSON.parse(await inp.files[0].text());
+        setState(JSON.parse(await inp.files[0].text()), "import");
         renderAll(); markDirty(); toast("Copia importada");
       }catch(e){ toast("JSON inválido", true); }
     });
