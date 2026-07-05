@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.18.1] - 2026-07-05
+
+- **Corregido: las etiquetas se veían siempre en equipos con pantalla táctil.** Ahora la reserva a hover usa `any-hover`, así que basta con tener ratón o trackpad; en móviles sin ratón siguen visibles.
+
 ## [0.18.0] - 2026-07-05
 
 - **Tareas con vencimiento e histórico.** Cada tarea admite una fecha de vencimiento (📅), con aviso a la vista: <span>vencida</span> en rojo, «hoy» en ámbar, o la fecha si es futura; las pendientes se ordenan por fecha. Al completar una tarea ya no se pierde: pasa a un **histórico de hechas** (botón «🗂️ Hechas») con su propio buscador; desde ahí puedes restaurarla o borrarla. La barra inferior avisa de tareas vencidas o que vencen hoy.
