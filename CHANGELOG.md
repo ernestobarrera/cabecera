@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.11.0] - 2026-07-05
+
+- **Espacios (escritorios múltiples).** En la barra, junto a Inicio, hay pestañas de espacios: **＋** crea uno nuevo, un **clic** cambia de espacio, **doble clic** lo renombra y **✕** lo elimina. Cada espacio tiene sus propios widgets y su propio fondo — ideal para separar por especialidad o proyecto. La búsqueda (Ctrl+K) mira en **todos** los espacios y salta al que corresponda.
+
 ## [0.10.0] - 2026-07-05
 
 - **Nuevo formato interno de datos, preparado para escritorios múltiples.** Tu `datos.json` pasa a un formato con «espacios» (por ahora uno solo). La conversión es automática y transparente, y se guarda una copia del formato anterior por si acaso. No cambia nada visible todavía: es la base sobre la que llegarán las pestañas por especialidad, la vista móvil y los packs que se actualizan sin pisar tu trabajo. (Si tienes Cabecera abierta en varias pestañas, recárgalas tras actualizar.)
