@@ -88,7 +88,9 @@ body{font-family:var(--font); color:var(--text); background:#10131a}
 #menu-results.has{display:block}
 .res-item{display:flex; align-items:center; gap:10px; padding:7px 9px; border-radius:9px; cursor:pointer; font-size:13.5px}
 .res-item:hover,.res-item.sel{background:var(--accent-soft)}
-.res-item .u{color:var(--text-dim); font-size:11.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1; text-align:right}
+.res-item .res-ic{width:22px; text-align:center; flex-shrink:0}
+.res-item .res-lb{flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.res-item .u{color:var(--text-dim); font-size:11.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:45%; text-align:right; flex-shrink:0}
 #menu-widgets{padding:6px 12px 12px; overflow:auto; min-height:0; flex:1}
 #menu-widgets h4, #menu-actions h4{font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--text-dim); margin:8px 2px 8px}
 .wgrid{display:grid; grid-template-columns:repeat(3,1fr); gap:8px}
@@ -269,7 +271,7 @@ ul.plain{list-style:none}
 </div>
 
 <div id="menu">
-  <input id="menu-search" type="text" placeholder="Buscar en tus enlaces…  ( / )" autocomplete="off">
+  <input id="menu-search" type="text" placeholder="Buscar en todo y ejecutar…  ( Ctrl+K )" autocomplete="off">
   <div id="menu-results"></div>
   <div id="menu-widgets">
     <h4>Añadir widget</h4>
@@ -1597,20 +1599,70 @@ function allLinks(){
   return out;
 }
 let selIdx = 0;
+
+// Texto buscable de un widget (para la paleta global)
+function widgetText(w){
+  const d = w.data || {};
+  switch (w.type){
+    case "notes": case "md": case "dictado": case "qr": return d.text || "";
+    case "todo": case "clips": return (d.items || []).map(i => i.t).filter(Boolean).join(" · ");
+    case "search": return (d.engines || []).map(e => e.n).join(" ");
+    default: return "";
+  }
+}
+const snippet = s => { s = String(s).replace(/\s+/g, " ").trim(); return s.length > 64 ? s.slice(0, 64) + "…" : s; };
+
+// Traer una ventana al frente, hacerla visible y destellar
+function focusWidget(id){
+  const wi = state.widgets.find(x => x.id === id);
+  const win = document.querySelector(`.win[data-id="${id}"]`);
+  if (wi){ wi.z = ++zTop; if (win) win.style.zIndex = zTop; markDirty(); }
+  if (win) win.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  closeMenu();
+  flashWidget({ id });
+}
+
+// Todas las entradas de la paleta: contenido + saltos + comandos
+function paletteEntries(){
+  const E = [];
+  const add = (icon, label, sub, run, hay) => E.push({ icon, label, sub, run, hay: (hay || (label + " " + sub)).toLowerCase() });
+  for (const w of state.widgets){
+    const name = w.t || (WTYPES[w.type] || {}).name || w.type;
+    const ico = (WTYPES[w.type] || {}).ico || "❔";
+    if (w.type === "links"){
+      for (const g of w.data.groups || []) for (const l of g.links || []){
+        let host = ""; try{ host = new URL(l.u).hostname; }catch(e){}
+        add("🔗", l.t || l.u, host, () => { window.open(l.u, "_blank", "noopener"); closeMenu(); }, (l.t || "") + " " + (l.u || ""));
+      }
+    } else {
+      const text = widgetText(w);
+      add(ico, name, text ? snippet(text) : "ir al widget", () => focusWidget(w.id), name + " " + text);
+    }
+  }
+  for (const [type, t] of Object.entries(WTYPES)) if (type !== "intro")
+    add("➕", "Añadir " + t.name, "widget nuevo", () => { addWidget(type); closeMenu(); }, "añadir crear nuevo " + t.name);
+  [["❓","Guía","act-ayuda"],["🧩","Packs","act-packs"],["🖼️","Fondo","act-wallpaper"],["📁","Sincronizar equipos","act-folder"],["⬇️","Exportar copia","act-export"],["⬆️","Importar copia","act-import"],["♻️","Restaurar copia","act-restore"]]
+    .forEach(([ic, label, id]) => add(ic, label, "acción", () => { closeMenu(); const b = $("#" + id); if (b) b.click(); }, label + " configuración"));
+  return E;
+}
+
 function renderResults(q){
   const box = $("#menu-results");
   q = q.trim().toLowerCase();
   if (!q){ box.classList.remove("has"); box.innerHTML = ""; return; }
-  const hits = allLinks().filter(l => (l.t + " " + l.u).toLowerCase().includes(q)).slice(0, 8);
+  const terms = q.split(/\s+/).filter(Boolean);
+  const hits = paletteEntries()
+    .filter(e => terms.every(t => e.hay.includes(t)))
+    .sort((a, b) => (b.label.toLowerCase().startsWith(terms[0]) - a.label.toLowerCase().startsWith(terms[0])))
+    .slice(0, 10);
   box.classList.add("has");
   box.innerHTML = hits.length ? "" : `<div class="empty">Sin coincidencias.</div>`;
   selIdx = 0;
-  hits.forEach((l, i) => {
+  hits.forEach((h, i) => {
     const d = document.createElement("div");
     d.className = "res-item" + (i === 0 ? " sel" : "");
-    let host = ""; try{ host = new URL(l.u).hostname; }catch(e){}
-    d.innerHTML = `<span class="link-tile" style="width:22px;height:22px;font-size:11px;background:hsl(${hueOf(host || l.t)},55%,42%)">${esc((l.t || "?")[0].toUpperCase())}</span><span>${esc(l.t)}</span><span class="u">${esc(host)}</span>`;
-    d.addEventListener("click", () => { window.open(l.u, "_blank", "noopener"); closeMenu(); });
+    d.innerHTML = `<span class="res-ic">${h.icon}</span><span class="res-lb">${esc(h.label)}</span><span class="u">${esc(h.sub)}</span>`;
+    d.addEventListener("click", h.run);
     box.appendChild(d);
   });
 }
@@ -1623,6 +1675,7 @@ function wireUI(){
     if (!e.target.closest("#menu") && !e.target.closest("#btn-inicio")) closeMenu();
   });
   document.addEventListener("keydown", e => {
+    if ((e.key === "k" || e.key === "K") && (e.ctrlKey || e.metaKey)){ e.preventDefault(); openMenu(); }
     if (e.key === "/" && !e.target.closest("input,textarea")){ e.preventDefault(); openMenu(); }
     if (e.key === "Escape") closeMenu();
   });
@@ -1969,7 +2022,7 @@ function bodyDictate(w, el){
 
 /* ---------- píldora informativa de la barra ---------- */
 const TIPS = [
-  "Pulsa / para buscar en tus enlaces al instante",
+  "Ctrl+K (o /) abre la paleta: busca en todo y ejecuta comandos",
   "Doble clic en el título de una ventana para renombrarla",
   "inbox.txt: escribe desde el móvil (OneDrive) y aparece en la Bandeja",
   "?pack=URL comparte tu escritorio con quien quieras",
