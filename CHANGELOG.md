@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.16.1] - 2026-07-05
+
+- **Corregido: se había perdido el renombrar ventanas** (doble clic en el título). Al añadir el arrastre entre espacios, el widget se volvía «no clicable» nada más pulsar; ahora eso solo ocurre cuando de verdad empiezas a arrastrar, así que el doble clic para renombrar vuelve a funcionar.
+- **Las etiquetas de un widget solo se muestran al pasar el ratón** (en el móvil, sin ratón, siguen visibles): estado en reposo más limpio.
+
 ## [0.16.0] - 2026-07-05
 
 - **Guía completa (`guia.html`).** Una página-manual independiente que explica cómo funciona todo: empezar, widgets, espacios, etiquetas, la paleta, móvil, packs, sincronización, atajos y privacidad. Se abre desde la Guía integrada, desde el widget de bienvenida y desde la paleta (Ctrl+K → «Guía completa»), y es compartible como enlace (`…/cabecera/guia.html`). No es una portada-puerta: el escritorio sigue abriéndose directo.

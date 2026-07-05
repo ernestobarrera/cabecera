@@ -42,6 +42,9 @@ body{font-family:var(--font); color:var(--text); background:#10131a}
 .win.collapsed .win-title{border-bottom:none}
 .win-btn.collapse{font-size:11px}
 .win-tags{display:flex; flex-wrap:wrap; gap:5px; padding:0 10px 8px}
+/* etiquetas solo al pasar el ratón (en táctil, sin hover, quedan visibles) */
+@media (hover:hover){ .win .win-tags{display:none} .win:hover .win-tags{display:flex} }
+.win.collapsed .win-tags{display:none}
 .tag-chip{font-size:11px; padding:2px 8px; border-radius:20px; border:1px solid var(--border-soft); background:rgba(255,255,255,.05); color:var(--text-dim); cursor:pointer; font-family:var(--font)}
 .tag-chip:hover{border-color:var(--accent); color:var(--text)}
 .tag-chip.on{background:var(--accent); color:#0b1220; border-color:var(--accent); font-weight:600}
@@ -1267,11 +1270,15 @@ function buildWindow(w){
   const title = el.querySelector(".win-title");
   title.addEventListener("pointerdown", ev => {
     if (ev.target.closest("button") || isMobile()) return;   // móvil: sin arrastre (scroll táctil)
-    ev.preventDefault();
     const sx = ev.clientX - w.x, sy = ev.clientY - w.y;
-    let overTab = null;
-    el.style.pointerEvents = "none";   // para que elementFromPoint vea la barra bajo el cursor
+    let overTab = null, dragging = false;
     const move = m => {
+      if (!dragging){
+        // umbral: hasta que hay movimiento real no es arrastre (así el clic/doble clic siguen funcionando)
+        if (Math.abs(m.clientX - ev.clientX) + Math.abs(m.clientY - ev.clientY) < 4) return;
+        dragging = true;
+        el.style.pointerEvents = "none";   // para que elementFromPoint vea la barra bajo el cursor
+      }
       w.x = Math.max(0, Math.min(m.clientX - sx, innerWidth - 80));
       w.y = Math.max(0, Math.min(m.clientY - sy, innerHeight - 110));
       el.style.left = w.x + "px"; el.style.top = w.y + "px";
@@ -1286,6 +1293,7 @@ function buildWindow(w){
     };
     const up = () => {
       removeEventListener("pointermove", move); removeEventListener("pointerup", up);
+      if (!dragging) return;   // fue un clic: no tocar nada (deja pasar dblclick para renombrar)
       el.style.pointerEvents = "";
       if (overTab){ const ti = +overTab.dataset.i; overTab.classList.remove("drop-target"); moveWidgetToSpace(w.id, ti); return; }
       markDirty();
