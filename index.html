@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Cabecera</title>
+<meta name="theme-color" content="#10161f">
+<link rel="icon" href='data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"%3E%3Crect width="64" height="64" rx="14" fill="%2310161f"/%3E%3Cpath d="M18 18h28v7H26v14h20v7H18z" fill="%235aa9f7"/%3E%3Cpath d="M31 29h15v6H31z" fill="%235fd08a"/%3E%3C/svg%3E'>
 <style>
 :root{
   --glass: rgba(22,26,34,.72);
@@ -41,13 +43,16 @@ body{font-family:var(--font); color:var(--text); background:#10131a}
 .win.collapsed .win-body,.win.collapsed .win-resize{display:none}
 .win.collapsed .win-title{border-bottom:none}
 .win-btn.collapse{font-size:11px}
-.win-tags{display:flex; flex-wrap:wrap; gap:5px; padding:0 10px 8px}
-/* etiquetas solo al pasar el ratón (en táctil, sin hover, quedan visibles) */
-@media (any-hover:hover){ .win .win-tags{display:none} .win:hover .win-tags{display:flex} }
+.win-tags{display:none; flex-wrap:wrap; gap:5px; padding:0 10px 8px}
+/* etiquetas solo al pasar el ratón: estado en reposo minimalista */
+.win:hover .win-tags{display:flex}
 .win.collapsed .win-tags{display:none}
 .tag-chip{font-size:11px; padding:2px 8px; border-radius:20px; border:1px solid var(--border-soft); background:rgba(255,255,255,.05); color:var(--text-dim); cursor:pointer; font-family:var(--font)}
 .tag-chip:hover{border-color:var(--accent); color:var(--text)}
 .tag-chip.on{background:var(--accent); color:#0b1220; border-color:var(--accent); font-weight:600}
+.tag-editor{display:flex; gap:6px; align-items:center; padding:8px 10px; border-bottom:1px solid var(--border-soft); background:rgba(0,0,0,.16)}
+.tag-editor input{flex:1; min-width:0; padding:6px 8px; border-radius:8px; border:1px solid var(--border-soft); background:rgba(0,0,0,.25); color:var(--text); font-family:var(--font); font-size:12.5px}
+.tag-editor input:focus{border-color:var(--accent); outline:none}
 #tb-filter{color:var(--accent); border-color:var(--accent); background:var(--accent-soft); gap:8px}
 #tb-filter .tf-x{cursor:pointer; opacity:.7}
 #tb-filter .tf-x:hover{opacity:1; color:#fff}
@@ -60,6 +65,8 @@ body{font-family:var(--font); color:var(--text); background:#10131a}
   border-radius:6px; cursor:pointer; line-height:1}
 .win-btn:hover{background:rgba(255,255,255,.1); color:var(--text)}
 .win-btn.close:hover{background:var(--danger); color:#fff}
+.win-btn.tagbtn{opacity:0; pointer-events:none; transition:opacity .14s ease, background .14s ease, color .14s ease}
+.win:hover .win-btn.tagbtn,.win:focus-within .win-btn.tagbtn{opacity:1; pointer-events:auto}
 .win-btn.dict-recv-btn{opacity:.4}
 .win.dict-recv{border-color:var(--accent); box-shadow:0 0 0 1px var(--accent), var(--shadow)}
 .win.dict-recv .win-title{background:var(--accent-soft)}
@@ -95,6 +102,8 @@ body{font-family:var(--font); color:var(--text); background:#10131a}
 .space-tab.drop-target{background:var(--accent); color:#0b1220; border-color:var(--accent); transform:translateY(-2px)}
 .space-tab .st-del{font-size:11px; line-height:1; opacity:.55; border-radius:4px; padding:0 2px}
 .space-tab .st-del:hover{opacity:1; color:#fff; background:var(--danger)}
+.inline-rename{min-width:70px; max-width:180px; padding:3px 6px; border-radius:7px; border:1px solid var(--accent);
+  background:rgba(0,0,0,.28); color:var(--text); font:inherit; outline:none}
 #space-add{background:transparent; border:1px dashed var(--border-soft); color:var(--text-dim); border-radius:9px; width:28px; height:28px; cursor:pointer; flex-shrink:0; font-size:15px; line-height:1}
 #space-add:hover{border-color:var(--accent); color:var(--text)}
 .tb-item{display:flex; align-items:center; gap:6px; padding:5px 10px; border-radius:8px; font-size:12.5px; color:var(--text-dim); cursor:pointer; border:1px solid transparent}
@@ -104,15 +113,33 @@ body{font-family:var(--font); color:var(--text); background:#10131a}
 #tb-sync .dot{width:9px; height:9px; border-radius:50%; background:#777}
 #tb-sync .dot.ok{background:var(--ok)} #tb-sync .dot.saving{background:var(--warn)}
 #tb-sync .dot.err{background:var(--danger)} #tb-sync .dot.local{background:#8a8f9c}
+#tb-sync{cursor:pointer}
+#tb-sync:hover{background:rgba(255,255,255,.07); color:var(--text)}
 #tb-clock{text-align:right; line-height:1.15; cursor:default}
 #tb-clock .h{font-size:14px; font-weight:600; color:var(--text)}
 #tb-clock .d{font-size:10.5px; color:var(--text-dim); text-transform:capitalize}
+
+/* accesos discretos del escritorio */
+#desk-dock{position:fixed; right:14px; bottom:60px; z-index:520; display:flex; align-items:center; gap:7px}
+.dock-btn{height:32px; min-width:32px; padding:0 10px; display:flex; align-items:center; justify-content:center; gap:6px;
+  border:1px solid var(--border-soft); border-radius:10px; background:rgba(22,26,34,.58); color:var(--text-dim);
+  backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px); box-shadow:0 8px 24px rgba(0,0,0,.25);
+  cursor:pointer; font-family:var(--font); font-size:12.5px}
+.dock-btn:hover{background:var(--accent-soft); border-color:var(--accent); color:var(--text)}
+.dock-key{font-weight:650; letter-spacing:.02em}
+.dock-count{min-width:15px; height:15px; padding:0 4px; border-radius:20px; background:var(--accent); color:#0b1220;
+  display:none; align-items:center; justify-content:center; font-size:10px; font-weight:700}
+.dock-btn.has .dock-count{display:flex}
+.dock-info{font-weight:700; font-style:italic}
 
 /* ---------- menú inicio ---------- */
 #menu{position:fixed; left:12px; bottom:54px; width:420px; max-height:70vh; z-index:600; display:none; flex-direction:column;
   background:var(--glass); backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px);
   border:1px solid var(--border); border-radius:16px; box-shadow:var(--shadow); overflow:hidden}
 #menu.open{display:flex}
+#menu.palette{left:50%; top:16vh; bottom:auto; width:min(640px, calc(100vw - 24px)); max-height:min(70vh, 640px); transform:translateX(-50%)}
+#menu.palette #menu-widgets,#menu.palette #menu-actions{display:none}
+#menu.floating{bottom:auto; transform:none}
 #menu-search{margin:12px; padding:9px 12px; border-radius:10px; border:1px solid var(--border-soft);
   background:rgba(0,0,0,.25); color:var(--text); font-size:14px; font-family:var(--font); outline:none}
 #menu-search:focus{border-color:var(--accent)}
@@ -138,8 +165,8 @@ body{font-family:var(--font); color:var(--text); background:#10131a}
 /* ---------- overlays / modales ---------- */
 .overlay{position:fixed; inset:0; z-index:900; display:none; align-items:center; justify-content:center; background:rgba(5,7,12,.72); backdrop-filter:blur(6px)}
 .overlay.open{display:flex}
-.modal{width:min(560px, 92vw); max-height:86vh; overflow:auto; background:var(--glass); border:1px solid var(--border);
-  border-radius:18px; box-shadow:var(--shadow); padding:26px}
+.modal{width:min(560px, 92vw); max-height:86vh; overflow:auto; background:rgba(20,24,32,.84); border:1px solid var(--border);
+  border-radius:14px; box-shadow:var(--shadow); padding:22px}
 .modal h2{font-size:19px; margin-bottom:6px}
 .modal p{font-size:13.5px; color:var(--text-dim); line-height:1.55; margin-bottom:10px}
 .modal .row{display:flex; gap:10px; flex-wrap:wrap; margin-top:14px}
@@ -179,25 +206,45 @@ textarea.notes{width:100%; height:100%; min-height:110px; resize:none; border:no
 .mini:hover{background:var(--accent-soft); border-color:var(--accent)}
 .mini.warn:hover{background:rgba(243,108,108,.15); border-color:var(--danger)}
 ul.plain{list-style:none}
-.todo-it{display:flex; align-items:center; gap:9px; padding:6px 4px; border-radius:8px}
+.todo-it{position:relative; display:flex; align-items:center; gap:9px; padding:6px 4px; border-radius:8px; flex-wrap:wrap}
 .todo-it:hover{background:rgba(255,255,255,.04)}
 .todo-it input[type=checkbox]{width:16px; height:16px; accent-color:var(--accent); cursor:pointer; flex-shrink:0}
 .todo-it .t{flex:1; word-break:break-word}
 .todo-it.done .t{text-decoration:line-through; color:var(--text-dim)}
 .it-del{border:none; background:none; color:var(--text-dim); cursor:pointer; font-size:13px; padding:2px 6px; border-radius:6px; opacity:0; flex-shrink:0}
-.todo-it:hover .it-del,.clip-it:hover .it-del,.link-it:hover .it-del,.link-it:hover .it-act{opacity:1}
+.it-edit,.it-up,.it-down,.it-drag{border:none; background:none; color:var(--text-dim); cursor:pointer; font-size:12px; padding:2px 4px; border-radius:6px; opacity:0; flex-shrink:0}
+.todo-it:hover .it-del,.todo-it:hover .it-edit,.todo-it:hover .it-up,.todo-it:hover .it-down,.todo-it:hover .it-drag,.clip-it:hover .it-del,.link-it:hover .it-del,.link-it:hover .it-act{opacity:1}
 .todo-it .due{font-size:10.5px; padding:1px 7px; border-radius:20px; white-space:nowrap; flex-shrink:0}
 .todo-it .due.overdue{background:rgba(243,108,108,.18); color:#f36c6c}
 .todo-it .due.today{background:rgba(240,194,94,.20); color:#f0c25e}
 .todo-it .due.future{background:rgba(255,255,255,.06); color:var(--text-dim)}
+.todo-it .due.alarm{border:1px solid rgba(90,169,247,.35)}
+.todo-it .task-note-mark{font-size:11px; color:var(--text-dim)}
 .todo-it .it-due{border:none; background:none; color:var(--text-dim); cursor:pointer; font-size:12px; padding:2px 4px; border-radius:6px; opacity:0; flex-shrink:0}
 .todo-it:hover .it-due{opacity:.8}
 .todo-it .it-due:hover{opacity:1; color:var(--text)}
+.due-editor,.rename-editor{position:absolute; z-index:25; display:grid; gap:8px; padding:10px;
+  background:rgba(20,24,32,.92); border:1px solid var(--border); border-radius:12px; box-shadow:var(--shadow)}
+.due-editor{position:static; width:100%; flex:1 0 100%}
+.rename-editor{left:8px; right:8px; top:32px}
+.due-grid{display:grid; grid-template-columns:1fr 92px; gap:8px}
+.due-editor label{display:flex; flex-direction:column; gap:4px; color:var(--text-dim); font-size:11.5px}
+.due-editor input,.due-editor textarea,.rename-editor input{padding:7px 9px; border-radius:9px; border:1px solid var(--border-soft); background:rgba(0,0,0,.26);
+  color:var(--text); font-family:var(--font); color-scheme:dark; min-width:0}
+.due-editor textarea{min-height:54px; resize:vertical; line-height:1.35}
+.due-editor input:focus,.due-editor textarea:focus,.rename-editor input:focus{border-color:var(--accent); outline:none}
+.due-actions{display:flex; gap:7px; flex-wrap:wrap}
 .todo-foot{margin-top:8px; display:flex; gap:8px; align-items:center; flex-wrap:wrap}
 .todo-toggle{flex-shrink:0}
 .todo-search{flex:1; min-width:110px; padding:5px 9px; border-radius:8px; border:1px solid var(--border-soft); background:rgba(255,255,255,.05); color:var(--text); font-family:var(--font); font-size:13px}
 .todo-search:focus{border-color:var(--accent); outline:none}
+.task-edit{flex:1; min-width:80px; padding:5px 8px; border-radius:8px; border:1px solid var(--accent);
+  background:rgba(0,0,0,.24); color:var(--text); font-family:var(--font); font-size:13px}
 .it-del:hover{color:var(--danger); background:rgba(243,108,108,.12)}
+.it-edit:hover,.it-up:hover,.it-down:hover,.it-drag:hover{color:var(--text); background:rgba(255,255,255,.1)}
+.todo-it.drag-over{outline:1px solid rgba(90,169,247,.55); background:var(--accent-soft)}
+.todo-it.drag-over.drop-after{box-shadow:inset 0 -2px 0 var(--accent)}
+.todo-it.drag-over:not(.drop-after){box-shadow:inset 0 2px 0 var(--accent)}
 .clip-it{display:flex; align-items:flex-start; gap:8px; padding:7px 8px; border-radius:9px; border:1px solid var(--border-soft); margin-bottom:7px; background:rgba(255,255,255,.02)}
 .clip-it .t{flex:1; word-break:break-word; white-space:pre-wrap; font-size:12.8px; max-height:76px; overflow:auto}
 .link-group{margin-bottom:12px}
@@ -239,24 +286,71 @@ ul.plain{list-style:none}
 .img-box img{flex:1; min-height:0; object-fit:contain; width:100%; border-radius:8px}
 .img-bar{display:flex; gap:6px}
 /* temporizador */
-.tmr{display:flex; flex-direction:column; gap:10px; height:100%}
-.tmr-tabs{display:flex; gap:6px; flex-wrap:wrap}
+.tmr{display:flex; flex-direction:column; gap:10px; height:100%; min-height:0}
+.tmr-tabs{display:grid; grid-template-columns:repeat(3,1fr); gap:6px}
+.tmr-tabs .mini{padding-inline:6px}
 .mini.on{background:var(--accent-soft); border-color:var(--accent)}
-.tmr-big{font-size:38px; font-weight:200; text-align:center; letter-spacing:.04em; flex:1; display:flex; align-items:center; justify-content:center}
-.row0{display:flex; gap:8px; align-items:center; justify-content:center; flex-wrap:wrap; color:var(--text-dim); font-size:12.5px}
-.row0 input{padding:6px 8px; border-radius:8px; border:1px solid var(--border-soft); background:rgba(0,0,0,.22); color:var(--text); font-family:var(--font)}
+.tmr-face{flex:1; min-height:92px; display:flex; align-items:center; justify-content:center; border-radius:12px;
+  border:1px solid var(--border-soft); background:conic-gradient(var(--accent) var(--p,0deg), rgba(255,255,255,.06) 0deg); position:relative; overflow:hidden}
+.tmr-face::after{content:""; position:absolute; inset:7px; border-radius:10px; background:rgba(12,15,21,.62); border:1px solid rgba(255,255,255,.04)}
+.tmr-big{position:relative; z-index:1; font-size:38px; font-weight:250; text-align:center; letter-spacing:.04em; font-variant-numeric:tabular-nums}
+.tmr-sub{position:relative; z-index:1; margin-top:4px; color:var(--text-dim); font-size:11.5px; text-align:center}
+.dial-row{display:grid; grid-template-columns:1fr 1fr; gap:8px}
+.dial{display:flex; flex-direction:column; gap:5px; padding:8px; border:1px solid var(--border-soft); border-radius:11px; background:rgba(255,255,255,.035)}
+.dial label{font-size:10.5px; color:var(--text-dim); text-transform:uppercase; letter-spacing:.06em}
+.dial input{width:100%; border:none; outline:none; background:transparent; color:var(--text); font-size:24px; font-weight:250; text-align:center; font-family:var(--font); font-variant-numeric:tabular-nums; color-scheme:dark}
+.dial input::-webkit-outer-spin-button,.dial input::-webkit-inner-spin-button{opacity:1}
+.tmr-row{display:flex; gap:7px; align-items:center; justify-content:center; flex-wrap:wrap}
+.tmr-row.tight{justify-content:space-between}
+.tmr-presets{display:grid; grid-template-columns:repeat(4,1fr); gap:6px}
+.tmr-setting{display:flex; align-items:center; gap:6px; color:var(--text-dim); font-size:12px}
+.tmr-setting select,.tmr-setting input[type=time],.tmr-setting input[type=text]{min-width:0; flex:1; padding:6px 8px; border-radius:8px; border:1px solid var(--border-soft); background:rgba(0,0,0,.22); color:var(--text); font-family:var(--font); color-scheme:dark}
+.lap-list{max-height:70px; overflow:auto; border-top:1px solid var(--border-soft); padding-top:6px; display:grid; gap:4px}
+.lap-list div{display:flex; justify-content:space-between; gap:8px; color:var(--text-dim); font-size:12px}
 /* calendario */
 .cal-nav{display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; text-transform:capitalize; font-size:13px}
 .cal-grid{display:grid; grid-template-columns:auto repeat(7,1fr); gap:2px; text-align:center; font-size:12.5px}
 .cal-grid .hd{color:var(--text-dim); font-size:10.5px; padding:3px 0}
 .cal-grid .wk{color:var(--text-dim); font-size:9.5px; padding:5px 5px 0 0; text-align:right; opacity:.7}
-.cal-grid .d{padding:4px 0; border-radius:6px}
+.cal-grid .d{padding:4px 0; border-radius:6px; cursor:pointer; position:relative}
 .cal-grid .d.sat{color:#d9822b}
 .cal-grid .d.sun{color:#e5484d}
 .cal-grid .hd.sat{color:#d9822b}
 .cal-grid .hd.sun{color:#e5484d}
 .cal-grid .d.holi{color:#e5484d; font-weight:700; cursor:help}
 .cal-grid .d.today{background:var(--accent); color:#0b1220; font-weight:700}
+.cal-grid .d.marked{box-shadow:inset 0 -2px 0 var(--ok); background:rgba(95,208,138,.12)}
+.cal-grid .d.mark-guardia{box-shadow:inset 0 -2px 0 var(--warn); background:rgba(240,194,94,.12)}
+.cal-grid .d.mark-curso{box-shadow:inset 0 -2px 0 var(--accent); background:rgba(90,169,247,.12)}
+.cal-grid .d.mark-personal,.cal-grid .d.mark-otro{box-shadow:inset 0 -2px 0 #e07a9c; background:rgba(224,122,156,.12)}
+.cal-grid .d.today.marked{outline:1px solid rgba(255,255,255,.55)}
+.mark-grid{display:grid; grid-template-columns:1fr 1fr; gap:9px; margin-top:10px}
+.mark-grid label{display:flex; flex-direction:column; gap:5px; font-size:12px; color:var(--text-dim)}
+.mark-grid input,.mark-grid select{padding:8px 10px; border-radius:9px; border:1px solid var(--border-soft); background:rgba(0,0,0,.25); color:var(--text); font-family:var(--font); color-scheme:dark}
+.mark-grid input:focus,.mark-grid select:focus{border-color:var(--accent); outline:none}
+.mark-list{margin-top:12px}
+.mark-row{display:flex; align-items:flex-start; gap:8px; padding:8px; border:1px solid var(--border-soft); border-radius:9px; margin-bottom:7px}
+.mark-row .t{flex:1; font-size:13px}
+.year-nav{display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:9px}
+.year-nav b{font-size:14px}
+.year-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(122px,1fr)); gap:8px}
+.year-month{border:1px solid var(--border-soft); border-radius:10px; padding:7px; background:rgba(255,255,255,.025)}
+.year-month h5{margin:0 0 5px; font-size:11px; text-transform:capitalize; color:var(--text-dim)}
+.ym-grid{display:grid; grid-template-columns:repeat(7,1fr); gap:1px; font-size:10px; text-align:center}
+.ym-grid span{min-height:15px; border-radius:4px; line-height:15px; position:relative}
+.ym-grid .hd{color:var(--text-dim); opacity:.65}
+.ym-grid .sat{color:#d9822b}.ym-grid .sun,.ym-grid .holi{color:#e5484d}.ym-grid .today{background:var(--accent); color:#0b1220; font-weight:700}
+.ym-grid .marked::after{content:""; position:absolute; left:50%; bottom:1px; width:4px; height:4px; border-radius:50%; background:var(--ok); transform:translateX(-50%)}
+.ym-grid .mark-guardia::after{background:var(--warn)}.ym-grid .mark-curso::after{background:var(--accent)}.ym-grid .mark-personal::after,.ym-grid .mark-otro::after{background:#e07a9c}
+.files-head{display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-bottom:8px}
+.files-path{font-size:12px; color:var(--text-dim); flex:1; min-width:120px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.files-privacy{margin-bottom:8px; padding:8px 9px; border:1px solid var(--border-soft); border-radius:9px; background:rgba(255,255,255,.035); color:var(--text-dim); font-size:12px; line-height:1.45}
+.files-remember{display:flex; gap:7px; align-items:center; font-size:12px; color:var(--text-dim)}
+.files-remember input{accent-color:var(--accent)}
+.files-row{display:flex; align-items:center; gap:8px; padding:7px 8px; border-radius:8px; cursor:pointer}
+.files-row:hover{background:rgba(255,255,255,.06)}
+.files-row .name{flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.files-row .meta{font-size:11px; color:var(--text-dim)}
 .win.flash{animation:winflash 1.1s ease-out}
 @keyframes winflash{0%{box-shadow:0 0 0 3px var(--accent)}100%{box-shadow:0 0 0 0 transparent}}
 /* reloj analógico */
@@ -310,6 +404,9 @@ ul.plain{list-style:none}
   #tb-spaces{max-width:none; flex:1}
   #btn-inicio{padding:6px 11px}
   #menu{left:10px; right:10px; width:auto; max-height:76vh}
+  #menu.palette{left:10px; right:10px; top:12vh; width:auto; transform:none}
+  #desk-dock{right:10px; bottom:56px}
+  #desk-arrange{display:none}
   .tour-card{max-width:none; left:12px !important; right:12px !important; width:auto}
 }
 
@@ -331,6 +428,12 @@ ul.plain{list-style:none}
 
 <div id="wallpaper"></div>
 <div id="desktop"></div>
+<div id="desk-dock" aria-label="Accesos rápidos">
+  <button class="dock-btn dock-key" id="desk-palette" title="Abrir paleta de comandos">Ctrl K</button>
+  <button class="dock-btn" id="desk-arrange" title="Autoordenar widgets">🧭</button>
+  <button class="dock-btn" id="desk-trash" title="Papelera">🗑️ <span class="dock-count" id="desk-trash-n"></span></button>
+  <button class="dock-btn dock-info" id="desk-info" title="Información del proyecto">i</button>
+</div>
 
 <div id="taskbar">
   <button id="btn-inicio">⊞ Inicio</button>
@@ -360,8 +463,10 @@ ul.plain{list-style:none}
       <div class="wcard" data-add="img"><span class="ico">🖼️</span>Imagen</div>
       <div class="wcard" data-add="timer"><span class="ico">⏱️</span>Temporizador</div>
       <div class="wcard" data-add="cal"><span class="ico">📅</span>Calendario</div>
+      <div class="wcard" data-add="year"><span class="ico">🗓️</span>Año</div>
       <div class="wcard" data-add="search"><span class="ico">🔎</span>Buscadores</div>
       <div class="wcard" data-add="calc"><span class="ico">🧮</span>Calculadora</div>
+      <div class="wcard" data-add="files"><span class="ico">📂</span>Archivos</div>
       <div class="wcard" data-add="dictado"><span class="ico">🎙️</span>Dictado</div>
     </div>
   </div>
@@ -371,6 +476,8 @@ ul.plain{list-style:none}
     <button class="act" id="act-packs">🧩 Packs</button>
     <button class="act" id="act-wallpaper">🖼️ Fondo</button>
     <button class="act" id="act-folder">📁 Sincronizar equipos</button>
+    <button class="act" id="act-arrange">🧭 Autoordenar</button>
+    <button class="act" id="act-trash">🗑️ Papelera</button>
     <button class="act" id="act-export">⬇️ Exportar copia</button>
     <button class="act" id="act-import">⬆️ Importar copia</button>
     <button class="act" id="act-restore">♻️ Restaurar copia</button>
@@ -452,6 +559,56 @@ ul.plain{list-style:none}
   </div>
 </div>
 
+<!-- papelera -->
+<div class="overlay" id="ov-trash">
+  <div class="modal">
+    <h2>🗑️ Papelera</h2>
+    <p>Guarda recuperaciones recientes de elementos no privados. Las notas no se guardan aquí al borrarlas: solo ofrecen deshacer inmediato en memoria.</p>
+    <div id="trash-list"></div>
+    <div class="row">
+      <button class="btn" id="trash-close">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- marcas de calendario -->
+<div class="overlay" id="ov-mark">
+  <div class="modal">
+    <h2>Marcar fecha</h2>
+    <div class="mark-grid">
+      <label>Desde <input type="date" id="mark-start"></label>
+      <label>Hasta <input type="date" id="mark-end"></label>
+      <label>Tipo <select id="mark-type">
+        <option value="vacaciones">Vacaciones</option>
+        <option value="guardia">Guardia</option>
+        <option value="curso">Curso</option>
+        <option value="personal">Personal</option>
+        <option value="otro">Otro</option>
+      </select></label>
+      <label>Etiqueta <input type="text" id="mark-label" maxlength="80" placeholder="Vacaciones"></label>
+    </div>
+    <div id="mark-list" class="mark-list"></div>
+    <div class="row">
+      <button class="btn primary" id="mark-save">Guardar</button>
+      <button class="btn" id="mark-close">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- información del proyecto -->
+<div class="overlay" id="ov-info">
+  <div class="modal">
+    <h2>Cabecera</h2>
+    <p><b>Tu página de cabecera:</b> un escritorio personal de widgets, sin cuentas, sin servidor de datos y sin telemetría.</p>
+    <p>Tus datos viven en el navegador o en un <b>datos.json</b> dentro de una carpeta que eliges. La sincronización entre equipos se apoya en esa carpeta, no en una nube propia de Cabecera.</p>
+    <p class="hint">Filosofía: rápido al abrir, progresivo al crecer, auditable, portable y prudente con información sensible. No es historia clínica ni gestor documental seguro.</p>
+    <div class="row">
+      <a class="btn" href="guia.html" target="_blank" rel="noopener">Guía completa</a>
+      <button class="btn" id="info-close">Cerrar</button>
+    </div>
+  </div>
+</div>
+
 <!-- guía -->
 <div class="overlay" id="ov-guia">
   <div class="modal">
@@ -467,17 +624,32 @@ ul.plain{list-style:none}
       — Copias: menú Inicio → «Exportar copia»; y «Restaurar copia» si algo sale mal.</p>
     </details>
     <details><summary>Atajos e integraciones</summary>
-      <p class="hint">— <b>Ctrl+K</b> (o <b>/</b>) abre la paleta: busca en todos los espacios y ejecuta comandos; ↑↓ y Enter.<br>
+      <p class="hint">— <b>Ctrl+K</b> (o <b>/</b>) abre la paleta: busca en todos los espacios y ejecuta comandos; también tienes acceso abajo a la derecha junto a Autoordenar, Papelera e información del proyecto.<br>
       — <b>Espacios</b>: usa <b>＋</b> en la barra para crear escritorios (uno por especialidad o proyecto); clic para cambiar, doble clic para renombrar, ✕ para eliminar. Cada espacio tiene su propio fondo. <b>Arrastra una ventana sobre otra pestaña</b> para mover ese widget a ese espacio.<br>
-      — <b>Etiquetas</b>: el botón <b>🏷️</b> de una ventana le pone etiquetas; haz clic en una etiqueta (o búscala en Ctrl+K) para dejar a la vista solo los widgets con esa etiqueta, en cualquier espacio.<br>
+      — <b>Etiquetas</b>: pasa el ratón por la barra de una ventana para mostrar el botón de etiquetas; haz clic en una etiqueta (o búscala en Ctrl+K) para dejar a la vista solo los widgets con esa etiqueta, en cualquier espacio.<br>
+      — <b>Calendario</b>: clic en un día para marcar vacaciones, guardias, cursos u otros rangos; el widget Año muestra esas marcas.<br>
+      — <b>Tareas</b>: cada tarea admite fecha, hora de aviso local y nota. Las alarmas suenan mientras Cabecera está abierta.<br>
+      — <b>Temporizador</b>: ajusta minutos y segundos con rueda o flechas, usa presets, cronómetro con vueltas y sonidos de alarma.<br>
       — En un grupo de enlaces, el botón <b>⇱ N</b> abre los N enlaces de una vez (permite los pop-ups la primera vez). También desde la paleta: «Abrir grupo: …».<br>
-      — Doble clic en el título de una ventana para renombrarla. El chevron <b>▾</b> la pliega a su barra; <b>⊟</b> en la barra pliega/despliega todas.<br>
+      — Doble clic en el título de una ventana o en una pestaña de espacio para renombrar inline. El chevron <b>▾</b> pliega una ventana; <b>⊟</b> pliega/despliega todas.<br>
       — <b>inbox.txt</b> en tu carpeta de datos: cualquier línea (una macro de teclado, un agente, el móvil vía OneDrive) aparece en la Bandeja.<br>
       — <b>?add=texto</b> añade a la Bandeja; <b>?pack=nombre|URL</b> carga un escritorio completo.<br>
       — Ctrl+V con una captura dentro del widget Imagen.<br>
       — El widget <b>Dictado</b> transcribe con tu micrófono (Edge/Chrome). Alternativa de Windows: <b>Win+H</b> dicta en cualquier cuadro de texto de la página.</p>
     </details>
     <div class="row" style="gap:8px"><button class="btn" id="guia-tour">▶ Hacer el tour</button><a class="btn" href="guia.html" target="_blank" rel="noopener">📖 Guía completa</a><button class="btn" id="guia-close">Cerrar</button></div>
+  </div>
+</div>
+
+<!-- ventanas emergentes -->
+<div class="overlay" id="ov-popups">
+  <div class="modal">
+    <h2>Ventanas emergentes bloqueadas</h2>
+    <p>Al abrir un grupo de enlaces, el navegador puede bloquear algunas pestañas la primera vez. En la barra de direcciones, abre el aviso de ventanas bloqueadas y elige permitirlas siempre para esta web; después vuelve a lanzar el grupo.</p>
+    <div class="row">
+      <button class="btn primary" id="popups-close">Entendido</button>
+    </div>
+    <div class="hint">En la versión publicada, la web es <b>ernestobarrera.github.io</b>. En local, permite el sitio <b>localhost</b>.</div>
   </div>
 </div>
 
@@ -567,6 +739,7 @@ function migrate(s){
       settings: (s.settings && typeof s.settings === "object") ? s.settings : { wallpaper: { type: "preset", value: 0 } },
       widgets: Array.isArray(s.widgets) ? s.widgets : []
     }],
+    calendarMarks: Array.isArray(s.calendarMarks) ? s.calendarMarks : [],
     dictTargetId: s.dictTargetId
   };
 }
@@ -603,6 +776,18 @@ function sanitizeState(s){
     return sp;
   });
   s.active = Math.min(Math.max(0, s.active | 0), s.spaces.length - 1);
+  s.trash = Array.isArray(s.trash) ? s.trash.filter(x => x && typeof x === "object" && typeof x.kind === "string").slice(0, 30) : [];
+  const validTypes = ["vacaciones","guardia","curso","personal","otro"];
+  s.calendarMarks = (Array.isArray(s.calendarMarks) ? s.calendarMarks : []).map(m => {
+    if (!m || typeof m !== "object") return null;
+    let start = String(m.start || "");
+    let end = String(m.end || start);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(start) || !/^\d{4}-\d{2}-\d{2}$/.test(end)) return null;
+    if (end < start) [start, end] = [end, start];
+    const type = validTypes.includes(m.type) ? m.type : "otro";
+    const label = String(m.label || type).trim().slice(0, 80) || type;
+    return { id: (typeof m.id === "string" && m.id) ? m.id.slice(0, 64) : "cm_" + uid(), start, end, type, label };
+  }).filter(Boolean).slice(0, 240);
   s.version = 2;
   if (typeof s.updatedAt !== "number") s.updatedAt = Date.now();
   return s;
@@ -685,6 +870,90 @@ function syncUI(mode, txt){
   const dot = $("#tb-sync .dot");
   dot.className = "dot " + mode;
   $("#tb-sync-t").textContent = txt;
+  const hints = {
+    ok: "Sincronización activa. Clic para comprobar ahora",
+    saving: "Guardando cambios",
+    err: "Revisar sincronización o conflicto",
+    local: "Solo local. Clic para sincronizar equipos"
+  };
+  $("#tb-sync").title = hints[mode] || "Estado de sincronización";
+}
+
+function plainClone(x){ return JSON.parse(JSON.stringify(x)); }
+function pushTrash(kind, label, data){
+  if (!Array.isArray(state.trash)) state.trash = [];
+  const item = { id: "tr_" + uid(), at: Date.now(), kind, label: String(label || "Elemento").slice(0, 120), data };
+  state.trash.unshift(item);
+  state.trash = state.trash.slice(0, 30);
+  return item.id;
+}
+function dropTrash(id){
+  state.trash = (state.trash || []).filter(x => x.id !== id);
+}
+function renderDock(){
+  const b = $("#desk-trash"), n = $("#desk-trash-n");
+  if (!b || !n || !state) return;
+  const count = Array.isArray(state.trash) ? state.trash.length : 0;
+  b.classList.toggle("has", count > 0);
+  n.textContent = count > 9 ? "9+" : String(count);
+}
+function restoreTrash(id){
+  const item = (state.trash || []).find(x => x.id === id);
+  if (!item) return;
+  const d = item.data || {};
+  if (item.kind === "widget" && d.widget){
+    const w = plainClone(d.widget);
+    if (state.widgets.some(x => x.id === w.id)) w.id = uid();
+    w.z = ++zTop;
+    state.widgets.push(w);
+  } else if (item.kind === "space" && d.space){
+    const sp = plainClone(d.space);
+    if (state.spaces.some(x => x.id === sp.id)) sp.id = "s_" + uid();
+    state.spaces.push(sp);
+    state.active = state.spaces.length - 1;
+  } else if (item.kind === "todo" && d.item){
+    let w = state.widgets.find(x => x.id === d.widgetId && x.type === "todo") || state.widgets.find(x => x.type === "todo");
+    if (!w){ addWidget("todo"); w = state.widgets[state.widgets.length - 1]; }
+    w.data.items.push(plainClone(d.item));
+  } else if (item.kind === "clip" && d.item){
+    let w = state.widgets.find(x => x.id === d.widgetId && x.type === "clips") || state.widgets.find(x => x.type === "clips");
+    if (!w){ addWidget("clips"); w = state.widgets[state.widgets.length - 1]; }
+    w.data.items.unshift(plainClone(d.item));
+  } else if (item.kind === "link" && d.link){
+    let w = state.widgets.find(x => x.id === d.widgetId && x.type === "links") || state.widgets.find(x => x.type === "links");
+    if (!w){ addWidget("links"); w = state.widgets[state.widgets.length - 1]; }
+    const groups = w.data.groups || (w.data.groups = [{ name: "General", links: [] }]);
+    const g = groups[Math.min(d.groupIndex || 0, groups.length - 1)] || groups[0];
+    g.links.push(plainClone(d.link));
+  } else if (item.kind === "engine" && d.engine){
+    let w = state.widgets.find(x => x.id === d.widgetId && x.type === "search") || state.widgets.find(x => x.type === "search");
+    if (!w){ addWidget("search"); w = state.widgets[state.widgets.length - 1]; }
+    if (!Array.isArray(w.data.engines)) w.data.engines = [];
+    w.data.engines.push(plainClone(d.engine));
+  }
+  dropTrash(id);
+  renderAll();
+  renderTrash();
+  markDirty();
+  toast("Elemento restaurado");
+}
+function openTrash(){ renderTrash(); $("#ov-trash").classList.add("open"); }
+function renderTrash(){
+  const box = $("#trash-list");
+  if (!box) return;
+  const items = state && Array.isArray(state.trash) ? state.trash : [];
+  box.innerHTML = items.length ? "" : `<div class="empty">La papelera está vacía.</div>`;
+  items.forEach(item => {
+    const d = document.createElement("div");
+    d.className = "inbox-line";
+    const when = new Date(item.at || Date.now()).toLocaleString("es-ES", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+    d.innerHTML = `<span class="t"><b>${esc(item.label)}</b><br><span class="empty" style="padding:0">${esc(when)} · ${esc(item.kind)}</span></span>
+      <button class="mini rs">Restaurar</button><button class="it-del rm" style="opacity:1" title="Quitar de la papelera">✕</button>`;
+    d.querySelector(".rs").addEventListener("click", () => restoreTrash(item.id));
+    d.querySelector(".rm").addEventListener("click", () => { dropTrash(item.id); renderTrash(); markDirty(); });
+    box.appendChild(d);
+  });
+  renderDock();
 }
 
 /* ============================================================
@@ -736,6 +1005,7 @@ async function writeDataFile(){
 
 function markDirty(){
   dirty = true;
+  renderDock();
   syncUI("saving", "guardando…");
   clearTimeout(saveTimer);
   saveTimer = setTimeout(saveNow, 700);
@@ -984,6 +1254,8 @@ function normalizePack(p){
     else if (w.type === "clips") data.items = (Array.isArray(d.items) ? d.items : []).map(i => ({ t: txt(i.t, 5000) })).filter(i => i.t);
     else if (w.type === "clock") data.analog = d.analog !== false;
     else if (w.type === "timer") data.min = num(d.min, 5, 1, 180);
+    else if (w.type === "year") data.year = num(d.year, new Date().getFullYear(), 1970, 2100);
+    else if (w.type === "files") data.folderName = txt(d.folderName, 120);
     else if (w.type === "img"){
       const s = String(d.img || "");
       if (!s.startsWith("data:image/") || s.length > 2500000) continue;
@@ -1114,8 +1386,10 @@ const WTYPES = {
   img:   { ico: "🖼️", name: "Imagen",       w: 340, h: 280 },
   timer: { ico: "⏱️", name: "Temporizador", w: 290, h: 210 },
   cal:   { ico: "📅", name: "Calendario",   w: 310, h: 300 },
+  year:  { ico: "🗓️", name: "Año",          w: 520, h: 520 },
   search:{ ico: "🔎", name: "Buscadores",   w: 300, h: 330 },
   calc:  { ico: "🧮", name: "Calculadora",  w: 260, h: 340 },
+  files: { ico: "📂", name: "Archivos",     w: 380, h: 360 },
   dictado:{ ico: "🎙️", name: "Dictado",     w: 330, h: 300 },
   intro: { ico: "👋", name: "Bienvenida",   w: 350, h: 280 }
 };
@@ -1133,6 +1407,7 @@ function renderAll(){
   }
   renderTabs();
   renderTagFilterBar();
+  renderDock();
 }
 
 /* ---------- espacios (escritorios/pestañas) ---------- */
@@ -1154,21 +1429,54 @@ function addSpace(){
   markDirty();
   renderAll();
 }
-function renameSpace(i){
-  const sp = state.spaces[i]; if (!sp) return;
-  const v = prompt("Nombre del espacio:", sp.name || "Escritorio");
-  if (v === null) return;
-  sp.name = v.trim().slice(0, 80) || sp.name;
-  markDirty();
-  renderTabs();
+function inlineRename(node, value, max, done){
+  const old = value || "";
+  const input = document.createElement("input");
+  input.className = "inline-rename";
+  input.value = old;
+  node.replaceWith(input);
+  let finished = false;
+  const finish = ok => {
+    if (finished || !input.isConnected) return;
+    finished = true;
+    const v = ok ? input.value.trim().slice(0, max) : old;
+    done(v);
+  };
+  input.addEventListener("keydown", e => {
+    if (e.key === "Enter") finish(true);
+    if (e.key === "Escape") finish(false);
+  });
+  input.addEventListener("blur", () => finish(true));
+  input.focus(); input.select();
+}
+function renameSpace(i, tab){
+  const sp = state.spaces[i]; if (!sp || !tab) return;
+  const name = tab.querySelector(".st-name"); if (!name) return;
+  inlineRename(name, sp.name || "Escritorio", 80, v => {
+    sp.name = v || sp.name;
+    markDirty();
+    renderTabs();
+  });
 }
 function deleteSpace(i){
   if (state.spaces.length <= 1){ toast("No puedes eliminar el único espacio", true); return; }
   const sp = state.spaces[i]; if (!sp) return;
   const n = (sp.widgets || []).length;
   if (!confirm(`¿Eliminar el espacio "${sp.name}"${n ? " y sus " + n + " widgets" : ""}?`)) return;
+  const copy = plainClone(sp);
   state.spaces.splice(i, 1);
   state.active = nextActiveAfterDelete(state.active, i, state.spaces.length);
+  if ((copy.widgets || []).some(w => w.type === "notes")){
+    toastAction("Espacio borrado. No se guardó en papelera porque contenía notas.", "Deshacer", () => {
+      state.spaces.splice(Math.min(i, state.spaces.length), 0, copy);
+      state.active = Math.min(i, state.spaces.length - 1);
+      bindSpace(state);
+      renderAll(); markDirty();
+    });
+  } else {
+    const tr = pushTrash("space", copy.name || "Espacio", { space: copy });
+    toastAction("Espacio enviado a la papelera.", "Deshacer", () => restoreTrash(tr));
+  }
   markDirty();
   renderAll();
 }
@@ -1178,12 +1486,31 @@ function normTags(str){
   return [...new Set(String(str || "").split(",").map(s => s.trim().toLowerCase().slice(0, 24)).filter(Boolean))].slice(0, 8);
 }
 function editWidgetTags(w, el){
-  const v = prompt("Etiquetas del widget (separadas por comas):", (w.tags || []).join(", "));
-  if (v === null) return;
-  const tags = normTags(v);
-  w.tags = tags.length ? tags : undefined;
-  paintWinTags(el, w);
-  markDirty();
+  el.querySelectorAll(".tag-editor").forEach(x => x.remove());
+  const ed = document.createElement("div");
+  ed.className = "tag-editor";
+  ed.innerHTML = `<input type="text" value="${esc((w.tags || []).join(", "))}" placeholder="etiquetas separadas por comas"><button class="mini ok">Guardar</button><button class="mini clear">Quitar</button>`;
+  el.querySelector(".win-title").after(ed);
+  const input = ed.querySelector("input");
+  const commit = () => {
+    const tags = normTags(input.value);
+    w.tags = tags.length ? tags : undefined;
+    ed.remove();
+    paintWinTags(el, w);
+    markDirty();
+  };
+  input.addEventListener("keydown", e => {
+    if (e.key === "Enter") commit();
+    if (e.key === "Escape") ed.remove();
+  });
+  ed.querySelector(".ok").addEventListener("click", commit);
+  ed.querySelector(".clear").addEventListener("click", () => {
+    w.tags = undefined;
+    ed.remove();
+    paintWinTags(el, w);
+    markDirty();
+  });
+  input.focus(); input.select();
 }
 function paintWinTags(el, w){
   const strip = el.querySelector(".win-tags");
@@ -1221,7 +1548,7 @@ const TOUR = [
   { sel: "#btn-inicio", pos: "top", title: "Añade widgets", body: "Desde <b>⊞ Inicio</b> agregas notas, enlaces, tareas, calendario… También con <b>Ctrl+K</b> escribiendo «Añadir»." },
   { sel: "#tb-spaces", pos: "top", title: "Espacios (escritorios)", body: "Crea escritorios con <b>＋</b>, uno por especialidad o proyecto. Clic para cambiar, doble clic para renombrar. Arrastra una ventana <b>sobre otra pestaña</b> para moverla allí." },
   { sel: "#btn-fold", pos: "top", title: "Ordena de un vistazo", body: "<b>⊟</b> pliega o despliega todos los widgets; cada uno también se pliega con <b>▾</b> en su barra." },
-  { sel: ".win .win-title", pos: "bottom", title: "Cada widget", body: "En su barra: <b>🏷️</b> etiquetas (aparecen al pasar el ratón), <b>▾</b> plegar, <b>✕</b> cerrar. <b>Doble clic</b> en el título para renombrarlo." },
+  { sel: ".win .win-title", pos: "bottom", title: "Cada widget", body: "Al pasar el ratón por su barra aparecen las etiquetas; <b>▾</b> pliega y <b>✕</b> cierra. <b>Doble clic</b> en el título para renombrarlo." },
   { sel: "#tb-sync", pos: "top", title: "Tus datos son tuyos", body: "Todo se guarda solo, sin cuentas ni servidor. Opcional: «Sincronizar equipos» para tener lo mismo en casa y en el trabajo." },
   { sel: null, pos: "center", title: "¡Listo!", body: "Pulsa <b>Ctrl+K</b> en cualquier momento para buscar y ejecutar. Tienes la guía completa cuando quieras.", cta: { label: "📖 Guía completa", href: "guia.html" } }
 ];
@@ -1273,6 +1600,25 @@ function foldAll(){   // si hay alguno abierto, pliega todos; si todos plegados,
   state.widgets.forEach(w => w.collapsed = anyOpen);
   renderAll(); markDirty();
 }
+function autoArrangeWidgets(){
+  const gap = 14, left0 = 24, top0 = 24, maxRight = Math.max(360, innerWidth - 24);
+  let x = left0, y = top0, rowH = 0, z = zTop;
+  state.widgets.forEach(w => {
+    const ww = Math.min(Math.max(+w.w || WTYPES[w.type]?.w || 260, 220), Math.max(220, maxRight - left0));
+    const hh = w.collapsed ? 42 : Math.max(+w.h || WTYPES[w.type]?.h || 180, 120);
+    if (x + ww > maxRight && x > left0){
+      x = left0;
+      y += rowH + gap;
+      rowH = 0;
+    }
+    w.x = x; w.y = y; w.w = ww; w.z = ++z;
+    x += ww + gap;
+    rowH = Math.max(rowH, hh);
+  });
+  zTop = z;
+  renderAll(); markDirty();
+  toast("Widgets autoordenados");
+}
 function moveWidgetToSpace(id, ti){
   const from = state.spaces[state.active];
   const idx = from.widgets.findIndex(x => x.id === id);
@@ -1295,7 +1641,7 @@ function renderTabs(){
   box.querySelectorAll(".space-tab").forEach(t => {
     const i = +t.dataset.i;
     t.addEventListener("click", e => { if (e.target.closest(".st-del")){ deleteSpace(i); return; } setActive(i); });
-    t.addEventListener("dblclick", e => { if (!e.target.closest(".st-del")) renameSpace(i); });
+    t.addEventListener("dblclick", e => { if (!e.target.closest(".st-del")) renameSpace(i, t); });
   });
   $("#space-add").addEventListener("click", addSpace);
 }
@@ -1334,11 +1680,16 @@ function buildWindow(w){
   // renombrar ventana (título propio, ej. "Notas de sesión")
   el.querySelector(".win-title").addEventListener("dblclick", e => {
     if (e.target.closest("button")) return;
-    const v = prompt("Título de la ventana:", w.t || t.name);
-    if (v === null) return;
-    w.t = v.trim() || undefined;
-    el.querySelector(".tname").textContent = w.t || t.name;
-    markDirty();
+    const name = el.querySelector(".tname");
+    inlineRename(name, w.t || t.name, 60, v => {
+      w.t = (!v || v === t.name) ? undefined : v;
+      const fresh = document.createElement("span");
+      fresh.className = "tname";
+      fresh.textContent = w.t || t.name;
+      const input = el.querySelector(".inline-rename");
+      if (input && input.parentNode) input.replaceWith(fresh);
+      markDirty();
+    });
   });
 
   el.addEventListener("pointerdown", () => {
@@ -1348,8 +1699,22 @@ function buildWindow(w){
   });
   el.querySelector(".close").addEventListener("click", e => {
     e.stopPropagation();
-    state.widgets = state.widgets.filter(x => x.id !== w.id);
-    el.remove(); markDirty();
+    const idx = state.widgets.findIndex(x => x.id === w.id);
+    if (idx < 0) return;
+    const copy = plainClone(w);
+    state.widgets.splice(idx, 1);
+    el.remove();
+    if (w.type === "files") idbDel("fileDir:" + w.id).catch(() => {});
+    if (w.type === "notes"){
+      toastAction("Nota borrada.", "Deshacer", () => {
+        state.widgets.splice(Math.min(idx, state.widgets.length), 0, copy);
+        renderAll(); markDirty();
+      });
+    } else {
+      const tr = pushTrash("widget", (WTYPES[w.type] || {}).name || "Widget", { widget: copy });
+      toastAction("Widget enviado a la papelera.", "Deshacer", () => restoreTrash(tr));
+    }
+    markDirty();
   });
 
   // arrastrar (y soltar sobre otra pestaña de espacio para mover el widget allí)
@@ -1403,16 +1768,48 @@ function buildWindow(w){
   return el;
 }
 
+function widgetRect(w){
+  const t = WTYPES[w.type] || {};
+  return {
+    x: +w.x || 0,
+    y: +w.y || 0,
+    w: Math.max(+w.w || t.w || 260, 220),
+    h: w.collapsed ? 42 : Math.max(+w.h || t.h || 180, 120)
+  };
+}
+function overlapsRect(a, b, gap = 12){
+  return a.x < b.x + b.w + gap && a.x + a.w + gap > b.x &&
+    a.y < b.y + b.h + gap && a.y + a.h + gap > b.y;
+}
+function nextWidgetSpot(ww, hh){
+  const gap = 14, step = 28, left0 = 24, top0 = 24, maxRight = Math.max(360, innerWidth - 24);
+  const w = Math.min(Math.max(+ww || 260, 220), Math.max(220, maxRight - left0));
+  const h = Math.max(+hh || 180, 120);
+  const rects = state.widgets.map(widgetRect);
+  const bottom = rects.reduce((m, r) => Math.max(m, r.y + r.h), top0);
+  const maxY = Math.max(innerHeight, bottom + h + gap + 180);
+  for (let y = top0; y <= maxY; y += step){
+    for (let x = left0; x + w <= maxRight; x += step){
+      const cand = { x, y, w, h };
+      if (!rects.some(r => overlapsRect(cand, r, gap))) return { x, y, w };
+    }
+  }
+  return { x: left0, y: bottom + gap, w };
+}
+
 function addWidget(type){
   const t = WTYPES[type];
-  const w = { id: uid(), type, x: 60 + Math.random() * 120 | 0, y: 60 + Math.random() * 90 | 0,
-    w: t.w, h: t.h, z: ++zTop,
+  const spot = nextWidgetSpot(t.w, t.h);
+  const w = { id: uid(), type, x: spot.x, y: spot.y,
+    w: spot.w, h: t.h, z: ++zTop,
     data: type === "links" ? { groups: [{ name: "General", links: [] }] }
         : type === "notes" ? { text: "" }
         : type === "todo"  ? { items: [] }
         : type === "clips" ? { items: [] }
         : type === "md"    ? { text: "", view: "edit" }
         : type === "dictado" ? { text: "" }
+        : type === "year"  ? { year: new Date().getFullYear() }
+        : type === "files" ? {}
         : type === "qr"    ? { text: "" } : {} };
   state.widgets.push(w);
   $("#desktop").appendChild(buildWindow(w));
@@ -1445,7 +1842,8 @@ function setDictTarget(id){
 function renderBody(w, el){
   ({ links: bodyLinks, notes: bodyNotes, todo: bodyTodo,
      clips: bodyClips, qr: bodyQr, clock: bodyClock, intro: bodyIntro,
-     md: bodyMd, img: bodyImg, timer: bodyTimer, cal: bodyCal, search: bodySearch,
+     md: bodyMd, img: bodyImg, timer: bodyTimer, cal: bodyCal, year: bodyYear, search: bodySearch,
+     files: bodyFiles,
      calc: bodyCalc, dictado: bodyDictate }[w.type] || (x => x))(w, el);
 }
 
@@ -1497,6 +1895,7 @@ function bodyTodo(w, el){
   const inp = el.querySelector(".todo-add input"), ul = el.querySelector(".todo-list");
   const toggle = el.querySelector(".todo-toggle"), search = el.querySelector(".todo-search");
   let view = "pend";   // "pend" (pendientes) | "done" (histórico de hechas)
+  let dragItem = null;
 
   const add = () => {
     const t = inp.value.trim(); if (!t) return;
@@ -1512,17 +1911,83 @@ function bodyTodo(w, el){
     if (!it.due) return null;
     const today = new Date(); today.setHours(0, 0, 0, 0);
     const days = Math.round((new Date(it.due + "T00:00:00") - today) / 86400000);
-    if (days < 0) return { cls: "overdue", label: "vencida" };
-    if (days === 0) return { cls: "today", label: "hoy" };
-    return { cls: "future", label: new Date(it.due + "T00:00:00").toLocaleDateString("es-ES", { day: "numeric", month: "short" }) };
+    const time = it.remind ? " " + it.remind : "";
+    const alarm = it.remind ? " alarm" : "";
+    if (days < 0) return { cls: "overdue" + alarm, label: "vencida" + time };
+    if (days === 0) return { cls: "today" + alarm, label: "hoy" + time };
+    return { cls: "future" + alarm, label: new Date(it.due + "T00:00:00").toLocaleDateString("es-ES", { day: "numeric", month: "short" }) + time };
   };
-  const setDue = it => {
-    const v = prompt("Fecha de vencimiento (AAAA-MM-DD); vacío para quitar:", it.due || "");
-    if (v === null) return;
-    const s = v.trim();
-    if (!s) delete it.due;
-    else if (/^\d{4}-\d{2}-\d{2}$/.test(s)) it.due = s;
-    else { toast("Formato de fecha: AAAA-MM-DD", true); return; }
+  const setDue = (it, li) => {
+    el.querySelectorAll(".due-editor").forEach(x => x.remove());
+    const ed = document.createElement("div");
+    ed.className = "due-editor";
+    ed.innerHTML = `<div class="due-grid"><label>Fecha<input class="dd" type="date" value="${esc(it.due || "")}"></label><label>Aviso<input class="hh" type="time" value="${esc(it.remind || "")}"></label></div>
+      <label>Nota<textarea class="nn" placeholder="Detalle privado de esta tarea...">${esc(it.note || "")}</textarea></label>
+      <div class="due-actions"><button class="mini ok" type="button">Guardar</button><button class="mini clear" type="button">Quitar fecha</button><button class="mini note-clear" type="button">Quitar nota</button></div>`;
+    li.appendChild(ed);
+    const date = ed.querySelector(".dd"), time = ed.querySelector(".hh"), note = ed.querySelector(".nn");
+    const commit = () => {
+      let d = date.value.trim(), h = time.value.trim();
+      const oldKey = [it.due || "", it.remind || ""].join("T");
+      if (!d && h) d = new Date().toISOString().slice(0, 10);
+      if (d) it.due = d; else delete it.due;
+      if (h && d) it.remind = h; else delete it.remind;
+      const n = note.value.trim();
+      if (n) it.note = n.slice(0, 1000); else delete it.note;
+      if (oldKey !== [it.due || "", it.remind || ""].join("T")) delete it.alertedAt;
+      ed.remove(); paint(); markDirty();
+    };
+    ed.querySelector(".ok").addEventListener("click", commit);
+    ed.addEventListener("keydown", e => {
+      if (e.key === "Escape") ed.remove();
+      if (e.key === "Enter" && !e.target.closest("textarea")) commit();
+    });
+    ed.querySelector(".clear").addEventListener("click", () => {
+      delete it.due; delete it.remind; delete it.alertedAt; ed.remove(); paint(); markDirty();
+    });
+    ed.querySelector(".note-clear").addEventListener("click", () => {
+      delete it.note; note.value = ""; commit();
+    });
+    date.focus();
+    if (date.showPicker) try{ date.showPicker(); }catch(e){}
+  };
+  const editItem = (it, li) => {
+    const span = li.querySelector(".t");
+    if (!span || li.querySelector(".task-edit")) return;
+    const old = it.t;
+    const input = document.createElement("input");
+    input.className = "task-edit";
+    input.value = old;
+    span.replaceWith(input);
+    const commit = () => {
+      const v = input.value.trim();
+      if (!v){ it.t = old; paint(); return; }
+      it.t = v.slice(0, 300);
+      paint(); markDirty();
+    };
+    const cancel = () => { it.t = old; paint(); };
+    input.addEventListener("keydown", e => {
+      if (e.key === "Enter") commit();
+      if (e.key === "Escape") cancel();
+    });
+    input.addEventListener("blur", commit);
+    input.focus(); input.select();
+  };
+  const moveItem = (it, dir) => {
+    const idx = w.data.items.indexOf(it), ni = idx + dir;
+    if (idx < 0 || ni < 0 || ni >= w.data.items.length) return;
+    [w.data.items[idx], w.data.items[ni]] = [w.data.items[ni], w.data.items[idx]];
+    paint(); markDirty();
+  };
+  const moveItemNear = (src, dst, after) => {
+    if (!src || !dst || src === dst) return;
+    const from = w.data.items.indexOf(src), to = w.data.items.indexOf(dst);
+    if (from < 0 || to < 0) return;
+    const [moved] = w.data.items.splice(from, 1);
+    let at = to;
+    if (from < to) at--;
+    if (after) at++;
+    w.data.items.splice(Math.max(0, Math.min(at, w.data.items.length)), 0, moved);
     paint(); markDirty();
   };
 
@@ -1534,8 +1999,7 @@ function bodyTodo(w, el){
 
     let list;
     if (view === "pend"){
-      list = w.data.items.filter(i => !i.done)
-        .sort((a, b) => (a.due ? 0 : 1) - (b.due ? 0 : 1) || String(a.due).localeCompare(String(b.due)));
+      list = w.data.items.filter(i => !i.done);
       if (!list.length) ul.innerHTML = `<div class="empty">Sin tareas pendientes.</div>`;
     } else {
       const q = search.value.trim().toLowerCase();
@@ -1548,18 +2012,53 @@ function bodyTodo(w, el){
       const li = document.createElement("li");
       li.className = "todo-it" + (it.done ? " done" : "");
       const dm = dueMeta(it);
-      li.innerHTML = `<input type="checkbox" ${it.done ? "checked" : ""}><span class="t">${esc(it.t)}</span>`
+      li.innerHTML = `<span class="it-drag" draggable="${view === "pend"}" title="Arrastrar">⋮⋮</span><input type="checkbox" ${it.done ? "checked" : ""}><span class="t">${esc(it.t)}</span>`
+        + (it.note ? `<span class="task-note-mark" title="${esc(it.note)}">i</span>` : "")
         + (dm ? `<span class="due ${dm.cls}">${dm.label}</span>` : "")
-        + `<button class="it-due" title="Vencimiento">📅</button><button class="it-del" title="Borrar">✕</button>`;
+        + `<button class="it-edit" title="Editar">✎</button><button class="it-up" title="Subir">↑</button><button class="it-down" title="Bajar">↓</button><button class="it-due" title="Fecha, nota y aviso">📅</button><button class="it-del" title="Borrar">✕</button>`;
+      const drag = li.querySelector(".it-drag");
+      drag.addEventListener("dragstart", e => {
+        if (view !== "pend"){ e.preventDefault(); return; }
+        dragItem = it;
+        e.dataTransfer.effectAllowed = "move";
+        e.dataTransfer.setData("text/plain", it.t || "tarea");
+      });
+      li.addEventListener("dragover", e => {
+        if (!dragItem || view !== "pend") return;
+        e.preventDefault();
+        const after = e.clientY > li.getBoundingClientRect().top + li.offsetHeight / 2;
+        li.classList.toggle("drag-over", dragItem !== it);
+        li.classList.toggle("drop-after", after);
+      });
+      li.addEventListener("dragleave", () => li.classList.remove("drag-over", "drop-after"));
+      li.addEventListener("drop", e => {
+        if (!dragItem || view !== "pend") return;
+        e.preventDefault();
+        const after = e.clientY > li.getBoundingClientRect().top + li.offsetHeight / 2;
+        li.classList.remove("drag-over", "drop-after");
+        moveItemNear(dragItem, it, after);
+        dragItem = null;
+      });
+      li.addEventListener("dragend", () => { dragItem = null; ul.querySelectorAll(".drag-over").forEach(x => x.classList.remove("drag-over", "drop-after")); });
       li.querySelector("input").addEventListener("change", e => {
         it.done = e.target.checked;
         it.doneAt = it.done ? Date.now() : undefined;
+        if (!it.done) delete it.alertedAt;
         paint(); markDirty();
       });
-      li.querySelector(".it-due").addEventListener("click", () => setDue(it));
+      li.querySelector(".t").addEventListener("dblclick", () => editItem(it, li));
+      li.querySelector(".it-edit").addEventListener("click", e => { e.stopPropagation(); editItem(it, li); });
+      li.querySelector(".it-up").addEventListener("click", e => { e.stopPropagation(); moveItem(it, -1); });
+      li.querySelector(".it-down").addEventListener("click", e => { e.stopPropagation(); moveItem(it, 1); });
+      li.querySelector(".it-due").addEventListener("click", e => { e.stopPropagation(); setDue(it, li); });
       li.querySelector(".it-del").addEventListener("click", () => {
         const idx = w.data.items.indexOf(it);
-        if (idx >= 0) w.data.items.splice(idx, 1);
+        if (idx >= 0){
+          const copy = plainClone(it);
+          w.data.items.splice(idx, 1);
+          const tr = pushTrash("todo", copy.t || "Tarea", { widgetId: w.id, item: copy });
+          toastAction("Tarea enviada a la papelera.", "Deshacer", () => restoreTrash(tr));
+        }
         paint(); markDirty();
       });
       ul.appendChild(li);
@@ -1590,7 +2089,13 @@ function bodyClips(w, el){
       d.querySelector(".mini").addEventListener("click", async () => {
         await navigator.clipboard.writeText(it.t); toast("Copiado");
       });
-      d.querySelector(".it-del").addEventListener("click", () => { w.data.items.splice(i, 1); paint(); markDirty(); });
+      d.querySelector(".it-del").addEventListener("click", () => {
+        const copy = plainClone(it);
+        w.data.items.splice(i, 1);
+        const tr = pushTrash("clip", snippet(copy.t || "Clip"), { widgetId: w.id, item: copy });
+        toastAction("Clip enviado a la papelera.", "Deshacer", () => restoreTrash(tr));
+        paint(); markDirty();
+      });
       list.appendChild(d);
     });
   };
@@ -1658,7 +2163,13 @@ function bodyLinks(w, el){
         });
         d.querySelector(".cp").addEventListener("click", async () => { await navigator.clipboard.writeText(l.u); toast("URL copiada"); });
         d.querySelector(".qr").addEventListener("click", () => showQr(l.u));
-        d.querySelector(".it-del").addEventListener("click", () => { g.links.splice(i, 1); paint(); markDirty(); });
+        d.querySelector(".it-del").addEventListener("click", () => {
+          const copy = plainClone(l);
+          g.links.splice(i, 1);
+          const tr = pushTrash("link", copy.t || copy.u || "Enlace", { widgetId: w.id, groupIndex: w.data.groups.indexOf(g), link: copy });
+          toastAction("Enlace enviado a la papelera.", "Deshacer", () => restoreTrash(tr));
+          paint(); markDirty();
+        });
         gd.appendChild(d);
       });
       box.appendChild(gd);
@@ -1837,63 +2348,148 @@ function bodyImg(w, el){
 }
 
 /* --- Temporizador / Cronómetro / Alarma --- */
+function playAlertSound(kind = "soft"){
+  try{
+    const ac = new (window.AudioContext || window.webkitAudioContext)();
+    const seq = kind === "double" ? [660, 880, 660, 880] : kind === "beep" ? [880, 880, 880] : [523, 659, 784];
+    let t = ac.currentTime;
+    seq.forEach((freq, i) => {
+      const o = ac.createOscillator(), g = ac.createGain();
+      o.type = kind === "soft" ? "sine" : "triangle";
+      o.frequency.value = freq;
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(kind === "soft" ? 0.16 : 0.23, t + 0.025);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.22);
+      o.connect(g); g.connect(ac.destination);
+      o.start(t); o.stop(t + 0.24);
+      t += i % 2 ? 0.20 : 0.28;
+    });
+    setTimeout(() => ac.close(), Math.max(800, seq.length * 300));
+  }catch(e){}
+}
+function fmtClock(ms, withHours = false){
+  const s = Math.max(0, Math.round(ms / 1000)), h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), r = s % 60;
+  return (withHours || h) ? `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(r).padStart(2, "0")}` : `${String(m).padStart(2, "0")}:${String(r).padStart(2, "0")}`;
+}
 function bodyTimer(w, el){
   el.innerHTML = `<div class="tmr">
-    <div class="tmr-tabs"><button data-t="cd" class="mini">⏳ Cuenta atrás</button><button data-t="sw" class="mini">⏱ Cronómetro</button><button data-t="al" class="mini">⏰ Alarma</button></div>
-    <div class="tmr-body" style="flex:1;display:flex;flex-direction:column;gap:8px"></div></div>`;
+    <div class="tmr-tabs"><button data-t="cd" class="mini">Cuenta</button><button data-t="sw" class="mini">Crono</button><button data-t="al" class="mini">Alarma</button></div>
+    <div class="tmr-body" style="flex:1;display:flex;flex-direction:column;gap:8px;min-height:0"></div></div>`;
   const body = el.querySelector(".tmr-body");
-  let iv = null, mode = w.data.tab || "cd";
+  let iv = null, mode = w.data.tab || "cd", endAt = 0, startedAt = 0, acc = 0, total = 0, laps = [];
   const stop = () => { if (iv){ clearInterval(iv); iv = null; } };
   const guard = () => { if (!el.isConnected){ stop(); return false; } return true; };
-  const beep = () => {
-    try{
-      const ac = new (window.AudioContext || window.webkitAudioContext)();
-      const o = ac.createOscillator(), g = ac.createGain();
-      o.connect(g); g.connect(ac.destination);
-      o.frequency.value = 880; g.gain.value = .22; o.start();
-      let n = 0;
-      const rep = setInterval(() => { g.gain.value = g.gain.value ? 0 : .22; if (++n > 7){ clearInterval(rep); o.stop(); ac.close(); } }, 240);
-    }catch(e){}
+  const setTabs = () => el.querySelectorAll(".tmr-tabs .mini").forEach(b => b.classList.toggle("on", b.dataset.t === mode));
+  const sound = () => playAlertSound(w.data.sound || "soft");
+  const safeSec = v => Math.min(12 * 3600, Math.max(5, Math.round(+v || 300)));
+  const setProgress = (left, base) => {
+    const deg = base ? Math.max(0, Math.min(360, 360 * (1 - left / base))) : 0;
+    const f = body.querySelector(".tmr-face");
+    if (f) f.style.setProperty("--p", deg + "deg");
   };
-  const fmt = ms => { const s = Math.max(0, Math.round(ms / 1000)); return String(Math.floor(s / 60)).padStart(2, "0") + ":" + String(s % 60).padStart(2, "0"); };
+  const bindDial = (inp, min, max, step, cb) => {
+    const clamp = v => Math.min(max, Math.max(min, Math.round(+v || 0)));
+    const set = v => { inp.value = String(clamp(v)).padStart(inp.classList.contains("sec") ? 2 : 1, "0"); cb(); };
+    inp.addEventListener("wheel", e => { e.preventDefault(); set(+inp.value + (e.deltaY < 0 ? step : -step)); }, { passive: false });
+    inp.addEventListener("keydown", e => {
+      if (e.key === "ArrowUp" || e.key === "ArrowDown"){ e.preventDefault(); set(+inp.value + (e.key === "ArrowUp" ? step : -step)); }
+    });
+    inp.addEventListener("change", () => set(+inp.value));
+  };
+  const persistDuration = () => {
+    const min = +body.querySelector(".min")?.value || 0, sec = +body.querySelector(".sec")?.value || 0;
+    const s = safeSec(min * 60 + sec);
+    w.data.cdSec = s;
+    if (w.data.rememberDuration !== false) markDirty();
+    return s;
+  };
+  const paintCd = () => {
+    const sec = safeSec(w.data.cdSec || (w.data.min || 5) * 60);
+    const m = Math.floor(sec / 60), s = sec % 60;
+    body.innerHTML = `<div class="tmr-face"><div><div class="tmr-big">${fmtClock(sec * 1000)}</div><div class="tmr-sub">rueda o flechas sobre los diales</div></div></div>
+      <div class="dial-row"><div class="dial"><label>min</label><input class="min" type="number" min="0" max="720" value="${m}"></div><div class="dial"><label>seg</label><input class="sec" type="number" min="0" max="55" step="5" value="${String(s).padStart(2, "0")}"></div></div>
+      <div class="tmr-presets">${[1,5,10,25].map(n => `<button class="mini" data-p="${n}">${n} min</button>`).join("")}</div>
+      <div class="tmr-row"><button class="mini go">▶ Iniciar</button><button class="mini pa">⏸</button><button class="mini st">⟲</button></div>
+      <div class="tmr-row tight"><label class="tmr-setting">Sonido <select class="snd"><option value="soft">suave</option><option value="beep">beep</option><option value="double">doble</option></select></label><label class="tmr-setting"><input class="rem" type="checkbox"> recordar</label></div>`;
+    const big = body.querySelector(".tmr-big"), sub = body.querySelector(".tmr-sub");
+    body.querySelector(".snd").value = w.data.sound || "soft";
+    body.querySelector(".rem").checked = w.data.rememberDuration !== false;
+    bindDial(body.querySelector(".min"), 0, 720, 1, () => { const v = persistDuration(); big.textContent = fmtClock(v * 1000); setProgress(v, v); });
+    bindDial(body.querySelector(".sec"), 0, 55, 5, () => { const v = persistDuration(); big.textContent = fmtClock(v * 1000); setProgress(v, v); });
+    body.querySelectorAll("[data-p]").forEach(b => b.addEventListener("click", () => {
+      w.data.cdSec = +b.dataset.p * 60; paintCd(); markDirty();
+    }));
+    body.querySelector(".snd").addEventListener("change", e => { w.data.sound = e.target.value; markDirty(); });
+    body.querySelector(".rem").addEventListener("change", e => { w.data.rememberDuration = e.target.checked; markDirty(); });
+    const tick = () => {
+      if (!guard()) return;
+      const left = endAt - Date.now();
+      big.textContent = fmtClock(left);
+      sub.textContent = left > 0 ? "en marcha" : "tiempo cumplido";
+      setProgress(left, total);
+      if (left <= 0){ stop(); big.textContent = "00:00"; sound(); toast("Tiempo cumplido"); }
+    };
+    body.querySelector(".go").addEventListener("click", () => {
+      total = persistDuration() * 1000;
+      if (total <= 0) return;
+      endAt = Date.now() + total;
+      stop(); tick(); iv = setInterval(tick, 250);
+    });
+    body.querySelector(".pa").addEventListener("click", () => {
+      if (!iv || !endAt) return;
+      const left = Math.max(5, Math.round((endAt - Date.now()) / 1000));
+      stop(); endAt = 0; w.data.cdSec = left; paintCd(); markDirty();
+    });
+    body.querySelector(".st").addEventListener("click", () => { stop(); endAt = 0; paintCd(); });
+    setProgress(sec, sec);
+  };
+  const paintSw = () => {
+    body.innerHTML = `<div class="tmr-face"><div><div class="tmr-big">00:00:00</div><div class="tmr-sub">cronómetro</div></div></div>
+      <div class="tmr-row"><button class="mini go">▶ Iniciar</button><button class="mini pa">⏸ Pausa</button><button class="mini lap">Vuelta</button><button class="mini st">⟲</button></div>
+      <div class="lap-list"></div>`;
+    const big = body.querySelector(".tmr-big"), list = body.querySelector(".lap-list");
+    const draw = () => {
+      const ms = acc + (iv ? Date.now() - startedAt : 0);
+      big.textContent = fmtClock(ms, true);
+    };
+    const drawLaps = () => { list.innerHTML = laps.map((x, i) => `<div><span>${i + 1}</span><span>${fmtClock(x, true)}</span></div>`).join(""); };
+    body.querySelector(".go").addEventListener("click", () => { if (iv) return; startedAt = Date.now(); iv = setInterval(() => { if (guard()) draw(); }, 200); });
+    body.querySelector(".pa").addEventListener("click", () => { if (!iv) return; acc += Date.now() - startedAt; stop(); draw(); });
+    body.querySelector(".lap").addEventListener("click", () => { laps.unshift(acc + (iv ? Date.now() - startedAt : 0)); laps = laps.slice(0, 6); drawLaps(); });
+    body.querySelector(".st").addEventListener("click", () => { stop(); acc = 0; laps = []; draw(); drawLaps(); });
+  };
+  const paintAl = () => {
+    const now = new Date(), hh = String(now.getHours()).padStart(2, "0"), mm = String((now.getMinutes() + 1) % 60).padStart(2, "0");
+    body.innerHTML = `<div class="tmr-face"><div><div class="tmr-big al-big">--:--</div><div class="tmr-sub">alarma local mientras Cabecera esté abierta</div></div></div>
+      <div class="tmr-row"><label class="tmr-setting">Hora <input class="at" type="time" value="${esc(w.data.alarmTime || `${hh}:${mm}`)}"></label></div>
+      <div class="tmr-row"><input class="al-label" type="text" maxlength="80" placeholder="Etiqueta" value="${esc(w.data.alarmLabel || "")}"></div>
+      <div class="tmr-row tight"><label class="tmr-setting">Sonido <select class="snd"><option value="soft">suave</option><option value="beep">beep</option><option value="double">doble</option></select></label></div>
+      <div class="tmr-row"><button class="mini go">Activar</button><button class="mini st">Quitar</button></div>`;
+    const big = body.querySelector(".al-big"), sub = body.querySelector(".tmr-sub");
+    body.querySelector(".snd").value = w.data.sound || "soft";
+    body.querySelector(".snd").addEventListener("change", e => { w.data.sound = e.target.value; markDirty(); });
+    const setLabel = () => { w.data.alarmLabel = body.querySelector(".al-label").value.trim().slice(0, 80); markDirty(); };
+    body.querySelector(".al-label").addEventListener("change", setLabel);
+    body.querySelector(".go").addEventListener("click", () => {
+      const v = body.querySelector(".at").value; if (!v) return;
+      const [H, M] = v.split(":").map(Number);
+      const t = new Date(); t.setHours(H, M, 0, 0);
+      if (t <= new Date()) t.setDate(t.getDate() + 1);
+      w.data.alarmTime = v; setLabel();
+      big.textContent = v; sub.textContent = w.data.alarmLabel || "alarma activa"; markDirty();
+      stop();
+      iv = setInterval(() => { if (!guard()) return;
+        if (Date.now() >= t){ stop(); sound(); toast("Alarma: " + (w.data.alarmLabel || v)); big.textContent = "--:--"; sub.textContent = "alarma finalizada"; }
+      }, 1000);
+    });
+    body.querySelector(".st").addEventListener("click", () => { stop(); delete w.data.alarmTime; big.textContent = "--:--"; sub.textContent = "alarma local mientras Cabecera esté abierta"; markDirty(); });
+  };
   const paint = () => {
     stop(); w.data.tab = mode;
-    if (mode === "cd"){
-      body.innerHTML = `<div class="tmr-big">--:--</div><div class="row0"><input class="min" type="number" min="1" max="180" value="${+w.data.min || 5}" style="width:64px"> min <button class="mini go">▶</button><button class="mini st">⏹</button></div>`;
-      const big = body.querySelector(".tmr-big");
-      body.querySelector(".go").addEventListener("click", () => {
-        w.data.min = Math.min(180, Math.max(1, +body.querySelector(".min").value || 5)); markDirty();
-        const end = Date.now() + w.data.min * 60000;
-        stop();
-        iv = setInterval(() => { if (!guard()) return;
-          const r = end - Date.now(); big.textContent = fmt(r);
-          if (r <= 0){ stop(); big.textContent = "00:00"; beep(); toast("⏳ Tiempo cumplido"); } }, 250);
-      });
-      body.querySelector(".st").addEventListener("click", () => { stop(); big.textContent = "--:--"; });
-    } else if (mode === "sw"){
-      body.innerHTML = `<div class="tmr-big">00:00</div><div class="row0"><button class="mini go">▶</button><button class="mini pa">⏸</button><button class="mini st">⟲</button></div>`;
-      const big = body.querySelector(".tmr-big");
-      let acc = 0, t0 = 0;
-      body.querySelector(".go").addEventListener("click", () => { if (iv) return; t0 = Date.now();
-        iv = setInterval(() => { if (guard()) big.textContent = fmt(acc + Date.now() - t0); }, 250); });
-      body.querySelector(".pa").addEventListener("click", () => { if (!iv) return; acc += Date.now() - t0; stop(); });
-      body.querySelector(".st").addEventListener("click", () => { stop(); acc = 0; big.textContent = "00:00"; });
-    } else {
-      body.innerHTML = `<div class="tmr-big al-big">—</div><div class="row0"><input class="at" type="time"><button class="mini go">Activar</button><button class="mini st">Quitar</button></div>`;
-      const big = body.querySelector(".al-big");
-      body.querySelector(".go").addEventListener("click", () => {
-        const v = body.querySelector(".at").value; if (!v) return;
-        const [H, M] = v.split(":").map(Number);
-        const t = new Date(); t.setHours(H, M, 0, 0);
-        if (t <= new Date()) t.setDate(t.getDate() + 1);
-        big.textContent = "⏰ " + v;
-        stop();
-        iv = setInterval(() => { if (!guard()) return;
-          if (Date.now() >= t){ stop(); beep(); big.textContent = "—"; toast("⏰ Alarma: " + v); } }, 1000);
-      });
-      body.querySelector(".st").addEventListener("click", () => { stop(); big.textContent = "—"; });
-    }
-    el.querySelectorAll(".tmr-tabs .mini").forEach(b => b.classList.toggle("on", b.dataset.t === mode));
+    if (mode === "cd") paintCd();
+    else if (mode === "sw") paintSw();
+    else paintAl();
+    setTabs();
   };
   el.querySelectorAll(".tmr-tabs .mini").forEach(b => b.addEventListener("click", () => { mode = b.dataset.t; paint(); markDirty(); }));
   paint();
@@ -1941,11 +2537,82 @@ function localHolidays(list, y){
   });
   return out;
 }
+const CAL_MARK_TYPES = {
+  vacaciones: "Vacaciones",
+  guardia: "Guardia",
+  curso: "Curso",
+  personal: "Personal",
+  otro: "Otro"
+};
+function isoDate(y, m, d){
+  return `${y}-${String(m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+}
+function marksForDate(ds){
+  return (state.calendarMarks || []).filter(m => m.start <= ds && ds <= (m.end || m.start));
+}
+function markSummary(m){
+  const label = m.label || CAL_MARK_TYPES[m.type] || "Marca";
+  return m.start === m.end ? label : `${label} (${m.start} → ${m.end})`;
+}
+function markDayMeta(ds, baseTitle = ""){
+  const marks = marksForDate(ds);
+  const first = marks[0];
+  return {
+    marks,
+    cls: first ? ` marked mark-${first.type || "otro"}` : "",
+    title: [baseTitle].concat(marks.map(markSummary)).filter(Boolean).join(" · ")
+  };
+}
+function openMarkEditor(ds){
+  const ov = $("#ov-mark");
+  $("#mark-start").value = ds;
+  $("#mark-end").value = ds;
+  $("#mark-type").value = "vacaciones";
+  $("#mark-label").value = "";
+  renderMarkList(ds);
+  ov.dataset.date = ds;
+  ov.classList.add("open");
+}
+function renderMarkList(ds){
+  const box = $("#mark-list");
+  if (!box) return;
+  const marks = marksForDate(ds);
+  box.innerHTML = marks.length ? "" : `<div class="empty">Sin marcas en esta fecha.</div>`;
+  marks.forEach(m => {
+    const d = document.createElement("div");
+    d.className = "mark-row";
+    d.innerHTML = `<span class="t"><b>${esc(m.label)}</b><br><span class="empty" style="padding:0">${esc(m.start)}${m.end !== m.start ? " → " + esc(m.end) : ""} · ${esc(CAL_MARK_TYPES[m.type] || "Otro")}</span></span>
+      <button class="it-del rm" style="opacity:1" title="Quitar marca">✕</button>`;
+    d.querySelector(".rm").addEventListener("click", () => {
+      state.calendarMarks = (state.calendarMarks || []).filter(x => x.id !== m.id);
+      renderMarkList(ds);
+      renderAll();
+      markDirty();
+    });
+    box.appendChild(d);
+  });
+}
+function saveCalendarMark(){
+  let start = $("#mark-start").value, end = $("#mark-end").value || start;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(start) || !/^\d{4}-\d{2}-\d{2}$/.test(end)){ toast("Fecha no válida", true); return; }
+  if (end < start) [start, end] = [end, start];
+  const type = CAL_MARK_TYPES[$("#mark-type").value] ? $("#mark-type").value : "otro";
+  const label = ($("#mark-label").value.trim() || CAL_MARK_TYPES[type]).slice(0, 80);
+  if (!Array.isArray(state.calendarMarks)) state.calendarMarks = [];
+  state.calendarMarks.unshift({ id: "cm_" + uid(), start, end, type, label });
+  state.calendarMarks = sanitizeState(state).calendarMarks;
+  $("#ov-mark").classList.remove("open");
+  renderAll();
+  markDirty();
+}
 function bodyCal(w, el){
-  let ym = null;
+  const now0 = new Date();
+  let ym = {
+    y: Number.isFinite(+w.data.y) ? +w.data.y : now0.getFullYear(),
+    m: Number.isFinite(+w.data.m) ? +w.data.m : now0.getMonth()
+  };
   const paint = () => {
     const now = new Date();
-    if (!ym) ym = { y: now.getFullYear(), m: now.getMonth() };
     const first = new Date(ym.y, ym.m, 1);
     const start = (first.getDay() + 6) % 7;      // lunes = 0
     const days = new Date(ym.y, ym.m + 1, 0).getDate();
@@ -1960,17 +2627,157 @@ function bodyCal(w, el){
         else {
           const isToday = day === now.getDate() && ym.m === now.getMonth() && ym.y === now.getFullYear();
           const wknd = c === 6 ? " sun" : c === 5 ? " sat" : "";
+          const ds = isoDate(ym.y, ym.m, day);
           const holi = holis[ym.m + "-" + day] || locals[ym.m + "-" + day];
-          const tip = holi ? ` title="${esc(holi)}"` : "";
-          html += `<span class="d${isToday ? " today" : ""}${wknd}${holi ? " holi" : ""}"${tip}>${day++}</span>`;
+          const meta = markDayMeta(ds, holi || "");
+          const tip = meta.title ? ` title="${esc(meta.title)}"` : "";
+          html += `<span class="d${isToday ? " today" : ""}${wknd}${holi ? " holi" : ""}${meta.cls}" data-date="${ds}"${tip}>${day++}</span>`;
         }
       }
     }
     el.innerHTML = html + "</div>";
-    el.querySelector(".pv").addEventListener("click", () => { ym.m--; if (ym.m < 0){ ym.m = 11; ym.y--; } paint(); });
-    el.querySelector(".nx").addEventListener("click", () => { ym.m++; if (ym.m > 11){ ym.m = 0; ym.y++; } paint(); });
+    const persist = () => { w.data.y = ym.y; w.data.m = ym.m; markDirty(); };
+    el.querySelector(".pv").addEventListener("click", () => { ym.m--; if (ym.m < 0){ ym.m = 11; ym.y--; } persist(); paint(); });
+    el.querySelector(".nx").addEventListener("click", () => { ym.m++; if (ym.m > 11){ ym.m = 0; ym.y++; } persist(); paint(); });
+    el.querySelectorAll("[data-date]").forEach(d => d.addEventListener("click", () => openMarkEditor(d.dataset.date)));
   };
   paint();
+}
+
+/* --- Año completo: 12 meses persistentes en un widget --- */
+function miniMonthHtml(y, m, local){
+  const now = new Date();
+  const first = new Date(y, m, 1), start = (first.getDay() + 6) % 7;
+  const days = new Date(y, m + 1, 0).getDate();
+  const holis = esHolidays(y), locals = localHolidays(local, y);
+  let html = `<div class="year-month"><h5>${first.toLocaleDateString("es-ES", { month: "long" })}</h5><div class="ym-grid">`;
+  html += ["L","M","X","J","V","S","D"].map((d, i) => `<span class="hd${i === 6 ? " sun" : i === 5 ? " sat" : ""}">${d}</span>`).join("");
+  for (let i = 0; i < start; i++) html += "<span></span>";
+  for (let d = 1; d <= days; d++){
+    const col = (start + d - 1) % 7;
+    const today = d === now.getDate() && m === now.getMonth() && y === now.getFullYear();
+    const ds = isoDate(y, m, d);
+    const holi = holis[m + "-" + d] || locals[m + "-" + d];
+    const meta = markDayMeta(ds, holi || "");
+    html += `<span class="${today ? "today " : ""}${col === 6 ? "sun " : col === 5 ? "sat " : ""}${holi ? "holi " : ""}${meta.cls.trim()}" data-date="${ds}"${meta.title ? ` title="${esc(meta.title)}"` : ""}>${d}</span>`;
+  }
+  return html + "</div></div>";
+}
+function bodyYear(w, el){
+  if (!Number.isFinite(+w.data.year)) w.data.year = new Date().getFullYear();
+  const paint = () => {
+    const y = +w.data.year;
+    el.innerHTML = `<div class="year-nav"><button class="mini pv">‹</button><b>${y}</b><button class="mini nx">›</button><button class="mini today">Hoy</button></div>
+      <div class="year-grid">${Array.from({ length: 12 }, (_, m) => miniMonthHtml(y, m, w.data.local)).join("")}</div>`;
+    el.querySelector(".pv").addEventListener("click", () => { w.data.year = y - 1; paint(); markDirty(); });
+    el.querySelector(".nx").addEventListener("click", () => { w.data.year = y + 1; paint(); markDirty(); });
+    el.querySelector(".today").addEventListener("click", () => { w.data.year = new Date().getFullYear(); paint(); markDirty(); });
+    el.querySelectorAll("[data-date]").forEach(d => d.addEventListener("click", () => openMarkEditor(d.dataset.date)));
+  };
+  paint();
+}
+
+/* --- Explorador de archivos local: solo carpetas concedidas por el usuario --- */
+function bodyFiles(w, el){
+  let root = null, current = null, stack = [];
+  const key = "fileDir:" + w.id;
+  const renderShell = (msg = "") => {
+    el.innerHTML = `<div class="files-privacy">Lectura local: Cabecera lista solo la carpeta que eliges. No sube archivos. Si abres uno, se muestra como una URL temporal <b>blob:</b> del navegador.</div>
+      <div class="files-head"><button class="mini pick">📂 Elegir carpeta</button><button class="mini up" style="display:none">↑ Subir</button><button class="mini forget"${w.data.folderName ? "" : " style=\"display:none\""}>Olvidar</button><span class="files-path">${esc(w.data.folderName || "Sin carpeta")}</span></div>
+      <label class="files-remember"><input type="checkbox" class="remember" ${w.data.rememberFolder ? "checked" : ""}> Recordar esta carpeta en este navegador</label>
+      <div class="files-list">${msg ? `<div class="empty">${esc(msg)}</div>` : ""}</div>`;
+    el.querySelector(".pick").addEventListener("click", pick);
+    el.querySelector(".up").addEventListener("click", () => { if (stack.length > 1){ stack.pop(); current = stack[stack.length - 1].handle; list(); } });
+    el.querySelector(".forget").addEventListener("click", async () => {
+      await idbDel(key);
+      root = current = null; stack = [];
+      delete w.data.folderName; delete w.data.rememberFolder;
+      renderShell("Permiso olvidado por Cabecera.");
+      markDirty();
+    });
+    el.querySelector(".remember").addEventListener("change", async e => {
+      w.data.rememberFolder = e.target.checked;
+      if (!w.data.rememberFolder) await idbDel(key);
+      else if (root) await idbSet(key, root);
+      markDirty();
+    });
+  };
+  const hasPerm = async h => {
+    try{ return (await h.queryPermission({ mode: "read" })) === "granted"; }
+    catch(e){ return false; }
+  };
+  const ensurePerm = async h => {
+    try{
+      if ((await h.queryPermission({ mode: "read" })) === "granted") return true;
+      return (await h.requestPermission({ mode: "read" })) === "granted";
+    }catch(e){ return false; }
+  };
+  const openFile = async h => {
+    try{
+      const f = await h.getFile();
+      const u = URL.createObjectURL(f);
+      window.open(u, "_blank", "noopener");
+      setTimeout(() => URL.revokeObjectURL(u), 30000);
+    }catch(e){ toast("No se pudo abrir el archivo", true); }
+  };
+  const list = async () => {
+    if (!current){ renderShell("Elige una carpeta para explorar sus archivos."); return; }
+    renderShell("Leyendo carpeta…");
+    const up = el.querySelector(".up");
+    if (up) up.style.display = stack.length > 1 ? "" : "none";
+    const path = el.querySelector(".files-path");
+    if (path) path.textContent = stack.map(x => x.name).join(" / ");
+    const box = el.querySelector(".files-list");
+    try{
+      const rows = [];
+      for await (const [name, h] of current.entries()) rows.push({ name, h, kind: h.kind });
+      rows.sort((a, b) => (a.kind === b.kind ? a.name.localeCompare(b.name) : a.kind === "directory" ? -1 : 1));
+      box.innerHTML = rows.length ? "" : `<div class="empty">Carpeta vacía.</div>`;
+      rows.slice(0, 160).forEach(r => {
+        const d = document.createElement("div");
+        d.className = "files-row";
+        d.innerHTML = `<span>${r.kind === "directory" ? "📁" : "📄"}</span><span class="name">${esc(r.name)}</span><span class="meta">${r.kind === "directory" ? "carpeta" : "archivo"}</span>`;
+        d.addEventListener("click", async () => {
+          if (r.kind === "directory"){ current = r.h; stack.push({ name: r.name, handle: r.h }); list(); }
+          else openFile(r.h);
+        });
+        box.appendChild(d);
+      });
+      if (rows.length > 160){
+        const more = document.createElement("div");
+        more.className = "empty"; more.textContent = `Mostrando 160 de ${rows.length} elementos.`;
+        box.appendChild(more);
+      }
+    }catch(e){
+      renderShell("No se pudo leer la carpeta. Vuelve a conceder permiso.");
+    }
+  };
+  const pick = async () => {
+    if (!window.showDirectoryPicker){ toast("Esta función necesita Edge o Chrome", true); return; }
+    try{
+      root = await window.showDirectoryPicker({ mode: "read" });
+      if (!(await ensurePerm(root))){ toast("Permiso denegado", true); return; }
+      if (w.data.rememberFolder) await idbSet(key, root);
+      else await idbDel(key);
+      w.data.folderName = root.name || "carpeta";
+      current = root; stack = [{ name: w.data.folderName, handle: root }];
+      markDirty(); list();
+    }catch(e){ /* cancelado */ }
+  };
+  (async () => {
+    renderShell("Elige una carpeta para explorar sus archivos.");
+    try{
+      if (!w.data.rememberFolder) return;
+      root = await idbGet(key);
+      if (root && await hasPerm(root)){
+        w.data.folderName = w.data.folderName || root.name || "carpeta";
+        current = root; stack = [{ name: w.data.folderName, handle: root }];
+        list();
+      } else if (root){
+        renderShell("Carpeta recordada. Pulsa Elegir carpeta para conceder acceso en esta sesión.");
+      }
+    }catch(e){}
+  })();
 }
 
 /* --- Buscadores (plantillas de URL con %s; tus bookmarklets-buscador viven aquí) --- */
@@ -2000,7 +2807,13 @@ function bodySearch(w, el){
       d.title = e.u;
       d.innerHTML = `<span class="link-tile" style="background:hsl(${hueOf(e.n)},55%,42%)">${esc(e.n[0].toUpperCase())}</span><span class="t">${esc(e.n)}</span><button class="it-del" title="Borrar">✕</button>`;
       d.addEventListener("click", ev => { if (!ev.target.closest("button")) go(e); });
-      d.querySelector(".it-del").addEventListener("click", () => { w.data.engines.splice(i, 1); paint(); markDirty(); });
+      d.querySelector(".it-del").addEventListener("click", () => {
+        const copy = plainClone(e);
+        w.data.engines.splice(i, 1);
+        const tr = pushTrash("engine", copy.n || "Buscador", { widgetId: w.id, engine: copy });
+        toastAction("Buscador enviado a la papelera.", "Deshacer", () => restoreTrash(tr));
+        paint(); markDirty();
+      });
       list.appendChild(d);
     });
   };
@@ -2085,7 +2898,7 @@ function focusWidget(id, si){
 function openGroup(links){
   let blocked = false;
   (links || []).forEach(l => { if (!window.open(l.u, "_blank", "noopener")) blocked = true; });
-  if (blocked) toast("El navegador bloqueó ventanas: permite los pop-ups para este sitio y reintenta", true);
+  if (blocked) toastAction("El navegador bloqueó algunas pestañas.", "Permitir", () => $("#ov-popups").classList.add("open"));
 }
 
 // Todas las entradas de la paleta: contenido + saltos + comandos + rutinas (en TODOS los espacios)
@@ -2119,10 +2932,13 @@ function paletteEntries(){
   if (tagFilter)
     add("🏷️", "Quitar filtro de etiqueta", tagFilter, () => { closeMenu(); setTagFilter(null); }, "quitar limpiar filtro etiqueta");
   add("▶", "Tour interactivo", "recorrido guiado", () => { closeMenu(); startTour(); }, "tour recorrido guiado interactivo empezar como funciona");
+  add("🪟", "Permitir ventanas emergentes", "para abrir grupos de enlaces", () => { closeMenu(); $("#ov-popups").classList.add("open"); }, "popup popups ventanas emergentes bloqueadas permitir pestañas grupos enlaces");
+  add("🧭", "Autoordenar widgets", "redistribuir pantalla", () => { closeMenu(); autoArrangeWidgets(); }, "autoordenar ordenar redistribuir organizar widgets pantalla");
+  add("🗑️", "Papelera", "recuperar borrados", () => { closeMenu(); openTrash(); }, "papelera recuperar restaurar borrados deshacer");
   add("📖", "Guía completa", "cómo funciona todo", () => { closeMenu(); window.open("guia.html", "_blank", "noopener"); }, "guia manual ayuda completa como funciona empezar");
   for (const [type, t] of Object.entries(WTYPES)) if (type !== "intro")
     add("➕", "Añadir " + t.name, "widget nuevo", () => { addWidget(type); closeMenu(); }, "añadir crear nuevo " + t.name);
-  [["❓","Guía","act-ayuda"],["🧩","Packs","act-packs"],["🖼️","Fondo","act-wallpaper"],["📁","Sincronizar equipos","act-folder"],["⬇️","Exportar copia","act-export"],["⬆️","Importar copia","act-import"],["♻️","Restaurar copia","act-restore"]]
+  [["❓","Guía","act-ayuda"],["🧩","Packs","act-packs"],["🖼️","Fondo","act-wallpaper"],["📁","Sincronizar equipos","act-folder"],["🧭","Autoordenar","act-arrange"],["🗑️","Papelera","act-trash"],["⬇️","Exportar copia","act-export"],["⬆️","Importar copia","act-import"],["♻️","Restaurar copia","act-restore"]]
     .forEach(([ic, label, id]) => add(ic, label, "acción", () => { closeMenu(); const b = $("#" + id); if (b) b.click(); }, label + " configuración"));
   return E;
 }
@@ -2147,18 +2963,48 @@ function renderResults(q){
     box.appendChild(d);
   });
 }
-function openMenu(){ $("#menu").classList.add("open"); $("#menu-search").value = ""; renderResults(""); setTimeout(() => $("#menu-search").focus(), 30); }
-function closeMenu(){ $("#menu").classList.remove("open"); }
+function openMenu(mode = "start", point = null){
+  const menu = $("#menu");
+  menu.classList.add("open");
+  menu.classList.toggle("palette", mode === "palette");
+  menu.classList.toggle("floating", !!point && mode !== "palette");
+  menu.style.left = ""; menu.style.top = ""; menu.style.bottom = ""; menu.style.transform = "";
+  if (point && mode !== "palette"){
+    const w = Math.min(420, innerWidth - 24), h = Math.min(Math.round(innerHeight * .70), 520);
+    menu.style.left = Math.max(12, Math.min(point.x, innerWidth - w - 12)) + "px";
+    menu.style.top = Math.max(12, Math.min(point.y, innerHeight - h - 58)) + "px";
+    menu.style.bottom = "auto";
+  }
+  $("#menu-search").value = "";
+  renderResults("");
+  setTimeout(() => $("#menu-search").focus(), 30);
+}
+function closeMenu(){
+  const menu = $("#menu");
+  menu.classList.remove("open", "palette", "floating");
+  menu.style.left = ""; menu.style.top = ""; menu.style.bottom = ""; menu.style.transform = "";
+}
 
 function wireUI(){
-  $("#btn-inicio").addEventListener("click", () => $("#menu").classList.contains("open") ? closeMenu() : openMenu());
+  $("#btn-inicio").addEventListener("click", () => $("#menu").classList.contains("open") ? closeMenu() : openMenu("start"));
   $("#btn-fold").addEventListener("click", foldAll);
+  $("#desk-palette").addEventListener("click", () => openMenu("palette"));
+  $("#desk-arrange").addEventListener("click", autoArrangeWidgets);
+  $("#desk-trash").addEventListener("click", openTrash);
+  $("#desk-info").addEventListener("click", () => $("#ov-info").classList.add("open"));
+  $("#info-close").addEventListener("click", () => $("#ov-info").classList.remove("open"));
+  document.addEventListener("dblclick", e => {
+    if (e.target.closest(".win,#menu,#taskbar,.overlay")) return;
+    if (!e.target.closest("#desktop") && e.target !== document.body && e.target !== $("#wallpaper")) return;
+    e.preventDefault(); e.stopPropagation();
+    openMenu("start", { x: e.clientX, y: e.clientY });
+  });
   document.addEventListener("click", e => {
-    if (!e.target.closest("#menu") && !e.target.closest("#btn-inicio")) closeMenu();
+    if (!e.target.closest("#menu") && !e.target.closest("#btn-inicio") && !e.target.closest("#desk-dock")) closeMenu();
   });
   document.addEventListener("keydown", e => {
-    if ((e.key === "k" || e.key === "K") && (e.ctrlKey || e.metaKey)){ e.preventDefault(); openMenu(); }
-    if (e.key === "/" && !e.target.closest("input,textarea")){ e.preventDefault(); openMenu(); }
+    if ((e.key === "k" || e.key === "K") && (e.ctrlKey || e.metaKey)){ e.preventDefault(); openMenu("palette"); }
+    if (e.key === "/" && !e.target.closest("input,textarea")){ e.preventDefault(); openMenu("palette"); }
     if (e.key === "Escape") closeMenu();
   });
   $("#menu-search").addEventListener("input", e => renderResults(e.target.value));
@@ -2239,6 +3085,11 @@ function wireUI(){
 
   // carpeta / exportar / importar
   $("#act-folder").addEventListener("click", () => { closeMenu(); $("#ov-boot").classList.add("open"); });
+  $("#act-arrange").addEventListener("click", () => { closeMenu(); autoArrangeWidgets(); });
+  $("#act-trash").addEventListener("click", () => { closeMenu(); openTrash(); });
+  $("#trash-close").addEventListener("click", () => $("#ov-trash").classList.remove("open"));
+  $("#mark-save").addEventListener("click", saveCalendarMark);
+  $("#mark-close").addEventListener("click", () => $("#ov-mark").classList.remove("open"));
   $("#act-export").addEventListener("click", () => {
     closeMenu();
     const a = document.createElement("a");
@@ -2273,6 +3124,15 @@ function wireUI(){
   });
 
   // sincronización / reconectar
+  $("#tb-sync").addEventListener("click", async () => {
+    if (backend === "fs"){
+      await poll();
+      if (!conflictPending) syncUI(dirty ? "saving" : "ok", dirty ? "guardando…" : "sincronizado");
+      toast("Sincronización comprobada");
+    } else {
+      $("#ov-boot").classList.add("open");
+    }
+  });
   $("#boot-pick").addEventListener("click", pickFolder);
   $("#boot-close").addEventListener("click", () => $("#ov-boot").classList.remove("open"));
   $("#rc-go").addEventListener("click", async () => {
@@ -2297,6 +3157,7 @@ function wireUI(){
   $("#act-ayuda").addEventListener("click", () => { closeMenu(); $("#ov-guia").classList.add("open"); });
   $("#guia-close").addEventListener("click", () => $("#ov-guia").classList.remove("open"));
   $("#guia-tour").addEventListener("click", () => { $("#ov-guia").classList.remove("open"); startTour(); });
+  $("#popups-close").addEventListener("click", () => $("#ov-popups").classList.remove("open"));
 
   // al volver a la pestaña, comprobar cambios de inmediato (no esperar al ciclo)
   document.addEventListener("visibilitychange", () => { if (!document.hidden) poll(); });
@@ -2312,6 +3173,7 @@ function wireUI(){
   }catch(e){ /* navegador sin BroadcastChannel */ }
 
   startPill();
+  startTaskAlerts();
 
   // bandeja
   $("#tb-inbox").addEventListener("click", openInbox);
@@ -2363,6 +3225,34 @@ function paintInbox(){
     });
     box.appendChild(d);
   });
+}
+
+function taskAlertTime(it){
+  if (!it || !it.due || !it.remind || it.done) return null;
+  const d = new Date(`${it.due}T${it.remind}:00`);
+  return Number.isFinite(+d) ? d : null;
+}
+function checkTaskAlerts(){
+  if (!state || !Array.isArray(state.spaces)) return;
+  let changed = false;
+  const now = Date.now();
+  state.spaces.forEach((sp, si) => (sp.widgets || []).filter(w => w.type === "todo").forEach(w => {
+    (w.data.items || []).forEach(it => {
+      const d = taskAlertTime(it);
+      if (!d || +d > now) return;
+      const stamp = `${it.due}T${it.remind}`;
+      if (it.alertedAt === stamp) return;
+      it.alertedAt = stamp;
+      changed = true;
+      playAlertSound("soft");
+      toastAction("Aviso: " + snippet(it.t || "tarea"), "Ver", () => focusWidget(w.id, si));
+    });
+  }));
+  if (changed) markDirty();
+}
+function startTaskAlerts(){
+  setInterval(checkTaskAlerts, 30000);
+  setTimeout(checkTaskAlerts, 1000);
 }
 
 /* --- Calculadora (ejecución inmediata, sin eval) --- */
@@ -2509,7 +3399,7 @@ const TIPS = [
   "Crea espacios (escritorios) con ＋ en la barra: uno por especialidad o proyecto",
   "Arrastra una ventana sobre otra pestaña de espacio para moverla allí",
   "Pliega un widget con ▾ en su barra, o todos con ⊟ en la barra inferior",
-  "Pon etiquetas a un widget con 🏷️ y filtra por ellas desde la paleta o al hacer clic",
+  "Pon etiquetas desde la barra del widget al pasar el ratón, y filtra por ellas desde la paleta",
   "En un grupo de enlaces, «⇱ N» abre los N enlaces de una vez",
   "Doble clic en el título de una ventana para renombrarla",
   "inbox.txt: escribe desde el móvil (OneDrive) y aparece en la Bandeja",

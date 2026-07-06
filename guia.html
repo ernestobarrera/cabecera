@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Guía de Cabecera — cómo funciona</title>
 <meta name="description" content="Cómo funciona Cabecera: widgets, espacios, etiquetas, sincronización y atajos. Tu página de inicio personalizable, sin cuentas ni servidor.">
+<meta name="theme-color" content="#10161f">
+<link rel="icon" href='data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"%3E%3Crect width="64" height="64" rx="14" fill="%2310161f"/%3E%3Cpath d="M18 18h28v7H26v14h20v7H18z" fill="%235aa9f7"/%3E%3Cpath d="M31 29h15v6H31z" fill="%235fd08a"/%3E%3C/svg%3E'>
 <style>
   :root{
     --bg:#0c0f15; --glass:rgba(22,26,34,.72); --border:rgba(255,255,255,.13); --border-soft:rgba(255,255,255,.08);
@@ -74,6 +76,7 @@
     <a href="#espacios">Espacios</a>
     <a href="#etiquetas">Etiquetas</a>
     <a href="#buscar">Buscar</a>
+    <a href="#papelera">Papelera</a>
     <a href="#movil">Móvil</a>
     <a href="#packs">Packs</a>
     <a href="#sync">Sincronizar</a>
@@ -99,18 +102,20 @@
   <div class="grid">
     <div class="card"><b>🔗 Enlaces</b><span>Accesos agrupados. Con «⇱ N» abres todo el grupo de una vez.</span></div>
     <div class="card"><b>📝 Nota</b><span>Texto libre; puedes darle color tipo post-it.</span></div>
-    <div class="card"><b>✅ Tareas</b><span>Pendientes con casillas, fecha de vencimiento (📅) e histórico de hechas con buscador.</span></div>
+    <div class="card"><b>✅ Tareas</b><span>Pendientes editables y arrastrables, con fecha, hora de aviso local, nota, papelera e histórico.</span></div>
     <div class="card"><b>📋 Portapapeles</b><span>Fragmentos de texto reutilizables.</span></div>
     <div class="card"><b>📄 Markdown</b><span>Editor + vista con formato.</span></div>
     <div class="card"><b>🖼️ Imagen</b><span>Pega con <kbd>Ctrl</kbd>+<kbd>V</kbd> o arrastra.</span></div>
-    <div class="card"><b>📅 Calendario</b><span>Con semana ISO y festivos de España.</span></div>
-    <div class="card"><b>⏱️ Temporizador</b><span>Cuenta atrás, cronómetro y alarma.</span></div>
+    <div class="card"><b>📅 Calendario</b><span>Con semana ISO, festivos de España, mes persistente y marcas como vacaciones.</span></div>
+    <div class="card"><b>🗓️ Año</b><span>Vista de los 12 meses con festivos, marcas y año persistente.</span></div>
+    <div class="card"><b>⏱️ Temporizador</b><span>Cuenta atrás con diales, presets, rueda/flechas, cronómetro con vueltas y alarma configurable.</span></div>
     <div class="card"><b>🔎 Buscadores</b><span>Plantillas de URL con %s (PubMed, etc.).</span></div>
     <div class="card"><b>🧮 Calculadora</b><span>Con teclado completo.</span></div>
     <div class="card"><b>🎙️ Dictado</b><span>Transcribe tu voz y lo envía a una nota.</span></div>
+    <div class="card"><b>📂 Archivos</b><span>Explora en lectura una carpeta local; no la recuerda salvo permiso explícito.</span></div>
     <div class="card"><b>🔳 QR · 🕐 Reloj</b><span>Código QR de un texto/URL y reloj analógico o digital.</span></div>
   </div>
-  <p class="note">En la barra de título de cada widget: <b>🏷️</b> etiquetas · <b>▾</b> plegar a la cabecera · <b>✕</b> cerrar. Doble clic en el título para renombrar la ventana.</p>
+  <p class="note">En la barra de título de cada widget: etiquetas al pasar el ratón · <b>▾</b> plegar a la cabecera · <b>✕</b> cerrar. Doble clic en el título para renombrar inline.</p>
 </section>
 
 <section id="espacios">
@@ -118,30 +123,38 @@
   <p class="lead">Varios escritorios independientes, uno por especialidad, proyecto o contexto. Están en la barra, junto a Inicio.</p>
   <ul class="steps">
     <li><b>Crear:</b> el botón <b>＋</b> añade un escritorio nuevo.</li>
-    <li><b>Cambiar:</b> un clic en la pestaña. <b>Renombrar:</b> doble clic. <b>Eliminar:</b> la <b>✕</b> de la pestaña activa.</li>
+    <li><b>Cambiar:</b> un clic en la pestaña. <b>Renombrar:</b> doble clic y edición inline. <b>Eliminar:</b> la <b>✕</b> de la pestaña activa.</li>
     <li><b>Mover un widget:</b> arrástralo por su título y suéltalo <b>sobre otra pestaña</b> (se resalta) para llevarlo a ese espacio.</li>
     <li>Cada espacio tiene su <b>propio fondo</b>. La búsqueda mira en todos.</li>
   </ul>
   <p class="note">Plegar todo con <b>⊟</b> en la barra deja cada espacio ordenado de un vistazo.</p>
+  <p class="note">La acción <b>🧭 Autoordenar</b> redistribuye las ventanas del espacio activo en una cuadrícula limpia; también está en el acceso inferior derecho.</p>
 </section>
 
 <section id="etiquetas">
   <h2><span class="ic">🏷️</span> Etiquetas</h2>
   <p class="lead">Un segundo eje de organización, transversal a los espacios.</p>
   <ul class="steps">
-    <li>Pon etiquetas a una ventana con el botón <b>🏷️</b> de su barra (separadas por comas).</li>
+    <li>Pon etiquetas a una ventana con el botón que aparece al pasar el ratón por su barra (separadas por comas).</li>
     <li>Haz clic en una etiqueta —o búscala en <kbd>Ctrl</kbd>+<kbd>K</kbd>— para dejar a la vista <b>solo</b> los widgets con esa etiqueta, en cualquier espacio.</li>
     <li>Quita el filtro desde el indicador <span class="tag">🏷️ …</span> de la barra inferior.</li>
   </ul>
 </section>
 
+<section id="papelera">
+  <h2><span class="ic">🗑️</span> Papelera</h2>
+  <p class="lead">Recuperación ligera sin convertir Cabecera en un gestor pesado.</p>
+  <p>Los widgets y elementos no privados borrados pasan a Papelera y pueden restaurarse desde Inicio o desde el acceso inferior derecho. Las notas no se guardan en la papelera por privacidad; al borrarlas solo aparece un deshacer inmediato.</p>
+</section>
+
 <section id="buscar">
   <h2><span class="ic">⌨️</span> Buscar y ejecutar — la paleta</h2>
-  <p class="lead"><kbd>Ctrl</kbd>+<kbd>K</kbd> (o <kbd>/</kbd>) abre la paleta de comandos.</p>
+  <p class="lead"><kbd>Ctrl</kbd>+<kbd>K</kbd> (o <kbd>/</kbd>) abre la paleta de comandos en el centro de la pantalla. También está en el acceso inferior derecho junto a Autoordenar, Papelera e información del proyecto.</p>
   <div class="grid">
     <div class="card"><b>Busca en todo</b><span>Notas, tareas, enlaces, etiquetas… en todos los espacios; al elegir un resultado salta a ese widget.</span></div>
     <div class="card"><b>Ejecuta comandos</b><span>«Añadir Nota», «Packs», «Fondo», «Exportar copia», «Filtrar por etiqueta: …».</span></div>
-    <div class="card"><b>Lanza rutinas</b><span>Un grupo de enlaces aparece como «Abrir grupo: …» y abre todas sus pestañas.</span></div>
+    <div class="card"><b>Lanza rutinas</b><span>Un grupo de enlaces aparece como «Abrir grupo: …» y abre todas sus pestañas. Si el navegador bloquea alguna, Cabecera te muestra la ayuda para permitirlas.</span></div>
+    <div class="card"><b>Identidad del proyecto</b><span>La «i» inferior resume la filosofía: sin cuentas, sin servidor de datos, sin telemetría.</span></div>
   </div>
 </section>
 
@@ -169,6 +182,7 @@
     <li>Inicio → «Sincronizar equipos» → eliges una carpeta (p. ej. <code>OneDrive\cabecera-datos</code>). Tus datos pasan a un <code>datos.json</code> en esa carpeta.</li>
     <li>Cada equipo elige su carpeta una vez; la ruta puede ser distinta en cada uno.</li>
     <li>Si dos equipos editan a la vez, la página avisa del conflicto y eliges con cuál quedarte.</li>
+    <li>El indicador de sincronización de la barra inferior también sirve para conectar o comprobar la carpeta.</li>
     <li><b>Bandeja:</b> cualquier línea en <code>inbox.txt</code> (desde el móvil, una macro o un agente) aparece para convertirla en nota/tarea.</li>
   </ul>
   <p class="note">Requiere Edge o Chrome (acceso a carpetas del navegador). En cualquier otro caso, el modo local siempre funciona.</p>
@@ -179,8 +193,12 @@
   <table>
     <tr><th>Atajo</th><th>Qué hace</th></tr>
     <tr><td><kbd>Ctrl</kbd>+<kbd>K</kbd> · <kbd>/</kbd></td><td>Abrir la paleta: buscar y ejecutar</td></tr>
+    <tr><td>Doble clic en el escritorio</td><td>Abrir el menú de creación junto al puntero</td></tr>
     <tr><td>Doble clic en el título</td><td>Renombrar la ventana</td></tr>
-    <tr><td><b>🏷️ / ▾ / ✕</b></td><td>Etiquetar / plegar / cerrar un widget</td></tr>
+    <tr><td>Clic en día del calendario</td><td>Marcar vacaciones, guardias, cursos u otros rangos</td></tr>
+    <tr><td>Rueda/flechas en Temporizador</td><td>Ajustar minutos y segundos rápidamente</td></tr>
+    <tr><td>Hover en barra · <b>▾</b> · <b>✕</b></td><td>Etiquetar / plegar / cerrar un widget</td></tr>
+    <tr><td>Arrastrar una tarea</td><td>Reordenar manualmente las tareas pendientes</td></tr>
     <tr><td><b>⊟</b> (barra)</td><td>Plegar o desplegar todos</td></tr>
     <tr><td><b>＋</b> (barra)</td><td>Nuevo espacio</td></tr>
     <tr><td>Arrastrar a una pestaña</td><td>Mover el widget a ese espacio</td></tr>
@@ -191,6 +209,7 @@
 <section id="privacidad">
   <h2><span class="ic">🔒</span> Privacidad y datos</h2>
   <p>Cabecera es una página estática: <b>sin cuentas, sin servidor de datos y sin telemetría</b>. Tus datos viven donde tú decidas —en el navegador o en un <code>datos.json</code> dentro de una carpeta tuya— y son legibles y portables. Puedes exportar una copia cuando quieras desde Inicio.</p>
+  <p class="note"><b>Archivos locales:</b> el widget Archivos pide permiso de lectura solo sobre la carpeta que eliges. Cabecera no sube esos archivos; si abres uno, el navegador puede mostrarlo como una URL temporal <code>blob:</code>. No elijas carpetas amplias o privadas salvo que te encaje ese permiso local.</p>
   <p class="note"><b>Uso sanitario responsable:</b> no guardes datos identificables de pacientes. No es historia clínica ni soporte diagnóstico. En un equipo compartido, usa tu propio perfil de navegador.</p>
 </section>
 

@@ -40,7 +40,7 @@ if (!mdToHtml('```\nabierto').endsWith('</pre>')) throw new Error('fence sin cie
 console.log('OK mdToHtml (XSS bloqueado, formato correcto)');
 
 // --- normalizePack: pack malicioso ---
-globalThis.WTYPES = { links:{w:300,h:340}, notes:{w:300,h:220}, todo:{w:300,h:260}, clips:{w:320,h:300}, qr:{w:260,h:330}, clock:{w:240,h:170}, md:{w:340,h:320}, img:{w:340,h:280}, timer:{w:290,h:210}, cal:{w:310,h:300}, search:{w:300,h:330}, intro:{w:350,h:280} };
+globalThis.WTYPES = { links:{w:300,h:340}, notes:{w:300,h:220}, todo:{w:300,h:260}, clips:{w:320,h:300}, qr:{w:260,h:330}, clock:{w:240,h:170}, md:{w:340,h:320}, img:{w:340,h:280}, timer:{w:290,h:210}, cal:{w:310,h:300}, year:{w:520,h:520}, search:{w:300,h:330}, calc:{w:260,h:340}, files:{w:380,h:360}, dictado:{w:330,h:300}, intro:{w:350,h:280} };
 globalThis.WP_PRESETS = [1, 2, 3, 4, 5, 6];
 eval('globalThis.normalizePack = ' + pickFn('normalizePack', 'p'));
 
@@ -128,6 +128,13 @@ const bad2 = sanitizeState(migrate({ version: 2, active: 0, spaces: [ { widgets:
 if (bad2.spaces[0].widgets.length !== 1) throw new Error('saneo: tipo desconocido no filtrado');
 if (typeof bad2.spaces[0].widgets[0].x !== 'number') throw new Error('saneo: dimensión no coercionada a número');
 if (typeof bad2.spaces[0].widgets[0].data !== 'object') throw new Error('saneo: data no normalizada a objeto');
+const marks = sanitizeState(migrate({ version: 2, active: 0, spaces: [ { widgets: [] } ], calendarMarks: [
+  { start: '2026-08-15', end: '2026-08-01', type: 'vacaciones', label: 'Verano' },
+  { start: 'bad', end: '2026-08-02', type: 'script', label: '<x>' }
+] })).calendarMarks;
+if (marks.length !== 1) throw new Error('calendarMarks: no filtra fechas inválidas');
+if (marks[0].start !== '2026-08-01' || marks[0].end !== '2026-08-15') throw new Error('calendarMarks: no normaliza rango invertido');
+if (marks[0].type !== 'vacaciones') throw new Error('calendarMarks: tipo válido perdido');
 // source e id estrictos (endurecimiento para el futuro merge no destructivo)
 const src2 = t => sanitizeWidgetShape({ type: 'notes', source: t }).source;
 if (src2('user') !== 'user') throw new Error('source: "user" no preservado');
