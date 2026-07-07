@@ -151,6 +151,22 @@ if (!wt || wt.length !== 3 || wt[0] !== 'clínica' || wt[2].length !== 24) throw
 if (sanitizeWidgetShape({ type: 'notes' }).tags !== undefined) throw new Error('tags vacío debe ser undefined');
 console.log('OK esquema v2 (migración, accesores no-enumerables, serialización, saneo estructural, source/id/tags estrictos)');
 
+// --- snapPosition: imán de arrastre (bordes del escritorio y de otras ventanas) ---
+eval('globalThis.snapPosition = ' + pickFn('snapPosition', 'x, y, ww, hh, rects, vw, vh, thr = 8, gap = 14'));
+const others = [ { x: 100, y: 100, w: 300, h: 200 } ];
+// alineación con el borde izquierdo de otra ventana (dentro del umbral)
+if (snapPosition(105, 500, 200, 100, others, 1400, 900).x !== 100) throw new Error('snap: no alinea con borde izquierdo cercano');
+// adyacencia a la derecha de otra ventana: x = 100+300+14
+if (snapPosition(410, 500, 200, 100, others, 1400, 900).x !== 414) throw new Error('snap: no pega a la derecha con hueco');
+// fuera del umbral: no toca la posición
+if (snapPosition(150, 500, 200, 100, others, 1400, 900).x !== 150) throw new Error('snap: mueve fuera del umbral');
+// borde del escritorio (margen 12)
+if (snapPosition(9, 9, 200, 100, [], 1400, 900).x !== 12) throw new Error('snap: no imanta al margen izquierdo');
+if (snapPosition(9, 9, 200, 100, [], 1400, 900).y !== 12) throw new Error('snap: no imanta al margen superior');
+// borde inferior útil: vh - 46 (barra) - hh - 12
+if (snapPosition(500, 900 - 46 - 100 - 15, 200, 100, [], 1400, 900).y !== 900 - 46 - 100 - 12) throw new Error('snap: no imanta al borde inferior útil');
+console.log('OK snapPosition (imán a bordes y ventanas, umbral respetado)');
+
 // espacios: índice activo tras borrar
 eval('globalThis.nextActiveAfterDelete = ' + pickFn('nextActiveAfterDelete', 'active, removed, len'));
 if (nextActiveAfterDelete(2, 0, 3) !== 1) throw new Error('borrar espacio anterior al activo: active debe bajar');

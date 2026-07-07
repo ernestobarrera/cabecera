@@ -94,9 +94,14 @@ body{font-family:var(--font); color:var(--text); background:#10131a}
 #btn-fold{background:rgba(255,255,255,.05); border:1px solid var(--border-soft); color:var(--text-dim); border-radius:9px; width:32px; height:32px; cursor:pointer; font-size:14px; flex-shrink:0; font-family:var(--font)}
 #btn-fold:hover{background:var(--accent-soft); border-color:var(--accent); color:var(--text)}
 #tb-spacer{flex:1}
-#tb-spaces{display:flex; align-items:center; gap:4px; overflow-x:auto; max-width:42vw; scrollbar-width:thin}
+#tb-spaces{display:flex; align-items:center; gap:4px; overflow-x:auto; max-width:42vw; scrollbar-width:none}
 #tb-spaces::-webkit-scrollbar{height:0}
+/* cuando hay más pestañas de las que caben: desvanecido en el borde con contenido oculto */
+#tb-spaces.fade-l{-webkit-mask-image:linear-gradient(90deg,transparent 0,#000 22px); mask-image:linear-gradient(90deg,transparent 0,#000 22px)}
+#tb-spaces.fade-r{-webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 22px),transparent); mask-image:linear-gradient(90deg,#000 calc(100% - 22px),transparent)}
+#tb-spaces.fade-l.fade-r{-webkit-mask-image:linear-gradient(90deg,transparent 0,#000 22px,#000 calc(100% - 22px),transparent); mask-image:linear-gradient(90deg,transparent 0,#000 22px,#000 calc(100% - 22px),transparent)}
 .space-tab{display:flex; align-items:center; gap:6px; background:transparent; border:1px solid var(--border-soft); color:var(--text-dim); border-radius:9px; padding:5px 10px; cursor:pointer; font-size:12.5px; font-family:var(--font); white-space:nowrap; flex-shrink:0}
+.space-tab .st-name{max-width:130px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
 .space-tab:hover{background:rgba(255,255,255,.06); color:var(--text)}
 .space-tab.active{background:var(--accent-soft); border-color:var(--accent); color:var(--text)}
 .space-tab.drop-target{background:var(--accent); color:#0b1220; border-color:var(--accent); transform:translateY(-2px)}
@@ -110,6 +115,9 @@ body{font-family:var(--font); color:var(--text); background:#10131a}
 .tb-item:hover{background:rgba(255,255,255,.07); color:var(--text)}
 #tb-inbox{display:none}
 #tb-inbox.has{display:flex; color:var(--warn); border-color:rgba(240,194,94,.35); background:rgba(240,194,94,.08)}
+/* aviso propio de tareas con fecha: al margen de la píldora rotatoria */
+#tb-tasks{display:none; color:var(--warn); border-color:rgba(240,194,94,.35); background:rgba(240,194,94,.08); white-space:nowrap; font-variant-numeric:tabular-nums}
+#tb-tasks.overdue{color:var(--danger); border-color:rgba(243,108,108,.4); background:rgba(243,108,108,.09)}
 #tb-sync .dot{width:9px; height:9px; border-radius:50%; background:#777}
 #tb-sync .dot.ok{background:var(--ok)} #tb-sync .dot.saving{background:var(--warn)}
 #tb-sync .dot.err{background:var(--danger)} #tb-sync .dot.local{background:#8a8f9c}
@@ -187,7 +195,7 @@ body{font-family:var(--font); color:var(--text); background:#10131a}
 .field input:focus{border-color:var(--accent)}
 
 /* ---------- toasts / conflicto ---------- */
-#toasts{position:fixed; right:14px; bottom:58px; z-index:950; display:flex; flex-direction:column; gap:8px}
+#toasts{position:fixed; right:14px; bottom:102px; z-index:950; display:flex; flex-direction:column; gap:8px}   /* por encima del dock, sin taparlo */
 .toast{padding:10px 14px; border-radius:11px; background:var(--glass); border:1px solid var(--border); font-size:13px; box-shadow:var(--shadow); max-width:340px}
 .toast.err{border-color:rgba(243,108,108,.5)}
 #conflict{position:fixed; top:12px; left:50%; transform:translateX(-50%); z-index:960; display:none; align-items:center; gap:12px;
@@ -439,6 +447,7 @@ ul.plain{list-style:none}
   .win{position:static !important; left:auto !important; top:auto !important;
     width:100% !important; min-width:0; max-height:82vh; z-index:auto !important; flex:0 0 auto}
   .win-resize{display:none}
+  .win-btn.maxb{display:none}
   #tb-pill, #tb-sync{display:none}
   #tb-spaces{max-width:none; flex:1}
   #btn-inicio{padding:6px 11px}
@@ -478,8 +487,10 @@ ul.plain{list-style:none}
   <button id="btn-inicio">⊞ Inicio</button>
   <button id="btn-fold" title="Plegar / desplegar todos los widgets">⊟</button>
   <div id="tb-spaces" title="Espacios (escritorios): clic para cambiar, doble clic para renombrar"></div>
+  <button id="space-add" title="Nuevo espacio">＋</button>
   <div id="tb-spacer"></div>
   <div class="tb-item" id="tb-filter" title="Filtro por etiqueta activo" style="display:none"></div>
+  <div class="tb-item" id="tb-tasks" title="Tareas vencidas o que vencen hoy"></div>
   <div class="tb-item" id="tb-pill" title="Píldora informativa — clic para cambiar"></div>
   <div class="tb-item" id="tb-inbox" title="Hay texto nuevo en inbox.txt">📥 Bandeja <span id="tb-inbox-n"></span></div>
   <div class="tb-item" id="tb-sync" title="Estado de sincronización"><span class="dot"></span><span id="tb-sync-t">—</span></div>
@@ -668,7 +679,9 @@ ul.plain{list-style:none}
       — <b>Tareas</b>: cada tarea admite fecha, hora de aviso local, nota y color discreto al pasar el ratón. Las alarmas suenan mientras Cabecera está abierta.<br>
       — <b>Temporizador</b>: ajusta minutos y segundos con rueda o flechas, usa presets, cronómetro con vueltas y sonidos de alarma.<br>
       — En un grupo de enlaces, el botón <b>⇱ N</b> abre los N enlaces de una vez (permite los pop-ups la primera vez). También desde la paleta: «Abrir grupo: …».<br>
-      — Doble clic en el título de una ventana o en una pestaña de espacio para renombrar inline. El chevron <b>▾</b> pliega una ventana; <b>⊟</b> pliega/despliega todas.<br>
+      — Doble clic en el título de una ventana o en una pestaña de espacio para renombrar inline. El chevron <b>▾</b> pliega una ventana; <b>⊟</b> pliega/despliega todas (al desplegar, si no caben, se reordenan solas). <b>⛶</b> maximiza una ventana y <b>❐</b> la restaura.<br>
+      — Al arrastrar una ventana se <b>alinea sola</b> con los bordes y con las demás; mantén <b>Alt</b> para moverla libre.<br>
+      — Las tareas <b>vencidas o de hoy</b> tienen su propio aviso ⏰/📌 en la barra: cada clic salta a la siguiente.<br>
       — <b>inbox.txt</b> en tu carpeta de datos: cualquier línea (una macro de teclado, un agente, el móvil vía OneDrive) aparece en la Bandeja.<br>
       — <b>?add=texto</b> añade a la Bandeja; <b>?pack=nombre|URL</b> carga un escritorio completo.<br>
       — Ctrl+V con una captura dentro del widget Imagen.<br>
@@ -1044,6 +1057,7 @@ async function writeDataFile(){
 function markDirty(){
   dirty = true;
   renderDock();
+  renderTaskChip();
   syncUI("saving", "guardando…");
   clearTimeout(saveTimer);
   saveTimer = setTimeout(saveNow, 700);
@@ -1448,6 +1462,7 @@ function renderAll(){
   renderTabs();
   renderTagFilterBar();
   renderDock();
+  renderTaskChip();
 }
 
 /* ---------- espacios (escritorios/pestañas) ---------- */
@@ -1635,14 +1650,28 @@ function showTourStep(){
   positionTourCard(card, target, step.pos, vw, vh);
 }
 
+function anyOverlap(){   // ¿hay solape real (más de unos px) entre las ventanas del espacio activo?
+  const rs = state.widgets.map(widgetRect);
+  for (let i = 0; i < rs.length; i++)
+    for (let j = i + 1; j < rs.length; j++)
+      if (overlapsRect(rs[i], rs[j], -8)) return true;
+  return false;
+}
 function foldAll(){   // si hay alguno abierto, pliega todos; si todos plegados, los despliega
   const anyOpen = state.widgets.some(w => !w.collapsed);
   state.widgets.forEach(w => w.collapsed = anyOpen);
+  if (!anyOpen && anyOverlap()){
+    // al desplegar, si el layout compacto (p. ej. autoordenado en plegado) ya no cabe, se reordena solo
+    autoArrangeWidgets(true);
+    toast("Desplegados y reordenados para no solaparse");
+    return;
+  }
   renderAll(); markDirty();
 }
-function autoArrangeWidgets(){
+function autoArrangeWidgets(silent){
   const gap = 14, left0 = 24, top0 = 24, maxRight = Math.max(360, innerWidth - 24);
-  let x = left0, y = top0, rowH = 0, z = zTop;
+  const maxBottom = innerHeight - 46 - 12;   // barra de tareas
+  let x = left0, y = top0, rowH = 0, z = zTop, clipped = false;
   state.widgets.forEach(w => {
     const ww = Math.min(Math.max(+w.w || WTYPES[w.type]?.w || 260, 220), Math.max(220, maxRight - left0));
     const hh = w.collapsed ? 42 : Math.max(+w.h || WTYPES[w.type]?.h || 180, 120);
@@ -1655,9 +1684,31 @@ function autoArrangeWidgets(){
     x += ww + gap;
     rowH = Math.max(rowH, hh);
   });
+  // que ninguna ventana quede del todo bajo el borde: la barra de título sigue accesible
+  state.widgets.forEach(w => {
+    if (w.y + 60 > maxBottom){ w.y = Math.max(top0, maxBottom - 60); clipped = true; }
+  });
   zTop = z;
   renderAll(); markDirty();
-  toast("Widgets autoordenados");
+  if (!silent) toast(clipped ? "Widgets autoordenados (no caben todos: algunos quedan al borde inferior)" : "Widgets autoordenados");
+}
+function toggleMaximize(w){   // ⛶ ocupa el escritorio; ❐ restaura el tamaño y posición previos
+  if (isMobile()) return;
+  const pad = 12, bar = 46;
+  if (w.max){
+    const p = w.max; delete w.max;
+    w.x = numOr(p.x, 40, 0, 8000); w.y = numOr(p.y, 40, 0, 8000);
+    w.w = numOr(p.w, (WTYPES[w.type] || {}).w || 260, 220, 4000);
+    w.h = numOr(p.h, (WTYPES[w.type] || {}).h || 180, 140, 4000);
+  } else {
+    w.max = { x: w.x, y: w.y, w: w.w, h: w.h };
+    if (w.collapsed) w.collapsed = false;
+    w.x = pad; w.y = pad;
+    w.w = Math.max(220, innerWidth - pad * 2);
+    w.h = Math.max(140, innerHeight - bar - pad * 2);
+  }
+  w.z = ++zTop;
+  renderAll(); markDirty();
 }
 function moveWidgetToSpace(id, ti){
   const from = state.spaces[state.active];
@@ -1671,19 +1722,31 @@ function moveWidgetToSpace(id, ti){
   renderTabs();
   toast(`Movido a «${state.spaces[ti].name}»`);
 }
+function updateSpacesFades(){
+  const box = $("#tb-spaces");
+  if (!box) return;
+  const max = box.scrollWidth - box.clientWidth;
+  box.classList.toggle("fade-l", box.scrollLeft > 4);
+  box.classList.toggle("fade-r", max - box.scrollLeft > 4);
+}
 function renderTabs(){
   const box = $("#tb-spaces");
   if (!box || !state) return;
   const multi = state.spaces.length > 1;
   box.innerHTML = state.spaces.map((sp, i) =>
     `<button class="space-tab${i === state.active ? " active" : ""}" data-i="${i}" title="${esc(sp.name || "Escritorio")}"><span class="st-name">${esc(sp.name || "Escritorio")}</span>${i === state.active && multi ? `<span class="st-del" title="Eliminar este espacio">✕</span>` : ""}</button>`
-  ).join("") + `<button id="space-add" title="Nuevo espacio">＋</button>`;
+  ).join("");
   box.querySelectorAll(".space-tab").forEach(t => {
     const i = +t.dataset.i;
     t.addEventListener("click", e => { if (e.target.closest(".st-del")){ deleteSpace(i); return; } setActive(i); });
     t.addEventListener("dblclick", e => { if (!e.target.closest(".st-del")) renameSpace(i, t); });
   });
-  $("#space-add").addEventListener("click", addSpace);
+  // la pestaña activa siempre a la vista, y desvanecidos solo si hay overflow
+  requestAnimationFrame(() => {
+    const act = box.querySelector(".space-tab.active");
+    if (act) act.scrollIntoView({ inline: "nearest", block: "nearest" });
+    updateSpacesFades();
+  });
 }
 
 function buildWindow(w){
@@ -1695,12 +1758,13 @@ function buildWindow(w){
   const dictBtn = w.type === "notes" ? `<button class="win-btn dict-recv-btn" title="Recibir el dictado en esta nota">🎙️</button>` : "";
   el.innerHTML = `
     <div class="win-title" title="Doble clic para renombrar"><span class="ico">${t.ico}</span><span class="tname">${esc(w.t || t.name)}</span><span class="sp"></span>
-      ${dictBtn}<button class="win-btn tagbtn" title="Etiquetas">🏷️</button><button class="win-btn collapse" title="Plegar / desplegar">${w.collapsed ? "▸" : "▾"}</button><button class="win-btn close" title="Cerrar">✕</button></div>
+      ${dictBtn}<button class="win-btn tagbtn" title="Etiquetas">🏷️</button><button class="win-btn maxb" title="${w.max ? "Restaurar tamaño" : "Maximizar"}">${w.max ? "❐" : "⛶"}</button><button class="win-btn collapse" title="Plegar / desplegar">${w.collapsed ? "▸" : "▾"}</button><button class="win-btn close" title="Cerrar">✕</button></div>
     <div class="win-tags"></div>
     <div class="win-body"></div>
     <div class="win-resize"></div>`;
   if (w.collapsed) el.classList.add("collapsed");
   el.querySelector(".tagbtn").addEventListener("click", e => { e.stopPropagation(); editWidgetTags(w, el); });
+  el.querySelector(".maxb").addEventListener("click", e => { e.stopPropagation(); toggleMaximize(w); });
   paintWinTags(el, w);
   el.querySelector(".collapse").addEventListener("click", e => {
     e.stopPropagation();
@@ -1762,16 +1826,22 @@ function buildWindow(w){
   title.addEventListener("pointerdown", ev => {
     if (ev.target.closest("button") || isMobile()) return;   // móvil: sin arrastre (scroll táctil)
     const sx = ev.clientX - w.x, sy = ev.clientY - w.y;
-    let overTab = null, dragging = false;
+    let overTab = null, dragging = false, dragRects = null;
     const move = m => {
       if (!dragging){
         // umbral: hasta que hay movimiento real no es arrastre (así el clic/doble clic siguen funcionando)
         if (Math.abs(m.clientX - ev.clientX) + Math.abs(m.clientY - ev.clientY) < 4) return;
         dragging = true;
+        dragRects = state.widgets.filter(x => x.id !== w.id).map(widgetRect);   // para el imán
         el.style.pointerEvents = "none";   // para que elementFromPoint vea la barra bajo el cursor
       }
       w.x = Math.max(0, Math.min(m.clientX - sx, innerWidth - 80));
       w.y = Math.max(0, Math.min(m.clientY - sy, innerHeight - 110));
+      if (!m.altKey){   // imán a bordes y ventanas; Alt = movimiento libre
+        const r = widgetRect(w);
+        const s = snapPosition(w.x, w.y, r.w, r.h, dragRects, innerWidth, innerHeight);
+        w.x = Math.max(0, s.x); w.y = Math.max(0, s.y);
+      }
       el.style.left = w.x + "px"; el.style.top = w.y + "px";
       const under = document.elementFromPoint(m.clientX, m.clientY);
       const tab = under && under.closest(".space-tab");
@@ -1820,6 +1890,19 @@ function widgetRect(w){
 function overlapsRect(a, b, gap = 12){
   return a.x < b.x + b.w + gap && a.x + a.w + gap > b.x &&
     a.y < b.y + b.h + gap && a.y + a.h + gap > b.y;
+}
+// Imán al arrastrar: alinea con los bordes del escritorio y de las demás ventanas
+// (alineación de bordes y adyacencia con hueco `gap`). Puro → testeable.
+function snapPosition(x, y, ww, hh, rects, vw, vh, thr = 8, gap = 14){
+  const xs = [12, vw - ww - 12], ys = [12, vh - 46 - hh - 12];
+  for (const r of rects){
+    xs.push(r.x, r.x + r.w - ww, r.x + r.w + gap, r.x - ww - gap);
+    ys.push(r.y, r.y + r.h - hh, r.y + r.h + gap, r.y - hh - gap);
+  }
+  let bx = x, by = y, dx = thr, dy = thr;
+  for (const c of xs){ const d = Math.abs(x - c); if (d < dx){ dx = d; bx = c; } }
+  for (const c of ys){ const d = Math.abs(y - c); if (d < dy){ dy = d; by = c; } }
+  return { x: bx, y: by };
 }
 function nextWidgetSpot(ww, hh){
   const gap = 14, step = 28, left0 = 24, top0 = 24, maxRight = Math.max(360, innerWidth - 24);
@@ -3249,6 +3332,24 @@ function closeMenu(){
 function wireUI(){
   $("#btn-inicio").addEventListener("click", () => $("#menu").classList.contains("open") ? closeMenu() : openMenu("start"));
   $("#btn-fold").addEventListener("click", foldAll);
+  $("#space-add").addEventListener("click", addSpace);
+  // barra de espacios: rueda = desplazamiento horizontal; desvanecidos según posición
+  const spacesBox = $("#tb-spaces");
+  spacesBox.addEventListener("wheel", e => {
+    if (spacesBox.scrollWidth <= spacesBox.clientWidth) return;
+    e.preventDefault();
+    spacesBox.scrollLeft += e.deltaY || e.deltaX;
+  }, { passive: false });
+  spacesBox.addEventListener("scroll", updateSpacesFades);
+  addEventListener("resize", updateSpacesFades);
+  // aviso de tareas: cada clic salta a la siguiente tarea vencida o de hoy
+  $("#tb-tasks").addEventListener("click", () => {
+    const s = dueTaskStats();
+    const hits = [...s.overdue, ...s.today];
+    if (!hits.length) return;
+    const h = hits[taskChipIdx++ % hits.length];
+    focusWidget(h.w.id, h.si);
+  });
   $("#desk-palette").addEventListener("click", () => openMenu("palette"));
   $("#desk-arrange").addEventListener("click", autoArrangeWidgets);
   $("#desk-trash").addEventListener("click", openTrash);
@@ -3266,7 +3367,13 @@ function wireUI(){
   document.addEventListener("keydown", e => {
     if ((e.key === "k" || e.key === "K") && (e.ctrlKey || e.metaKey)){ e.preventDefault(); openMenu("palette"); }
     if (e.key === "/" && !e.target.closest("input,textarea")){ e.preventDefault(); openMenu("palette"); }
-    if (e.key === "Escape") closeMenu();
+    if (e.key === "Escape"){
+      // cierra lo más superficial: modal abierto (salvo reconectar, que espera decisión) > tour > menú
+      const ov = $$(".overlay.open").filter(x => x.id !== "ov-reconnect").pop();
+      if (ov){ ov.classList.remove("open"); return; }
+      if ($("#tour").classList.contains("open")){ endTour(); return; }
+      closeMenu();
+    }
   });
   $("#menu-search").addEventListener("input", e => renderResults(e.target.value));
   $("#menu-search").addEventListener("keydown", e => {
@@ -3658,6 +3765,39 @@ function bodyDictate(w, el){
   });
 }
 
+/* ---------- aviso propio de tareas con fecha (todos los espacios) ---------- */
+function dueTaskStats(){
+  const out = { overdue: [], today: [] };
+  if (!state || !Array.isArray(state.spaces)) return out;
+  const t0 = new Date(); t0.setHours(0, 0, 0, 0);
+  state.spaces.forEach((sp, si) => (sp.widgets || []).filter(x => x.type === "todo").forEach(w => {
+    (w.data.items || []).forEach(it => {
+      if (it.done || !it.due) return;
+      const d = new Date(it.due + "T00:00:00");
+      if (d < t0) out.overdue.push({ w, si, it });
+      else if (+d === +t0) out.today.push({ w, si, it });
+    });
+  }));
+  return out;
+}
+let taskChipIdx = 0;
+function renderTaskChip(){
+  const el = $("#tb-tasks");
+  if (!el || !state) return;
+  const s = dueTaskStats();
+  const n = s.overdue.length + s.today.length;
+  if (!n){ el.style.display = "none"; return; }
+  el.style.display = "flex";
+  el.classList.toggle("overdue", s.overdue.length > 0);
+  el.textContent = (s.overdue.length ? `⏰ ${s.overdue.length}` : "") +
+    (s.overdue.length && s.today.length ? "  " : "") +
+    (s.today.length ? `📌 ${s.today.length}` : "");
+  el.title = [
+    s.overdue.length ? `${s.overdue.length} tarea${s.overdue.length === 1 ? "" : "s"} vencida${s.overdue.length === 1 ? "" : "s"}` : "",
+    s.today.length ? `${s.today.length} vence${s.today.length === 1 ? "" : "n"} hoy` : ""
+  ].filter(Boolean).join(" · ") + " — clic para ir a la tarea";
+}
+
 /* ---------- píldora informativa de la barra ---------- */
 const TIPS = [
   "Ctrl+K (o /) abre la paleta: busca en todos los espacios y ejecuta comandos",
@@ -3677,7 +3817,11 @@ const TIPS = [
   "El calendario muestra la semana ISO (≈ semana epidemiológica)",
   "Tus datos son un archivo tuyo: datos.json, legible y portable",
   "El widget Dictado transcribe tu voz; Win+H de Windows también sirve",
-  "La calculadora acepta el teclado: números, + − * / y Enter"
+  "La calculadora acepta el teclado: números, + − * / y Enter",
+  "⛶ maximiza un widget a todo el escritorio; ❐ lo devuelve a su sitio",
+  "Al arrastrar, las ventanas se alinean solas con los bordes; con Alt se mueven libres",
+  "El aviso ⏰/📌 de la barra te lleva a la tarea vencida o de hoy con un clic",
+  "Escape cierra el modal o el menú abierto"
 ];
 let pillIdx = 0;
 function pillMsgs(){
@@ -3688,14 +3832,9 @@ function pillMsgs(){
   if (state){
     const holi = esHolidays(now.getFullYear())[now.getMonth() + "-" + now.getDate()];
     if (holi) out.push(`🎉 Hoy es festivo: ${holi}`);
-    const todos = state.widgets.filter(x => x.type === "todo").flatMap(x => x.data.items || []);
+    // vencidas/hoy viven en su propio aviso fijo (#tb-tasks); aquí solo el progreso global
+    const todos = state.spaces.flatMap(sp => (sp.widgets || []).filter(x => x.type === "todo").flatMap(x => x.data.items || []));
     if (todos.length){ const done = todos.filter(i => i.done).length; out.push(`✅ ${done}/${todos.length} tarea${todos.length === 1 ? "" : "s"} hecha${done === 1 ? "" : "s"}`); }
-    const today0 = new Date(); today0.setHours(0, 0, 0, 0);
-    const pend = todos.filter(i => !i.done && i.due);
-    const overdue = pend.filter(i => new Date(i.due + "T00:00:00") < today0).length;
-    const dueToday = pend.filter(i => +new Date(i.due + "T00:00:00") === +today0).length;
-    if (overdue) out.push(`⏰ ${overdue} tarea${overdue === 1 ? "" : "s"} vencida${overdue === 1 ? "" : "s"}`);
-    if (dueToday) out.push(`📌 ${dueToday} tarea${dueToday === 1 ? "" : "s"} vence${dueToday === 1 ? "" : "n"} hoy`);
     const wc = state.widgets.length;
     const links = state.widgets.filter(x => x.type === "links").reduce((a, x) => a + (x.data.groups || []).reduce((s, g) => s + (g.links || []).length, 0), 0);
     const notes = state.widgets.filter(x => x.type === "notes").length;
@@ -3708,7 +3847,7 @@ function startPill(){
   const el = $("#tb-pill");
   const paint = () => { const m = pillMsgs(); el.textContent = m[pillIdx % m.length]; };
   el.addEventListener("click", () => { pillIdx++; paint(); });
-  setInterval(() => { pillIdx++; paint(); }, 45000);
+  setInterval(() => { pillIdx++; paint(); renderTaskChip(); }, 45000);   // el chip se refresca también al pasar la medianoche
   paint();
 }
 

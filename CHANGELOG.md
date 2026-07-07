@@ -1,5 +1,48 @@
 # Changelog
 
+## [0.21.0] - 2026-07-07
+
+- **Aviso propio de tareas con fecha.** Las tareas vencidas (⏰) o que vencen hoy (📌) tienen ahora su propio indicador fijo en la barra, separado de la píldora informativa rotatoria; cada clic salta a la siguiente tarea afectada, aunque esté en otro espacio. La píldora conserva la semana ISO, el progreso global y los consejos.
+- **Barra de espacios más clara con muchas pestañas.** El botón **＋** queda siempre visible (ya no se pierde al final del scroll), las pestañas se desplazan con la rueda del ratón, los bordes se desvanecen cuando hay más pestañas ocultas, los nombres largos se recortan con puntos suspensivos y la pestaña activa se mantiene a la vista.
+- **Desplegar sin solapes.** Si pliegas todos los widgets, los autoordenas y luego los despliegas, Cabecera detecta que el layout compacto ya no cabe y los reordena sola.
+- **Ventanas con imán.** Al arrastrar una ventana se alinea automáticamente con los bordes del escritorio y con las demás ventanas (alineación y adyacencia con hueco uniforme); mantén **Alt** para moverla libre.
+- **Maximizar/restaurar.** Nuevo botón **⛶** en la barra de cada ventana: la amplía a todo el escritorio y **❐** la devuelve exactamente a su tamaño y posición anteriores. Ideal para Año, Markdown o Calendario.
+- **Escape cierra.** La tecla Esc cierra el modal abierto, el tour o el menú, en ese orden.
+- **Autoordenar acotado.** El autoordenado ya no puede dejar ventanas enteras por debajo del borde inferior: la barra de título queda siempre accesible y, si no caben todas, lo avisa.
+- **Los toasts ya no tapan el dock.** Los avisos emergentes aparecen por encima de los accesos rápidos inferiores.
+- Guía integrada, `guia.html` y consejos de la píldora actualizados. Test nuevo del imán de arrastre (`snapPosition`).
+
+## [0.20.0] - 2026-07-07
+
+- **Calendario más legible y explicativo.** El widget mensual se adapta mejor al ampliar, muestra una ayuda visible para añadir días y añade resumen de hábiles/festivos y conceptos del mes.
+- **Conceptos canónicos ampliados.** Las marcas de calendario incluyen vacaciones, asuntos, antigüedad, formación/docencia, exámenes, conciliación, familiar, consulta médica, deber público, traslado, compensación horaria y festivos locales/nacionales.
+- **Festivos manuales en rojo.** Los festivos locales o nacionales añadidos por el usuario se pintan en rojo y entran en el cálculo de días hábiles/festivos.
+- **Nuevo widget Permisos.** Permite registrar días u horas por concepto y ver el cómputo anual, interoperando con los widgets Calendario y Año mediante las mismas marcas globales.
+- **Vista Año con resumen.** El widget Año muestra hábiles, festivos laborables y totales por concepto junto a los 12 meses.
+- **Tareas con color discreto.** Cada tarea puede llevar una barra de color visible y un selector que aparece solo al pasar el ratón.
+- **Alta de widgets más visible.** Al crear widgets pequeños como Reloj, Cabecera prioriza que aparezcan completos dentro de la pantalla.
+- **Guía actualizada.** La ayuda integrada, `guia.html` y `README.md` explican calendario, permisos, festivos y cómputo anual.
+
+## [0.19.0] - 2026-07-06
+
+- **Paleta centrada con Ctrl+K.** El menú Inicio sigue siendo el panel completo de widgets y ajustes; Ctrl+K (o `/`) abre ahora una paleta central más parecida a un lanzador de comandos.
+- **Accesos mínimos en el escritorio.** Abajo a la derecha hay una entrada discreta a Ctrl+K, Autoordenar, Papelera e información básica del proyecto.
+- **Crear widgets con doble clic en el escritorio.** Doble clic sobre una zona vacía abre el menú junto al puntero para añadir widgets más rápido.
+- **Alta de widgets más visible.** Los widgets nuevos buscan un hueco libre antes de aparecer, evitando que queden tapados por ventanas existentes.
+- **Sincronización más accionable.** El estado de sincronización de la barra inferior ahora se puede pulsar: en modo local abre la conexión de carpeta; en modo sincronizado comprueba cambios.
+- **Tareas editables, ordenables y con avisos.** Cada tarea se puede editar inline, arrastrar para reordenar, subir/bajar, anotar y mandar a papelera; el botón 📅 permite fecha, hora de aviso local y nota.
+- **Temporizador rediseñado.** Cuenta atrás con diales manejables por rueda/flechas, presets rápidos, sonidos configurables, cronómetro con vueltas y alarma local con etiqueta.
+- **Calendario con marcas canónicas.** Cualquier calendario permite marcar rangos como vacaciones, guardia, curso o personal; las marcas viven en el estado global y se pintan también en el widget Año.
+- **Widget Año.** Nueva vista anual con los 12 meses, festivos, marcas de calendario y año persistente.
+- **Widget Archivos más prudente.** Explorador de una carpeta local elegida por el usuario, en modo lectura. No recuerda la carpeta salvo que se marque explícitamente, permite olvidarla y explica que las aperturas `blob:` son URLs temporales locales.
+- **Papelera segura.** Los widgets y elementos no privados se pueden restaurar desde la papelera. Las notas no se guardan ahí: solo tienen deshacer inmediato.
+- **Autoordenar widgets.** Acción para redistribuir las ventanas del escritorio en una cuadrícula limpia, visible también desde el acceso inferior derecho.
+- **Renombrado inline.** Ventanas y espacios dejan de usar `prompt()` del navegador: se editan directamente en su título o pestaña.
+- **Ayuda cuando el navegador bloquea ventanas emergentes.** Al abrir un grupo de enlaces, Cabecera explica cómo permitir las pestañas para la web si el navegador bloquea alguna.
+- **Favicon propio.** Cabecera ya tiene icono identificativo para pestañas, favoritos y accesos anclados.
+- **Etiquetas solo en hover.** El botón de etiqueta y la tira de etiquetas quedan ocultos en reposo para mantener el escritorio más minimalista; el editor de etiquetas ya no depende de `prompt()`.
+- **Guía inicial actualizada.** La ayuda integrada y `guia.html` explican calendario con marcas, tareas con avisos, temporizador, dock inferior, privacidad de archivos y filosofía del proyecto.
+
 ## [0.18.1] - 2026-07-05
 
 - **Corregido: las etiquetas se veían siempre en equipos con pantalla táctil.** Ahora la reserva a hover usa `any-hover`, así que basta con tener ratón o trackpad; en móviles sin ratón siguen visibles.
