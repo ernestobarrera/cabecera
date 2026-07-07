@@ -79,7 +79,7 @@ body{font-family:var(--font); color:var(--text); background:#10131a}
 .swatch.on{box-shadow:0 0 0 2px var(--accent)}
 .swatch.none{background:transparent; position:relative}
 .swatch.none::after{content:"∅"; position:absolute; inset:0; font-size:11px; line-height:14px; text-align:center; color:var(--text-dim)}
-.win-body{flex:1; overflow:auto; padding:10px; font-size:13.5px}
+.win-body{flex:1; min-height:0; overflow:auto; padding:10px; font-size:13.5px}
 .win-resize{position:absolute; right:0; bottom:0; width:16px; height:16px; cursor:nwse-resize; opacity:.5}
 .win-resize::after{content:""; position:absolute; right:4px; bottom:4px; width:8px; height:8px;
   border-right:2px solid var(--text-dim); border-bottom:2px solid var(--text-dim); border-radius:2px}
@@ -206,14 +206,22 @@ textarea.notes{width:100%; height:100%; min-height:110px; resize:none; border:no
 .mini:hover{background:var(--accent-soft); border-color:var(--accent)}
 .mini.warn:hover{background:rgba(243,108,108,.15); border-color:var(--danger)}
 ul.plain{list-style:none}
-.todo-it{position:relative; display:flex; align-items:center; gap:9px; padding:6px 4px; border-radius:8px; flex-wrap:wrap}
+.todo-it{position:relative; display:flex; align-items:center; gap:9px; padding:6px 4px; border-radius:8px; flex-wrap:wrap; --task-color:transparent}
 .todo-it:hover{background:rgba(255,255,255,.04)}
+.todo-it.has-task-color{box-shadow:inset 3px 0 0 var(--task-color); padding-left:8px}
 .todo-it input[type=checkbox]{width:16px; height:16px; accent-color:var(--accent); cursor:pointer; flex-shrink:0}
 .todo-it .t{flex:1; word-break:break-word}
 .todo-it.done .t{text-decoration:line-through; color:var(--text-dim)}
 .it-del{border:none; background:none; color:var(--text-dim); cursor:pointer; font-size:13px; padding:2px 6px; border-radius:6px; opacity:0; flex-shrink:0}
-.it-edit,.it-up,.it-down,.it-drag{border:none; background:none; color:var(--text-dim); cursor:pointer; font-size:12px; padding:2px 4px; border-radius:6px; opacity:0; flex-shrink:0}
-.todo-it:hover .it-del,.todo-it:hover .it-edit,.todo-it:hover .it-up,.todo-it:hover .it-down,.todo-it:hover .it-drag,.clip-it:hover .it-del,.link-it:hover .it-del,.link-it:hover .it-act{opacity:1}
+.it-edit,.it-up,.it-down,.it-drag,.it-color{border:none; background:none; color:var(--text-dim); cursor:pointer; font-size:12px; padding:2px 4px; border-radius:6px; opacity:0; flex-shrink:0}
+.it-color{color:var(--task-color); font-size:14px}
+.todo-it:hover .it-del,.todo-it:hover .it-edit,.todo-it:hover .it-up,.todo-it:hover .it-down,.todo-it:hover .it-drag,.todo-it:hover .it-color,.clip-it:hover .it-del,.link-it:hover .it-del,.link-it:hover .it-act{opacity:1}
+.color-pop{position:absolute; right:8px; top:30px; z-index:30; display:flex; gap:7px; align-items:center; padding:7px;
+  border:1px solid var(--border); border-radius:11px; background:rgba(20,24,32,.96); box-shadow:var(--shadow)}
+.color-dot{width:18px; height:18px; border-radius:50%; border:1px solid var(--border); cursor:pointer; padding:0; background:transparent}
+.color-dot:hover,.color-dot.on{box-shadow:0 0 0 2px var(--accent)}
+.color-dot.none{position:relative}
+.color-dot.none::after{content:"∅"; position:absolute; inset:0; color:var(--text-dim); font-size:11px; line-height:16px; text-align:center}
 .todo-it .due{font-size:10.5px; padding:1px 7px; border-radius:20px; white-space:nowrap; flex-shrink:0}
 .todo-it .due.overdue{background:rgba(243,108,108,.18); color:#f36c6c}
 .todo-it .due.today{background:rgba(240,194,94,.20); color:#f0c25e}
@@ -308,11 +316,13 @@ ul.plain{list-style:none}
 .lap-list{max-height:70px; overflow:auto; border-top:1px solid var(--border-soft); padding-top:6px; display:grid; gap:4px}
 .lap-list div{display:flex; justify-content:space-between; gap:8px; color:var(--text-dim); font-size:12px}
 /* calendario */
-.cal-nav{display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; text-transform:capitalize; font-size:13px}
-.cal-grid{display:grid; grid-template-columns:auto repeat(7,1fr); gap:2px; text-align:center; font-size:12.5px}
-.cal-grid .hd{color:var(--text-dim); font-size:10.5px; padding:3px 0}
-.cal-grid .wk{color:var(--text-dim); font-size:9.5px; padding:5px 5px 0 0; text-align:right; opacity:.7}
-.cal-grid .d{padding:4px 0; border-radius:6px; cursor:pointer; position:relative}
+.cal-wrap{height:100%; min-height:0; display:flex; flex-direction:column; gap:8px; container-type:size}
+.cal-nav{display:flex; align-items:center; justify-content:space-between; text-transform:capitalize; font-size:13px; flex-shrink:0}
+.cal-help{font-size:11.5px; line-height:1.35; color:var(--text-dim); border:1px solid var(--border-soft); border-radius:9px; padding:6px 8px; background:rgba(255,255,255,.035); flex-shrink:0}
+.cal-grid{display:grid; grid-template-columns:auto repeat(7,1fr); grid-auto-rows:minmax(24px,1fr); gap:2px; text-align:center; font-size:12.5px; flex:1; min-height:0}
+.cal-grid .hd{color:var(--text-dim); font-size:10.5px; padding:3px 0; display:flex; align-items:center; justify-content:center}
+.cal-grid .wk{color:var(--text-dim); font-size:9.5px; padding:0 5px 0 0; text-align:right; opacity:.7; display:flex; align-items:center; justify-content:flex-end}
+.cal-grid .d{padding:4px 0; border-radius:6px; cursor:pointer; position:relative; display:flex; align-items:center; justify-content:center; min-height:24px}
 .cal-grid .d.sat{color:#d9822b}
 .cal-grid .d.sun{color:#e5484d}
 .cal-grid .hd.sat{color:#d9822b}
@@ -323,7 +333,22 @@ ul.plain{list-style:none}
 .cal-grid .d.mark-guardia{box-shadow:inset 0 -2px 0 var(--warn); background:rgba(240,194,94,.12)}
 .cal-grid .d.mark-curso{box-shadow:inset 0 -2px 0 var(--accent); background:rgba(90,169,247,.12)}
 .cal-grid .d.mark-personal,.cal-grid .d.mark-otro{box-shadow:inset 0 -2px 0 #e07a9c; background:rgba(224,122,156,.12)}
+.cal-grid .d.mark-asuntos,.cal-grid .d.mark-asuntos_ant,.cal-grid .d.mark-antiguedad,.cal-grid .d.mark-conciliacion{box-shadow:inset 0 -2px 0 #5fd08a; background:rgba(95,208,138,.12)}
+.cal-grid .d.mark-formacion,.cal-grid .d.mark-examenes,.cal-grid .d.mark-consulta{box-shadow:inset 0 -2px 0 #8d8bff; background:rgba(141,139,255,.12)}
+.cal-grid .d.mark-familiar,.cal-grid .d.mark-deber_publico,.cal-grid .d.mark-traslado,.cal-grid .d.mark-compensacion{box-shadow:inset 0 -2px 0 #f0c25e; background:rgba(240,194,94,.12)}
+.cal-grid .d.mark-festivo_local,.cal-grid .d.mark-festivo_nacional{color:#e5484d; font-weight:700; box-shadow:inset 0 -2px 0 #e5484d; background:rgba(229,72,77,.13)}
 .cal-grid .d.today.marked{outline:1px solid rgba(255,255,255,.55)}
+.cal-summary,.year-summary{display:flex; gap:6px; flex-wrap:wrap; align-items:center; color:var(--text-dim); font-size:11.5px; line-height:1.35; flex-shrink:0}
+.cal-pill,.year-pill{display:inline-flex; align-items:center; gap:5px; padding:3px 7px; border-radius:999px; border:1px solid var(--border-soft); background:rgba(255,255,255,.035)}
+.cal-dot,.year-dot{display:inline-block; width:7px; height:7px; border-radius:50%; background:var(--accent); flex-shrink:0}
+@container (min-width:420px){
+  .cal-grid{font-size:14px; gap:3px; grid-auto-rows:minmax(30px,1fr)}
+  .cal-grid .d{min-height:30px}
+}
+@container (min-height:420px){
+  .cal-grid{grid-auto-rows:minmax(34px,1fr)}
+  .cal-grid .d{min-height:34px}
+}
 .mark-grid{display:grid; grid-template-columns:1fr 1fr; gap:9px; margin-top:10px}
 .mark-grid label{display:flex; flex-direction:column; gap:5px; font-size:12px; color:var(--text-dim)}
 .mark-grid input,.mark-grid select{padding:8px 10px; border-radius:9px; border:1px solid var(--border-soft); background:rgba(0,0,0,.25); color:var(--text); font-family:var(--font); color-scheme:dark}
@@ -333,6 +358,7 @@ ul.plain{list-style:none}
 .mark-row .t{flex:1; font-size:13px}
 .year-nav{display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:9px}
 .year-nav b{font-size:14px}
+.year-summary{margin:-2px 0 9px}
 .year-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(122px,1fr)); gap:8px}
 .year-month{border:1px solid var(--border-soft); border-radius:10px; padding:7px; background:rgba(255,255,255,.025)}
 .year-month h5{margin:0 0 5px; font-size:11px; text-transform:capitalize; color:var(--text-dim)}
@@ -342,6 +368,19 @@ ul.plain{list-style:none}
 .ym-grid .sat{color:#d9822b}.ym-grid .sun,.ym-grid .holi{color:#e5484d}.ym-grid .today{background:var(--accent); color:#0b1220; font-weight:700}
 .ym-grid .marked::after{content:""; position:absolute; left:50%; bottom:1px; width:4px; height:4px; border-radius:50%; background:var(--ok); transform:translateX(-50%)}
 .ym-grid .mark-guardia::after{background:var(--warn)}.ym-grid .mark-curso::after{background:var(--accent)}.ym-grid .mark-personal::after,.ym-grid .mark-otro::after{background:#e07a9c}
+.ym-grid .mark-formacion::after,.ym-grid .mark-examenes::after,.ym-grid .mark-consulta::after{background:#8d8bff}.ym-grid .mark-familiar::after,.ym-grid .mark-deber_publico::after,.ym-grid .mark-traslado::after,.ym-grid .mark-compensacion::after{background:#f0c25e}.ym-grid .mark-festivo_local::after,.ym-grid .mark-festivo_nacional::after{background:#e5484d}
+.leave{height:100%; min-height:0; display:flex; flex-direction:column; gap:9px}
+.leave-nav{display:flex; align-items:center; justify-content:space-between; gap:8px}
+.leave-help{font-size:12px; color:var(--text-dim); line-height:1.4; border:1px solid var(--border-soft); border-radius:9px; padding:7px 9px; background:rgba(255,255,255,.035)}
+.leave-form{display:grid; grid-template-columns:1fr 1fr; gap:8px}
+.leave-form label{display:flex; flex-direction:column; gap:4px; color:var(--text-dim); font-size:11.5px}
+.leave-form input,.leave-form select{padding:7px 9px; border-radius:9px; border:1px solid var(--border-soft); background:rgba(0,0,0,.25); color:var(--text); font-family:var(--font); color-scheme:dark; min-width:0}
+.leave-form .wide{grid-column:1/-1}
+.leave-add{grid-column:1/-1}
+.leave-summary{display:grid; gap:6px; min-height:0; overflow:auto}
+.leave-row{display:grid; grid-template-columns:1fr auto; gap:8px; align-items:center; padding:7px 8px; border:1px solid var(--border-soft); border-radius:9px; background:rgba(255,255,255,.025)}
+.leave-row b{font-size:12.5px}
+.leave-row span{font-size:11.5px; color:var(--text-dim)}
 .files-head{display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-bottom:8px}
 .files-path{font-size:12px; color:var(--text-dim); flex:1; min-width:120px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
 .files-privacy{margin-bottom:8px; padding:8px 9px; border:1px solid var(--border-soft); border-radius:9px; background:rgba(255,255,255,.035); color:var(--text-dim); font-size:12px; line-height:1.45}
@@ -354,10 +393,10 @@ ul.plain{list-style:none}
 .win.flash{animation:winflash 1.1s ease-out}
 @keyframes winflash{0%{box-shadow:0 0 0 3px var(--accent)}100%{box-shadow:0 0 0 0 transparent}}
 /* reloj analógico */
-.clock-face{position:relative}
+.clock-face{position:relative; height:100%; min-height:0; display:flex; align-items:center; justify-content:center}
 .clock-face .tg{position:absolute; top:0; right:0; opacity:0}
 .clock-face:hover .tg{opacity:1}
-.aclk{flex:1; width:100%; min-height:0}
+.aclk{flex:1; width:100%; height:100%; max-height:100%; min-height:0}
 .aclk .c0{fill:rgba(255,255,255,.04); stroke:var(--border)}
 .aclk .tick{stroke:var(--text-dim); stroke-width:1}
 .aclk .hh{stroke:var(--text); stroke-width:3; stroke-linecap:round}
@@ -464,6 +503,7 @@ ul.plain{list-style:none}
       <div class="wcard" data-add="timer"><span class="ico">⏱️</span>Temporizador</div>
       <div class="wcard" data-add="cal"><span class="ico">📅</span>Calendario</div>
       <div class="wcard" data-add="year"><span class="ico">🗓️</span>Año</div>
+      <div class="wcard" data-add="leave"><span class="ico">🧾</span>Permisos</div>
       <div class="wcard" data-add="search"><span class="ico">🔎</span>Buscadores</div>
       <div class="wcard" data-add="calc"><span class="ico">🧮</span>Calculadora</div>
       <div class="wcard" data-add="files"><span class="ico">📂</span>Archivos</div>
@@ -578,13 +618,9 @@ ul.plain{list-style:none}
     <div class="mark-grid">
       <label>Desde <input type="date" id="mark-start"></label>
       <label>Hasta <input type="date" id="mark-end"></label>
-      <label>Tipo <select id="mark-type">
-        <option value="vacaciones">Vacaciones</option>
-        <option value="guardia">Guardia</option>
-        <option value="curso">Curso</option>
-        <option value="personal">Personal</option>
-        <option value="otro">Otro</option>
-      </select></label>
+      <label>Tipo <select id="mark-type"></select></label>
+      <label>Unidad <select id="mark-unit"><option value="days">Días</option><option value="hours">Horas</option></select></label>
+      <label>Horas <input type="number" id="mark-hours" min="0" max="24" step="0.25" placeholder="Opcional"></label>
       <label>Etiqueta <input type="text" id="mark-label" maxlength="80" placeholder="Vacaciones"></label>
     </div>
     <div id="mark-list" class="mark-list"></div>
@@ -627,8 +663,9 @@ ul.plain{list-style:none}
       <p class="hint">— <b>Ctrl+K</b> (o <b>/</b>) abre la paleta: busca en todos los espacios y ejecuta comandos; también tienes acceso abajo a la derecha junto a Autoordenar, Papelera e información del proyecto.<br>
       — <b>Espacios</b>: usa <b>＋</b> en la barra para crear escritorios (uno por especialidad o proyecto); clic para cambiar, doble clic para renombrar, ✕ para eliminar. Cada espacio tiene su propio fondo. <b>Arrastra una ventana sobre otra pestaña</b> para mover ese widget a ese espacio.<br>
       — <b>Etiquetas</b>: pasa el ratón por la barra de una ventana para mostrar el botón de etiquetas; haz clic en una etiqueta (o búscala en Ctrl+K) para dejar a la vista solo los widgets con esa etiqueta, en cualquier espacio.<br>
-      — <b>Calendario</b>: clic en un día para marcar vacaciones, guardias, cursos u otros rangos; el widget Año muestra esas marcas.<br>
-      — <b>Tareas</b>: cada tarea admite fecha, hora de aviso local y nota. Las alarmas suenan mientras Cabecera está abierta.<br>
+      — <b>Calendario</b>: clic en un día para marcar vacaciones, permisos o festivos locales/nacionales; el widget Año muestra esas marcas y resume hábiles/festivos.<br>
+      — <b>Permisos</b>: añade días u horas por concepto desde un widget específico; usa el mismo calendario global.<br>
+      — <b>Tareas</b>: cada tarea admite fecha, hora de aviso local, nota y color discreto al pasar el ratón. Las alarmas suenan mientras Cabecera está abierta.<br>
       — <b>Temporizador</b>: ajusta minutos y segundos con rueda o flechas, usa presets, cronómetro con vueltas y sonidos de alarma.<br>
       — En un grupo de enlaces, el botón <b>⇱ N</b> abre los N enlaces de una vez (permite los pop-ups la primera vez). También desde la paleta: «Abrir grupo: …».<br>
       — Doble clic en el título de una ventana o en una pestaña de espacio para renombrar inline. El chevron <b>▾</b> pliega una ventana; <b>⊟</b> pliega/despliega todas.<br>
@@ -716,7 +753,6 @@ function defaultState(){
 
 /* ============================================================
    Esquema v2: espacios (spaces[]) + separación contenido/layout.
-   Ver ADR y plan en ia-config/actas/2026-07-05_*cabecera*v2*.
    - v1 (widgets en raíz) se migra en memoria; NO se escribe al cargar.
    - state.widgets / state.settings son accesores no-enumerables al
      espacio activo: los ~30 usos existentes no cambian y JSON.stringify
@@ -777,7 +813,7 @@ function sanitizeState(s){
   });
   s.active = Math.min(Math.max(0, s.active | 0), s.spaces.length - 1);
   s.trash = Array.isArray(s.trash) ? s.trash.filter(x => x && typeof x === "object" && typeof x.kind === "string").slice(0, 30) : [];
-  const validTypes = ["vacaciones","guardia","curso","personal","otro"];
+  const validTypes = ["vacaciones","vacaciones_ant","asuntos","asuntos_ant","antiguedad","formacion","examenes","conciliacion","familiar","consulta","deber_publico","traslado","compensacion","festivo_nacional","festivo_local","guardia","curso","personal","otro"];
   s.calendarMarks = (Array.isArray(s.calendarMarks) ? s.calendarMarks : []).map(m => {
     if (!m || typeof m !== "object") return null;
     let start = String(m.start || "");
@@ -786,7 +822,9 @@ function sanitizeState(s){
     if (end < start) [start, end] = [end, start];
     const type = validTypes.includes(m.type) ? m.type : "otro";
     const label = String(m.label || type).trim().slice(0, 80) || type;
-    return { id: (typeof m.id === "string" && m.id) ? m.id.slice(0, 64) : "cm_" + uid(), start, end, type, label };
+    const unit = m.unit === "hours" ? "hours" : "days";
+    const hours = unit === "hours" ? numOr(m.hours, 0, 0, 24 * 366) : undefined;
+    return { id: (typeof m.id === "string" && m.id) ? m.id.slice(0, 64) : "cm_" + uid(), start, end, type, label, unit, ...(hours ? { hours } : {}) };
   }).filter(Boolean).slice(0, 240);
   s.version = 2;
   if (typeof s.updatedAt !== "number") s.updatedAt = Date.now();
@@ -1255,6 +1293,7 @@ function normalizePack(p){
     else if (w.type === "clock") data.analog = d.analog !== false;
     else if (w.type === "timer") data.min = num(d.min, 5, 1, 180);
     else if (w.type === "year") data.year = num(d.year, new Date().getFullYear(), 1970, 2100);
+    else if (w.type === "leave") data.year = num(d.year, new Date().getFullYear(), 1970, 2100);
     else if (w.type === "files") data.folderName = txt(d.folderName, 120);
     else if (w.type === "img"){
       const s = String(d.img || "");
@@ -1387,6 +1426,7 @@ const WTYPES = {
   timer: { ico: "⏱️", name: "Temporizador", w: 290, h: 210 },
   cal:   { ico: "📅", name: "Calendario",   w: 310, h: 300 },
   year:  { ico: "🗓️", name: "Año",          w: 520, h: 520 },
+  leave: { ico: "🧾", name: "Permisos",     w: 390, h: 430 },
   search:{ ico: "🔎", name: "Buscadores",   w: 300, h: 330 },
   calc:  { ico: "🧮", name: "Calculadora",  w: 260, h: 340 },
   files: { ico: "📂", name: "Archivos",     w: 380, h: 360 },
@@ -1786,15 +1826,19 @@ function nextWidgetSpot(ww, hh){
   const w = Math.min(Math.max(+ww || 260, 220), Math.max(220, maxRight - left0));
   const h = Math.max(+hh || 180, 120);
   const rects = state.widgets.map(widgetRect);
-  const bottom = rects.reduce((m, r) => Math.max(m, r.y + r.h), top0);
-  const maxY = Math.max(innerHeight, bottom + h + gap + 180);
-  for (let y = top0; y <= maxY; y += step){
-    for (let x = left0; x + w <= maxRight; x += step){
-      const cand = { x, y, w, h };
-      if (!rects.some(r => overlapsRect(cand, r, gap))) return { x, y, w };
+  const visibleMaxY = Math.max(top0, innerHeight - 46 - gap - h);
+  const scan = limitY => {
+    for (let y = top0; y <= limitY; y += step){
+      for (let x = left0; x + w <= maxRight; x += step){
+        const cand = { x, y, w, h };
+        if (!rects.some(r => overlapsRect(cand, r, gap))) return { x, y, w };
+      }
     }
-  }
-  return { x: left0, y: bottom + gap, w };
+    return null;
+  };
+  const visible = scan(visibleMaxY);
+  if (visible) return visible;
+  return { x: left0, y: visibleMaxY, w };
 }
 
 function addWidget(type){
@@ -1809,6 +1853,7 @@ function addWidget(type){
         : type === "md"    ? { text: "", view: "edit" }
         : type === "dictado" ? { text: "" }
         : type === "year"  ? { year: new Date().getFullYear() }
+        : type === "leave" ? { year: new Date().getFullYear() }
         : type === "files" ? {}
         : type === "qr"    ? { text: "" } : {} };
   state.widgets.push(w);
@@ -1819,6 +1864,9 @@ function addWidget(type){
 function refreshWidget(w){
   const el = document.querySelector(`.win[data-id="${w.id}"] .win-body`);
   if (el) renderBody(w, el);
+}
+function refreshCalendarConsumers(skipId){
+  state.widgets.filter(x => ["cal","year","leave"].includes(x.type) && x.id !== skipId).forEach(refreshWidget);
 }
 
 function flashWidget(w){
@@ -1844,7 +1892,7 @@ function renderBody(w, el){
      clips: bodyClips, qr: bodyQr, clock: bodyClock, intro: bodyIntro,
      md: bodyMd, img: bodyImg, timer: bodyTimer, cal: bodyCal, year: bodyYear, search: bodySearch,
      files: bodyFiles,
-     calc: bodyCalc, dictado: bodyDictate }[w.type] || (x => x))(w, el);
+     calc: bodyCalc, dictado: bodyDictate, leave: bodyLeave }[w.type] || (x => x))(w, el);
 }
 
 /* --- Bienvenida (solo primer arranque) --- */
@@ -1868,6 +1916,7 @@ function bodyIntro(w, el){
 
 /* --- Nota (con color tipo post-it) --- */
 const NOTE_COLORS = { amarillo: "#e6c34a", rosa: "#e07a9c", verde: "#5ab98a", azul: "#5aa9f7", naranja: "#e0955a" };
+const TASK_COLORS = { azul: "#5aa9f7", verde: "#5fd08a", ambar: "#f0c25e", rojo: "#f36c6c", rosa: "#e07a9c", gris: "#9aa4b5" };
 const hexA = (h, a) => { const n = parseInt(h.slice(1), 16); return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`; };
 function bodyNotes(w, el){
   el.innerHTML = `<div class="note-colors"></div><textarea class="notes" placeholder="Escribe aquí…"></textarea>`;
@@ -1990,6 +2039,21 @@ function bodyTodo(w, el){
     w.data.items.splice(Math.max(0, Math.min(at, w.data.items.length)), 0, moved);
     paint(); markDirty();
   };
+  const editTaskColor = (it, li) => {
+    el.querySelectorAll(".color-pop").forEach(x => x.remove());
+    const pop = document.createElement("div");
+    pop.className = "color-pop";
+    const keys = [""].concat(Object.keys(TASK_COLORS));
+    pop.innerHTML = keys.map(k => `<button class="color-dot${k ? "" : " none"}${(it.color || "") === k ? " on" : ""}" data-c="${k}" title="${k || "sin color"}"${k ? ` style="background:${TASK_COLORS[k]}"` : ""}></button>`).join("");
+    pop.querySelectorAll(".color-dot").forEach(b => b.addEventListener("click", e => {
+      e.stopPropagation();
+      const c = b.dataset.c || "";
+      if (c && TASK_COLORS[c]) it.color = c; else delete it.color;
+      pop.remove();
+      paint(); markDirty();
+    }));
+    li.appendChild(pop);
+  };
 
   function paint(){
     ul.innerHTML = "";
@@ -2010,12 +2074,14 @@ function bodyTodo(w, el){
 
     list.forEach(it => {
       const li = document.createElement("li");
-      li.className = "todo-it" + (it.done ? " done" : "");
+      const taskColor = TASK_COLORS[it.color] || "";
+      li.className = "todo-it" + (it.done ? " done" : "") + (taskColor ? " has-task-color" : "");
+      if (taskColor) li.style.setProperty("--task-color", taskColor);
       const dm = dueMeta(it);
       li.innerHTML = `<span class="it-drag" draggable="${view === "pend"}" title="Arrastrar">⋮⋮</span><input type="checkbox" ${it.done ? "checked" : ""}><span class="t">${esc(it.t)}</span>`
         + (it.note ? `<span class="task-note-mark" title="${esc(it.note)}">i</span>` : "")
         + (dm ? `<span class="due ${dm.cls}">${dm.label}</span>` : "")
-        + `<button class="it-edit" title="Editar">✎</button><button class="it-up" title="Subir">↑</button><button class="it-down" title="Bajar">↓</button><button class="it-due" title="Fecha, nota y aviso">📅</button><button class="it-del" title="Borrar">✕</button>`;
+        + `<button class="it-color" title="Color">●</button><button class="it-edit" title="Editar">✎</button><button class="it-up" title="Subir">↑</button><button class="it-down" title="Bajar">↓</button><button class="it-due" title="Fecha, nota y aviso">📅</button><button class="it-del" title="Borrar">✕</button>`;
       const drag = li.querySelector(".it-drag");
       drag.addEventListener("dragstart", e => {
         if (view !== "pend"){ e.preventDefault(); return; }
@@ -2047,6 +2113,7 @@ function bodyTodo(w, el){
         paint(); markDirty();
       });
       li.querySelector(".t").addEventListener("dblclick", () => editItem(it, li));
+      li.querySelector(".it-color").addEventListener("click", e => { e.stopPropagation(); editTaskColor(it, li); });
       li.querySelector(".it-edit").addEventListener("click", e => { e.stopPropagation(); editItem(it, li); });
       li.querySelector(".it-up").addEventListener("click", e => { e.stopPropagation(); moveItem(it, -1); });
       li.querySelector(".it-down").addEventListener("click", e => { e.stopPropagation(); moveItem(it, 1); });
@@ -2539,16 +2606,141 @@ function localHolidays(list, y){
 }
 const CAL_MARK_TYPES = {
   vacaciones: "Vacaciones",
+  vacaciones_ant: "Vacaciones año anterior",
+  asuntos: "Asuntos particulares",
+  asuntos_ant: "Asuntos año anterior",
+  antiguedad: "Antigüedad",
+  formacion: "Formación / docencia",
+  examenes: "Exámenes",
+  conciliacion: "Conciliación",
+  familiar: "Familiar",
+  consulta: "Consulta médica",
+  deber_publico: "Deber público",
+  traslado: "Traslado",
+  compensacion: "Compensación horaria",
+  festivo_nacional: "Festivo nacional",
+  festivo_local: "Festivo local",
   guardia: "Guardia",
   curso: "Curso",
   personal: "Personal",
   otro: "Otro"
 };
+const CAL_MARK_GROUPS = [
+  { label: "Permisos y vacaciones", types: ["vacaciones","vacaciones_ant","asuntos","asuntos_ant","antiguedad","formacion","examenes","conciliacion","familiar","consulta","deber_publico","traslado","compensacion"] },
+  { label: "Festivos", types: ["festivo_nacional","festivo_local"] },
+  { label: "Otros", types: ["guardia","curso","personal","otro"] }
+];
+const CAL_HOLIDAY_TYPES = new Set(["festivo_nacional","festivo_local"]);
+const CAL_MARK_COLORS = {
+  vacaciones: "#5fd08a", vacaciones_ant: "#5fd08a", asuntos: "#5fd08a", asuntos_ant: "#5fd08a", antiguedad: "#5fd08a",
+  formacion: "#8d8bff", examenes: "#8d8bff", consulta: "#8d8bff",
+  conciliacion: "#5fd08a", familiar: "#f0c25e", deber_publico: "#f0c25e", traslado: "#f0c25e", compensacion: "#f0c25e",
+  festivo_nacional: "#e5484d", festivo_local: "#e5484d",
+  guardia: "#f0c25e", curso: "#5aa9f7", personal: "#e07a9c", otro: "#e07a9c"
+};
+function markTypeOptions(selected = "vacaciones"){
+  return CAL_MARK_GROUPS.map(g => `<optgroup label="${esc(g.label)}">${g.types.map(t => `<option value="${t}"${t === selected ? " selected" : ""}>${esc(CAL_MARK_TYPES[t] || t)}</option>`).join("")}</optgroup>`).join("");
+}
+function markColor(type){ return CAL_MARK_COLORS[type] || "#e07a9c"; }
 function isoDate(y, m, d){
   return `${y}-${String(m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
 }
+function parseIsoDate(ds){
+  const p = String(ds || "").split("-").map(Number);
+  return p.length === 3 ? new Date(p[0], p[1] - 1, p[2]) : new Date(NaN);
+}
+function addIsoDays(ds, n){
+  const d = parseIsoDate(ds);
+  d.setDate(d.getDate() + n);
+  return isoDate(d.getFullYear(), d.getMonth(), d.getDate());
+}
+function todayIso(){
+  const d = new Date();
+  return isoDate(d.getFullYear(), d.getMonth(), d.getDate());
+}
 function marksForDate(ds){
   return (state.calendarMarks || []).filter(m => m.start <= ds && ds <= (m.end || m.start));
+}
+function manualHolidayForDate(ds){
+  return marksForDate(ds).find(m => CAL_HOLIDAY_TYPES.has(m.type));
+}
+function holidayNameForDate(ds, local){
+  const d = parseIsoDate(ds);
+  if (Number.isNaN(+d)) return "";
+  const y = d.getFullYear(), key = d.getMonth() + "-" + d.getDate();
+  const manual = manualHolidayForDate(ds);
+  return manual ? (manual.label || CAL_MARK_TYPES[manual.type] || "Festivo") : (esHolidays(y)[key] || localHolidays(local, y)[key] || "");
+}
+function rangeBaseStats(start, end, local){
+  let business = 0, holidays = 0, weekend = 0, calendar = 0;
+  for (let ds = start; ds <= end; ds = addIsoDays(ds, 1)){
+    const d = parseIsoDate(ds), day = d.getDay();
+    const isWeekend = day === 0 || day === 6;
+    const holiday = holidayNameForDate(ds, local);
+    calendar++;
+    if (isWeekend) weekend++;
+    else if (holiday) holidays++;
+    else business++;
+  }
+  return { calendar, business, holidays, weekend };
+}
+function countMarkDays(m, y, local){
+  let start = m.start, end = m.end || m.start;
+  if (y){
+    start = start < `${y}-01-01` ? `${y}-01-01` : start;
+    end = end > `${y}-12-31` ? `${y}-12-31` : end;
+  }
+  if (!start || !end || end < start) return { calendar: 0, business: 0, holidays: 0, weekend: 0, hours: 0 };
+  const out = rangeBaseStats(start, end, local);
+  out.hours = m.unit === "hours" ? Math.max(0, Number(m.hours) || 0) : 0;
+  return out;
+}
+function marksInRange(start, end){
+  return (state.calendarMarks || []).filter(m => m && m.start <= end && (m.end || m.start) >= start);
+}
+function markTotalsForRange(start, end, local){
+  const totals = new Map();
+  for (const m of marksInRange(start, end)){
+    const mm = { ...m, start: m.start < start ? start : m.start, end: (m.end || m.start) > end ? end : (m.end || m.start) };
+    const c = countMarkDays(mm, null, local);
+    const prev = totals.get(m.type) || { type: m.type, label: CAL_MARK_TYPES[m.type] || "Otro", calendar: 0, business: 0, holidays: 0, weekend: 0, hours: 0, count: 0 };
+    prev.calendar += c.calendar; prev.business += c.business; prev.holidays += c.holidays; prev.weekend += c.weekend; prev.hours += c.hours; prev.count++;
+    totals.set(m.type, prev);
+  }
+  const order = CAL_MARK_GROUPS.flatMap(g => g.types);
+  return [...totals.values()].sort((a, b) => order.indexOf(a.type) - order.indexOf(b.type));
+}
+function fmtHours(h){
+  const n = Math.round(h * 100) / 100;
+  return (Number.isInteger(n) ? String(n) : String(n).replace(".", ",")) + " h";
+}
+function totalText(t){
+  const parts = [];
+  if (t.business) parts.push(`${t.business} háb`);
+  if (t.holidays) parts.push(`${t.holidays} fest`);
+  if (t.weekend) parts.push(`${t.weekend} fin sem`);
+  if (t.hours) parts.push(fmtHours(t.hours));
+  if (!parts.length) parts.push(`${t.calendar} días`);
+  return parts.join(" · ");
+}
+function summaryPills(rows, limit = 3){
+  return rows.slice(0, limit).map(r => `<span class="cal-pill"><i class="cal-dot" style="background:${markColor(r.type)}"></i>${esc(r.label)}: ${esc(totalText(r))}</span>`).join("");
+}
+function calendarSummaryHtml(y, m, local){
+  const start = isoDate(y, m, 1), end = isoDate(y, m, new Date(y, m + 1, 0).getDate());
+  const base = rangeBaseStats(start, end, local);
+  const rows = markTotalsForRange(start, end, local);
+  return `<div class="cal-summary"><span class="cal-pill">Hábiles: ${base.business}</span><span class="cal-pill">Festivos: ${base.holidays}</span>${summaryPills(rows, 2) || `<span class="cal-pill">Sin permisos este mes</span>`}</div>`;
+}
+function yearSummaryHtml(y, local){
+  const base = rangeBaseStats(`${y}-01-01`, `${y}-12-31`, local);
+  const rows = markTotalsForRange(`${y}-01-01`, `${y}-12-31`, local);
+  return `<div class="year-summary"><span class="year-pill">Hábiles: ${base.business}</span><span class="year-pill">Festivos laborables: ${base.holidays}</span>${rows.slice(0, 4).map(r => `<span class="year-pill"><i class="year-dot" style="background:${markColor(r.type)}"></i>${esc(r.label)}: ${esc(totalText(r))}</span>`).join("")}</div>`;
+}
+function leaveSummaryHtml(y, local){
+  const rows = markTotalsForRange(`${y}-01-01`, `${y}-12-31`, local);
+  if (!rows.length) return `<div class="empty">Aún no hay permisos o festivos marcados en ${y}.</div>`;
+  return rows.map(r => `<div class="leave-row"><b><span class="year-dot" style="background:${markColor(r.type)}"></span> ${esc(r.label)}</b><span>${esc(totalText(r))} · ${r.count} marca${r.count === 1 ? "" : "s"}</span></div>`).join("");
 }
 function markSummary(m){
   const label = m.label || CAL_MARK_TYPES[m.type] || "Marca";
@@ -2556,7 +2748,7 @@ function markSummary(m){
 }
 function markDayMeta(ds, baseTitle = ""){
   const marks = marksForDate(ds);
-  const first = marks[0];
+  const first = marks.find(m => CAL_HOLIDAY_TYPES.has(m.type)) || marks[0];
   return {
     marks,
     cls: first ? ` marked mark-${first.type || "otro"}` : "",
@@ -2567,7 +2759,10 @@ function openMarkEditor(ds){
   const ov = $("#ov-mark");
   $("#mark-start").value = ds;
   $("#mark-end").value = ds;
-  $("#mark-type").value = "vacaciones";
+  $("#mark-type").innerHTML = markTypeOptions("vacaciones");
+  $("#mark-unit").value = "days";
+  $("#mark-hours").value = "";
+  $("#mark-hours").closest("label").style.display = "none";
   $("#mark-label").value = "";
   renderMarkList(ds);
   ov.dataset.date = ds;
@@ -2581,7 +2776,8 @@ function renderMarkList(ds){
   marks.forEach(m => {
     const d = document.createElement("div");
     d.className = "mark-row";
-    d.innerHTML = `<span class="t"><b>${esc(m.label)}</b><br><span class="empty" style="padding:0">${esc(m.start)}${m.end !== m.start ? " → " + esc(m.end) : ""} · ${esc(CAL_MARK_TYPES[m.type] || "Otro")}</span></span>
+    const c = countMarkDays(m);
+    d.innerHTML = `<span class="t"><b>${esc(m.label)}</b><br><span class="empty" style="padding:0">${esc(m.start)}${m.end !== m.start ? " → " + esc(m.end) : ""} · ${esc(CAL_MARK_TYPES[m.type] || "Otro")} · ${esc(totalText(c))}</span></span>
       <button class="it-del rm" style="opacity:1" title="Quitar marca">✕</button>`;
     d.querySelector(".rm").addEventListener("click", () => {
       state.calendarMarks = (state.calendarMarks || []).filter(x => x.id !== m.id);
@@ -2598,8 +2794,10 @@ function saveCalendarMark(){
   if (end < start) [start, end] = [end, start];
   const type = CAL_MARK_TYPES[$("#mark-type").value] ? $("#mark-type").value : "otro";
   const label = ($("#mark-label").value.trim() || CAL_MARK_TYPES[type]).slice(0, 80);
+  const unit = $("#mark-unit").value === "hours" ? "hours" : "days";
+  const hours = unit === "hours" ? Math.max(0, Math.min(8784, Number($("#mark-hours").value) || 0)) : 0;
   if (!Array.isArray(state.calendarMarks)) state.calendarMarks = [];
-  state.calendarMarks.unshift({ id: "cm_" + uid(), start, end, type, label });
+  state.calendarMarks.unshift({ id: "cm_" + uid(), start, end, type, label, unit, ...(hours ? { hours } : {}) });
   state.calendarMarks = sanitizeState(state).calendarMarks;
   $("#ov-mark").classList.remove("open");
   renderAll();
@@ -2617,7 +2815,8 @@ function bodyCal(w, el){
     const start = (first.getDay() + 6) % 7;      // lunes = 0
     const days = new Date(ym.y, ym.m + 1, 0).getDate();
     const holis = esHolidays(ym.y), locals = localHolidays(w.data.local, ym.y);
-    let html = `<div class="cal-nav"><button class="mini pv">‹</button><b>${first.toLocaleDateString("es-ES", { month: "long", year: "numeric" })}</b><button class="mini nx">›</button></div>
+    let html = `<div class="cal-wrap"><div class="cal-nav"><button class="mini pv">‹</button><b>${first.toLocaleDateString("es-ES", { month: "long", year: "numeric" })}</b><button class="mini nx">›</button></div>
+      <div class="cal-help">Clic en un día para añadir vacaciones, permisos o festivos locales/nacionales.</div>
       <div class="cal-grid"><span class="wk"></span>${["L","M","X","J","V","S","D"].map((d, i) => `<span class="hd${i === 6 ? " sun" : i === 5 ? " sat" : ""}">${d}</span>`).join("")}`;
     let day = 1;
     for (let r = 0; day <= days && r < 7; r++){
@@ -2635,7 +2834,7 @@ function bodyCal(w, el){
         }
       }
     }
-    el.innerHTML = html + "</div>";
+    el.innerHTML = html + `</div>${calendarSummaryHtml(ym.y, ym.m, w.data.local)}</div>`;
     const persist = () => { w.data.y = ym.y; w.data.m = ym.m; markDirty(); };
     el.querySelector(".pv").addEventListener("click", () => { ym.m--; if (ym.m < 0){ ym.m = 11; ym.y--; } persist(); paint(); });
     el.querySelector(".nx").addEventListener("click", () => { ym.m++; if (ym.m > 11){ ym.m = 0; ym.y++; } persist(); paint(); });
@@ -2657,7 +2856,7 @@ function miniMonthHtml(y, m, local){
     const col = (start + d - 1) % 7;
     const today = d === now.getDate() && m === now.getMonth() && y === now.getFullYear();
     const ds = isoDate(y, m, d);
-    const holi = holis[m + "-" + d] || locals[m + "-" + d];
+    const holi = holis[m + "-" + d] || locals[m + "-" + d] || holidayNameForDate(ds, local);
     const meta = markDayMeta(ds, holi || "");
     html += `<span class="${today ? "today " : ""}${col === 6 ? "sun " : col === 5 ? "sat " : ""}${holi ? "holi " : ""}${meta.cls.trim()}" data-date="${ds}"${meta.title ? ` title="${esc(meta.title)}"` : ""}>${d}</span>`;
   }
@@ -2668,11 +2867,73 @@ function bodyYear(w, el){
   const paint = () => {
     const y = +w.data.year;
     el.innerHTML = `<div class="year-nav"><button class="mini pv">‹</button><b>${y}</b><button class="mini nx">›</button><button class="mini today">Hoy</button></div>
+      ${yearSummaryHtml(y, w.data.local)}
       <div class="year-grid">${Array.from({ length: 12 }, (_, m) => miniMonthHtml(y, m, w.data.local)).join("")}</div>`;
     el.querySelector(".pv").addEventListener("click", () => { w.data.year = y - 1; paint(); markDirty(); });
     el.querySelector(".nx").addEventListener("click", () => { w.data.year = y + 1; paint(); markDirty(); });
     el.querySelector(".today").addEventListener("click", () => { w.data.year = new Date().getFullYear(); paint(); markDirty(); });
     el.querySelectorAll("[data-date]").forEach(d => d.addEventListener("click", () => openMarkEditor(d.dataset.date)));
+  };
+  paint();
+}
+
+/* --- Permisos: entrada rápida sobre las marcas globales de calendario --- */
+function bodyLeave(w, el){
+  if (!Number.isFinite(+w.data.year)) w.data.year = new Date().getFullYear();
+  const paint = () => {
+    const y = +w.data.year;
+    const def = todayIso().startsWith(String(y)) ? todayIso() : `${y}-01-01`;
+    const type = CAL_MARK_TYPES[w.data.type] ? w.data.type : "vacaciones";
+    const unit = w.data.unit === "hours" ? "hours" : "days";
+    el.innerHTML = `<div class="leave">
+      <div class="leave-nav"><button class="mini pv">‹</button><b>${y}</b><button class="mini nx">›</button><button class="mini today">Hoy</button></div>
+      <div class="leave-help">Registra vacaciones, permisos o festivos. Se verán en Calendario y Año, con cómputo de hábiles y festivos.</div>
+      <div class="leave-form">
+        <label class="wide">Concepto <select class="leave-type">${markTypeOptions(type)}</select></label>
+        <label>Desde <input class="leave-start" type="date" value="${esc(w.data.start || def)}"></label>
+        <label>Hasta <input class="leave-end" type="date" value="${esc(w.data.end || w.data.start || def)}"></label>
+        <label>Unidad <select class="leave-unit"><option value="days"${unit === "days" ? " selected" : ""}>Días</option><option value="hours"${unit === "hours" ? " selected" : ""}>Horas</option></select></label>
+        <label class="leave-hours-box">Horas <input class="leave-hours" type="number" min="0" max="24" step="0.25" value="${esc(w.data.hours || "")}" placeholder="Ej. 2"></label>
+        <label class="wide">Etiqueta <input class="leave-label" type="text" maxlength="80" placeholder="${esc(CAL_MARK_TYPES[type] || "Permiso")}"></label>
+        <button class="mini leave-add" type="button">Añadir al calendario</button>
+      </div>
+      <div class="leave-summary">
+        ${yearSummaryHtml(y, w.data.local)}
+        ${leaveSummaryHtml(y, w.data.local)}
+      </div>
+    </div>`;
+    const typeEl = el.querySelector(".leave-type"), start = el.querySelector(".leave-start"), end = el.querySelector(".leave-end");
+    const unitEl = el.querySelector(".leave-unit"), hours = el.querySelector(".leave-hours"), hoursBox = el.querySelector(".leave-hours-box");
+    const label = el.querySelector(".leave-label");
+    const syncHours = () => { hoursBox.style.display = unitEl.value === "hours" ? "flex" : "none"; };
+    syncHours();
+    el.querySelector(".pv").addEventListener("click", () => { w.data.year = y - 1; paint(); markDirty(); });
+    el.querySelector(".nx").addEventListener("click", () => { w.data.year = y + 1; paint(); markDirty(); });
+    el.querySelector(".today").addEventListener("click", () => { w.data.year = new Date().getFullYear(); delete w.data.start; delete w.data.end; paint(); markDirty(); });
+    typeEl.addEventListener("change", () => { w.data.type = typeEl.value; label.placeholder = CAL_MARK_TYPES[typeEl.value] || "Permiso"; markDirty(); });
+    unitEl.addEventListener("change", () => { w.data.unit = unitEl.value; syncHours(); markDirty(); });
+    start.addEventListener("change", () => { w.data.start = start.value; if (!end.value || end.value < start.value) end.value = start.value; w.data.end = end.value; markDirty(); });
+    end.addEventListener("change", () => { w.data.end = end.value; markDirty(); });
+    hours.addEventListener("input", () => { w.data.hours = hours.value; markDirty(); });
+    el.querySelector(".leave-add").addEventListener("click", () => {
+      let a = start.value, b = end.value || a;
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(a) || !/^\d{4}-\d{2}-\d{2}$/.test(b)){ toast("Fecha no válida", true); return; }
+      if (b < a) [a, b] = [b, a];
+      const tp = CAL_MARK_TYPES[typeEl.value] ? typeEl.value : "otro";
+      const un = unitEl.value === "hours" ? "hours" : "days";
+      const hs = un === "hours" ? Math.max(0, Math.min(8784, Number(hours.value) || 0)) : 0;
+      if (un === "hours" && !hs){ toast("Indica cuántas horas", true); return; }
+      const lb = (label.value.trim() || CAL_MARK_TYPES[tp]).slice(0, 80);
+      if (!Array.isArray(state.calendarMarks)) state.calendarMarks = [];
+      state.calendarMarks.unshift({ id: "cm_" + uid(), start: a, end: b, type: tp, label: lb, unit: un, ...(hs ? { hours: hs } : {}) });
+      state.calendarMarks = sanitizeState(state).calendarMarks;
+      w.data.type = tp; w.data.unit = un; w.data.start = a; w.data.end = b; w.data.hours = hs || "";
+      label.value = "";
+      markDirty();
+      refreshCalendarConsumers(w.id);
+      paint();
+      toast("Añadido al calendario");
+    });
   };
   paint();
 }
@@ -3090,6 +3351,10 @@ function wireUI(){
   $("#trash-close").addEventListener("click", () => $("#ov-trash").classList.remove("open"));
   $("#mark-save").addEventListener("click", saveCalendarMark);
   $("#mark-close").addEventListener("click", () => $("#ov-mark").classList.remove("open"));
+  $("#mark-unit").addEventListener("change", e => {
+    const box = $("#mark-hours").closest("label");
+    if (box) box.style.display = e.target.value === "hours" ? "flex" : "none";
+  });
   $("#act-export").addEventListener("click", () => {
     closeMenu();
     const a = document.createElement("a");

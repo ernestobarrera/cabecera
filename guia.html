@@ -73,6 +73,7 @@
   <nav class="toc">
     <a href="#empezar">Empezar</a>
     <a href="#widgets">Widgets</a>
+    <a href="#calendario">Calendario</a>
     <a href="#espacios">Espacios</a>
     <a href="#etiquetas">Etiquetas</a>
     <a href="#buscar">Buscar</a>
@@ -102,12 +103,13 @@
   <div class="grid">
     <div class="card"><b>🔗 Enlaces</b><span>Accesos agrupados. Con «⇱ N» abres todo el grupo de una vez.</span></div>
     <div class="card"><b>📝 Nota</b><span>Texto libre; puedes darle color tipo post-it.</span></div>
-    <div class="card"><b>✅ Tareas</b><span>Pendientes editables y arrastrables, con fecha, hora de aviso local, nota, papelera e histórico.</span></div>
+    <div class="card"><b>✅ Tareas</b><span>Pendientes editables y arrastrables, con fecha, hora de aviso local, nota, color, papelera e histórico.</span></div>
     <div class="card"><b>📋 Portapapeles</b><span>Fragmentos de texto reutilizables.</span></div>
     <div class="card"><b>📄 Markdown</b><span>Editor + vista con formato.</span></div>
     <div class="card"><b>🖼️ Imagen</b><span>Pega con <kbd>Ctrl</kbd>+<kbd>V</kbd> o arrastra.</span></div>
-    <div class="card"><b>📅 Calendario</b><span>Con semana ISO, festivos de España, mes persistente y marcas como vacaciones.</span></div>
-    <div class="card"><b>🗓️ Año</b><span>Vista de los 12 meses con festivos, marcas y año persistente.</span></div>
+    <div class="card"><b>📅 Calendario</b><span>Con semana ISO, festivos de España, ayuda visible, marcas y resumen mensual.</span></div>
+    <div class="card"><b>🗓️ Año</b><span>Vista de los 12 meses con festivos, marcas, año persistente y resumen anual.</span></div>
+    <div class="card"><b>🧾 Permisos</b><span>Registra vacaciones, permisos o festivos por días u horas; se sincroniza con Calendario y Año.</span></div>
     <div class="card"><b>⏱️ Temporizador</b><span>Cuenta atrás con diales, presets, rueda/flechas, cronómetro con vueltas y alarma configurable.</span></div>
     <div class="card"><b>🔎 Buscadores</b><span>Plantillas de URL con %s (PubMed, etc.).</span></div>
     <div class="card"><b>🧮 Calculadora</b><span>Con teclado completo.</span></div>
@@ -116,6 +118,18 @@
     <div class="card"><b>🔳 QR · 🕐 Reloj</b><span>Código QR de un texto/URL y reloj analógico o digital.</span></div>
   </div>
   <p class="note">En la barra de título de cada widget: etiquetas al pasar el ratón · <b>▾</b> plegar a la cabecera · <b>✕</b> cerrar. Doble clic en el título para renombrar inline.</p>
+</section>
+
+<section id="calendario">
+  <h2><span class="ic">📅</span> Calendario y permisos</h2>
+  <p class="lead">Calendario, Año y Permisos comparten las mismas marcas globales.</p>
+  <div class="grid">
+    <div class="card"><b>Marcar días</b><span>Clic en cualquier día del calendario para añadir vacaciones, permisos, guardias, cursos u otros rangos.</span></div>
+    <div class="card"><b>Festivos</b><span>Los festivos nacionales calculados van en rojo; puedes añadir festivos locales o nacionales manuales en rojo.</span></div>
+    <div class="card"><b>Cómputo</b><span>Los resúmenes separan días hábiles, festivos laborables, fines de semana y horas cuando el permiso sea parcial.</span></div>
+    <div class="card"><b>Permisos</b><span>El widget Permisos ofrece una lista reducida de conceptos: vacaciones, asuntos, antigüedad, formación, exámenes, conciliación, familiar, consulta, deber público, traslado, compensación y otros.</span></div>
+  </div>
+  <p class="note">No pretende sustituir la normativa de cada centro: es una agenda personal local-first para controlar permisos y vacaciones de forma práctica.</p>
 </section>
 
 <section id="espacios">
@@ -195,7 +209,8 @@
     <tr><td><kbd>Ctrl</kbd>+<kbd>K</kbd> · <kbd>/</kbd></td><td>Abrir la paleta: buscar y ejecutar</td></tr>
     <tr><td>Doble clic en el escritorio</td><td>Abrir el menú de creación junto al puntero</td></tr>
     <tr><td>Doble clic en el título</td><td>Renombrar la ventana</td></tr>
-    <tr><td>Clic en día del calendario</td><td>Marcar vacaciones, guardias, cursos u otros rangos</td></tr>
+    <tr><td>Clic en día del calendario</td><td>Marcar vacaciones, permisos, festivos locales/nacionales u otros rangos</td></tr>
+    <tr><td>Widget Permisos</td><td>Añadir días u horas por concepto y revisar el cómputo anual</td></tr>
     <tr><td>Rueda/flechas en Temporizador</td><td>Ajustar minutos y segundos rápidamente</td></tr>
     <tr><td>Hover en barra · <b>▾</b> · <b>✕</b></td><td>Etiquetar / plegar / cerrar un widget</td></tr>
     <tr><td>Arrastrar una tarea</td><td>Reordenar manualmente las tareas pendientes</td></tr>
