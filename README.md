@@ -70,6 +70,20 @@ El código es público pero no contiene ningún dato; los datos siempre quedan e
 - **`?add=texto`**: añade a la bandeja (bookmarklets, accesos directos).
 - **Sincronización y conflictos**: guardado automático, vigilancia del archivo cada 4 s, barra de conflicto si dos equipos editan a la vez (gana quien tú decidas).
 
+### Gramática de captura (contrato estable, v1)
+
+La misma línea de texto vale desde la paleta (Ctrl+K), la Bandeja (`inbox.txt`) y `?add=` — la puede escribir una persona, una macro o un agente de IA, y Cabecera la interpreta igual, en local y sin red:
+
+| Línea | Resultado |
+|---|---|
+| `t <texto> [@fecha]` | Tarea (fechas: `@hoy`, `@mañana`, `@DD/MM` — año actual —, `@DD/MM/AAAA`) |
+| `n <texto>` | Nota |
+| `c <texto>` | Clip |
+| URL sola, o `e <URL> [título]` | Enlace (grupo «Capturados») |
+| `v DD-DD/MM [concepto]` | Marca de calendario (por defecto `vacaciones`; también `guardia`, `curso`, `asuntos`, `formacion`…) |
+
+Reglas del contrato: prefijo en minúscula + espacio; interpretación **determinista** (nada de lenguaje natural amplio); si una línea no encaja con total seguridad, queda como texto normal en la Bandeja. En la paleta, la primera opción muestra qué se creará y en qué espacio (Enter confirma); desde la Bandeja **nada se crea sin confirmación humana**, línea a línea. Un cambio incompatible de esta gramática se anunciará como v2 en el CHANGELOG; la v1 no se romperá en silencio.
+
 ## Límites conocidos
 
 - Modo sincronizado y packs-desde-archivo: solo Edge/Chrome (File System Access API) y por HTTP(S), no `file://`.

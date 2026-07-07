@@ -282,6 +282,7 @@ ul.plain{list-style:none}
 .clock-face .d{font-size:13.5px; color:var(--text-dim); text-transform:capitalize}
 .inbox-line{display:flex; align-items:flex-start; gap:8px; padding:8px; border-radius:9px; border:1px solid var(--border-soft); margin-bottom:8px}
 .inbox-line .t{flex:1; word-break:break-word; white-space:pre-wrap; font-size:13px}
+.inbox-line .sug{color:var(--accent); border-color:rgba(90,169,247,.4); background:rgba(90,169,247,.08)}
 .empty{color:var(--text-dim); font-size:12.5px; padding:8px 4px}
 /* markdown */
 .md-bar{display:flex; gap:6px; margin-bottom:8px}
@@ -601,7 +602,7 @@ ul.plain{list-style:none}
 <div class="overlay" id="ov-inbox">
   <div class="modal">
     <h2>📥 Bandeja de entrada</h2>
-    <p>Contenido de <b>inbox.txt</b>. Convierte cada línea en lo que necesites; al importarla se retira del archivo.</p>
+    <p>Contenido de <b>inbox.txt</b>. Convierte cada línea en lo que necesites; al importarla se retira del archivo. Las líneas que sigan la gramática de captura (<code>t tarea @mañana</code>, <code>n nota</code>, <code>c clip</code>, una URL, <code>v 12-16/8</code>) ofrecen su conversión sugerida con un clic — nada se crea sin tu confirmación.</p>
     <div id="inbox-list"></div>
     <div class="row">
       <button class="btn danger" id="inbox-clear">Vaciar todo</button>
@@ -672,6 +673,7 @@ ul.plain{list-style:none}
     </details>
     <details><summary>Atajos e integraciones</summary>
       <p class="hint">— <b>Ctrl+K</b> (o <b>/</b>) abre la paleta: busca en todos los espacios y ejecuta comandos; también tienes acceso abajo a la derecha junto a Autoordenar, Papelera e información del proyecto.<br>
+      — <b>Captura rápida en la paleta</b>: escribe <code>t llamar a Juan @mañana</code> (tarea), <code>n una idea</code> (nota), <code>c fragmento</code> (clip), pega una URL (enlace) o <code>v 12-16/8</code> (vacaciones en el calendario; admite concepto: <code>v 12/8 guardia</code>). La primera opción muestra qué se creará y dónde; Enter confirma. Fechas: <code>@hoy</code>, <code>@mañana</code>, <code>@12/8</code> (año actual) o <code>@12/8/2027</code>. La misma gramática funciona en la Bandeja: las líneas que la sigan (escritas por ti, una macro o un agente en <b>inbox.txt</b>) ofrecen su conversión con un clic.<br>
       — <b>Espacios</b>: usa <b>＋</b> en la barra para crear escritorios (uno por especialidad o proyecto); clic para cambiar, doble clic para renombrar, ✕ para eliminar. Cada espacio tiene su propio fondo. <b>Arrastra una ventana sobre otra pestaña</b> para mover ese widget a ese espacio.<br>
       — <b>Etiquetas</b>: pasa el ratón por la barra de una ventana para mostrar el botón de etiquetas; haz clic en una etiqueta (o búscala en Ctrl+K) para dejar a la vista solo los widgets con esa etiqueta, en cualquier espacio.<br>
       — <b>Calendario</b>: clic en un día para marcar vacaciones, permisos o festivos locales/nacionales; el widget Año muestra esas marcas y resume hábiles/festivos.<br>
@@ -3261,6 +3263,118 @@ function openGroup(links){
   if (blocked) toastAction("El navegador bloqueó algunas pestañas.", "Permitir", () => $("#ov-popups").classList.add("open"));
 }
 
+/* ---------- gramática de captura (spec interna: _privado/spec-gramatica-captura.md) ----------
+   Una misma línea vale desde la paleta, la bandeja (inbox.txt) o ?add=: la puede escribir
+   una persona, una macro o un agente. Parser puro: línea → acción o null.
+   Reglas fijas: prefijo minúscula+espacio; si no hay confianza total, NO interpreta;
+   año SIEMPRE el de `now` salvo explícito (sin salto automático: cero magia). */
+function parseCapture(line, now){
+  if (typeof line !== "string") return null;
+  const s = line.trim();
+  if (!s) return null;
+  const iso = (y, mo, d) => {   // fecha real o null (rechaza 31/2, mes 13…)
+    y = +y; mo = +mo; d = +d;
+    const dt = new Date(y, mo - 1, d);
+    return (dt.getFullYear() === y && dt.getMonth() === mo - 1 && dt.getDate() === d)
+      ? `${y}-${String(mo).padStart(2, "0")}-${String(d).padStart(2, "0")}` : null;
+  };
+  if (/^https?:\/\/\S+$/.test(s)) return { kind: "link", url: s, title: "" };
+  const m = s.match(/^([tncev]) +(\S[\s\S]*)$/);
+  if (!m) return null;
+  const rest = m[2].trim();
+  if (m[1] === "n") return { kind: "note", text: rest };
+  if (m[1] === "c") return { kind: "clip", text: rest };
+  if (m[1] === "e"){
+    const e = rest.match(/^(https?:\/\/\S+)(?: +(.+))?$/);
+    return e ? { kind: "link", url: e[1], title: (e[2] || "").trim() } : null;
+  }
+  if (m[1] === "t"){
+    const dm = rest.match(/^([\s\S]*\S) +@(\S+)$/);
+    if (!dm) return { kind: "task", text: rest };
+    const tok = dm[2].toLowerCase();
+    let due = null;
+    if (tok === "hoy") due = iso(now.getFullYear(), now.getMonth() + 1, now.getDate());
+    else if (tok === "mañana" || tok === "manana"){
+      const t1 = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+      due = iso(t1.getFullYear(), t1.getMonth() + 1, t1.getDate());
+    } else {
+      const f = tok.match(/^(\d{1,2})[\/-](\d{1,2})(?:[\/-](\d{4}))?$/);
+      if (f) due = iso(f[3] || now.getFullYear(), f[2], f[1]);
+    }
+    // fecha imposible → tarea sin fecha con el token intacto (no se pierde nada)
+    return due ? { kind: "task", text: dm[1], due } : { kind: "task", text: rest };
+  }
+  // v: marca de calendario — estricto: toca estado global, así que fecha inválida
+  // o concepto no canónico anulan el parseo entero (sin degradación)
+  const v = rest.match(/^(\d{1,2})(?:-(\d{1,2}))?\/(\d{1,2})(?:\/(\d{4}))?(?: +(\S+))?$/);
+  if (!v) return null;
+  let type = "vacaciones";
+  if (v[5]){
+    const key = v[5].normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+    if (!CAL_MARK_TYPES[key]) return null;
+    type = key;
+  }
+  const a = Math.min(+v[1], +(v[2] || v[1])), b = Math.max(+v[1], +(v[2] || v[1]));
+  const start = iso(v[4] || now.getFullYear(), v[3], a), end = iso(v[4] || now.getFullYear(), v[3], b);
+  return (start && end) ? { kind: "mark", start, end, type } : null;
+}
+
+const CAPTURE_META = {
+  task: { ico: "✅", name: "Tarea",  done: "Tarea añadida" },
+  note: { ico: "📝", name: "Nota",   done: "Nota añadida" },
+  clip: { ico: "📋", name: "Clip",   done: "Clip añadido" },
+  link: { ico: "🔗", name: "Enlace", done: "Enlace añadido" },
+  mark: { ico: "📅", name: "Marca",  done: "Marca añadida" }
+};
+function captureSummary(cap){
+  if (cap.kind === "link") return cap.title || cap.url;
+  if (cap.kind === "mark") return (CAL_MARK_TYPES[cap.type] || "Marca") + " · " + cap.start + (cap.end !== cap.start ? " → " + cap.end : "");
+  return snippet(cap.text) + (cap.due ? " · " + new Date(cap.due + "T00:00:00").toLocaleDateString("es-ES", { day: "numeric", month: "short" }) : "");
+}
+// destino siempre visible ANTES de confirmar (spec: nada se crea en otro espacio en silencio)
+function captureDest(cap){
+  if (cap.kind === "mark") return "al calendario global";
+  const sp = state.spaces[state.active];
+  return "en «" + ((sp && sp.name) || "Escritorio") + "»";
+}
+function applyCapture(cap){
+  // destino: SIEMPRE el espacio activo; si falta el widget del tipo, se crea aquí
+  const ensure = type => {
+    let w = state.widgets.find(x => x.type === type);
+    if (!w){ addWidget(type); w = state.widgets[state.widgets.length - 1]; }
+    return w;
+  };
+  if (cap.kind === "mark"){
+    if (!Array.isArray(state.calendarMarks)) state.calendarMarks = [];
+    state.calendarMarks.unshift({ id: "cm_" + uid(), start: cap.start, end: cap.end, type: cap.type, label: CAL_MARK_TYPES[cap.type] || "Marca", unit: "days" });
+    state.calendarMarks = sanitizeState(state).calendarMarks;   // mismo saneo que saveCalendarMark
+    refreshCalendarConsumers();
+  } else if (cap.kind === "task"){
+    const w = ensure("todo");
+    w.data.items.push({ t: cap.text, done: false, ...(cap.due ? { due: cap.due } : {}) });
+    refreshWidget(w); flashWidget(w);
+  } else if (cap.kind === "note"){
+    const w = ensure("notes");
+    w.data.text = (w.data.text ? w.data.text + "\n" : "") + cap.text;
+    refreshWidget(w); flashWidget(w);
+  } else if (cap.kind === "clip"){
+    const w = ensure("clips");
+    w.data.items.unshift({ t: cap.text });
+    refreshWidget(w); flashWidget(w);
+  } else if (cap.kind === "link"){
+    const w = ensure("links");
+    const groups = w.data.groups || (w.data.groups = []);
+    let g = groups.find(x => (x.name || "") === "Capturados");
+    if (!g){ g = { name: "Capturados", links: [] }; groups.push(g); }
+    let t = cap.title;
+    if (!t){ try{ t = new URL(cap.url).hostname; }catch(e){ t = cap.url; } }
+    g.links.push({ t, u: cap.url });
+    refreshWidget(w); flashWidget(w);
+  }
+  markDirty();
+  toast(CAPTURE_META[cap.kind].done + " " + captureDest(cap));
+}
+
 // Todas las entradas de la paleta: contenido + saltos + comandos + rutinas (en TODOS los espacios)
 function paletteEntries(){
   const E = [];
@@ -3305,13 +3419,18 @@ function paletteEntries(){
 
 function renderResults(q){
   const box = $("#menu-results");
+  // gramática de captura: si lo tecleado parsea, «crear» es la PRIMERA opción (Enter confirma);
+  // si no parsea, la paleta sigue siendo búsqueda normal — sin modos
+  const cap = parseCapture(q, new Date());
   q = q.trim().toLowerCase();
   if (!q){ box.classList.remove("has"); box.innerHTML = ""; return; }
   const terms = q.split(/\s+/).filter(Boolean);
   const hits = paletteEntries()
     .filter(e => terms.every(t => e.hay.includes(t)))
     .sort((a, b) => (b.label.toLowerCase().startsWith(terms[0]) - a.label.toLowerCase().startsWith(terms[0])))
-    .slice(0, 10);
+    .slice(0, cap ? 9 : 10);
+  if (cap) hits.unshift({ icon: "➕", label: CAPTURE_META[cap.kind].name + ": " + captureSummary(cap), sub: captureDest(cap),
+    run: () => { applyCapture(cap); closeMenu(); } });
   box.classList.add("has");
   box.innerHTML = hits.length ? "" : `<div class="empty">Sin coincidencias.</div>`;
   selIdx = 0;
@@ -3599,13 +3718,19 @@ function paintInbox(){
   inboxLines.forEach((line, i) => {
     const d = document.createElement("div");
     d.className = "inbox-line";
-    d.innerHTML = `<span class="t">${esc(line)}</span>
+    // gramática de captura: si la línea parsea, se ofrece la conversión sugerida con su
+    // destino visible; NUNCA se auto-crea (el humano confirma línea a línea)
+    const cap = parseCapture(line, new Date());
+    const sug = cap ? `<button class="mini sug">→ ${CAPTURE_META[cap.kind].ico} ${esc(CAPTURE_META[cap.kind].name)} ${esc(captureDest(cap))}</button>` : "";
+    d.innerHTML = `<span class="t">${esc(line)}</span>${sug}
       <button class="mini n">📝 Nota</button><button class="mini k">✅ Tarea</button><button class="mini c">📋 Clip</button><button class="it-del" style="opacity:1">✕</button>`;
     const consume = async fn => {
       fn(line);
       await mutateInbox(fresh => { const k = fresh.indexOf(line); if (k >= 0) fresh.splice(k, 1); return fresh; });
       paintInbox(); markDirty();
     };
+    // se re-parsea al confirmar: el destino es el espacio activo EN ESE MOMENTO (spec §2)
+    if (cap) d.querySelector(".sug").addEventListener("click", () => consume(() => applyCapture(parseCapture(line, new Date()))));
     d.querySelector(".n").addEventListener("click", () => consume(t => {
       let w = state.widgets.find(x => x.type === "notes");
       if (!w){ addWidget("notes"); w = state.widgets[state.widgets.length - 1]; }
@@ -3831,6 +3956,7 @@ function renderTaskChip(){
 /* ---------- píldora informativa de la barra ---------- */
 const TIPS = [
   "Ctrl+K (o /) abre la paleta: busca en todos los espacios y ejecuta comandos",
+  "En la paleta: «t llamar @mañana» crea una tarea, «n idea» una nota, «v 12-16/8» unas vacaciones",
   "Crea espacios (escritorios) con ＋ en la barra: uno por especialidad o proyecto",
   "Arrastra una ventana sobre otra pestaña de espacio para moverla allí",
   "Pliega un widget con ▾ en su barra, o todos con ⊟ en la barra inferior",

@@ -170,6 +170,17 @@
     <div class="card"><b>Lanza rutinas</b><span>Un grupo de enlaces aparece como «Abrir grupo: …» y abre todas sus pestañas. Si el navegador bloquea alguna, Cabecera te muestra la ayuda para permitirlas.</span></div>
     <div class="card"><b>Identidad del proyecto</b><span>La «i» inferior resume la filosofía: sin cuentas, sin servidor de datos, sin telemetría.</span></div>
   </div>
+  <h3 style="margin-top:18px">Captura rápida: escribe y Cabecera lo coloca</h3>
+  <p>La paleta no solo encuentra: <b>crea</b>. Si lo que escribes empieza por un prefijo de la gramática de captura, la primera opción muestra qué se creará y en qué espacio; <kbd>Enter</kbd> lo confirma. Si no, es una búsqueda normal — no hay modos.</p>
+  <table>
+    <tr><th>Escribes</th><th>Se crea</th></tr>
+    <tr><td><code>t llamar a Juan @mañana</code></td><td>Tarea con fecha en el espacio activo (<code>@hoy</code>, <code>@mañana</code>, <code>@12/8</code>, <code>@12/8/2027</code>)</td></tr>
+    <tr><td><code>n idea para la sesión</code></td><td>Nota (se añade a la nota del espacio activo)</td></tr>
+    <tr><td><code>c texto reutilizable</code></td><td>Clip en el portapapeles de fragmentos</td></tr>
+    <tr><td><code>https://…</code> o <code>e https://… Título</code></td><td>Enlace en el grupo «Capturados»</td></tr>
+    <tr><td><code>v 12-16/8</code> · <code>v 12/8 guardia</code></td><td>Marca en el calendario global (vacaciones si no indicas concepto)</td></tr>
+  </table>
+  <p class="note">La gramática es deliberadamente estricta y predecible: las fechas <code>@12/8</code> usan siempre el año actual (para otro año, escríbelo: <code>@12/8/2027</code>), y si algo no encaja con total seguridad, no se interpreta. La misma gramática funciona en la <b>Bandeja</b>: una línea escrita en <code>inbox.txt</code> por ti desde el móvil, por una macro de teclado o por un agente de IA ofrece su conversión con un clic — nada se crea sin tu confirmación.</p>
 </section>
 
 <section id="movil">
@@ -197,7 +208,7 @@
     <li>Cada equipo elige su carpeta una vez; la ruta puede ser distinta en cada uno.</li>
     <li>Si dos equipos editan a la vez, la página avisa del conflicto y eliges con cuál quedarte.</li>
     <li>El indicador de sincronización de la barra inferior también sirve para conectar o comprobar la carpeta.</li>
-    <li><b>Bandeja:</b> cualquier línea en <code>inbox.txt</code> (desde el móvil, una macro o un agente) aparece para convertirla en nota/tarea.</li>
+    <li><b>Bandeja:</b> cualquier línea en <code>inbox.txt</code> (desde el móvil, una macro o un agente) aparece para convertirla en nota/tarea. Si la línea sigue la <a href="#buscar">gramática de captura</a> (<code>t tarea @mañana</code>, <code>v 12-16/8</code>…), la conversión sugerida se ofrece con un clic.</li>
   </ul>
   <p class="note">Requiere Edge o Chrome (acceso a carpetas del navegador). En cualquier otro caso, el modo local siempre funciona.</p>
 </section>

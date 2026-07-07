@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.22.0] - 2026-07-07
+
+- **Captura rápida: escribe y Cabecera lo coloca.** La paleta (Ctrl+K) ahora también **crea**: `t llamar a Juan @mañana` (tarea con fecha), `n idea` (nota), `c fragmento` (clip), una URL pegada (enlace al grupo «Capturados») o `v 12-16/8` (vacaciones en el calendario global; admite concepto: `v 12/8 guardia`). La primera opción de la paleta muestra qué se creará y en qué espacio; Enter confirma. Si lo escrito no encaja con la gramática, la paleta sigue siendo búsqueda normal — sin modos.
+- **La misma gramática en la Bandeja.** Una línea de `inbox.txt` que siga la gramática (escrita por ti desde el móvil, por una macro de teclado o por un agente de IA) ofrece su conversión sugerida con el destino visible; un clic la convierte. **Nada se crea sin confirmación humana**, línea a línea. Es el mismo lenguaje para personas y programas: local, determinista y sin red.
+- Reglas deliberadamente predecibles: prefijo en minúscula, fechas `@hoy`/`@mañana`/`@DD/MM` (siempre año actual; otro año se escribe explícito) y, ante cualquier duda, no se interpreta. Fecha imposible en una tarea (`@31/2`) no se pierde: queda en el texto.
+- Gramática documentada como **contrato estable** en el README (sección Integraciones), la guía integrada y `guia.html`. Parser puro `parseCapture` con batería propia de tests (fechas frontera, año bisiesto, no-parseos).
+
 ## [0.21.1] - 2026-07-07
 
 - **Corregido: maximizar/restaurar entre monitores distintos.** Una ventana maximizada en un monitor grande podía abrirse desbordada en uno pequeño, y al restaurar podía saltar a coordenadas fuera de pantalla. Ahora la geometría maximizada se recalcula siempre contra la pantalla actual (al cargar, al restaurar y al redimensionar la ventana del navegador), y la restauración re-encaja el tamaño y la posición guardados para que la ventana quede visible. Con tests de cambio de viewport y de datos manipulados.

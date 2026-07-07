@@ -194,4 +194,51 @@ if (nextActiveAfterDelete(2, 2, 2) !== 1) throw new Error('borrar el activo (úl
 if (nextActiveAfterDelete(0, 1, 2) !== 0) throw new Error('borrar posterior con active 0: sigue 0');
 console.log('OK espacios (índice activo tras borrar)');
 
+// --- parseCapture: gramática de captura v1 (spec: _privado/spec-gramatica-captura.md) ---
+// Reglas fijas: prefijo minúscula+espacio; año SIEMPRE el de `now` salvo explícito (sin
+// salto automático); si no hay confianza total, null (nunca adivina).
+eval('globalThis.CAL_MARK_TYPES = ' + src.match(/const CAL_MARK_TYPES = (\{[\s\S]*?\});/)[1]);
+eval('globalThis.parseCapture = ' + pickFn('parseCapture', 'line, now'));
+const NOW = new Date(2026, 6, 7);   // 7 jul 2026 (miércoles)
+const eq = (got, want, msg) => { if (JSON.stringify(got) !== JSON.stringify(want)) throw new Error(msg + '\n  got:  ' + JSON.stringify(got) + '\n  want: ' + JSON.stringify(want)); };
+
+// tareas
+eq(parseCapture('t comprar pan', NOW), { kind: 'task', text: 'comprar pan' }, 'tarea simple');
+eq(parseCapture('t llamar a Juan @hoy', NOW), { kind: 'task', text: 'llamar a Juan', due: '2026-07-07' }, 'tarea @hoy');
+eq(parseCapture('t llamar @mañana', NOW), { kind: 'task', text: 'llamar', due: '2026-07-08' }, 'tarea @mañana');
+eq(parseCapture('t llamar @manana', NOW), { kind: 'task', text: 'llamar', due: '2026-07-08' }, 'tarea @manana sin tilde');
+eq(parseCapture('t revisar informe @12/8', NOW), { kind: 'task', text: 'revisar informe', due: '2026-08-12' }, 'tarea @DD/MM');
+eq(parseCapture('t revisar @12-8', NOW), { kind: 'task', text: 'revisar', due: '2026-08-12' }, 'tarea @DD-MM');
+eq(parseCapture('t felicitar @12/1', NOW), { kind: 'task', text: 'felicitar', due: '2026-01-12' }, 'año actual aunque la fecha ya pasó (sin salto automático)');
+eq(parseCapture('t congreso @12/8/2027', NOW), { kind: 'task', text: 'congreso', due: '2027-08-12' }, 'año explícito');
+eq(parseCapture('t bisiesto @29/2/2028', NOW), { kind: 'task', text: 'bisiesto', due: '2028-02-29' }, '29/2 en bisiesto válido');
+eq(parseCapture('t pagar @31/2', NOW), { kind: 'task', text: 'pagar @31/2' }, 'fecha imposible: sin due, el token no se pierde');
+eq(parseCapture('t fin de año @mañana', new Date(2026, 11, 31)), { kind: 'task', text: 'fin de año', due: '2027-01-01' }, '@mañana en Nochevieja cruza el año');
+
+// notas y clips
+eq(parseCapture('n idea para la sesión', NOW), { kind: 'note', text: 'idea para la sesión' }, 'nota');
+eq(parseCapture('c fragmento reutilizable', NOW), { kind: 'clip', text: 'fragmento reutilizable' }, 'clip');
+
+// enlaces
+eq(parseCapture('https://pubmed.ncbi.nlm.nih.gov/', NOW), { kind: 'link', url: 'https://pubmed.ncbi.nlm.nih.gov/', title: '' }, 'URL suelta');
+eq(parseCapture('e https://x.com Mi sitio', NOW), { kind: 'link', url: 'https://x.com', title: 'Mi sitio' }, 'enlace con título');
+if (parseCapture('e sin-url', NOW) !== null) throw new Error('e sin URL debe ser null');
+if (parseCapture('javascript:alert(1)', NOW) !== null) throw new Error('URI no http(s) debe ser null');
+
+// marcas de calendario (estricto: fecha inválida o concepto no canónico → null)
+eq(parseCapture('v 12-16/8', NOW), { kind: 'mark', start: '2026-08-12', end: '2026-08-16', type: 'vacaciones' }, 'rango vacaciones por defecto');
+eq(parseCapture('v 12/8 guardia', NOW), { kind: 'mark', start: '2026-08-12', end: '2026-08-12', type: 'guardia' }, 'un día con concepto');
+eq(parseCapture('v 12-16/8/2027', NOW), { kind: 'mark', start: '2027-08-12', end: '2027-08-16', type: 'vacaciones' }, 'rango con año explícito');
+eq(parseCapture('v 16-12/8', NOW), { kind: 'mark', start: '2026-08-12', end: '2026-08-16', type: 'vacaciones' }, 'rango invertido se normaliza');
+eq(parseCapture('v 1-2/9 formación', NOW), { kind: 'mark', start: '2026-09-01', end: '2026-09-02', type: 'formacion' }, 'concepto con tilde → clave canónica');
+if (parseCapture('v 12-16/8 inventado', NOW) !== null) throw new Error('concepto no canónico debe ser null');
+if (parseCapture('v 29/2', NOW) !== null) throw new Error('29/2 en año no bisiesto debe ser null');
+if (parseCapture('v 12-16/13', NOW) !== null) throw new Error('mes 13 debe ser null');
+
+// no-parseos explícitos de la spec §3
+for (const bad of ['T llamar', 'x foo', 'mañana comprar', 'vacaciones del 12 al 16 de agosto', 't', 't   ', 'n', '', '   ', 'e'])
+  if (parseCapture(bad, NOW) !== null) throw new Error('debería NO parsear: "' + bad + '"');
+if (parseCapture(null, NOW) !== null || parseCapture(42, NOW) !== null) throw new Error('entrada no-string debe ser null');
+console.log('OK parseCapture (gramática determinista, año sin magia, no-parseos respetados)');
+
 console.log('\nTODO EN VERDE');
