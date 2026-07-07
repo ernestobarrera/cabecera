@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.21.1] - 2026-07-07
+
+- **Corregido: maximizar/restaurar entre monitores distintos.** Una ventana maximizada en un monitor grande podía abrirse desbordada en uno pequeño, y al restaurar podía saltar a coordenadas fuera de pantalla. Ahora la geometría maximizada se recalcula siempre contra la pantalla actual (al cargar, al restaurar y al redimensionar la ventana del navegador), y la restauración re-encaja el tamaño y la posición guardados para que la ventana quede visible. Con tests de cambio de viewport y de datos manipulados.
+
 ## [0.21.0] - 2026-07-07
 
 - **Aviso propio de tareas con fecha.** Las tareas vencidas (⏰) o que vencen hoy (📌) tienen ahora su propio indicador fijo en la barra, separado de la píldora informativa rotatoria; cada clic salta a la siguiente tarea afectada, aunque esté en otro espacio. La píldora conserva la semana ISO, el progreso global y los consejos.

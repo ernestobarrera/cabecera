@@ -1692,20 +1692,31 @@ function autoArrangeWidgets(silent){
   renderAll(); markDirty();
   if (!silent) toast(clipped ? "Widgets autoordenados (no caben todos: algunos quedan al borde inferior)" : "Widgets autoordenados");
 }
+/* Geometría robusta frente a cambios de monitor/resolución (puras → testeables) */
+function maxRect(vw, vh){   // rect "maximizado" para el viewport actual
+  const pad = 12, bar = 46;
+  return { x: pad, y: pad, w: Math.max(220, vw - pad * 2), h: Math.max(140, vh - bar - pad * 2) };
+}
+function clampRect(x, y, ww, hh, vw, vh){   // encaja un rect guardado (quizá de otro monitor) en el viewport actual
+  const bar = 46;
+  return {
+    x: Math.max(0, Math.min(numOr(x, 40, 0, 8000), Math.max(0, vw - 80))),
+    y: Math.max(0, Math.min(numOr(y, 40, 0, 8000), Math.max(0, vh - bar - 60))),
+    w: Math.min(numOr(ww, 260, 220, 4000), Math.max(220, vw - 24)),
+    h: Math.min(numOr(hh, 180, 140, 4000), Math.max(140, vh - bar - 24))
+  };
+}
 function toggleMaximize(w){   // ⛶ ocupa el escritorio; ❐ restaura el tamaño y posición previos
   if (isMobile()) return;
-  const pad = 12, bar = 46;
   if (w.max){
     const p = w.max; delete w.max;
-    w.x = numOr(p.x, 40, 0, 8000); w.y = numOr(p.y, 40, 0, 8000);
-    w.w = numOr(p.w, (WTYPES[w.type] || {}).w || 260, 220, 4000);
-    w.h = numOr(p.h, (WTYPES[w.type] || {}).h || 180, 140, 4000);
+    const r = clampRect(p.x, p.y, p.w, p.h, innerWidth, innerHeight);   // lo guardado puede venir de otro monitor
+    w.x = r.x; w.y = r.y; w.w = r.w; w.h = r.h;
   } else {
     w.max = { x: w.x, y: w.y, w: w.w, h: w.h };
     if (w.collapsed) w.collapsed = false;
-    w.x = pad; w.y = pad;
-    w.w = Math.max(220, innerWidth - pad * 2);
-    w.h = Math.max(140, innerHeight - bar - pad * 2);
+    const m = maxRect(innerWidth, innerHeight);
+    w.x = m.x; w.y = m.y; w.w = m.w; w.h = m.h;
   }
   w.z = ++zTop;
   renderAll(); markDirty();
@@ -1751,6 +1762,11 @@ function renderTabs(){
 
 function buildWindow(w){
   const t = WTYPES[w.type] || { ico: "❔", name: w.type };
+  // una ventana maximizada se re-encaja SIEMPRE al viewport actual (pudo guardarse en otro monitor)
+  if (w.max && !isMobile()){
+    const m = maxRect(innerWidth, innerHeight);
+    w.x = m.x; w.y = m.y; w.w = m.w; w.h = m.h;
+  }
   const el = document.createElement("div");
   el.className = "win";
   el.dataset.id = w.id;
@@ -3341,7 +3357,21 @@ function wireUI(){
     spacesBox.scrollLeft += e.deltaY || e.deltaX;
   }, { passive: false });
   spacesBox.addEventListener("scroll", updateSpacesFades);
-  addEventListener("resize", updateSpacesFades);
+  addEventListener("resize", () => {
+    updateSpacesFades();
+    // las ventanas maximizadas siguen al viewport (cambio de tamaño, monitor o resolución)
+    if (isMobile() || !state) return;
+    let touched = false;
+    state.widgets.forEach(w => {
+      if (!w.max) return;
+      const m = maxRect(innerWidth, innerHeight);
+      w.x = m.x; w.y = m.y; w.w = m.w; w.h = m.h;
+      const el = document.querySelector(`.win[data-id="${w.id}"]`);
+      if (el){ el.style.left = m.x + "px"; el.style.top = m.y + "px"; el.style.width = m.w + "px"; el.style.height = m.h + "px"; }
+      touched = true;
+    });
+    if (touched) markDirty();
+  });
   // aviso de tareas: cada clic salta a la siguiente tarea vencida o de hoy
   $("#tb-tasks").addEventListener("click", () => {
     const s = dueTaskStats();

@@ -167,6 +167,25 @@ if (snapPosition(9, 9, 200, 100, [], 1400, 900).y !== 12) throw new Error('snap:
 if (snapPosition(500, 900 - 46 - 100 - 15, 200, 100, [], 1400, 900).y !== 900 - 46 - 100 - 12) throw new Error('snap: no imanta al borde inferior útil');
 console.log('OK snapPosition (imán a bordes y ventanas, umbral respetado)');
 
+// --- maxRect / clampRect: geometría maximizada robusta ante cambio de monitor (hotfix v0.21.1) ---
+eval('globalThis.maxRect = ' + pickFn('maxRect', 'vw, vh'));
+eval('globalThis.clampRect = ' + pickFn('clampRect', 'x, y, ww, hh, vw, vh'));
+// maximizado en portátil 1366x768: llena el viewport útil (padding 12, barra 46)
+const mr = maxRect(1366, 768);
+if (mr.x !== 12 || mr.y !== 12 || mr.w !== 1342 || mr.h !== 698) throw new Error('maxRect: geometría incorrecta en 1366x768');
+// rect guardado en 4K (3840x2160) restaurado en portátil: cabe y queda visible
+const r4k = clampRect(3000, 1800, 3800, 2000, 1366, 768);
+if (r4k.x > 1366 - 80 || r4k.y > 768 - 46 - 60) throw new Error('clampRect: posición de otro monitor no re-encajada');
+if (r4k.w > 1366 - 24 || r4k.h > 768 - 46 - 24) throw new Error('clampRect: tamaño de otro monitor no acotado');
+// w.max manipulado (basura): cae a valores por defecto sanos, nunca NaN
+const rBad = clampRect('x', null, NaN, {}, 1366, 768);
+for (const k of ['x','y','w','h']) if (!Number.isFinite(rBad[k])) throw new Error('clampRect: valor no finito con entrada basura (' + k + ')');
+if (rBad.w < 220 || rBad.h < 140) throw new Error('clampRect: mínimos de ventana no respetados');
+// rect normal en su mismo monitor: no se toca
+const rSame = clampRect(100, 100, 300, 200, 1366, 768);
+if (rSame.x !== 100 || rSame.y !== 100 || rSame.w !== 300 || rSame.h !== 200) throw new Error('clampRect: altera un rect que ya cabía');
+console.log('OK maxRect/clampRect (maximizado sigue al viewport, restauración entre monitores, basura saneada)');
+
 // espacios: índice activo tras borrar
 eval('globalThis.nextActiveAfterDelete = ' + pickFn('nextActiveAfterDelete', 'active, removed, len'));
 if (nextActiveAfterDelete(2, 0, 3) !== 1) throw new Error('borrar espacio anterior al activo: active debe bajar');
