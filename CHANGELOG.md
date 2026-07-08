@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.23.0] - 2026-07-08
+
+- **Color de ventana en Nota y Tareas, más minimalista.** El color tipo post-it deja de mostrarse siempre en el cuerpo de la nota: ahora hay un botón **●** en la barra de título, oculto hasta pasar el ratón (igual que las etiquetas). El widget de Tareas gana la misma opción de color para toda la ventana (además del color por tarea, que ya existía).
+- **Escritorios reordenables.** Arrastra una pestaña de espacio sobre otra para cambiar su orden.
+- **Color de pestaña automático.** Si el fondo de un escritorio es uno de los degradados predefinidos, su pestaña se tiñe sola con el tono medio de ese fondo — sin selector de color aparte que mantener.
+- Guía integrada y `guia.html` actualizados con los tres cambios. Test nuevo (`gradientAvgHex`).
+
 ## [0.22.0] - 2026-07-07
 
 - **Captura rápida: escribe y Cabecera lo coloca.** La paleta (Ctrl+K) ahora también **crea**: `t llamar a Juan @mañana` (tarea con fecha), `n idea` (nota), `c fragmento` (clip), una URL pegada (enlace al grupo «Capturados») o `v 12-16/8` (vacaciones en el calendario global; admite concepto: `v 12/8 guardia`). La primera opción de la paleta muestra qué se creará y en qué espacio; Enter confirma. Si lo escrito no encaja con la gramática, la paleta sigue siendo búsqueda normal — sin modos.

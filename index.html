@@ -65,20 +65,16 @@ body{font-family:var(--font); color:var(--text); background:#10131a}
   border-radius:6px; cursor:pointer; line-height:1}
 .win-btn:hover{background:rgba(255,255,255,.1); color:var(--text)}
 .win-btn.close:hover{background:var(--danger); color:#fff}
-.win-btn.tagbtn{opacity:0; pointer-events:none; transition:opacity .14s ease, background .14s ease, color .14s ease}
-.win:hover .win-btn.tagbtn,.win:focus-within .win-btn.tagbtn{opacity:1; pointer-events:auto}
+.win-btn.tagbtn,.win-btn.colorbtn{opacity:0; pointer-events:none; transition:opacity .14s ease, background .14s ease, color .14s ease}
+.win:hover .win-btn.tagbtn,.win:focus-within .win-btn.tagbtn,
+.win:hover .win-btn.colorbtn,.win:focus-within .win-btn.colorbtn{opacity:1; pointer-events:auto}
+.win.has-win-color .win-btn.colorbtn{color:var(--win-color)}
 .win-btn.dict-recv-btn{opacity:.4}
 .win.dict-recv{border-color:var(--accent); box-shadow:0 0 0 1px var(--accent), var(--shadow)}
 .win.dict-recv .win-title{background:var(--accent-soft)}
 .win.dict-recv .dict-recv-btn{opacity:1; color:var(--accent)}
 .dict-dest{font-size:11px; color:var(--text-dim); padding:3px 2px 0}
 .dict-dest.warn{color:#d9822b}
-.note-colors{display:flex; gap:6px; margin-bottom:7px; align-items:center}
-.swatch{width:16px; height:16px; border-radius:50%; border:1px solid var(--border); cursor:pointer; padding:0; flex-shrink:0}
-.swatch:hover{transform:scale(1.15)}
-.swatch.on{box-shadow:0 0 0 2px var(--accent)}
-.swatch.none{background:transparent; position:relative}
-.swatch.none::after{content:"∅"; position:absolute; inset:0; font-size:11px; line-height:14px; text-align:center; color:var(--text-dim)}
 .win-body{flex:1; min-height:0; overflow:auto; padding:10px; font-size:13.5px}
 .win-resize{position:absolute; right:0; bottom:0; width:16px; height:16px; cursor:nwse-resize; opacity:.5}
 .win-resize::after{content:""; position:absolute; right:4px; bottom:4px; width:8px; height:8px;
@@ -104,7 +100,10 @@ body{font-family:var(--font); color:var(--text); background:#10131a}
 .space-tab .st-name{max-width:130px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
 .space-tab:hover{background:rgba(255,255,255,.06); color:var(--text)}
 .space-tab.active{background:var(--accent-soft); border-color:var(--accent); color:var(--text)}
+.space-tab.has-accent{box-shadow:inset 3px 0 0 var(--sp-accent); padding-left:8px}
 .space-tab.drop-target{background:var(--accent); color:#0b1220; border-color:var(--accent); transform:translateY(-2px)}
+.space-tab.drag-over.drop-after{box-shadow:inset -2px 0 0 var(--accent)}
+.space-tab.drag-over:not(.drop-after){box-shadow:inset 2px 0 0 var(--accent)}
 .space-tab .st-del{font-size:11px; line-height:1; opacity:.55; border-radius:4px; padding:0 2px}
 .space-tab .st-del:hover{opacity:1; color:#fff; background:var(--danger)}
 .inline-rename{min-width:70px; max-width:180px; padding:3px 6px; border-radius:7px; border:1px solid var(--accent);
@@ -487,7 +486,7 @@ ul.plain{list-style:none}
 <div id="taskbar">
   <button id="btn-inicio">⊞ Inicio</button>
   <button id="btn-fold" title="Plegar / desplegar todos los widgets">⊟</button>
-  <div id="tb-spaces" title="Espacios (escritorios): clic para cambiar, doble clic para renombrar"></div>
+  <div id="tb-spaces" title="Espacios (escritorios): clic para cambiar, doble clic para renombrar, arrastra para reordenar"></div>
   <button id="space-add" title="Nuevo espacio">＋</button>
   <div id="tb-spacer"></div>
   <div class="tb-item" id="tb-filter" title="Filtro por etiqueta activo" style="display:none"></div>
@@ -1304,7 +1303,10 @@ function normalizePack(p){
     else if (w.type === "qr")    data.text = txt(d.text, 2000);
     else if (w.type === "md"){   data.text = txt(d.text, 100000); data.view = "view"; }
     else if (w.type === "dictado") data.text = txt(d.text, 100000);
-    else if (w.type === "todo")  data.items = (Array.isArray(d.items) ? d.items : []).map(i => ({ t: txt(i.t, 300), done: !!i.done })).filter(i => i.t);
+    else if (w.type === "todo"){
+      data.items = (Array.isArray(d.items) ? d.items : []).map(i => ({ t: txt(i.t, 300), done: !!i.done })).filter(i => i.t);
+      if (["amarillo","rosa","verde","azul","naranja"].includes(d.color)) data.color = d.color;
+    }
     else if (w.type === "clips") data.items = (Array.isArray(d.items) ? d.items : []).map(i => ({ t: txt(i.t, 5000) })).filter(i => i.t);
     else if (w.type === "clock") data.analog = d.analog !== false;
     else if (w.type === "timer") data.min = num(d.min, 5, 1, 180);
@@ -1603,7 +1605,7 @@ function renderTagFilterBar(){
 /* ---------- tour interactivo (coach-marks) ---------- */
 const TOUR = [
   { sel: "#btn-inicio", pos: "top", title: "Añade widgets", body: "Desde <b>⊞ Inicio</b> agregas notas, enlaces, tareas, calendario… También con <b>Ctrl+K</b> escribiendo «Añadir»." },
-  { sel: "#tb-spaces", pos: "top", title: "Espacios (escritorios)", body: "Crea escritorios con <b>＋</b>, uno por especialidad o proyecto. Clic para cambiar, doble clic para renombrar. Arrastra una ventana <b>sobre otra pestaña</b> para moverla allí." },
+  { sel: "#tb-spaces", pos: "top", title: "Espacios (escritorios)", body: "Crea escritorios con <b>＋</b>, uno por especialidad o proyecto. Clic para cambiar, doble clic para renombrar, arrastra una pestaña para reordenarla. Arrastra una ventana <b>sobre otra pestaña</b> para moverla allí. El color de cada pestaña se toma solo del fondo de ese escritorio." },
   { sel: "#btn-fold", pos: "top", title: "Ordena de un vistazo", body: "<b>⊟</b> pliega o despliega todos los widgets; cada uno también se pliega con <b>▾</b> en su barra." },
   { sel: ".win .win-title", pos: "bottom", title: "Cada widget", body: "Al pasar el ratón por su barra aparecen las etiquetas; <b>▾</b> pliega y <b>✕</b> cierra. <b>Doble clic</b> en el título para renombrarlo." },
   { sel: "#tb-sync", pos: "top", title: "Tus datos son tuyos", body: "Todo se guarda solo, sin cuentas ni servidor. Opcional: «Sincronizar equipos» para tener lo mismo en casa y en el trabajo." },
@@ -1742,17 +1744,51 @@ function updateSpacesFades(){
   box.classList.toggle("fade-l", box.scrollLeft > 4);
   box.classList.toggle("fade-r", max - box.scrollLeft > 4);
 }
+let dragSpaceIdx = null;
+function moveSpaceNear(from, to, after){
+  if (from === to) return;
+  const activeSpace = state.spaces[state.active];
+  const [moved] = state.spaces.splice(from, 1);
+  let at = to;
+  if (from < to) at--;
+  if (after) at++;
+  state.spaces.splice(Math.max(0, Math.min(at, state.spaces.length)), 0, moved);
+  state.active = state.spaces.indexOf(activeSpace);
+  markDirty();
+  renderTabs();
+}
 function renderTabs(){
   const box = $("#tb-spaces");
   if (!box || !state) return;
   const multi = state.spaces.length > 1;
-  box.innerHTML = state.spaces.map((sp, i) =>
-    `<button class="space-tab${i === state.active ? " active" : ""}" data-i="${i}" title="${esc(sp.name || "Escritorio")}"><span class="st-name">${esc(sp.name || "Escritorio")}</span>${i === state.active && multi ? `<span class="st-del" title="Eliminar este espacio">✕</span>` : ""}</button>`
-  ).join("");
+  box.innerHTML = state.spaces.map((sp, i) => {
+    const accent = spaceAccent(sp);
+    return `<button class="space-tab${i === state.active ? " active" : ""}${accent ? " has-accent" : ""}" data-i="${i}" title="${esc(sp.name || "Escritorio")}"${accent ? ` style="--sp-accent:${accent}"` : ""}><span class="st-name">${esc(sp.name || "Escritorio")}</span>${i === state.active && multi ? `<span class="st-del" title="Eliminar este espacio">✕</span>` : ""}</button>`;
+  }).join("");
   box.querySelectorAll(".space-tab").forEach(t => {
     const i = +t.dataset.i;
     t.addEventListener("click", e => { if (e.target.closest(".st-del")){ deleteSpace(i); return; } setActive(i); });
     t.addEventListener("dblclick", e => { if (!e.target.closest(".st-del")) renameSpace(i, t); });
+    if (multi){
+      t.draggable = true;
+      t.addEventListener("dragstart", e => { dragSpaceIdx = i; e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", state.spaces[i].name || "Escritorio"); });
+      t.addEventListener("dragover", e => {
+        if (dragSpaceIdx === null || dragSpaceIdx === i) return;
+        e.preventDefault();
+        const after = e.clientX > t.getBoundingClientRect().left + t.offsetWidth / 2;
+        t.classList.add("drag-over");
+        t.classList.toggle("drop-after", after);
+      });
+      t.addEventListener("dragleave", () => t.classList.remove("drag-over", "drop-after"));
+      t.addEventListener("drop", e => {
+        if (dragSpaceIdx === null) return;
+        e.preventDefault();
+        const after = e.clientX > t.getBoundingClientRect().left + t.offsetWidth / 2;
+        moveSpaceNear(dragSpaceIdx, i, after);
+        dragSpaceIdx = null;
+      });
+      t.addEventListener("dragend", () => { dragSpaceIdx = null; box.querySelectorAll(".drag-over").forEach(x => x.classList.remove("drag-over", "drop-after")); });
+    }
   });
   // la pestaña activa siempre a la vista, y desvanecidos solo si hay overflow
   requestAnimationFrame(() => {
@@ -1774,14 +1810,17 @@ function buildWindow(w){
   el.dataset.id = w.id;
   el.style.cssText = `left:${+w.x || 0}px; top:${+w.y || 0}px; width:${+w.w || 260}px; height:${+w.h || 180}px; z-index:${+w.z || 1}`;
   const dictBtn = w.type === "notes" ? `<button class="win-btn dict-recv-btn" title="Recibir el dictado en esta nota">🎙️</button>` : "";
+  const colorable = w.type === "notes" || w.type === "todo";
+  const colorBtn = colorable ? `<button class="win-btn colorbtn" title="Color de la ventana">●</button>` : "";
   el.innerHTML = `
     <div class="win-title" title="Doble clic para renombrar"><span class="ico">${t.ico}</span><span class="tname">${esc(w.t || t.name)}</span><span class="sp"></span>
-      ${dictBtn}<button class="win-btn tagbtn" title="Etiquetas">🏷️</button><button class="win-btn maxb" title="${w.max ? "Restaurar tamaño" : "Maximizar"}">${w.max ? "❐" : "⛶"}</button><button class="win-btn collapse" title="Plegar / desplegar">${w.collapsed ? "▸" : "▾"}</button><button class="win-btn close" title="Cerrar">✕</button></div>
+      ${dictBtn}${colorBtn}<button class="win-btn tagbtn" title="Etiquetas">🏷️</button><button class="win-btn maxb" title="${w.max ? "Restaurar tamaño" : "Maximizar"}">${w.max ? "❐" : "⛶"}</button><button class="win-btn collapse" title="Plegar / desplegar">${w.collapsed ? "▸" : "▾"}</button><button class="win-btn close" title="Cerrar">✕</button></div>
     <div class="win-tags"></div>
     <div class="win-body"></div>
     <div class="win-resize"></div>`;
   if (w.collapsed) el.classList.add("collapsed");
   el.querySelector(".tagbtn").addEventListener("click", e => { e.stopPropagation(); editWidgetTags(w, el); });
+  if (colorable) el.querySelector(".colorbtn").addEventListener("click", e => { e.stopPropagation(); editWinColor(w, el); });
   el.querySelector(".maxb").addEventListener("click", e => { e.stopPropagation(); toggleMaximize(w); });
   paintWinTags(el, w);
   el.querySelector(".collapse").addEventListener("click", e => {
@@ -1798,6 +1837,7 @@ function buildWindow(w){
     setDictTarget(state.dictTargetId === w.id ? null : w.id);
   });
   renderBody(w, el.querySelector(".win-body"));
+  if (colorable) applyWinColor(w, el);
 
   // renombrar ventana (título propio, ej. "Notas de sesión")
   el.querySelector(".win-title").addEventListener("dblclick", e => {
@@ -2015,24 +2055,36 @@ function bodyIntro(w, el){
   el.querySelector(".gu").addEventListener("click", () => $("#ov-guia").classList.add("open"));
 }
 
-/* --- Nota (con color tipo post-it) --- */
-const NOTE_COLORS = { amarillo: "#e6c34a", rosa: "#e07a9c", verde: "#5ab98a", azul: "#5aa9f7", naranja: "#e0955a" };
+/* --- Color de ventana (notas y tareas, estilo post-it) --- */
+const WIN_COLORS = { amarillo: "#e6c34a", rosa: "#e07a9c", verde: "#5ab98a", azul: "#5aa9f7", naranja: "#e0955a" };
 const TASK_COLORS = { azul: "#5aa9f7", verde: "#5fd08a", ambar: "#f0c25e", rojo: "#f36c6c", rosa: "#e07a9c", gris: "#9aa4b5" };
 const hexA = (h, a) => { const n = parseInt(h.slice(1), 16); return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`; };
+function applyWinColor(w, el){
+  const c = WIN_COLORS[w.data.color];
+  el.style.background = c ? hexA(c, .16) : "";
+  el.classList.toggle("has-win-color", !!c);
+  if (c) el.style.setProperty("--win-color", c); else el.style.removeProperty("--win-color");
+}
+function editWinColor(w, el){
+  el.querySelectorAll(".color-pop").forEach(x => x.remove());
+  const pop = document.createElement("div");
+  pop.className = "color-pop";
+  const keys = [""].concat(Object.keys(WIN_COLORS));
+  pop.innerHTML = keys.map(k => `<button class="color-dot${k ? "" : " none"}${(w.data.color || "") === k ? " on" : ""}" data-c="${k}" title="${k || "sin color"}"${k ? ` style="background:${WIN_COLORS[k]}"` : ""}></button>`).join("");
+  pop.querySelectorAll(".color-dot").forEach(b => b.addEventListener("click", e => {
+    e.stopPropagation();
+    w.data.color = b.dataset.c || undefined;
+    pop.remove();
+    applyWinColor(w, el);
+    markDirty();
+  }));
+  el.appendChild(pop);
+}
 function bodyNotes(w, el){
-  el.innerHTML = `<div class="note-colors"></div><textarea class="notes" placeholder="Escribe aquí…"></textarea>`;
-  const ta = el.querySelector("textarea"), bar = el.querySelector(".note-colors");
+  el.innerHTML = `<textarea class="notes" placeholder="Escribe aquí…"></textarea>`;
+  const ta = el.querySelector("textarea");
   ta.value = w.data.text || "";
   ta.addEventListener("input", () => { w.data.text = ta.value; markDirty(); });
-  const apply = () => { const win = el.closest(".win"); if (win){ const c = NOTE_COLORS[w.data.color]; win.style.background = c ? hexA(c, .16) : ""; } };
-  const swatches = [""].concat(Object.keys(NOTE_COLORS));
-  bar.innerHTML = swatches.map(k => `<button class="swatch${k ? "" : " none"}${(w.data.color || "") === k ? " on" : ""}" data-c="${k}" title="${k || "sin color"}"${k ? ` style="background:${NOTE_COLORS[k]}"` : ""}></button>`).join("");
-  bar.querySelectorAll(".swatch").forEach(b => b.addEventListener("click", () => {
-    w.data.color = b.dataset.c || undefined;
-    bar.querySelectorAll(".swatch").forEach(x => x.classList.toggle("on", x.dataset.c === (w.data.color || "")));
-    apply(); markDirty();
-  }));
-  apply();
 }
 
 /* --- Tareas --- */
@@ -3201,6 +3253,21 @@ const WP_PRESETS = [
   "linear-gradient(135deg,#141e30 0%,#243b55 100%)",
   "linear-gradient(160deg,#134e5e 0%,#1d976c 120%)"
 ];
+// acento de un fondo: promedio de los tonos hex del degradado (barato, sin canvas ni petición de red)
+function gradientAvgHex(css){
+  const hexes = String(css || "").match(/#[0-9a-fA-F]{6}/g);
+  if (!hexes || !hexes.length) return null;
+  let r = 0, g = 0, b = 0;
+  hexes.forEach(h => { const n = parseInt(h.slice(1), 16); r += (n >> 16) & 255; g += (n >> 8) & 255; b += n & 255; });
+  const toHex = v => Math.round(v / hexes.length).toString(16).padStart(2, "0");
+  return "#" + toHex(r) + toHex(g) + toHex(b);
+}
+const WP_PRESET_ACCENTS = WP_PRESETS.map(gradientAvgHex);
+function spaceAccent(sp){
+  const wp = (sp.settings && sp.settings.wallpaper) || { type: "preset", value: 0 };
+  if (wp.type !== "preset") return null;   // fondo de foto/URL: sin acento calculable en barato
+  return WP_PRESET_ACCENTS[wp.value % WP_PRESET_ACCENTS.length] || null;
+}
 let wpObjectUrl = null;
 async function applyWallpaper(){
   const wp = state.settings.wallpaper || { type: "preset", value: 0 };

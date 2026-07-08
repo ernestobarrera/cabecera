@@ -186,6 +186,15 @@ const rSame = clampRect(100, 100, 300, 200, 1366, 768);
 if (rSame.x !== 100 || rSame.y !== 100 || rSame.w !== 300 || rSame.h !== 200) throw new Error('clampRect: altera un rect que ya cabía');
 console.log('OK maxRect/clampRect (maximizado sigue al viewport, restauración entre monitores, basura saneada)');
 
+// --- gradientAvgHex: acento de pestaña calculado del degradado de fondo (sin canvas, barato) ---
+eval('globalThis.gradientAvgHex = ' + pickFn('gradientAvgHex', 'css'));
+if (gradientAvgHex('linear-gradient(135deg,#1b2735 0%,#090a0f 100%)') !== '#121922') throw new Error('gradientAvgHex: promedio de dos tonos incorrecto');
+if (gradientAvgHex('linear-gradient(135deg,#000000 0%,#ffffff 50%,#000000 100%)') !== '#555555') throw new Error('gradientAvgHex: promedio de tres tonos incorrecto');
+if (gradientAvgHex('url("foo.jpg") center/cover no-repeat, #10131a') !== '#10131a') throw new Error('gradientAvgHex: un único tono debe devolverse tal cual');
+if (gradientAvgHex('') !== null) throw new Error('gradientAvgHex: cadena vacía debe ser null');
+if (gradientAvgHex(null) !== null) throw new Error('gradientAvgHex: entrada no-string debe ser null');
+console.log('OK gradientAvgHex (acento de pestaña = promedio de los tonos del degradado)');
+
 // espacios: índice activo tras borrar
 eval('globalThis.nextActiveAfterDelete = ' + pickFn('nextActiveAfterDelete', 'active, removed, len'));
 if (nextActiveAfterDelete(2, 0, 3) !== 1) throw new Error('borrar espacio anterior al activo: active debe bajar');
