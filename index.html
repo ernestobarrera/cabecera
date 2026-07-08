@@ -379,11 +379,16 @@ ul.plain{list-style:none}
 .year-summary{margin:-2px 0 9px; flex-shrink:0}
 /* nº de columnas fijo por escalón (no auto-fit): así, al agrandar el widget dentro de un mismo
    escalón, las tarjetas existentes crecen (y con ellas su letra, ver .year-month más abajo) en vez
-   de limitarse a añadir columnas al tamaño mínimo */
+   de limitarse a añadir columnas al tamaño mínimo. Escalones de 1 en 1 columna (legibilidad
+   primero): añadir de golpe varias columnas a la vez agranda el bajón de letra justo al cruzar
+   el umbral, porque el ancho por tarjeta se reparte entre más columnas de sopetón; subiendo de
+   1 en 1 ese bajón es mucho más suave. Tope en 6 columnas: con 12 meses, más columnas dejaría
+   tarjetas muy anchas y solo 1-2 filas, sin ganar legibilidad real. */
 .year-grid{display:grid; grid-template-columns:repeat(2,1fr); gap:8px; align-content:start}
-@container (min-width:440px){ .year-grid{grid-template-columns:repeat(3,1fr)} }
-@container (min-width:640px){ .year-grid{grid-template-columns:repeat(4,1fr)} }
-@container (min-width:900px){ .year-grid{grid-template-columns:repeat(6,1fr)} }
+@container (min-width:460px){ .year-grid{grid-template-columns:repeat(3,1fr)} }
+@container (min-width:620px){ .year-grid{grid-template-columns:repeat(4,1fr)} }
+@container (min-width:780px){ .year-grid{grid-template-columns:repeat(5,1fr)} }
+@container (min-width:940px){ .year-grid{grid-template-columns:repeat(6,1fr)} }
 /* container-type:inline-size en cada mes: la letra se ajusta al ancho real de SU tarjeta,
    tanto si el widget Año crece (tarjetas más anchas dentro del mismo escalón de columnas)
    como si cambia el nº de columnas */
@@ -846,7 +851,7 @@ function sanitizeWidgetShape(w){
     id: (typeof w.id === "string" && w.id) ? w.id.slice(0, 64) : uid(),
     type: w.type,
     x: numOr(w.x, 40, 0, 8000), y: numOr(w.y, 40, 0, 8000),
-    w: numOr(w.w, t.w, 120, 4000), h: numOr(w.h, t.h, 80, 4000),
+    w: numOr(w.w, t.w, t.minW || 120, 4000), h: numOr(w.h, t.h, t.minH || 80, 4000),
     z: numOr(w.z, 1, 0, 1e6),
     data: (w.data && typeof w.data === "object") ? w.data : {},
     // exacto: "user" | "pack" | "pack:<slug acotado>" (para el futuro merge no destructivo)
@@ -865,6 +870,14 @@ function sanitizeState(s){
     sp.widgets = (Array.isArray(sp.widgets) ? sp.widgets : []).filter(w => w && WTYPES[w.type]).map(sanitizeWidgetShape);
     return sp;
   });
+  // migración única: el alto por defecto de "Mes" subió de 300 a 360 (más aire para el resumen
+  // de marcas); a los widgets ya existentes que se quedaron exactos en el valor viejo se les da
+  // el nuevo alto una sola vez. No se repite (por eso el flag), así no pisa un resize deliberado
+  // a 300 hecho después de esta migración.
+  if (!s.migratedCalH300){
+    for (const sp of s.spaces) for (const w of sp.widgets) if (w.type === "cal" && w.h === 300) w.h = 360;
+    s.migratedCalH300 = true;
+  }
   s.active = Math.min(Math.max(0, s.active | 0), s.spaces.length - 1);
   s.trash = Array.isArray(s.trash) ? s.trash.filter(x => x && typeof x === "object" && typeof x.kind === "string").slice(0, 30) : [];
   const validTypes = ["vacaciones","vacaciones_ant","asuntos","asuntos_ant","antiguedad","formacion","examenes","conciliacion","familiar","consulta","deber_publico","traslado","compensacion","festivo_nacional","festivo_local","guardia","curso","personal","otro"];
@@ -1491,8 +1504,8 @@ const WTYPES = {
   md:    { ico: "📄", name: "Markdown",     w: 340, h: 320 },
   img:   { ico: "🖼️", name: "Imagen",       w: 340, h: 280 },
   timer: { ico: "⏱️", name: "Temporizador", w: 290, h: 210 },
-  cal:   { ico: "📅", name: "Mes",          w: 310, h: 360 },
-  year:  { ico: "🗓️", name: "Año",          w: 520, h: 520 },
+  cal:   { ico: "📅", name: "Mes",          w: 310, h: 360, minW: 260, minH: 280 },
+  year:  { ico: "🗓️", name: "Año",          w: 520, h: 520, minW: 300, minH: 340 },
   leave: { ico: "🧾", name: "Permisos",     w: 390, h: 430 },
   search:{ ico: "🔎", name: "Buscadores",   w: 300, h: 330 },
   calc:  { ico: "🧮", name: "Calculadora",  w: 260, h: 340 },
@@ -1986,9 +1999,10 @@ function buildWindow(w){
     if (isMobile()) return;
     ev.preventDefault(); ev.stopPropagation();
     const sw = w.w - ev.clientX, sh = w.h - ev.clientY;
+    const t = WTYPES[w.type];
     const move = m => {
-      w.w = Math.max(220, sw + m.clientX);
-      w.h = Math.max(140, sh + m.clientY);
+      w.w = Math.max(t.minW || 220, sw + m.clientX);
+      w.h = Math.max(t.minH || 140, sh + m.clientY);
       el.style.width = w.w + "px"; el.style.height = w.h + "px";
     };
     const up = () => { removeEventListener("pointermove", move); removeEventListener("pointerup", up); markDirty(); };

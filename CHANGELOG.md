@@ -2,6 +2,7 @@
 
 ## [Sin publicar]
 
+- **Mes y Año se redimensionan con criterio.** Ambos widgets tienen ahora tamaño mínimo propio (no se pueden encoger hasta ser ilegibles), el Año añade columnas de una en una al crecer (la letra baja suave, sin saltos) y los widgets Mes existentes ganan una sola vez el nuevo alto por defecto, con más aire para el resumen.
 - **El widget Archivos gana buscador y ordenación.** Busca por nombre dentro de la carpeta concedida (incluye subcarpetas) y ordena por nombre, tipo o tamaño, con tamaños legibles. Con tests (`matchesTerm`, `extOf`, `humanSize`).
 - **«Calendario» pasa a llamarse «Mes»**, y tanto Mes como Año escalan ahora su tipografía al tamaño real de la ventana: amplíalos y se leen, no solo se estiran.
 - **Arrastre de pestañas más claro.** La pestaña que arrastras se atenúa y una barra de acento animada señala el lado exacto de inserción, sin parpadeos. El punto de color ● de Nota/Tareas muestra una rueda de color cuando aún no hay color elegido.
