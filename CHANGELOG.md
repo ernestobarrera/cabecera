@@ -1,5 +1,13 @@
 # Changelog
 
+## [Sin publicar]
+
+- **El widget Archivos gana buscador y ordenación.** Busca por nombre dentro de la carpeta concedida (incluye subcarpetas) y ordena por nombre, tipo o tamaño, con tamaños legibles. Con tests (`matchesTerm`, `extOf`, `humanSize`).
+- **«Calendario» pasa a llamarse «Mes»**, y tanto Mes como Año escalan ahora su tipografía al tamaño real de la ventana: amplíalos y se leen, no solo se estiran.
+- **Arrastre de pestañas más claro.** La pestaña que arrastras se atenúa y una barra de acento animada señala el lado exacto de inserción, sin parpadeos. El punto de color ● de Nota/Tareas muestra una rueda de color cuando aún no hay color elegido.
+- **Más seguro al conectar carpeta de sincronización.** Leer y vigilar `datos.json` ya no fabrica el archivo si falta de forma transitoria (nube aún sincronizando): antes, cualquier ausencia momentánea podía crear un archivo vacío en silencio. Y si la carpeta conectada no tiene aún `datos.json`, Cabecera pregunta antes de crear nada («Reintentar» / «Crear aquí» / elegir otra carpeta), en vez de sembrar un escritorio nuevo sin avisar. Guía actualizada con una nota sobre copias en conflicto y el historial de versiones de tu propia nube.
+- **La paleta recuerda la gramática de captura donde se usa.** Al abrir Ctrl+K en vacío aparecen chips discretos («t tarea», «n nota», «c clip», «e enlace», «v 12-16/8») que rellenan el prefijo con un clic, más un acceso a la sintaxis completa de la guía. Y si tecleas un prefijo incompleto o con una fecha imposible (`v 31/2`), una línea de pista te enseña la sintaxis correcta sin interrumpir la búsqueda. Con test propio (`captureHint`).
+
 ## [0.23.0] - 2026-07-08
 
 - **Color de ventana en Nota y Tareas, más minimalista.** El color tipo post-it deja de mostrarse siempre en el cuerpo de la nota: ahora hay un botón **●** en la barra de título, oculto hasta pasar el ratón (igual que las etiquetas). El widget de Tareas gana la misma opción de color para toda la ventana (además del color por tarea, que ya existía).

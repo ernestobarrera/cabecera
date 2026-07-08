@@ -40,7 +40,7 @@ if (!mdToHtml('```\nabierto').endsWith('</pre>')) throw new Error('fence sin cie
 console.log('OK mdToHtml (XSS bloqueado, formato correcto)');
 
 // --- normalizePack: pack malicioso ---
-globalThis.WTYPES = { links:{w:300,h:340}, notes:{w:300,h:220}, todo:{w:300,h:260}, clips:{w:320,h:300}, qr:{w:260,h:330}, clock:{w:240,h:170}, md:{w:340,h:320}, img:{w:340,h:280}, timer:{w:290,h:210}, cal:{w:310,h:300}, year:{w:520,h:520}, leave:{w:390,h:430}, search:{w:300,h:330}, calc:{w:260,h:340}, files:{w:380,h:360}, dictado:{w:330,h:300}, intro:{w:350,h:280} };
+globalThis.WTYPES = { links:{w:300,h:340}, notes:{w:300,h:220}, todo:{w:300,h:260}, clips:{w:320,h:300}, qr:{w:260,h:330}, clock:{w:240,h:170}, md:{w:340,h:320}, img:{w:340,h:280}, timer:{w:290,h:210}, cal:{w:310,h:360}, year:{w:520,h:520}, leave:{w:390,h:430}, search:{w:300,h:330}, calc:{w:260,h:340}, files:{w:380,h:360}, dictado:{w:330,h:300}, intro:{w:350,h:280} };
 globalThis.WP_PRESETS = [1, 2, 3, 4, 5, 6];
 eval('globalThis.normalizePack = ' + pickFn('normalizePack', 'p'));
 
@@ -249,5 +249,30 @@ for (const bad of ['T llamar', 'x foo', 'mañana comprar', 'vacaciones del 12 al
   if (parseCapture(bad, NOW) !== null) throw new Error('debería NO parsear: "' + bad + '"');
 if (parseCapture(null, NOW) !== null || parseCapture(42, NOW) !== null) throw new Error('entrada no-string debe ser null');
 console.log('OK parseCapture (gramática determinista, año sin magia, no-parseos respetados)');
+
+// --- captureHint: ayuda de última milla en la paleta ---
+eval('globalThis.captureHint = ' + pickFn('captureHint', 'q'));
+if (!/^t texto/.test(captureHint('t') || '')) throw new Error('hint: "t" solo debe enseñar la sintaxis de tarea');
+if (!/^v 12-16\/8/.test(captureHint('v 31/2') || '')) throw new Error('hint: "v" con fecha imposible debe enseñar la sintaxis de marca');
+if (!/enlace/.test(captureHint('e ') || '')) throw new Error('hint: "e " debe enseñar la sintaxis de enlace');
+for (const noHint of ['temporizador', 'nota de ayer', 'x foo', '', '   ', 'T '])
+  if (captureHint(noHint) !== null) throw new Error('hint: no debería haber pista para "' + noHint + '"');
+if (captureHint(42) !== null) throw new Error('hint: entrada no-string debe ser null');
+console.log('OK captureHint (pista solo ante prefijo real, búsquedas normales sin ruido)');
+
+// --- widget Archivos: buscador (matchesTerm) y orden (extOf, humanSize) ---
+eval('globalThis.matchesTerm = ' + pickFn('matchesTerm', 'name, term'));
+eval('globalThis.extOf = ' + pickFn('extOf', 'name'));
+eval('globalThis.humanSize = ' + pickFn('humanSize', 'bytes'));
+if (!matchesTerm('Informe.pdf', 'inf')) throw new Error('matchesTerm: no encuentra substring case-insensitive');
+if (matchesTerm('Informe.pdf', '')) throw new Error('matchesTerm: término vacío no debe casar con nada');
+if (matchesTerm('foto.jpg', 'zzz')) throw new Error('matchesTerm: falso positivo');
+if (extOf('archivo.tar.gz') !== 'gz') throw new Error('extOf: extensión final incorrecta');
+if (extOf('sinextension') !== '') throw new Error('extOf: sin punto debe ser cadena vacía');
+if (extOf('.gitignore') !== '') throw new Error('extOf: punto inicial no cuenta como extensión');
+if (humanSize(500) !== '500 B') throw new Error('humanSize: bytes sin convertir');
+if (humanSize(2048) !== '2.0 KB') throw new Error('humanSize: conversión a KB incorrecta');
+if (humanSize(5 * 1024 * 1024) !== '5.0 MB') throw new Error('humanSize: conversión a MB incorrecta');
+console.log('OK widget Archivos (matchesTerm, extOf, humanSize)');
 
 console.log('\nTODO EN VERDE');
