@@ -1,6 +1,6 @@
 # Changelog
 
-## [Sin publicar]
+## [0.24.0] - 2026-07-08
 
 - **Mes y Año se redimensionan con criterio.** Ambos widgets tienen ahora tamaño mínimo propio (no se pueden encoger hasta ser ilegibles), el Año añade columnas de una en una al crecer (la letra baja suave, sin saltos) y los widgets Mes existentes ganan una sola vez el nuevo alto por defecto, con más aire para el resumen.
 - **El widget Archivos gana buscador y ordenación.** Busca por nombre dentro de la carpeta concedida (incluye subcarpetas) y ordena por nombre, tipo o tamaño, con tamaños legibles. Con tests (`matchesTerm`, `extOf`, `humanSize`).
