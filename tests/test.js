@@ -186,6 +186,98 @@ const rSame = clampRect(100, 100, 300, 200, 1366, 768);
 if (rSame.x !== 100 || rSame.y !== 100 || rSame.w !== 300 || rSame.h !== 200) throw new Error('clampRect: altera un rect que ya cabía');
 console.log('OK maxRect/clampRect (maximizado sigue al viewport, restauración entre monitores, basura saneada)');
 
+// --- Fase 1 motor de encuadre puro (acta 2026-07-09, aún sin conectar a render) ---
+// WTYPES real (el stub simplificado de la sección normalizePack no trae minW/minH)
+eval('globalThis.WTYPES = ' + src.match(/const WTYPES = (\{[\s\S]*?\});/)[1]);
+eval('globalThis.safeViewportRect = ' + pickFn('safeViewportRect', 'vw, vh'));
+eval('globalThis.widgetLayoutSpec = ' + pickFn('widgetLayoutSpec', 'type'));
+eval('globalThis.fitRectToViewport = ' + pickFn('fitRectToViewport', 'rect, spec, viewport'));
+eval('globalThis.planViewportLayout = ' + pickFn('planViewportLayout', 'widgets, viewport'));
+
+// safeViewportRect reutiliza maxRect (mismo área útil, sin duplicar el cálculo)
+for (const [vw, vh] of [[1366, 768], [1920, 1200], [3840, 2160]])
+  if (JSON.stringify(safeViewportRect(vw, vh)) !== JSON.stringify(maxRect(vw, vh)))
+    throw new Error('safeViewportRect: diverge de maxRect en ' + vw + 'x' + vh);
+
+// widgetLayoutSpec: deriva de WTYPES sin escribir en la tabla
+const specYear = widgetLayoutSpec('year');
+if (specYear.w !== 520 || specYear.h !== 520 || specYear.minW !== 300 || specYear.minH !== 340)
+  throw new Error('widgetLayoutSpec: no deriva bien los valores existentes de "year"');
+const specNotes = widgetLayoutSpec('notes');   // WTYPES.notes no trae minW/minH propios
+if (specNotes.minW !== 220 || specNotes.minH !== 140) throw new Error('widgetLayoutSpec: mínimos por defecto incorrectos');
+if (WTYPES.notes.minW !== undefined || WTYPES.notes.minH !== undefined)
+  throw new Error('widgetLayoutSpec: mutó WTYPES en vivo (ronda 2 Codex: prohibido en Fase 1)');
+if (widgetLayoutSpec('inventado').w !== 260) throw new Error('widgetLayoutSpec: tipo desconocido sin fallback sano');
+
+// fitRectToViewport: un rect que ya cabe no se toca (paridad con clampRect)
+const vp1366 = safeViewportRect(1366, 768);
+const fitSame = fitRectToViewport({ x: 100, y: 100, w: 300, h: 200 }, widgetLayoutSpec('notes'), vp1366);
+if (fitSame.x !== 100 || fitSame.y !== 100 || fitSame.w !== 300 || fitSame.h !== 200)
+  throw new Error('fitRectToViewport: altera un rect que ya cabía');
+
+// fitRectToViewport: guardado en 4K, proyectado en portátil — debe quedar ENTERO dentro del
+// viewport (no solo el título asomando, la crítica exacta que Codex hizo a clampRect)
+const fit4k = fitRectToViewport({ x: 3400, y: 1900, w: 520, h: 520 }, widgetLayoutSpec('year'), vp1366);
+if (fit4k.x < vp1366.x || fit4k.y < vp1366.y) throw new Error('fitRectToViewport: rect fuera del borde superior/izquierdo');
+if (fit4k.x + fit4k.w > vp1366.x + vp1366.w + 0.001) throw new Error('fitRectToViewport: cuerpo se sale por la derecha, no solo el título');
+if (fit4k.y + fit4k.h > vp1366.y + vp1366.h + 0.001) throw new Error('fitRectToViewport: cuerpo se sale por abajo, no solo el título');
+
+// fitRectToViewport: entrada basura (NaN/null/strings) — nunca produce valores no finitos
+const fitBad = fitRectToViewport({ x: 'x', y: null, w: NaN, h: {} }, widgetLayoutSpec('notes'), vp1366);
+for (const k of ['x', 'y', 'w', 'h']) if (!Number.isFinite(fitBad[k])) throw new Error('fitRectToViewport: valor no finito con entrada basura (' + k + ')');
+
+// fitRectToViewport: widget mayor que el viewport útil (ventana muy estrecha, 320px) —
+// se encoge a sus mínimos y no rompe, aunque no llegue a caber del todo
+const vpTiny = safeViewportRect(320, 480);
+const fitTiny = fitRectToViewport({ x: 0, y: 0, w: 520, h: 520 }, widgetLayoutSpec('year'), vpTiny);
+if (!Number.isFinite(fitTiny.w) || !Number.isFinite(fitTiny.h) || fitTiny.w < 300 || fitTiny.h < 340)
+  throw new Error('fitRectToViewport: no respeta mínimos en viewport diminuto');
+
+console.log('OK fitRectToViewport (rect intacto si cabe, proyección 4K→portátil sin franja, basura saneada, mínimos respetados)');
+
+// planViewportLayout: plegado siempre a 42px, con independencia del h guardado
+const planCollapsed = planViewportLayout([{ id: 'a', type: 'notes', x: 50, y: 50, w: 300, h: 900, collapsed: true }], vp1366);
+if (planCollapsed[0].h !== 42) throw new Error('planViewportLayout: widget plegado no queda en 42px');
+
+// planViewportLayout: viewport justo por encima del corte a móvil (701-900px) — salida sana
+const vp750 = safeViewportRect(750, 600);
+const planNarrow = planViewportLayout([{ id: 'b', type: 'files', x: 3000, y: 10, w: 380, h: 360 }], vp750);
+if (planNarrow[0].x + planNarrow[0].w > vp750.x + vp750.w + 0.001) throw new Error('planViewportLayout: se sale del viewport 701-900px');
+
+// planViewportLayout: widget con w.max presente (maximizado) no debe romper la proyección
+// (Fase 1 no gobierna ese caso — sigue en manos de maxRect/clampRect vía buildWindow/resize)
+const planMax = planViewportLayout([{ id: 'c', type: 'notes', x: 10, y: 10, w: 300, h: 200, max: { x: 0, y: 0, w: 100, h: 100 } }], vp1366);
+if (!Number.isFinite(planMax[0].x) || !Number.isFinite(planMax[0].w)) throw new Error('planViewportLayout: widget maximizado rompe la proyección');
+
+// planViewportLayout: muchos widgets simultáneos — cada uno queda contenido en el viewport
+// (Fase 1 proyecta de forma independiente; NO empaqueta ni evita solapes entre sí)
+const manyWidgets = Array.from({ length: 15 }, (_, i) => ({ id: 'w' + i, type: 'notes', x: 100 + i * 5, y: 100 + i * 5, w: 300, h: 220 }));
+const planMany = planViewportLayout(manyWidgets, vp1366);
+for (const r of planMany){
+  if (r.x < vp1366.x || r.y < vp1366.y) throw new Error('planViewportLayout: widget fuera del borde con muchos abiertos');
+  if (r.x + r.w > vp1366.x + vp1366.w + 0.001 || r.y + r.h > vp1366.y + vp1366.h + 0.001)
+    throw new Error('planViewportLayout: widget se sale del viewport con muchos abiertos');
+}
+
+// caso real reportado: sesión guardada en el monitor grande de casa (2560x1440), abierta en
+// cada uno de los buckets representativos de dispositivo — siempre queda dentro del viewport
+const savedInBigMonitor = [
+  { id: 'links', type: 'links', x: 2200, y: 1100, w: 300, h: 340 },
+  { id: 'year', type: 'year', x: 1800, y: 700, w: 520, h: 520 },
+  { id: 'files', type: 'files', x: 2000, y: 900, w: 380, h: 360 },
+];
+const buckets = [[1280, 800], [1366, 768], [1920, 1080], [1920, 1200], [2560, 1440], [3840, 2160]];
+for (const [vw, vh] of buckets){
+  const vp = safeViewportRect(vw, vh);
+  const plan = planViewportLayout(savedInBigMonitor, vp);
+  for (const r of plan){
+    if (r.x < vp.x - 0.001 || r.y < vp.y - 0.001) throw new Error('bucket ' + vw + 'x' + vh + ': widget fuera del borde superior/izquierdo');
+    if (r.x + r.w > vp.x + vp.w + 0.001 || r.y + r.h > vp.y + vp.h + 0.001)
+      throw new Error('bucket ' + vw + 'x' + vh + ': widget se sale por la derecha/abajo (el bug reportado por Ernesto)');
+  }
+}
+console.log('OK planViewportLayout (plegados, 701-900px, maximizado no rompe, muchos widgets, 4K→todos los buckets sin salirse)');
+
 // --- gradientAvgHex: acento de pestaña calculado del degradado de fondo (sin canvas, barato) ---
 eval('globalThis.gradientAvgHex = ' + pickFn('gradientAvgHex', 'css'));
 if (gradientAvgHex('linear-gradient(135deg,#1b2735 0%,#090a0f 100%)') !== '#121922') throw new Error('gradientAvgHex: promedio de dos tonos incorrecto');
@@ -259,6 +351,24 @@ for (const noHint of ['temporizador', 'nota de ayer', 'x foo', '', '   ', 'T '])
   if (captureHint(noHint) !== null) throw new Error('hint: no debería haber pista para "' + noHint + '"');
 if (captureHint(42) !== null) throw new Error('hint: entrada no-string debe ser null');
 console.log('OK captureHint (pista solo ante prefijo real, búsquedas normales sin ruido)');
+
+// --- escrituras fantasma: los cambios automáticos no programan guardado FS ---
+// (spec escrituras-fantasma, veredicto Codex 2026-07-09: abrir Cabecera jamás escribe)
+eval('globalThis.markAuto = ' + pickFn('markAuto', ''));
+let dirtyCalls = 0;
+globalThis.markDirty = () => dirtyCalls++;
+globalThis.renderTaskChip = () => {};
+globalThis.backend = 'fs';
+markAuto();
+if (dirtyCalls !== 0) throw new Error('markAuto en modo sincronizado NO debe programar guardado');
+globalThis.backend = 'local';
+markAuto();
+if (dirtyCalls !== 1) throw new Error('markAuto en modo local debe delegar en markDirty');
+// invariantes de fuente contra regresiones de los callsites auditados
+if (src.includes('if (touched) markDirty')) throw new Error('regresión: el resize automático vuelve a persistir');
+if (!/if \(changed\) markAuto\(\);/.test(src)) throw new Error('regresión: checkTaskAlerts ya no usa markAuto');
+if (!src.includes('freshPending')) throw new Error('falta el guardián de frescura tras segundo plano');
+console.log('OK escrituras fantasma (markAuto por backend, resize sin persistir, alertas a caballito, guardián de frescura presente)');
 
 // --- widget Archivos: buscador (matchesTerm) y orden (extOf, humanSize) ---
 eval('globalThis.matchesTerm = ' + pickFn('matchesTerm', 'name, term'));

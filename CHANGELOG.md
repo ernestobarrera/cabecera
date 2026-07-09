@@ -1,5 +1,11 @@
 # Changelog
 
+## [Sin publicar]
+
+- **Fin de las escrituras fantasma: abrir Cabecera ya no escribe nunca tu archivo.** Dos guardados automáticos podían escribir `datos.json` sin que tocaras nada — el reajuste de ventanas maximizadas al cambiar el tamaño del navegador, y el registro «ya avisé» de las alarmas de tareas al dispararse. Ese segundo caso era exactamente el conflicto matutino: abrías la pestaña, saltaban los avisos de la noche y Cabecera escribía sobre la versión vieja antes de que tu nube bajara la buena, generando copias en conflicto. Ahora los cambios automáticos viven en memoria y viajan a disco con tu siguiente edición real; tu arrastre y redimensionado manual siguen guardándose como siempre.
+- **Guardián de frescura al volver a la pestaña.** Tras más de un minuto en segundo plano (donde el navegador congela la vigilancia periódica), el primer guardado espera a comprobar la sincronización — verás «comprobando sincronización…» un instante — para no escribir sobre una versión anticuada mientras tu nube todavía descarga.
+- Coste asumido y honesto: si un aviso de tarea suena y cierras sin editar nada, al reabrir puede sonar una vez más. Con tests nuevos (comportamiento por modo e invariantes contra regresión de los puntos auditados).
+
 ## [0.24.0] - 2026-07-08
 
 - **Mes y Año se redimensionan con criterio.** Ambos widgets tienen ahora tamaño mínimo propio (no se pueden encoger hasta ser ilegibles), el Año añade columnas de una en una al crecer (la letra baja suave, sin saltos) y los widgets Mes existentes ganan una sola vez el nuevo alto por defecto, con más aire para el resumen.

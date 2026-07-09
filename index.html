@@ -1119,7 +1119,28 @@ function markDirty(){
   saveTimer = setTimeout(saveNow, 700);
 }
 
+// Cambio AUTOMÁTICO (sin acción humana): en modo sincronizado NO programa guardado —
+// la mutación queda en memoria y viaja a disco con el siguiente guardado humano.
+// Escribir datos.json sin humano es lo que bifurcaba OneDrive por las mañanas
+// (spec escrituras-fantasma; veredicto Codex 2026-07-09). En modo local no hay nube
+// que bifurcar, así que persiste como siempre.
+function markAuto(){
+  if (backend !== "fs"){ markDirty(); return; }
+  renderTaskChip();
+}
+
+// Tras >60 s en segundo plano (timers estrangulados: la vigilancia de 4 s no corrió),
+// el PRIMER guardado sincronizado espera un poll limpio: OneDrive puede estar aún
+// bajando la versión de otro equipo. Sin modal: solo «comprobando sincronización…».
+let freshPending = false, hiddenAt = 0;
+
 async function saveNow(){
+  if (backend === "fs" && freshPending){
+    syncUI("saving", "comprobando sincronización…");
+    try{ await poll(); }catch(e){}
+    freshPending = false;
+    if (conflictPending) return;        // el humano decide en la barra de conflicto
+  }
   state.updatedAt = Date.now();
   saving = true;
   try{
@@ -1772,6 +1793,41 @@ function clampRect(x, y, ww, hh, vw, vh){   // encaja un rect guardado (quizá d
     h: Math.min(numOr(hh, 180, 140, 4000), Math.max(140, vh - bar - 24))
   };
 }
+/* ---------- Fase 1 (contraste Codex↔Claude, acta 2026-07-09): motor de encuadre puro,
+   aún SIN conectar a render/drag/resize/datos.json. safeViewportRect reutiliza maxRect
+   (mismo área útil, sin duplicar cálculo). widgetLayoutSpec deriva mínimos de WTYPES SIN
+   escribir en la tabla (ronda 2 Codex: el resize manual ya lee minW/minH en vivo — mutar
+   WTYPES cambiaría ese comportamiento antes de que este motor esté conectado a nada).
+   fitRectToViewport nunca deja solo una franja de título visible: si el widget cabe, lo
+   mete entero; si no, lo encoge hasta sus mínimos y lo reposiciona dentro del área útil.
+   planViewportLayout proyecta cada widget de forma independiente: sin packing ni
+   resolución de colisiones (eso ya lo cubre autoArrangeWidgets a petición explícita); la
+   política de "no caben todos abiertos" queda como hipótesis a validar en Fase 2. */
+function safeViewportRect(vw, vh){
+  return maxRect(vw, vh);
+}
+function widgetLayoutSpec(type){
+  const t = WTYPES[type] || {};
+  return { w: t.w || 260, h: t.h || 180, minW: t.minW || 220, minH: t.minH || 140 };
+}
+function fitRectToViewport(rect, spec, viewport){
+  const w = Math.max(spec.minW, Math.min(numOr(rect.w, spec.w, spec.minW, 4000), viewport.w));
+  const h = Math.max(spec.minH, Math.min(numOr(rect.h, spec.h, spec.minH, 4000), viewport.h));
+  const maxX = Math.max(viewport.x, viewport.x + viewport.w - w);
+  const maxY = Math.max(viewport.y, viewport.y + viewport.h - h);
+  const x = Math.min(Math.max(numOr(rect.x, viewport.x, -100000, 100000), viewport.x), maxX);
+  const y = Math.min(Math.max(numOr(rect.y, viewport.y, -100000, 100000), viewport.y), maxY);
+  return { x, y, w, h };
+}
+function planViewportLayout(widgets, viewport){
+  return widgets.map(w => {
+    const spec = widgetLayoutSpec(w.type);
+    const storedH = w.collapsed ? 42 : numOr(w.h, spec.h, spec.minH, 4000);
+    const effSpec = w.collapsed ? { ...spec, minH: 0 } : spec;
+    const rect = fitRectToViewport({ x: w.x, y: w.y, w: w.w, h: storedH }, effSpec, viewport);
+    return { id: w.id, x: rect.x, y: rect.y, w: rect.w, h: w.collapsed ? 42 : rect.h };
+  });
+}
 function toggleMaximize(w){   // ⛶ ocupa el escritorio; ❐ restaura el tamaño y posición previos
   if (isMobile()) return;
   if (w.max){
@@ -1879,10 +1935,14 @@ function buildWindow(w){
     const m = maxRect(innerWidth, innerHeight);
     w.x = m.x; w.y = m.y; w.w = m.w; w.h = m.h;
   }
+  // Fase 2 (acta 2026-07-09): proyección no destructiva — se PINTA el rect ajustado al
+  // viewport actual; lo persistido (w.x/y/w/h) no se toca aquí, solo al arrastrar/
+  // redimensionar/imantar (ver los pointerdown de título y esquina más abajo).
+  const paint = isMobile() ? widgetRect(w) : planViewportLayout([w], safeViewportRect(innerWidth, innerHeight))[0];
   const el = document.createElement("div");
   el.className = "win";
   el.dataset.id = w.id;
-  el.style.cssText = `left:${+w.x || 0}px; top:${+w.y || 0}px; width:${+w.w || 260}px; height:${+w.h || 180}px; z-index:${+w.z || 1}`;
+  el.style.cssText = `left:${paint.x}px; top:${paint.y}px; width:${paint.w}px; height:${paint.h}px; z-index:${+w.z || 1}`;
   const dictBtn = w.type === "notes" ? `<button class="win-btn dict-recv-btn" title="Recibir el dictado en esta nota">🎙️</button>` : "";
   const colorable = w.type === "notes" || w.type === "todo";
   const colorBtn = colorable ? `<button class="win-btn colorbtn" title="Color de la ventana"><span class="cdot"></span></button>` : "";
@@ -1957,14 +2017,17 @@ function buildWindow(w){
   const title = el.querySelector(".win-title");
   title.addEventListener("pointerdown", ev => {
     if (ev.target.closest("button") || isMobile()) return;   // móvil: sin arrastre (scroll táctil)
-    const sx = ev.clientX - w.x, sy = ev.clientY - w.y;
+    const vp = safeViewportRect(innerWidth, innerHeight);
+    const proj = planViewportLayout([w], vp)[0];   // Fase 2: origen = rect realmente visible, no el crudo guardado (evita salto al empezar a arrastrar)
+    const sx = ev.clientX - proj.x, sy = ev.clientY - proj.y;
     let overTab = null, dragging = false, dragRects = null;
     const move = m => {
       if (!dragging){
         // umbral: hasta que hay movimiento real no es arrastre (así el clic/doble clic siguen funcionando)
         if (Math.abs(m.clientX - ev.clientX) + Math.abs(m.clientY - ev.clientY) < 4) return;
         dragging = true;
-        dragRects = state.widgets.filter(x => x.id !== w.id).map(widgetRect);   // para el imán
+        w.x = proj.x; w.y = proj.y; w.w = proj.w; w.h = proj.h;   // promueve el rect visible a estado real solo al confirmarse el arrastre
+        dragRects = planViewportLayout(state.widgets.filter(x => x.id !== w.id), vp);   // imán contra lo realmente visible, no posiciones fuera de encuadre
         el.style.pointerEvents = "none";   // para que elementFromPoint vea la barra bajo el cursor
       }
       w.x = Math.max(0, Math.min(m.clientX - sx, innerWidth - 80));
@@ -1998,9 +2061,12 @@ function buildWindow(w){
   el.querySelector(".win-resize").addEventListener("pointerdown", ev => {
     if (isMobile()) return;
     ev.preventDefault(); ev.stopPropagation();
-    const sw = w.w - ev.clientX, sh = w.h - ev.clientY;
+    const proj = planViewportLayout([w], safeViewportRect(innerWidth, innerHeight))[0];   // Fase 2: origen visible, no el crudo
+    const sw = proj.w - ev.clientX, sh = proj.h - ev.clientY;
     const t = WTYPES[w.type];
+    let moved = false;
     const move = m => {
+      if (!moved){ moved = true; w.x = proj.x; w.y = proj.y; }   // promueve posición solo si de verdad hay redimensionado
       w.w = Math.max(t.minW || 220, sw + m.clientX);
       w.h = Math.max(t.minH || 140, sh + m.clientY);
       el.style.width = w.w + "px"; el.style.height = w.h + "px";
@@ -3818,18 +3884,17 @@ function wireUI(){
   spacesBox.addEventListener("scroll", updateSpacesFades);
   addEventListener("resize", () => {
     updateSpacesFades();
-    // las ventanas maximizadas siguen al viewport (cambio de tamaño, monitor o resolución)
+    // las ventanas maximizadas siguen al viewport (cambio de tamaño, monitor o resolución).
+    // Recomputación pura: NO persiste (se recalcula en cada carga; escribir aquí era una
+    // escritura fantasma que podía bifurcar OneDrive — spec escrituras-fantasma).
     if (isMobile() || !state) return;
-    let touched = false;
     state.widgets.forEach(w => {
       if (!w.max) return;
       const m = maxRect(innerWidth, innerHeight);
       w.x = m.x; w.y = m.y; w.w = m.w; w.h = m.h;
       const el = document.querySelector(`.win[data-id="${w.id}"]`);
       if (el){ el.style.left = m.x + "px"; el.style.top = m.y + "px"; el.style.width = m.w + "px"; el.style.height = m.h + "px"; }
-      touched = true;
     });
-    if (touched) markDirty();
   });
   // aviso de tareas: cada clic salta a la siguiente tarea vencida o de hoy
   $("#tb-tasks").addEventListener("click", () => {
@@ -4041,7 +4106,13 @@ function wireUI(){
   $("#popups-close").addEventListener("click", () => $("#ov-popups").classList.remove("open"));
 
   // al volver a la pestaña, comprobar cambios de inmediato (no esperar al ciclo)
-  document.addEventListener("visibilitychange", () => { if (!document.hidden) poll(); });
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden){ hiddenAt = Date.now(); return; }
+    // al volver de >60 s en segundo plano, el próximo guardado FS espera un poll limpio
+    if (backend === "fs" && hiddenAt && Date.now() - hiddenAt > 60000) freshPending = true;
+    hiddenAt = 0;
+    poll().then(() => { freshPending = false; });
+  });
 
   // avisar si Cabecera ya está abierta en otra pestaña del mismo navegador
   try{
@@ -4135,7 +4206,10 @@ function checkTaskAlerts(){
       toastAction("Aviso: " + snippet(it.t || "tarea"), "Ver", () => focusWidget(w.id, si));
     });
   }));
-  if (changed) markDirty();
+  // alertedAt viaja con el siguiente guardado humano: los avisos que saltan al abrir
+  // por la mañana ya no escriben sobre la base rancia (era EL conflicto matutino).
+  // Coste asumido: si se recarga sin haber editado, un aviso puede repetirse una vez.
+  if (changed) markAuto();
 }
 function startTaskAlerts(){
   setInterval(checkTaskAlerts, 30000);
