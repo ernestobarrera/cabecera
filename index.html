@@ -3913,7 +3913,9 @@ function wireUI(){
     if (e.target.closest(".win,#menu,#taskbar,.overlay")) return;
     if (!e.target.closest("#desktop") && e.target !== document.body && e.target !== $("#wallpaper")) return;
     e.preventDefault(); e.stopPropagation();
-    openMenu("start", { x: e.clientX, y: e.clientY });
+    // doble clic = paleta (el centro de todo); con Ctrl = menú de creación junto al puntero
+    if (e.ctrlKey) openMenu("start", { x: e.clientX, y: e.clientY });
+    else openMenu("palette");
   });
   document.addEventListener("click", e => {
     if (!e.target.closest("#menu") && !e.target.closest("#btn-inicio") && !e.target.closest("#desk-dock")) closeMenu();
