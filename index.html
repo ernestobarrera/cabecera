@@ -733,7 +733,7 @@ ul.plain{list-style:none}
     </div>
     <div id="mark-list" class="mark-list"></div>
     <div class="row">
-      <button class="btn primary" id="mark-save">Guardar</button>
+      <button class="btn primary" id="mark-save">Añadir marca</button>
       <button class="btn" id="mark-close">Cerrar</button>
     </div>
   </div>
@@ -2576,6 +2576,7 @@ function bodyTodo(w, el){
         it.done = e.target.checked;
         it.doneAt = it.done ? Date.now() : undefined;
         if (!it.done) delete it.alertedAt;
+        if (it.done) playDoneClick();
         paint(); markDirty();
       });
       li.querySelector(".t").addEventListener("dblclick", () => editItem(it, li));
@@ -2912,6 +2913,25 @@ function playAlertSound(kind = "soft"){
     setTimeout(() => ac.close(), Math.max(800, seq.length * 300));
   }catch(e){}
 }
+// Clic breve y grave→agudo al completar una tarea: refuerzo discreto del trabajo hecho.
+// Solo suena en el gesto de marcar (nunca al desmarcar); nace de un clic del usuario,
+// así que el AudioContext no está suspendido; si lo estuviera, calla (sin cola).
+function playDoneClick(){
+  try{
+    const ac = new (window.AudioContext || window.webkitAudioContext)();
+    if (ac.state === "suspended"){ try{ ac.close(); }catch(e){} return; }
+    const t = ac.currentTime;
+    const o = ac.createOscillator(), g = ac.createGain();
+    o.type = "sine";
+    o.frequency.setValueAtTime(587, t);
+    o.frequency.exponentialRampToValueAtTime(1175, t + 0.06);
+    g.gain.setValueAtTime(0.10, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.11);
+    o.connect(g); g.connect(ac.destination);
+    o.start(t); o.stop(t + 0.12);
+    setTimeout(() => { try{ ac.close(); }catch(e){} }, 250);
+  }catch(e){}
+}
 function fmtClock(ms, withHours = false){
   const s = Math.max(0, Math.round(ms / 1000)), h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), r = s % 60;
   return (withHours || h) ? `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(r).padStart(2, "0")}` : `${String(m).padStart(2, "0")}:${String(r).padStart(2, "0")}`;
@@ -3118,6 +3138,7 @@ const CAL_MARK_COLORS = {
 };
 // Conceptos propios del usuario (state.customMarkTypes): conviven con los canónicos.
 function customMarkTypes(){ return (state && Array.isArray(state.customMarkTypes)) ? state.customMarkTypes : []; }
+function customMarkIds(){ return customMarkTypes().map(c => c.id); }
 function customMarkType(t){ return customMarkTypes().find(c => c.id === t) || null; }
 function isMarkType(t){ return !!(CAL_MARK_TYPES[t] || customMarkType(t)); }
 function markTypeLabel(t, fb = "Otro"){ return CAL_MARK_TYPES[t] || (customMarkType(t) || {}).label || fb; }
@@ -3266,6 +3287,8 @@ function renderCustomMarkTypes(){
     `<span class="chip"><span class="dot" style="background:${c.color}"></span>${esc(c.label)}<button class="rmc" data-id="${esc(c.id)}" title="Quitar concepto">✕</button></span>`).join("");
   box.querySelectorAll(".rmc").forEach(b => b.addEventListener("click", () => {
     const id = b.dataset.id;
+    // el ✕ del chip elimina el CONCEPTO (no la marca del día): confirmar evita perderlo sin querer
+    if (!confirm(`¿Quitar el concepto «${markTypeLabel(id)}» de tu lista? Sus marcas pasan a «Otro». Para quitar solo la marca de un día, usa el ✕ de la lista de marcas.`)) return;
     state.customMarkTypes = customMarkTypes().filter(c => c.id !== id);
     if (!state.customMarkTypes.length) delete state.customMarkTypes;
     (state.calendarMarks || []).forEach(m => { if (m.type === id) m.type = "otro"; });
@@ -3293,7 +3316,7 @@ function saveCustomMarkType(){
   $("#mark-custom-form").style.display = "none";
   renderCustomMarkTypes();
   markDirty();
-  toast(`Concepto «${name}» creado y seleccionado`);
+  toast(`Concepto «${name}» creado y seleccionado — «Añadir marca» lo aplica a la fecha`);
 }
 function renderMarkList(ds){
   const box = $("#mark-list");
@@ -3311,6 +3334,7 @@ function renderMarkList(ds){
       renderMarkList(ds);
       renderAll();
       markDirty();
+      toast("Marca quitada (ya está aplicado: puedes cerrar)");
     });
     box.appendChild(d);
   });
@@ -3881,7 +3905,7 @@ function openGroup(links){
    una persona, una macro o un agente. Parser puro: línea → acción o null.
    Reglas fijas: prefijo minúscula+espacio; si no hay confianza total, NO interpreta;
    año SIEMPRE el de `now` salvo explícito (sin salto automático: cero magia). */
-function parseCapture(line, now){
+function parseCapture(line, now, customIds){
   if (typeof line !== "string") return null;
   const s = line.trim();
   if (!s) return null;
@@ -3918,14 +3942,19 @@ function parseCapture(line, now){
     return due ? { kind: "task", text: dm[1], due } : { kind: "task", text: rest };
   }
   // v: marca de calendario — estricto: toca estado global, así que fecha inválida
-  // o concepto no canónico anulan el parseo entero (sin degradación)
+  // o concepto desconocido anulan el parseo entero (sin degradación). customIds:
+  // ids de los conceptos propios del usuario, comparados por el mismo slug con el que nacen
   const v = rest.match(/^(\d{1,2})(?:-(\d{1,2}))?\/(\d{1,2})(?:\/(\d{4}))?(?: +(\S+))?$/);
   if (!v) return null;
   let type = "vacaciones";
   if (v[5]){
     const key = v[5].normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-    if (!CAL_MARK_TYPES[key]) return null;
-    type = key;
+    if (CAL_MARK_TYPES[key]) type = key;
+    else {
+      const slug = key.replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+      if (!(customIds || []).includes(slug)) return null;
+      type = slug;
+    }
   }
   const a = Math.min(+v[1], +(v[2] || v[1])), b = Math.max(+v[1], +(v[2] || v[1]));
   const start = iso(v[4] || now.getFullYear(), v[3], a), end = iso(v[4] || now.getFullYear(), v[3], b);
@@ -3941,7 +3970,7 @@ function captureHint(q){
     n: "n texto — añade una nota",
     c: "c texto — guarda un clip en el portapapeles",
     e: "e https://… título — guarda un enlace (o pega la URL directamente)",
-    v: "v 12-16/8 concepto — marca el calendario (v 12/8 guardia · sin concepto = vacaciones)"
+    v: "v 12-16/8 concepto — marca el calendario (v 12/8 guardia · valen tus conceptos propios · sin concepto = vacaciones)"
   };
   const m = q.trim().match(/^([tncev])(?: |$)/);
   return m ? HINTS[m[1]] : null;
@@ -3956,7 +3985,7 @@ const CAPTURE_META = {
 };
 function captureSummary(cap){
   if (cap.kind === "link") return cap.title || cap.url;
-  if (cap.kind === "mark") return (CAL_MARK_TYPES[cap.type] || "Marca") + " · " + cap.start + (cap.end !== cap.start ? " → " + cap.end : "");
+  if (cap.kind === "mark") return markTypeLabel(cap.type, "Marca") + " · " + cap.start + (cap.end !== cap.start ? " → " + cap.end : "");
   return snippet(cap.text) + (cap.due ? " · " + new Date(cap.due + "T00:00:00").toLocaleDateString("es-ES", { day: "numeric", month: "short" }) : "");
 }
 // destino siempre visible ANTES de confirmar (spec: nada se crea en otro espacio en silencio)
@@ -3976,7 +4005,7 @@ function applyCapture(cap, target){
   };
   if (cap.kind === "mark"){
     if (!Array.isArray(state.calendarMarks)) state.calendarMarks = [];
-    state.calendarMarks.unshift({ id: "cm_" + uid(), start: cap.start, end: cap.end, type: cap.type, label: CAL_MARK_TYPES[cap.type] || "Marca", unit: "days" });
+    state.calendarMarks.unshift({ id: "cm_" + uid(), start: cap.start, end: cap.end, type: cap.type, label: markTypeLabel(cap.type, "Marca"), unit: "days" });
     state.calendarMarks = sanitizeState(state).calendarMarks;   // mismo saneo que saveCalendarMark
     refreshCalendarConsumers();
   } else if (cap.kind === "task"){
@@ -4062,7 +4091,7 @@ function renderResults(q){
   const box = $("#menu-results");
   // gramática de captura: si lo tecleado parsea, «crear» es la PRIMERA opción (Enter confirma);
   // si no parsea, la paleta sigue siendo búsqueda normal — sin modos
-  const cap = parseCapture(q, new Date());
+  const cap = parseCapture(q, new Date(), customMarkIds());
   // ayuda de última milla: prefijo tecleado que (aún) no parsea → pista de sintaxis
   const hint = cap ? null : captureHint(q);
   q = q.trim().toLowerCase();
@@ -4448,7 +4477,7 @@ function paintInbox(){
     d.className = "inbox-line";
     // gramática de captura: si la línea parsea, se ofrece la conversión sugerida con su
     // destino visible; NUNCA se auto-crea (el humano confirma línea a línea)
-    const cap = parseCapture(line, new Date());
+    const cap = parseCapture(line, new Date(), customMarkIds());
     const sug = cap ? `<button class="mini sug">→ ${CAPTURE_META[cap.kind].ico} ${esc(CAPTURE_META[cap.kind].name)} ${esc(captureDest(cap))}</button>` : "";
     d.innerHTML = `<span class="t">${esc(line)}</span>${sug}
       <button class="mini n">📝 Nota</button><button class="mini k">✅ Tarea</button><button class="mini c">📋 Clip</button><button class="it-del" style="opacity:1">✕</button>`;
@@ -4458,7 +4487,7 @@ function paintInbox(){
       paintInbox(); markDirty();
     };
     // se re-parsea al confirmar: el destino es el espacio activo EN ESE MOMENTO (spec §2)
-    if (cap) d.querySelector(".sug").addEventListener("click", () => consume(() => applyCapture(parseCapture(line, new Date()))));
+    if (cap) d.querySelector(".sug").addEventListener("click", () => consume(() => applyCapture(parseCapture(line, new Date(), customMarkIds()))));
     d.querySelector(".n").addEventListener("click", () => consume(t => {
       let w = state.widgets.find(x => x.type === "notes");
       if (!w){ addWidget("notes"); w = state.widgets[state.widgets.length - 1]; }

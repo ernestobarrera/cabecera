@@ -103,7 +103,7 @@
   <div class="grid">
     <div class="card"><b>🔗 Enlaces</b><span>Accesos agrupados. Con «⇱ N» abres todo el grupo de una vez.</span></div>
     <div class="card"><b>📝 Nota</b><span>Texto libre; puedes darle color tipo post-it desde el punto de color que aparece al pasar el ratón por su barra de título, y una <b>cabecera opcional</b> (botón ⓘ de la barra de título) que explica qué guarda la nota — discreta, y nítida al pasar el ratón.</span></div>
-    <div class="card"><b>✅ Tareas</b><span>Pendientes editables y arrastrables, con fecha, hora de aviso local, nota, color por tarea, papelera e histórico. El texto ocupa todo el ancho: los botones de cada tarea aparecen <b>debajo</b> al pasar el ratón. Las URLs pegadas en una tarea se vuelven enlaces clicables. La ventana completa también admite color tipo post-it (mismo punto de color en la barra de título).</span></div>
+    <div class="card"><b>✅ Tareas</b><span>Pendientes editables y arrastrables, con fecha, hora de aviso local, nota, color por tarea, papelera e histórico. El texto ocupa todo el ancho: los botones de cada tarea aparecen <b>debajo</b> al pasar el ratón. Las URLs pegadas en una tarea se vuelven enlaces clicables. Completar una tarea suena con un clic breve (solo al marcar, nunca al desmarcar). La ventana completa también admite color tipo post-it (mismo punto de color en la barra de título).</span></div>
     <div class="card"><b>📋 Portapapeles</b><span>Fragmentos de texto reutilizables.</span></div>
     <div class="card"><b>📄 Markdown</b><span>Editor + vista con formato.</span></div>
     <div class="card"><b>🖼️ Imagen</b><span>Pega con <kbd>Ctrl</kbd>+<kbd>V</kbd> o arrastra.</span></div>
@@ -128,7 +128,8 @@
     <div class="card"><b>Festivos</b><span>Los festivos nacionales calculados van en rojo; puedes añadir festivos locales o nacionales manuales en rojo.</span></div>
     <div class="card"><b>Cómputo</b><span>Los resúmenes separan días hábiles, festivos laborables, fines de semana y horas cuando el permiso sea parcial.</span></div>
     <div class="card"><b>Permisos</b><span>El widget Permisos ofrece una lista reducida de conceptos: vacaciones, asuntos, antigüedad, formación, exámenes, conciliación, familiar, consulta, deber público, traslado, compensación y otros.</span></div>
-    <div class="card"><b>Conceptos propios</b><span>¿Te faltan «Avisos» o «Urgencias»? En el editor de marcas (clic en un día), <b>＋ Concepto propio</b> crea conceptos con tu nombre y tu color, que aparecen junto a los canónicos en Mes, Año y Permisos. La ✕ del chip los quita (sus marcas pasan a «Otro» sin perder la etiqueta).</span></div>
+    <div class="card"><b>Conceptos propios</b><span>¿Te faltan «Avisos» o «Urgencias»? En el editor de marcas (clic en un día), <b>＋ Concepto propio</b> crea conceptos con tu nombre y tu color, que quedan guardados para reutilizarlos: aparecen bajo «Tus conceptos» en Mes, Año y Permisos, y valen en la gramática (<code>v 12/8 avisos</code>). La ✕ del chip elimina el concepto de tu lista (sus marcas pasan a «Otro» sin perder la etiqueta); para quitar solo la marca de un día usa la ✕ de esa marca.</span></div>
+    <div class="card"><b>Añadir y quitar marcas</b><span>En el editor, <b>Añadir marca</b> crea una marca nueva con lo que hayas elegido en el formulario. Quitar una marca de la lista se aplica al momento: después basta con <b>Cerrar</b>.</span></div>
   </div>
   <p class="note">No pretende sustituir la normativa de cada centro: es una agenda personal local-first para controlar permisos y vacaciones de forma práctica.</p>
   <p class="note">Mes y Año están pensados para ampliarse: la letra crece con la ventana y el Año va sumando columnas de una en una. Ambos tienen un tamaño mínimo por debajo del cual no se dejan encoger (serían ilegibles).</p>
@@ -181,7 +182,7 @@
     <tr><td><code>n idea para la sesión</code></td><td>Nota (se añade a la nota del espacio activo)</td></tr>
     <tr><td><code>c texto reutilizable</code></td><td>Clip en el portapapeles de fragmentos</td></tr>
     <tr><td><code>https://…</code> o <code>e https://… Título</code></td><td>Enlace en el grupo «Capturados»</td></tr>
-    <tr><td><code>v 12-16/8</code> · <code>v 12/8 guardia</code></td><td>Marca en el calendario global (vacaciones si no indicas concepto)</td></tr>
+    <tr><td><code>v 12-16/8</code> · <code>v 12/8 guardia</code></td><td>Marca en el calendario global (vacaciones si no indicas concepto; valen también tus conceptos propios: <code>v 12/8 avisos</code>)</td></tr>
   </table>
   <p class="note">La gramática es deliberadamente estricta y predecible: las fechas <code>@12/8</code> usan siempre el año actual (para otro año, escríbelo: <code>@12/8/2027</code>), y si algo no encaja con total seguridad, no se interpreta. La misma gramática funciona en la <b>Bandeja</b>: una línea escrita en <code>inbox.txt</code> por ti desde el móvil, por una macro de teclado o por un agente de IA ofrece su conversión con un clic — nada se crea sin tu confirmación.</p>
 </section>

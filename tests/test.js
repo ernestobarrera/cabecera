@@ -299,7 +299,7 @@ console.log('OK espacios (índice activo tras borrar)');
 // Reglas fijas: prefijo minúscula+espacio; año SIEMPRE el de `now` salvo explícito (sin
 // salto automático); si no hay confianza total, null (nunca adivina).
 eval('globalThis.CAL_MARK_TYPES = ' + src.match(/const CAL_MARK_TYPES = (\{[\s\S]*?\});/)[1]);
-eval('globalThis.parseCapture = ' + pickFn('parseCapture', 'line, now'));
+eval('globalThis.parseCapture = ' + pickFn('parseCapture', 'line, now, customIds'));
 const NOW = new Date(2026, 6, 7);   // 7 jul 2026 (miércoles)
 const eq = (got, want, msg) => { if (JSON.stringify(got) !== JSON.stringify(want)) throw new Error(msg + '\n  got:  ' + JSON.stringify(got) + '\n  want: ' + JSON.stringify(want)); };
 
@@ -333,6 +333,13 @@ eq(parseCapture('v 12-16/8/2027', NOW), { kind: 'mark', start: '2027-08-12', end
 eq(parseCapture('v 16-12/8', NOW), { kind: 'mark', start: '2026-08-12', end: '2026-08-16', type: 'vacaciones' }, 'rango invertido se normaliza');
 eq(parseCapture('v 1-2/9 formación', NOW), { kind: 'mark', start: '2026-09-01', end: '2026-09-02', type: 'formacion' }, 'concepto con tilde → clave canónica');
 if (parseCapture('v 12-16/8 inventado', NOW) !== null) throw new Error('concepto no canónico debe ser null');
+// conceptos propios: valen si el usuario los tiene creados (comparación por slug), estricto si no
+eq(parseCapture('v 12/8 avisos', NOW, ['avisos']), { kind: 'mark', start: '2026-08-12', end: '2026-08-12', type: 'avisos' }, 'concepto propio existente');
+eq(parseCapture('v 12/8 Avisos', NOW, ['avisos']), { kind: 'mark', start: '2026-08-12', end: '2026-08-12', type: 'avisos' }, 'concepto propio con mayúscula → slug');
+eq(parseCapture('v 12/8 día-libre', NOW, ['dia_libre']), { kind: 'mark', start: '2026-08-12', end: '2026-08-12', type: 'dia_libre' }, 'concepto propio con tilde y guion → slug');
+if (parseCapture('v 12/8 avisos', NOW) !== null) throw new Error('concepto propio sin lista debe ser null');
+if (parseCapture('v 12/8 avisos', NOW, ['otro_concepto']) !== null) throw new Error('concepto propio ajeno a la lista debe ser null');
+eq(parseCapture('v 12/8 guardia', NOW, ['avisos']), { kind: 'mark', start: '2026-08-12', end: '2026-08-12', type: 'guardia' }, 'canónico sigue ganando con lista presente');
 if (parseCapture('v 29/2', NOW) !== null) throw new Error('29/2 en año no bisiesto debe ser null');
 if (parseCapture('v 12-16/13', NOW) !== null) throw new Error('mes 13 debe ser null');
 
@@ -414,7 +421,12 @@ if (!src.includes('w.data.sortDir')) throw new Error('regresión: Archivos perdi
 // nunca como objeto capturado (quedaría huérfano si entra un sync remoto — hallazgo Codex)
 if (!src.includes('extras.push({ wId:')) throw new Error('regresión: la paleta vuelve a capturar el objeto widget como destino');
 if (!src.includes('s.id === x.spId')) throw new Error('regresión: el destino de lista nombrada ya no se resuelve en el clic');
-console.log('OK invariantes (audio encolado, conceptos propios saneados, sin tope de 300, sortDir presente, destino por IDs)');
+// Clic de tarea completada: suena solo al marcar (nunca al desmarcar) y la paleta/bandeja
+// pasan los conceptos propios a la gramática v.
+if (!src.includes('if (it.done) playDoneClick();')) throw new Error('regresión: falta el clic al completar tarea');
+if (!src.includes('function playDoneClick()')) throw new Error('regresión: falta playDoneClick');
+if ((src.match(/parseCapture\((?:q|line), new Date\(\), customMarkIds\(\)\)/g) || []).length < 3) throw new Error('regresión: algún caller de parseCapture no pasa los conceptos propios');
+console.log('OK invariantes (audio encolado, conceptos propios saneados, sin tope de 300, sortDir presente, destino por IDs, clic de hecho, conceptos propios en gramática)');
 
 // --- privacidad escénica (spec 0b): priv boolean estricto + fugas cubiertas ---
 if (sanitizeWidgetShape({ type: 'notes', priv: true }).priv !== true) throw new Error('priv=true no se preserva');
