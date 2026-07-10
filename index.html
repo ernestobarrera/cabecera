@@ -65,9 +65,10 @@ body{font-family:var(--font); color:var(--text); background:#10131a}
   border-radius:6px; cursor:pointer; line-height:1}
 .win-btn:hover{background:rgba(255,255,255,.1); color:var(--text)}
 .win-btn.close:hover{background:var(--danger); color:#fff}
-.win-btn.tagbtn,.win-btn.colorbtn{opacity:0; pointer-events:none; transition:opacity .14s ease, background .14s ease, color .14s ease}
+.win-btn.tagbtn,.win-btn.colorbtn,.win-btn.descbtn{opacity:0; pointer-events:none; transition:opacity .14s ease, background .14s ease, color .14s ease}
 .win:hover .win-btn.tagbtn,.win:focus-within .win-btn.tagbtn,
-.win:hover .win-btn.colorbtn,.win:focus-within .win-btn.colorbtn{opacity:1; pointer-events:auto}
+.win:hover .win-btn.colorbtn,.win:focus-within .win-btn.colorbtn,
+.win:hover .win-btn.descbtn,.win:focus-within .win-btn.descbtn{opacity:1; pointer-events:auto}
 .win-btn.colorbtn{display:inline-flex; align-items:center; justify-content:center}
 .cdot{display:inline-block; width:13px; height:13px; border-radius:50%; flex-shrink:0; box-sizing:border-box;
   border:1px solid rgba(255,255,255,.4);
@@ -253,6 +254,34 @@ ul.plain{list-style:none}
 .todo-it .it-due{border:none; background:none; color:var(--text-dim); cursor:pointer; font-size:12px; padding:2px 4px; border-radius:6px; opacity:0; flex-shrink:0}
 .todo-it:hover .it-due{opacity:.8}
 .todo-it .it-due:hover{opacity:1; color:var(--text)}
+/* acciones bajo el texto (solo al pasar el ratón): el texto ocupa todo el ancho del widget */
+.todo-it .it-actions{display:none; flex-basis:100%; align-items:center; gap:2px; margin-left:25px}
+.todo-it:hover .it-actions,.todo-it:focus-within .it-actions{display:flex}
+.todo-it .it-actions button{opacity:1}
+@media (any-hover:none){ .todo-it .it-actions{display:flex} }
+.todo-it .t a{color:var(--accent); text-decoration:underline; text-underline-offset:2px; word-break:break-all}
+/* cabecera opcional de una nota: línea dim arriba, nítida al pasar el ratón */
+.notes-desc{flex-shrink:0; font-size:11px; color:var(--text-dim); opacity:.6; padding:2px 2px 5px; margin-bottom:5px; border-bottom:1px dashed var(--border-soft); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; cursor:text}
+.win:hover .notes-desc,.win:focus-within .notes-desc{opacity:1}
+.win-body.has-desc{display:flex; flex-direction:column}
+.win-body.has-desc textarea.notes{height:auto; flex:1; min-height:60px}
+.desc-edit{flex-shrink:0; margin-bottom:5px; padding:5px 8px; border-radius:8px; border:1px solid var(--accent); background:rgba(0,0,0,.28); color:var(--text); font-family:var(--font); font-size:12px; outline:none; width:100%}
+/* Archivos: cabeceras de columna clicables (asc/desc) */
+.files-cols{display:flex; gap:4px; padding:0 2px 5px; border-bottom:1px solid var(--border-soft); margin-bottom:4px}
+.files-cols button{border:none; background:none; color:var(--text-dim); cursor:pointer; font-size:11px; font-family:var(--font); padding:2px 7px; border-radius:6px}
+.files-cols button:hover{color:var(--text); background:rgba(255,255,255,.07)}
+.files-cols button.on{color:var(--text); background:rgba(255,255,255,.09)}
+.files-cols .grow{flex:1}
+/* conceptos de calendario propios */
+.mark-custom-row{display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-top:8px}
+.mark-custom-row .chip{display:inline-flex; align-items:center; gap:5px; font-size:11.5px; color:var(--text-dim); background:rgba(255,255,255,.05); border-radius:16px; padding:2px 4px 2px 9px}
+.mark-custom-row .chip .dot{width:9px; height:9px; border-radius:50%; flex-shrink:0}
+.mark-custom-row .chip .rmc{border:none; background:none; color:var(--text-dim); cursor:pointer; font-size:11px; padding:1px 5px; border-radius:8px}
+.mark-custom-row .chip .rmc:hover{color:var(--danger)}
+.mark-custom-form{display:flex; gap:6px; align-items:center; margin-top:7px}
+.mark-custom-form input[type=text]{flex:1; padding:6px 9px; border-radius:8px; border:1px solid var(--border-soft); background:rgba(0,0,0,.25); color:var(--text); font-family:var(--font); font-size:12.5px; outline:none}
+.mark-custom-form input[type=text]:focus{border-color:var(--accent)}
+.mark-custom-form input[type=color]{width:34px; height:30px; border:none; background:none; padding:0; cursor:pointer}
 .due-editor,.rename-editor{position:absolute; z-index:25; display:grid; gap:8px; padding:10px;
   background:rgba(20,24,32,.92); border:1px solid var(--border); border-radius:12px; box-shadow:var(--shadow)}
 .due-editor{position:static; width:100%; flex:1 0 100%}
@@ -362,6 +391,8 @@ ul.plain{list-style:none}
 .cal-grid .d.mark-formacion,.cal-grid .d.mark-examenes,.cal-grid .d.mark-consulta{box-shadow:inset 0 -2px 0 #8d8bff; background:rgba(141,139,255,.12)}
 .cal-grid .d.mark-familiar,.cal-grid .d.mark-deber_publico,.cal-grid .d.mark-traslado,.cal-grid .d.mark-compensacion{box-shadow:inset 0 -2px 0 #f0c25e; background:rgba(240,194,94,.12)}
 .cal-grid .d.mark-festivo_local,.cal-grid .d.mark-festivo_nacional{color:#e5484d; font-weight:700; box-shadow:inset 0 -2px 0 #e5484d; background:rgba(229,72,77,.13)}
+/* conceptos propios del usuario: color por variable inline (--mark-color/--mark-bg) */
+.cal-grid .d.mark-custom{box-shadow:inset 0 -2px 0 var(--mark-color); background:var(--mark-bg)}
 .cal-grid .d.today.marked{outline:1px solid rgba(255,255,255,.55)}
 .cal-summary,.year-summary{display:flex; gap:6px; flex-wrap:wrap; align-items:center; color:var(--text-dim); font-size:clamp(11px,1.6cqi,14px); line-height:1.35; flex-shrink:0}
 .cal-pill,.year-pill{display:inline-flex; align-items:center; gap:5px; padding:3px 7px; border-radius:999px; border:1px solid var(--border-soft); background:rgba(255,255,255,.035)}
@@ -401,6 +432,8 @@ ul.plain{list-style:none}
 .ym-grid .marked::after{content:""; position:absolute; left:50%; bottom:1px; width:4px; height:4px; border-radius:50%; background:var(--ok); transform:translateX(-50%)}
 .ym-grid .mark-guardia::after{background:var(--warn)}.ym-grid .mark-curso::after{background:var(--accent)}.ym-grid .mark-personal::after,.ym-grid .mark-otro::after{background:#e07a9c}
 .ym-grid .mark-formacion::after,.ym-grid .mark-examenes::after,.ym-grid .mark-consulta::after{background:#8d8bff}.ym-grid .mark-familiar::after,.ym-grid .mark-deber_publico::after,.ym-grid .mark-traslado::after,.ym-grid .mark-compensacion::after{background:#f0c25e}.ym-grid .mark-festivo_local::after,.ym-grid .mark-festivo_nacional::after{background:#e5484d}
+.ym-grid .mark-custom::after{background:var(--mark-color)}
+.ym-grid .mark-custom::after{background:var(--mark-color)}
 .leave{height:100%; min-height:0; display:flex; flex-direction:column; gap:9px; container-type:size}
 .leave-nav{display:flex; align-items:center; justify-content:space-between; gap:8px}
 .leave-help{font-size:12px; color:var(--text-dim); line-height:1.4; border:1px solid var(--border-soft); border-radius:9px; padding:7px 9px; background:rgba(255,255,255,.035)}
@@ -679,6 +712,12 @@ ul.plain{list-style:none}
       <label>Horas <input type="number" id="mark-hours" min="0" max="24" step="0.25" placeholder="Opcional"></label>
       <label>Etiqueta <input type="text" id="mark-label" maxlength="80" placeholder="Vacaciones"></label>
     </div>
+    <div class="mark-custom-row"><button class="mini" id="mark-custom-new">＋ Concepto propio</button><span id="mark-custom-list"></span></div>
+    <div class="mark-custom-form" id="mark-custom-form" style="display:none">
+      <input type="text" id="mc-name" maxlength="40" placeholder="Nombre (p. ej. Avisos)">
+      <input type="color" id="mc-color" value="#f0c25e" title="Color del concepto">
+      <button class="mini" id="mc-save">Crear</button>
+    </div>
     <div id="mark-list" class="mark-list"></div>
     <div class="row">
       <button class="btn primary" id="mark-save">Guardar</button>
@@ -880,7 +919,20 @@ function sanitizeState(s){
   }
   s.active = Math.min(Math.max(0, s.active | 0), s.spaces.length - 1);
   s.trash = Array.isArray(s.trash) ? s.trash.filter(x => x && typeof x === "object" && typeof x.kind === "string").slice(0, 30) : [];
-  const validTypes = ["vacaciones","vacaciones_ant","asuntos","asuntos_ant","antiguedad","formacion","examenes","conciliacion","familiar","consulta","deber_publico","traslado","compensacion","festivo_nacional","festivo_local","guardia","curso","personal","otro"];
+  // conceptos de calendario propios del usuario: id-slug, etiqueta y color hex.
+  // Se sanean ANTES que las marcas para que validTypes los incluya.
+  s.customMarkTypes = (Array.isArray(s.customMarkTypes) ? s.customMarkTypes : []).map(c => {
+    if (!c || typeof c !== "object") return null;
+    const id = String(c.id || "").toLowerCase();
+    if (!/^[a-z0-9_]{2,24}$/.test(id) || CAL_MARK_TYPES[id]) return null;
+    const label = String(c.label || "").trim().slice(0, 40);
+    if (!label) return null;
+    const color = /^#[0-9a-fA-F]{6}$/.test(String(c.color || "")) ? c.color : "#e07a9c";
+    return { id, label, color };
+  }).filter(Boolean).filter((c, i, a) => a.findIndex(x => x.id === c.id) === i).slice(0, 24);
+  if (!s.customMarkTypes.length) delete s.customMarkTypes;
+  const validTypes = ["vacaciones","vacaciones_ant","asuntos","asuntos_ant","antiguedad","formacion","examenes","conciliacion","familiar","consulta","deber_publico","traslado","compensacion","festivo_nacional","festivo_local","guardia","curso","personal","otro"]
+    .concat((s.customMarkTypes || []).map(c => c.id));
   s.calendarMarks = (Array.isArray(s.calendarMarks) ? s.calendarMarks : []).map(m => {
     if (!m || typeof m !== "object") return null;
     let start = String(m.start || "");
@@ -1946,15 +1998,17 @@ function buildWindow(w){
   const dictBtn = w.type === "notes" ? `<button class="win-btn dict-recv-btn" title="Recibir el dictado en esta nota">🎙️</button>` : "";
   const colorable = w.type === "notes" || w.type === "todo";
   const colorBtn = colorable ? `<button class="win-btn colorbtn" title="Color de la ventana"><span class="cdot"></span></button>` : "";
+  const descBtn = w.type === "notes" ? `<button class="win-btn descbtn" title="Cabecera de la nota (explica qué guarda)">ⓘ</button>` : "";
   el.innerHTML = `
     <div class="win-title" title="Doble clic para renombrar"><span class="ico">${t.ico}</span><span class="tname">${esc(w.t || t.name)}</span><span class="sp"></span>
-      ${dictBtn}${colorBtn}<button class="win-btn tagbtn" title="Etiquetas">🏷️</button><button class="win-btn maxb" title="${w.max ? "Restaurar tamaño" : "Maximizar"}">${w.max ? "❐" : "⛶"}</button><button class="win-btn collapse" title="Plegar / desplegar">${w.collapsed ? "▸" : "▾"}</button><button class="win-btn close" title="Cerrar">✕</button></div>
+      ${dictBtn}${descBtn}${colorBtn}<button class="win-btn tagbtn" title="Etiquetas">🏷️</button><button class="win-btn maxb" title="${w.max ? "Restaurar tamaño" : "Maximizar"}">${w.max ? "❐" : "⛶"}</button><button class="win-btn collapse" title="Plegar / desplegar">${w.collapsed ? "▸" : "▾"}</button><button class="win-btn close" title="Cerrar">✕</button></div>
     <div class="win-tags"></div>
     <div class="win-body"></div>
     <div class="win-resize"></div>`;
   if (w.collapsed) el.classList.add("collapsed");
   el.querySelector(".tagbtn").addEventListener("click", e => { e.stopPropagation(); editWidgetTags(w, el); });
   if (colorable) el.querySelector(".colorbtn").addEventListener("click", e => { e.stopPropagation(); editWinColor(w, el); });
+  if (w.type === "notes") el.querySelector(".descbtn").addEventListener("click", e => { e.stopPropagation(); editNoteDesc(w, el); });
   el.querySelector(".maxb").addEventListener("click", e => { e.stopPropagation(); toggleMaximize(w); });
   paintWinTags(el, w);
   el.querySelector(".collapse").addEventListener("click", e => {
@@ -2222,13 +2276,65 @@ function editWinColor(w, el){
   el.appendChild(pop);
 }
 function bodyNotes(w, el){
-  el.innerHTML = `<textarea class="notes" placeholder="Escribe aquí…"></textarea>`;
+  const desc = String(w.data.desc || "").trim();
+  el.classList.toggle("has-desc", !!desc);
+  el.innerHTML = (desc ? `<div class="notes-desc" title="${esc(desc)} (clic para editar)">${esc(desc)}</div>` : "")
+    + `<textarea class="notes" placeholder="Escribe aquí…"></textarea>`;
   const ta = el.querySelector("textarea");
   ta.value = w.data.text || "";
   ta.addEventListener("input", () => { w.data.text = ta.value; markDirty(); });
+  const line = el.querySelector(".notes-desc");
+  if (line) line.addEventListener("click", () => editNoteDesc(w, el.closest(".win")));
+}
+// Cabecera opcional de una nota (w.data.desc): explica qué guarda el widget.
+// Se edita inline (Enter guarda, Esc cancela); vacía = se quita.
+function editNoteDesc(w, winEl){
+  const body = winEl && winEl.querySelector(".win-body");
+  if (!body || body.querySelector(".desc-edit")) return;
+  body.classList.add("has-desc");
+  const input = document.createElement("input");
+  input.className = "desc-edit";
+  input.placeholder = "Cabecera: qué guarda esta nota…";
+  input.maxLength = 120;
+  input.value = w.data.desc || "";
+  const line = body.querySelector(".notes-desc");
+  if (line) line.replaceWith(input); else body.prepend(input);
+  let done = false;
+  const finish = save => {
+    if (done) return; done = true;
+    if (save){
+      const v = input.value.trim().slice(0, 120);
+      if (v) w.data.desc = v; else delete w.data.desc;
+      markDirty();
+    }
+    refreshWidget(w);
+  };
+  input.addEventListener("keydown", e => {
+    e.stopPropagation();
+    if (e.key === "Enter") finish(true);
+    if (e.key === "Escape") finish(false);
+  });
+  input.addEventListener("blur", () => finish(true));
+  input.focus(); input.select();
 }
 
 /* --- Tareas --- */
+// Texto de tarea → HTML con URLs http/https clicables. Escapa primero (esc) y
+// convierte después, para que ningún otro HTML del texto sobreviva. Pura y testeable.
+function linkifyEsc(t){
+  const s = esc(String(t == null ? "" : t));
+  return s.replace(/\bhttps?:\/\/[^\s<]+/g, m => {
+    let url = m, tail = "";
+    for (;;){   // puntuación colgante (y entidades escapadas) fuera del enlace, sin partirlas
+      const ent = url.match(/(?:&gt;|&quot;|&#39;|&amp;)$/);
+      if (ent){ tail = ent[0] + tail; url = url.slice(0, -ent[0].length); continue; }
+      if (/[).,;:!?»]$/.test(url)){ tail = url.slice(-1) + tail; url = url.slice(0, -1); continue; }
+      break;
+    }
+    if (!/^https?:\/\/\S/.test(url)) return m;
+    return `<a href="${url}" target="_blank" rel="noopener">${url}</a>${tail}`;
+  });
+}
 function bodyTodo(w, el){
   el.innerHTML = `
     <div class="todo-add"><input type="text" placeholder="Nueva tarea…"><button class="mini">＋</button></div>
@@ -2305,7 +2411,7 @@ function bodyTodo(w, el){
     const commit = () => {
       const v = input.value.trim();
       if (!v){ it.t = old; paint(); return; }
-      it.t = v.slice(0, 300);
+      it.t = v;
       paint(); markDirty();
     };
     const cancel = () => { it.t = old; paint(); };
@@ -2372,10 +2478,10 @@ function bodyTodo(w, el){
       li.className = "todo-it" + (it.done ? " done" : "") + (taskColor ? " has-task-color" : "");
       if (taskColor) li.style.setProperty("--task-color", taskColor);
       const dm = dueMeta(it);
-      li.innerHTML = `<span class="it-drag" draggable="${view === "pend"}" title="Arrastrar">⋮⋮</span><input type="checkbox" ${it.done ? "checked" : ""}><span class="t">${esc(it.t)}</span>`
+      li.innerHTML = `<span class="it-drag" draggable="${view === "pend"}" title="Arrastrar">⋮⋮</span><input type="checkbox" ${it.done ? "checked" : ""}><span class="t">${linkifyEsc(it.t)}</span>`
         + (it.note ? `<span class="task-note-mark" title="${esc(it.note)}">i</span>` : "")
         + (dm ? `<span class="due ${dm.cls}">${dm.label}</span>` : "")
-        + `<button class="it-color" title="Color"><span class="cdot"></span></button><button class="it-edit" title="Editar">✎</button><button class="it-up" title="Subir">↑</button><button class="it-down" title="Bajar">↓</button><button class="it-due" title="Fecha, nota y aviso">📅</button><button class="it-del" title="Borrar">✕</button>`;
+        + `<span class="it-actions"><button class="it-color" title="Color"><span class="cdot"></span></button><button class="it-edit" title="Editar">✎</button><button class="it-up" title="Subir">↑</button><button class="it-down" title="Bajar">↓</button><button class="it-due" title="Fecha, nota y aviso">📅</button><button class="it-del" title="Borrar">✕</button></span>`;
       const drag = li.querySelector(".it-drag");
       drag.addEventListener("dragstart", e => {
         if (view !== "pend"){ e.preventDefault(); return; }
@@ -2709,9 +2815,21 @@ function bodyImg(w, el){
 }
 
 /* --- Temporizador / Cronómetro / Alarma --- */
+// Sin gesto previo del usuario, el navegador crea el AudioContext suspendido (política de
+// autoplay): los avisos que saltan nada más abrir se veían (toast) pero no sonaban. Se
+// encola el último y suena en el primer clic/tecla.
+let pendingAlertSound = null;
+function unlockAlertSound(){
+  document.removeEventListener("pointerdown", unlockAlertSound, true);
+  document.removeEventListener("keydown", unlockAlertSound, true);
+  if (pendingAlertSound){ const k = pendingAlertSound; pendingAlertSound = null; playAlertSound(k); }
+}
+document.addEventListener("pointerdown", unlockAlertSound, true);
+document.addEventListener("keydown", unlockAlertSound, true);
 function playAlertSound(kind = "soft"){
   try{
     const ac = new (window.AudioContext || window.webkitAudioContext)();
+    if (ac.state === "suspended"){ pendingAlertSound = kind; try{ ac.close(); }catch(e){} return; }
     const seq = kind === "double" ? [660, 880, 660, 880] : kind === "beep" ? [880, 880, 880] : [523, 659, 784];
     let t = ac.currentTime;
     seq.forEach((freq, i) => {
@@ -2932,10 +3050,17 @@ const CAL_MARK_COLORS = {
   festivo_nacional: "#e5484d", festivo_local: "#e5484d",
   guardia: "#f0c25e", curso: "#5aa9f7", personal: "#e07a9c", otro: "#e07a9c"
 };
+// Conceptos propios del usuario (state.customMarkTypes): conviven con los canónicos.
+function customMarkTypes(){ return (state && Array.isArray(state.customMarkTypes)) ? state.customMarkTypes : []; }
+function customMarkType(t){ return customMarkTypes().find(c => c.id === t) || null; }
+function isMarkType(t){ return !!(CAL_MARK_TYPES[t] || customMarkType(t)); }
+function markTypeLabel(t, fb = "Otro"){ return CAL_MARK_TYPES[t] || (customMarkType(t) || {}).label || fb; }
 function markTypeOptions(selected = "vacaciones"){
-  return CAL_MARK_GROUPS.map(g => `<optgroup label="${esc(g.label)}">${g.types.map(t => `<option value="${t}"${t === selected ? " selected" : ""}>${esc(CAL_MARK_TYPES[t] || t)}</option>`).join("")}</optgroup>`).join("");
+  const customs = customMarkTypes();
+  return CAL_MARK_GROUPS.map(g => `<optgroup label="${esc(g.label)}">${g.types.map(t => `<option value="${t}"${t === selected ? " selected" : ""}>${esc(CAL_MARK_TYPES[t] || t)}</option>`).join("")}</optgroup>`).join("")
+    + (customs.length ? `<optgroup label="Tus conceptos">${customs.map(c => `<option value="${esc(c.id)}"${c.id === selected ? " selected" : ""}>${esc(c.label)}</option>`).join("")}</optgroup>` : "");
 }
-function markColor(type){ return CAL_MARK_COLORS[type] || "#e07a9c"; }
+function markColor(type){ return CAL_MARK_COLORS[type] || (customMarkType(type) || {}).color || "#e07a9c"; }
 function isoDate(y, m, d){
   return `${y}-${String(m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
 }
@@ -2997,7 +3122,7 @@ function markTotalsForRange(start, end, local){
   for (const m of marksInRange(start, end)){
     const mm = { ...m, start: m.start < start ? start : m.start, end: (m.end || m.start) > end ? end : (m.end || m.start) };
     const c = countMarkDays(mm, null, local);
-    const prev = totals.get(m.type) || { type: m.type, label: CAL_MARK_TYPES[m.type] || "Otro", calendar: 0, business: 0, holidays: 0, weekend: 0, hours: 0, count: 0 };
+    const prev = totals.get(m.type) || { type: m.type, label: markTypeLabel(m.type), calendar: 0, business: 0, holidays: 0, weekend: 0, hours: 0, count: 0 };
     prev.calendar += c.calendar; prev.business += c.business; prev.holidays += c.holidays; prev.weekend += c.weekend; prev.hours += c.hours; prev.count++;
     totals.set(m.type, prev);
   }
@@ -3037,15 +3162,17 @@ function leaveSummaryHtml(y, local){
   return rows.map(r => `<div class="leave-row"><b><span class="year-dot" style="background:${markColor(r.type)}"></span> ${esc(r.label)}</b><span>${esc(totalText(r))} · ${r.count} marca${r.count === 1 ? "" : "s"}</span></div>`).join("");
 }
 function markSummary(m){
-  const label = m.label || CAL_MARK_TYPES[m.type] || "Marca";
+  const label = m.label || markTypeLabel(m.type, "Marca");
   return m.start === m.end ? label : `${label} (${m.start} → ${m.end})`;
 }
 function markDayMeta(ds, baseTitle = ""){
   const marks = marksForDate(ds);
   const first = marks.find(m => CAL_HOLIDAY_TYPES.has(m.type)) || marks[0];
+  const custom = first && !CAL_MARK_TYPES[first.type] ? customMarkType(first.type) : null;
   return {
     marks,
-    cls: first ? ` marked mark-${first.type || "otro"}` : "",
+    cls: first ? ` marked ${custom ? "mark-custom" : `mark-${first.type || "otro"}`}` : "",
+    sty: custom ? ` style="--mark-color:${custom.color};--mark-bg:${hexA(custom.color, .12)}"` : "",
     title: [baseTitle].concat(marks.map(markSummary)).filter(Boolean).join(" · ")
   };
 }
@@ -3058,9 +3185,49 @@ function openMarkEditor(ds){
   $("#mark-hours").value = "";
   $("#mark-hours").closest("label").style.display = "none";
   $("#mark-label").value = "";
+  $("#mark-custom-form").style.display = "none";
+  renderCustomMarkTypes();
   renderMarkList(ds);
   ov.dataset.date = ds;
   ov.classList.add("open");
+}
+// Conceptos propios: chips con su color en el modal de marcas; ✕ los quita
+// (las marcas existentes de ese concepto pasan a «Otro» conservando su etiqueta).
+function renderCustomMarkTypes(){
+  const box = $("#mark-custom-list");
+  if (!box) return;
+  box.innerHTML = customMarkTypes().map(c =>
+    `<span class="chip"><span class="dot" style="background:${c.color}"></span>${esc(c.label)}<button class="rmc" data-id="${esc(c.id)}" title="Quitar concepto">✕</button></span>`).join("");
+  box.querySelectorAll(".rmc").forEach(b => b.addEventListener("click", () => {
+    const id = b.dataset.id;
+    state.customMarkTypes = customMarkTypes().filter(c => c.id !== id);
+    if (!state.customMarkTypes.length) delete state.customMarkTypes;
+    (state.calendarMarks || []).forEach(m => { if (m.type === id) m.type = "otro"; });
+    const sel = $("#mark-type");
+    sel.innerHTML = markTypeOptions(isMarkType(sel.value) && sel.value !== id ? sel.value : "vacaciones");
+    renderCustomMarkTypes();
+    renderAll();
+    markDirty();
+    toast("Concepto quitado: sus marcas pasan a «Otro»");
+  }));
+}
+function saveCustomMarkType(){
+  const name = $("#mc-name").value.trim().slice(0, 40);
+  if (!name){ toast("Ponle nombre al concepto", true); return; }
+  const id = name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 24);
+  if (id.length < 2){ toast("Nombre demasiado corto", true); return; }
+  if (isMarkType(id)){ toast("Ese concepto ya existe", true); return; }
+  if (!Array.isArray(state.customMarkTypes)) state.customMarkTypes = [];
+  if (state.customMarkTypes.length >= 24){ toast("Máximo 24 conceptos propios", true); return; }
+  const color = /^#[0-9a-fA-F]{6}$/.test($("#mc-color").value) ? $("#mc-color").value : "#e07a9c";
+  state.customMarkTypes.push({ id, label: name, color });
+  $("#mark-type").innerHTML = markTypeOptions(id);
+  $("#mc-name").value = "";
+  $("#mark-custom-form").style.display = "none";
+  renderCustomMarkTypes();
+  markDirty();
+  toast(`Concepto «${name}» creado y seleccionado`);
 }
 function renderMarkList(ds){
   const box = $("#mark-list");
@@ -3071,7 +3238,7 @@ function renderMarkList(ds){
     const d = document.createElement("div");
     d.className = "mark-row";
     const c = countMarkDays(m);
-    d.innerHTML = `<span class="t"><b>${esc(m.label)}</b><br><span class="empty" style="padding:0">${esc(m.start)}${m.end !== m.start ? " → " + esc(m.end) : ""} · ${esc(CAL_MARK_TYPES[m.type] || "Otro")} · ${esc(totalText(c))}</span></span>
+    d.innerHTML = `<span class="t"><b>${esc(m.label)}</b><br><span class="empty" style="padding:0">${esc(m.start)}${m.end !== m.start ? " → " + esc(m.end) : ""} · ${esc(markTypeLabel(m.type))} · ${esc(totalText(c))}</span></span>
       <button class="it-del rm" style="opacity:1" title="Quitar marca">✕</button>`;
     d.querySelector(".rm").addEventListener("click", () => {
       state.calendarMarks = (state.calendarMarks || []).filter(x => x.id !== m.id);
@@ -3086,8 +3253,8 @@ function saveCalendarMark(){
   let start = $("#mark-start").value, end = $("#mark-end").value || start;
   if (!/^\d{4}-\d{2}-\d{2}$/.test(start) || !/^\d{4}-\d{2}-\d{2}$/.test(end)){ toast("Fecha no válida", true); return; }
   if (end < start) [start, end] = [end, start];
-  const type = CAL_MARK_TYPES[$("#mark-type").value] ? $("#mark-type").value : "otro";
-  const label = ($("#mark-label").value.trim() || CAL_MARK_TYPES[type]).slice(0, 80);
+  const type = isMarkType($("#mark-type").value) ? $("#mark-type").value : "otro";
+  const label = ($("#mark-label").value.trim() || markTypeLabel(type)).slice(0, 80);
   const unit = $("#mark-unit").value === "hours" ? "hours" : "days";
   const hours = unit === "hours" ? Math.max(0, Math.min(8784, Number($("#mark-hours").value) || 0)) : 0;
   if (!Array.isArray(state.calendarMarks)) state.calendarMarks = [];
@@ -3124,7 +3291,7 @@ function bodyCal(w, el){
           const holi = holis[ym.m + "-" + day] || locals[ym.m + "-" + day];
           const meta = markDayMeta(ds, holi || "");
           const tip = meta.title ? ` title="${esc(meta.title)}"` : "";
-          html += `<span class="d${isToday ? " today" : ""}${wknd}${holi ? " holi" : ""}${meta.cls}" data-date="${ds}"${tip}>${day++}</span>`;
+          html += `<span class="d${isToday ? " today" : ""}${wknd}${holi ? " holi" : ""}${meta.cls}" data-date="${ds}"${meta.sty}${tip}>${day++}</span>`;
         }
       }
     }
@@ -3152,7 +3319,7 @@ function miniMonthHtml(y, m, local){
     const ds = isoDate(y, m, d);
     const holi = holis[m + "-" + d] || locals[m + "-" + d] || holidayNameForDate(ds, local);
     const meta = markDayMeta(ds, holi || "");
-    html += `<span class="${today ? "today " : ""}${col === 6 ? "sun " : col === 5 ? "sat " : ""}${holi ? "holi " : ""}${meta.cls.trim()}" data-date="${ds}"${meta.title ? ` title="${esc(meta.title)}"` : ""}>${d}</span>`;
+    html += `<span class="${today ? "today " : ""}${col === 6 ? "sun " : col === 5 ? "sat " : ""}${holi ? "holi " : ""}${meta.cls.trim()}" data-date="${ds}"${meta.sty}${meta.title ? ` title="${esc(meta.title)}"` : ""}>${d}</span>`;
   }
   return html + "</div></div>";
 }
@@ -3177,7 +3344,7 @@ function bodyLeave(w, el){
   const paint = () => {
     const y = +w.data.year;
     const def = todayIso().startsWith(String(y)) ? todayIso() : `${y}-01-01`;
-    const type = CAL_MARK_TYPES[w.data.type] ? w.data.type : "vacaciones";
+    const type = isMarkType(w.data.type) ? w.data.type : "vacaciones";
     const unit = w.data.unit === "hours" ? "hours" : "days";
     el.innerHTML = `<div class="leave">
       <div class="leave-nav"><button class="mini pv">‹</button><b>${y}</b><button class="mini nx">›</button><button class="mini today">Hoy</button></div>
@@ -3188,7 +3355,7 @@ function bodyLeave(w, el){
         <label>Hasta <input class="leave-end" type="date" value="${esc(w.data.end || w.data.start || def)}"></label>
         <label>Unidad <select class="leave-unit"><option value="days"${unit === "days" ? " selected" : ""}>Días</option><option value="hours"${unit === "hours" ? " selected" : ""}>Horas</option></select></label>
         <label class="leave-hours-box">Horas <input class="leave-hours" type="number" min="0" max="24" step="0.25" value="${esc(w.data.hours || "")}" placeholder="Ej. 2"></label>
-        <label class="wide">Etiqueta <input class="leave-label" type="text" maxlength="80" placeholder="${esc(CAL_MARK_TYPES[type] || "Permiso")}"></label>
+        <label class="wide">Etiqueta <input class="leave-label" type="text" maxlength="80" placeholder="${esc(markTypeLabel(type, "Permiso"))}"></label>
         <button class="mini leave-add" type="button">Añadir al calendario</button>
       </div>
       <div class="leave-summary">
@@ -3204,7 +3371,7 @@ function bodyLeave(w, el){
     el.querySelector(".pv").addEventListener("click", () => { w.data.year = y - 1; paint(); markDirty(); });
     el.querySelector(".nx").addEventListener("click", () => { w.data.year = y + 1; paint(); markDirty(); });
     el.querySelector(".today").addEventListener("click", () => { w.data.year = new Date().getFullYear(); delete w.data.start; delete w.data.end; paint(); markDirty(); });
-    typeEl.addEventListener("change", () => { w.data.type = typeEl.value; label.placeholder = CAL_MARK_TYPES[typeEl.value] || "Permiso"; markDirty(); });
+    typeEl.addEventListener("change", () => { w.data.type = typeEl.value; label.placeholder = markTypeLabel(typeEl.value, "Permiso"); markDirty(); });
     unitEl.addEventListener("change", () => { w.data.unit = unitEl.value; syncHours(); markDirty(); });
     start.addEventListener("change", () => { w.data.start = start.value; if (!end.value || end.value < start.value) end.value = start.value; w.data.end = end.value; markDirty(); });
     end.addEventListener("change", () => { w.data.end = end.value; markDirty(); });
@@ -3213,11 +3380,11 @@ function bodyLeave(w, el){
       let a = start.value, b = end.value || a;
       if (!/^\d{4}-\d{2}-\d{2}$/.test(a) || !/^\d{4}-\d{2}-\d{2}$/.test(b)){ toast("Fecha no válida", true); return; }
       if (b < a) [a, b] = [b, a];
-      const tp = CAL_MARK_TYPES[typeEl.value] ? typeEl.value : "otro";
+      const tp = isMarkType(typeEl.value) ? typeEl.value : "otro";
       const un = unitEl.value === "hours" ? "hours" : "days";
       const hs = un === "hours" ? Math.max(0, Math.min(8784, Number(hours.value) || 0)) : 0;
       if (un === "hours" && !hs){ toast("Indica cuántas horas", true); return; }
-      const lb = (label.value.trim() || CAL_MARK_TYPES[tp]).slice(0, 80);
+      const lb = (label.value.trim() || markTypeLabel(tp)).slice(0, 80);
       if (!Array.isArray(state.calendarMarks)) state.calendarMarks = [];
       state.calendarMarks.unshift({ id: "cm_" + uid(), start: a, end: b, type: tp, label: lb, unit: un, ...(hs ? { hours: hs } : {}) });
       state.calendarMarks = sanitizeState(state).calendarMarks;
@@ -3253,6 +3420,8 @@ function bodyFiles(w, el){
   let root = null, current = null, stack = [];
   let term = "", recursive = false, searchGen = 0, searchTimer = null;
   if (!w.data.sortBy) w.data.sortBy = "name";
+  if (w.data.sortDir !== "asc" && w.data.sortDir !== "desc")
+    w.data.sortDir = (w.data.sortBy === "date" || w.data.sortBy === "size") ? "desc" : "asc";
   const key = "fileDir:" + w.id;
   const MAX_VISITADOS = 4000, MAX_RESULTADOS = 160;
   const box = () => el.querySelector(".files-list");
@@ -3263,13 +3432,8 @@ function bodyFiles(w, el){
       <label class="files-remember"><input type="checkbox" class="remember" ${w.data.rememberFolder ? "checked" : ""}> Recordar esta carpeta en este navegador</label>
       <div class="files-search"><input class="q" type="text" placeholder="Buscar por nombre…" value="${esc(term)}"${current ? "" : " disabled"}>
         <label><input type="checkbox" class="rec"${recursive ? " checked" : ""}${current ? "" : " disabled"}> Subcarpetas</label>
-        <select class="sort"${current ? "" : " disabled"}>
-          <option value="name"${w.data.sortBy === "name" ? " selected" : ""}>Nombre</option>
-          <option value="type"${w.data.sortBy === "type" ? " selected" : ""}>Tipo</option>
-          <option value="date"${w.data.sortBy === "date" ? " selected" : ""}>Fecha</option>
-          <option value="size"${w.data.sortBy === "size" ? " selected" : ""}>Tamaño</option>
-        </select>
       </div>
+      <div class="files-cols"></div>
       <div class="files-list">${msg ? `<div class="empty">${esc(msg)}</div>` : ""}</div>`;
     el.querySelector(".pick").addEventListener("click", pick);
     el.querySelector(".up").addEventListener("click", () => { if (stack.length > 1){ stack.pop(); current = stack[stack.length - 1].handle; navigate(); } });
@@ -3296,11 +3460,25 @@ function bodyFiles(w, el){
       recursive = e.target.checked;
       if (term.trim().length >= 2) runSearch();
     });
-    el.querySelector(".sort").addEventListener("change", e => {
-      w.data.sortBy = e.target.value;
+    paintCols();
+  };
+
+  // cabeceras de columna clicables: primer clic ordena, segundo invierte (▲/▼)
+  const paintCols = () => {
+    const bar = el.querySelector(".files-cols");
+    if (!bar) return;
+    const arrow = by => w.data.sortBy === by ? (w.data.sortDir === "desc" ? " ▼" : " ▲") : "";
+    bar.innerHTML = [["name","Nombre"],["type","Tipo"],["date","Fecha"],["size","Tamaño"]]
+      .map(([by, lb], i) => (i === 2 ? `<span class="grow"></span>` : "") +
+        `<button data-by="${by}"${w.data.sortBy === by ? ` class="on"` : ""}${current ? "" : " disabled"}>${lb}${arrow(by)}</button>`).join("");
+    bar.querySelectorAll("button[data-by]").forEach(b => b.addEventListener("click", () => {
+      const by = b.dataset.by;
+      if (w.data.sortBy === by) w.data.sortDir = w.data.sortDir === "asc" ? "desc" : "asc";
+      else { w.data.sortBy = by; w.data.sortDir = (by === "date" || by === "size") ? "desc" : "asc"; }
       markDirty();
+      paintCols();
       if (term.trim()) runSearch(); else listCurrent(++searchGen);
-    });
+    }));
   };
 
   const hasPerm = async h => {
@@ -3337,9 +3515,12 @@ function bodyFiles(w, el){
     const total = byName.length;
     const shown = byName.slice(0, MAX_RESULTADOS);
     const by = w.data.sortBy;
-    if (by === "type"){
+    const dir = w.data.sortDir === "desc" ? -1 : 1;
+    if (by === "name"){
+      if (dir < 0) shown.sort((a, b) => a.kind === b.kind ? b.name.localeCompare(a.name) : a.kind === "directory" ? -1 : 1);
+    } else if (by === "type"){
       shown.sort((a, b) => a.kind === b.kind
-        ? (a.kind === "directory" ? 0 : (extOf(a.name).localeCompare(extOf(b.name)) || 0))
+        ? (a.kind === "directory" ? 0 : dir * (extOf(a.name).localeCompare(extOf(b.name)) || 0))
         : a.kind === "directory" ? -1 : 1);
     } else if (by === "date" || by === "size"){
       await withStats(shown);
@@ -3349,7 +3530,7 @@ function bodyFiles(w, el){
         if (a.kind === "directory") return 0;
         const av = a.stat ? (by === "date" ? a.stat.mtime : a.stat.size) : -1;
         const bv = b.stat ? (by === "date" ? b.stat.mtime : b.stat.size) : -1;
-        return bv - av;
+        return dir * (av - bv);
       });
     }
     return { shown, total };
@@ -3718,7 +3899,9 @@ function captureDest(cap){
   const sp = state.spaces[state.active];
   return "en «" + ((sp && sp.name) || "Escritorio") + "»";
 }
-function applyCapture(cap){
+// target (opcional, solo tareas): { w, si } — una lista de tareas CON NOMBRE elegida
+// en la paleta. Sin target, el destino es SIEMPRE el espacio activo.
+function applyCapture(cap, target){
   // destino: SIEMPRE el espacio activo; si falta el widget del tipo, se crea aquí
   const ensure = type => {
     let w = state.widgets.find(x => x.type === type);
@@ -3731,9 +3914,15 @@ function applyCapture(cap){
     state.calendarMarks = sanitizeState(state).calendarMarks;   // mismo saneo que saveCalendarMark
     refreshCalendarConsumers();
   } else if (cap.kind === "task"){
-    const w = ensure("todo");
+    const w = (target && target.w) || ensure("todo");
+    if (!Array.isArray(w.data.items)) w.data.items = [];
     w.data.items.push({ t: cap.text, done: false, ...(cap.due ? { due: cap.due } : {}) });
     refreshWidget(w); flashWidget(w);
+    if (target){
+      markDirty();
+      toast(CAPTURE_META.task.done + " en «" + (w.t || "Tareas") + "»");
+      return;
+    }
   } else if (cap.kind === "note"){
     const w = ensure("notes");
     w.data.text = (w.data.text ? w.data.text + "\n" : "") + cap.text;
@@ -3825,12 +4014,25 @@ function renderResults(q){
     return;
   }
   const terms = q.split(/\s+/).filter(Boolean);
+  // listas de tareas CON NOMBRE: destinos extra de un vistazo cuando la línea es una tarea
+  // (0.7c: «t dudas del día» puede ir a «dudas clínicas» sin tocar la gramática)
+  let extras = [];
+  if (cap && cap.kind === "task"){
+    const primary = state.widgets.find(x => x.type === "todo");
+    state.spaces.forEach((sp, si) => (sp.widgets || []).forEach(x => {
+      if (x.type === "todo" && x.t && x.t.trim() && x !== primary) extras.push({ w: x, si, sp });
+    }));
+    extras.sort((a, b) => (a.si === state.active ? 0 : 1) - (b.si === state.active ? 0 : 1));
+    extras = extras.slice(0, 3);
+  }
   const hits = paletteEntries()
     .filter(e => terms.every(t => e.hay.includes(t)))
     .sort((a, b) => (b.label.toLowerCase().startsWith(terms[0]) - a.label.toLowerCase().startsWith(terms[0])))
-    .slice(0, cap ? 9 : 10);
+    .slice(0, cap ? 9 - extras.length : 10);
   if (cap) hits.unshift({ icon: "➕", label: CAPTURE_META[cap.kind].name + ": " + captureSummary(cap), sub: captureDest(cap),
     run: () => { applyCapture(cap); closeMenu(); } });
+  extras.forEach((x, i) => hits.splice(1 + i, 0, { icon: "➕", label: "Tarea en «" + x.w.t.trim() + "»",
+    sub: "en «" + (x.sp.name || "Espacio") + "»", run: () => { applyCapture(cap, { w: x.w, si: x.si }); closeMenu(); } }));
   box.classList.add("has");
   box.innerHTML = hits.length || hint ? "" : `<div class="empty">Sin coincidencias.</div>`;
   selIdx = 0;
@@ -4014,6 +4216,14 @@ function wireUI(){
   $("#trash-close").addEventListener("click", () => $("#ov-trash").classList.remove("open"));
   $("#mark-save").addEventListener("click", saveCalendarMark);
   $("#mark-close").addEventListener("click", () => $("#ov-mark").classList.remove("open"));
+  $("#mark-custom-new").addEventListener("click", () => {
+    const f = $("#mark-custom-form");
+    const show = f.style.display === "none";
+    f.style.display = show ? "flex" : "none";
+    if (show) $("#mc-name").focus();
+  });
+  $("#mc-save").addEventListener("click", saveCustomMarkType);
+  $("#mc-name").addEventListener("keydown", e => { if (e.key === "Enter") saveCustomMarkType(); });
   $("#mark-unit").addEventListener("change", e => {
     const box = $("#mark-hours").closest("label");
     if (box) box.style.display = e.target.value === "hours" ? "flex" : "none";

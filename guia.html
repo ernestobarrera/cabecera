@@ -102,8 +102,8 @@
   <p class="lead">Cada ventana es un widget. Añádelos desde Inicio o con <kbd>Ctrl</kbd>+<kbd>K</kbd>.</p>
   <div class="grid">
     <div class="card"><b>🔗 Enlaces</b><span>Accesos agrupados. Con «⇱ N» abres todo el grupo de una vez.</span></div>
-    <div class="card"><b>📝 Nota</b><span>Texto libre; puedes darle color tipo post-it desde el punto de color que aparece al pasar el ratón por su barra de título.</span></div>
-    <div class="card"><b>✅ Tareas</b><span>Pendientes editables y arrastrables, con fecha, hora de aviso local, nota, color por tarea, papelera e histórico. La ventana completa también admite color tipo post-it (mismo punto de color en la barra de título).</span></div>
+    <div class="card"><b>📝 Nota</b><span>Texto libre; puedes darle color tipo post-it desde el punto de color que aparece al pasar el ratón por su barra de título, y una <b>cabecera opcional</b> (botón ⓘ de la barra de título) que explica qué guarda la nota — discreta, y nítida al pasar el ratón.</span></div>
+    <div class="card"><b>✅ Tareas</b><span>Pendientes editables y arrastrables, con fecha, hora de aviso local, nota, color por tarea, papelera e histórico. El texto ocupa todo el ancho: los botones de cada tarea aparecen <b>debajo</b> al pasar el ratón. Las URLs pegadas en una tarea se vuelven enlaces clicables. La ventana completa también admite color tipo post-it (mismo punto de color en la barra de título).</span></div>
     <div class="card"><b>📋 Portapapeles</b><span>Fragmentos de texto reutilizables.</span></div>
     <div class="card"><b>📄 Markdown</b><span>Editor + vista con formato.</span></div>
     <div class="card"><b>🖼️ Imagen</b><span>Pega con <kbd>Ctrl</kbd>+<kbd>V</kbd> o arrastra.</span></div>
@@ -114,10 +114,10 @@
     <div class="card"><b>🔎 Buscadores</b><span>Plantillas de URL con %s (PubMed, etc.).</span></div>
     <div class="card"><b>🧮 Calculadora</b><span>Con teclado completo.</span></div>
     <div class="card"><b>🎙️ Dictado</b><span>Transcribe tu voz y lo envía a una nota.</span></div>
-    <div class="card"><b>📂 Archivos</b><span>Explora en lectura una carpeta local; no la recuerda salvo permiso explícito. Con buscador por nombre (incluye subcarpetas) y ordenación por nombre, tipo o tamaño.</span></div>
+    <div class="card"><b>📂 Archivos</b><span>Explora en lectura una carpeta local; no la recuerda salvo permiso explícito. Con buscador por nombre (incluye subcarpetas) y <b>cabeceras de columna</b> clicables — Nombre, Tipo, Fecha, Tamaño; un clic ordena, otro invierte (▲/▼).</span></div>
     <div class="card"><b>🔳 QR · 🕐 Reloj</b><span>Código QR de un texto/URL y reloj analógico o digital.</span></div>
   </div>
-  <p class="note">En la barra de título de cada widget: etiquetas y, en Nota y Tareas, color de ventana — ambos ocultos hasta pasar el ratón · <b>⛶</b> maximizar (❐ restaura) · <b>▾</b> plegar a la cabecera · <b>✕</b> cerrar. Doble clic en el título para renombrar inline.</p>
+  <p class="note">En la barra de título de cada widget: etiquetas y, en Nota y Tareas, color de ventana (en Nota también la cabecera ⓘ) — ocultos hasta pasar el ratón · <b>⛶</b> maximizar (❐ restaura) · <b>▾</b> plegar a la cabecera · <b>✕</b> cerrar. Doble clic en el título para renombrar inline.</p>
 </section>
 
 <section id="calendario">
@@ -128,6 +128,7 @@
     <div class="card"><b>Festivos</b><span>Los festivos nacionales calculados van en rojo; puedes añadir festivos locales o nacionales manuales en rojo.</span></div>
     <div class="card"><b>Cómputo</b><span>Los resúmenes separan días hábiles, festivos laborables, fines de semana y horas cuando el permiso sea parcial.</span></div>
     <div class="card"><b>Permisos</b><span>El widget Permisos ofrece una lista reducida de conceptos: vacaciones, asuntos, antigüedad, formación, exámenes, conciliación, familiar, consulta, deber público, traslado, compensación y otros.</span></div>
+    <div class="card"><b>Conceptos propios</b><span>¿Te faltan «Avisos» o «Urgencias»? En el editor de marcas (clic en un día), <b>＋ Concepto propio</b> crea conceptos con tu nombre y tu color, que aparecen junto a los canónicos en Mes, Año y Permisos. La ✕ del chip los quita (sus marcas pasan a «Otro» sin perder la etiqueta).</span></div>
   </div>
   <p class="note">No pretende sustituir la normativa de cada centro: es una agenda personal local-first para controlar permisos y vacaciones de forma práctica.</p>
   <p class="note">Mes y Año están pensados para ampliarse: la letra crece con la ventana y el Año va sumando columnas de una en una. Ambos tienen un tamaño mínimo por debajo del cual no se dejan encoger (serían ilegibles).</p>
@@ -176,7 +177,7 @@
   <p>No hace falta memorizar nada: al abrir la paleta en vacío aparecen <b>chips</b> con los prefijos (un clic los rellena), y si tecleas un prefijo incompleto o una fecha imposible (<code>v 31/2</code>), una línea de pista te recuerda la sintaxis correcta sin interrumpir la búsqueda.</p>
   <table>
     <tr><th>Escribes</th><th>Se crea</th></tr>
-    <tr><td><code>t llamar a Juan @mañana</code></td><td>Tarea con fecha en el espacio activo (<code>@hoy</code>, <code>@mañana</code>, <code>@12/8</code>, <code>@12/8/2027</code>)</td></tr>
+    <tr><td><code>t llamar a Juan @mañana</code></td><td>Tarea con fecha en el espacio activo (<code>@hoy</code>, <code>@mañana</code>, <code>@12/8</code>, <code>@12/8/2027</code>). Si tienes listas de tareas <b>con nombre</b> («dudas clínicas»…), la paleta ofrece además «Tarea en “X”» para elegir destino</td></tr>
     <tr><td><code>n idea para la sesión</code></td><td>Nota (se añade a la nota del espacio activo)</td></tr>
     <tr><td><code>c texto reutilizable</code></td><td>Clip en el portapapeles de fragmentos</td></tr>
     <tr><td><code>https://…</code> o <code>e https://… Título</code></td><td>Enlace en el grupo «Capturados»</td></tr>

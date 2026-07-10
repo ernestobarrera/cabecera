@@ -385,4 +385,31 @@ if (humanSize(2048) !== '2.0 KB') throw new Error('humanSize: conversión a KB i
 if (humanSize(5 * 1024 * 1024) !== '5.0 MB') throw new Error('humanSize: conversión a MB incorrecta');
 console.log('OK widget Archivos (matchesTerm, extOf, humanSize)');
 
+// --- linkifyEsc: URLs clicables en tareas, sin abrir la puerta a HTML ---
+eval('globalThis.linkifyEsc = ' + pickFn('linkifyEsc', 't'));
+const lk = linkifyEsc('descargar https://www.who.int/x?a=1&b=2 ya');
+if (!lk.includes('<a href="https://www.who.int/x?a=1&amp;b=2"')) throw new Error('linkify: URL no enlazada o & sin escapar');
+if (!lk.includes('target="_blank"') || !lk.includes('rel="noopener"')) throw new Error('linkify: faltan atributos de seguridad');
+if (linkifyEsc('<b>x</b> y https://a.io').includes('<b>')) throw new Error('linkify: HTML del texto sin escapar');
+const lk2 = linkifyEsc('mira (https://a.io/p).');
+if (!lk2.includes('href="https://a.io/p"') || !lk2.includes('</a>).')) throw new Error('linkify: puntuación colgante dentro del enlace');
+const lk3 = linkifyEsc('ver <https://a.io>');
+if (!lk3.includes('</a>&gt;')) throw new Error('linkify: entidad &gt; final partida o dentro del enlace');
+if (linkifyEsc('sin urls aqui') !== 'sin urls aqui') throw new Error('linkify: texto sin URL alterado');
+if (linkifyEsc('javascript:alert(1)').includes('<a')) throw new Error('linkify: esquema no-http enlazado');
+console.log('OK linkifyEsc (URLs http/https, escape previo, puntuación fuera)');
+
+// --- invariantes de fuente: sonido de avisos y conceptos propios ---
+// El aviso que salta sin gesto del usuario se ENCOLA (autoplay) y suena al primer clic/tecla.
+if (!src.includes('pendingAlertSound = kind')) throw new Error('regresión: aviso sin gesto ya no se encola');
+if (!src.includes('addEventListener("pointerdown", unlockAlertSound')) throw new Error('regresión: falta el desbloqueo de audio por gesto');
+// Conceptos de calendario propios: saneo, validTypes dinámico y color por variable CSS.
+if (!src.includes('s.customMarkTypes = (Array.isArray(s.customMarkTypes)')) throw new Error('regresión: customMarkTypes sin sanear');
+if (!src.includes('.concat((s.customMarkTypes || []).map(c => c.id))')) throw new Error('regresión: validTypes ya no acepta conceptos propios');
+if (!src.includes('mark-custom')) throw new Error('regresión: falta la clase mark-custom para el color propio');
+// Edición de tarea ya no trunca a 300; Archivos persiste dirección de orden.
+if (src.includes('it.t = v.slice(0, 300)')) throw new Error('regresión: la edición de tarea vuelve a truncar a 300');
+if (!src.includes('w.data.sortDir')) throw new Error('regresión: Archivos perdió la dirección de orden');
+console.log('OK invariantes (audio encolado, conceptos propios saneados, sin tope de 300, sortDir presente)');
+
 console.log('\nTODO EN VERDE');
