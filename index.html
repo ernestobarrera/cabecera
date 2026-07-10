@@ -1755,8 +1755,13 @@ try{ privacyOn = localStorage.getItem("cabecera-privacy") === "1"; }catch(e){}
 function setPrivacy(on){
   privacyOn = !!on;
   try{ localStorage.setItem("cabecera-privacy", privacyOn ? "1" : "0"); }catch(e){}
+  // un filtro de etiqueta activo revela su nombre en la barra y en la paleta (hallazgo Codex P1)
+  if (privacyOn && tagFilter) tagFilter = null;
   applyPrivacyUI();
   renderAll();
+  // la paleta abierta conservaría resultados calculados sin filtro (hallazgo Codex P1)
+  const menu = $("#menu");
+  if (menu && menu.classList.contains("open")) renderResults($("#menu-search").value);
   toast(privacyOn ? "Privacidad activa: los widgets 👁 quedan cubiertos (visual, no cifrado)" : "Privacidad desactivada: todo visible");
 }
 function applyPrivacyUI(){
@@ -4087,8 +4092,9 @@ function renderResults(q){
     const primary = state.widgets.find(x => x.type === "todo");
     state.spaces.forEach((sp, si) => (sp.widgets || []).forEach(x => {
       // solo IDs, nunca el objeto: si entra una sincronización remota con la paleta
-      // abierta, el objeto pintado queda huérfano del estado nuevo (hallazgo Codex)
-      if (x.type === "todo" && x.t && x.t.trim() && x !== primary)
+      // abierta, el objeto pintado queda huérfano del estado nuevo (hallazgo Codex).
+      // Y una lista privada tampoco se ofrece como destino: su nombre es fuga (Codex P1)
+      if (x.type === "todo" && x.t && x.t.trim() && x !== primary && !(privacyOn && x.priv))
         extras.push({ wId: x.id, spId: sp.id, name: x.t.trim(), spName: sp.name || "Espacio", si });
     }));
     extras.sort((a, b) => (a.si === state.active ? 0 : 1) - (b.si === state.active ? 0 : 1));
@@ -4592,7 +4598,8 @@ function bodyDictate(w, el){
 
   // Nota destino: la nota marcada con 🎙️ (state.dictTargetId); si no hay ninguna, la primera nota
   const notesList = () => state.widgets.filter(x => x.type === "notes");
-  const noteName = n => n.t || ("Nota " + (notesList().indexOf(n) + 1));
+  // el título de una nota privada es fuga también aquí (Destino: y toast de envío — hallazgo Codex P1)
+  const noteName = n => (privacyOn && n.priv) ? "Nota privada" : (n.t || ("Nota " + (notesList().indexOf(n) + 1)));
   const targetNote = () => {
     const notes = notesList();
     return (state.dictTargetId && notes.find(n => n.id === state.dictTargetId)) || notes[0] || null;

@@ -429,6 +429,11 @@ if (!src.includes('if (privacyOn && w.priv) continue;')) throw new Error('regres
 if (!src.match(/allTags\(\)\{[\s\S]{0,200}privacyOn && w\.priv/)) throw new Error('regresión: allTags expone etiquetas de widgets privados');
 if (!src.includes('Aviso en un widget privado')) throw new Error('regresión: el toast de aviso revela texto de tarea privada');
 if (!src.includes('Desactiva el modo privacidad para cambiar marcas')) throw new Error('regresión: se puede desmarcar en directo');
-console.log('OK privacidad escénica (priv estricto en saneo, modo por dispositivo, paleta/etiquetas/toasts cubiertos, desmarcado bloqueado)');
+// las 4 fugas P1 del veredicto Codex (2026-07-10) no deben reabrirse:
+if (!src.includes('? "Nota privada"')) throw new Error('regresión P1: el Dictado vuelve a revelar el título de la nota destino');
+if (!src.includes('&& !(privacyOn && x.priv))')) throw new Error('regresión P1: la paleta vuelve a ofrecer listas privadas como destino de tarea');
+if (!src.match(/function setPrivacy\(on\)\{[\s\S]{0,900}tagFilter = null/)) throw new Error('regresión P1: activar privacidad ya no limpia el filtro de etiqueta');
+if (!src.match(/function setPrivacy\(on\)\{[\s\S]{0,900}renderResults\(/)) throw new Error('regresión P1: activar privacidad ya no recalcula la paleta abierta');
+console.log('OK privacidad escénica (priv estricto en saneo, modo por dispositivo, paleta/etiquetas/toasts cubiertos, desmarcado bloqueado, 4 fugas P1 cerradas)');
 
 console.log('\nTODO EN VERDE');
