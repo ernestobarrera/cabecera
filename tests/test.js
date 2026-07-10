@@ -410,6 +410,10 @@ if (!src.includes('mark-custom')) throw new Error('regresión: falta la clase ma
 // Edición de tarea ya no trunca a 300; Archivos persiste dirección de orden.
 if (src.includes('it.t = v.slice(0, 300)')) throw new Error('regresión: la edición de tarea vuelve a truncar a 300');
 if (!src.includes('w.data.sortDir')) throw new Error('regresión: Archivos perdió la dirección de orden');
-console.log('OK invariantes (audio encolado, conceptos propios saneados, sin tope de 300, sortDir presente)');
+// Listas nombradas en paleta: el destino viaja por IDs y se resuelve al hacer clic,
+// nunca como objeto capturado (quedaría huérfano si entra un sync remoto — hallazgo Codex)
+if (!src.includes('extras.push({ wId:')) throw new Error('regresión: la paleta vuelve a capturar el objeto widget como destino');
+if (!src.includes('s.id === x.spId')) throw new Error('regresión: el destino de lista nombrada ya no se resuelve en el clic');
+console.log('OK invariantes (audio encolado, conceptos propios saneados, sin tope de 300, sortDir presente, destino por IDs)');
 
 console.log('\nTODO EN VERDE');

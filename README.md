@@ -84,6 +84,17 @@ La misma línea de texto vale desde la paleta (Ctrl+K), la Bandeja (`inbox.txt`)
 
 Reglas del contrato: prefijo en minúscula + espacio; interpretación **determinista** (nada de lenguaje natural amplio); si una línea no encaja con total seguridad, queda como texto normal en la Bandeja. En la paleta, la primera opción muestra qué se creará y en qué espacio (Enter confirma); desde la Bandeja **nada se crea sin confirmación humana**, línea a línea. Un cambio incompatible de esta gramática se anunciará como v2 en el CHANGELOG; la v1 no se romperá en silencio.
 
+### Invariantes (compromisos del proyecto)
+
+Para cualquier persona o programa que se integre con Cabecera, estas reglas no cambian entre versiones:
+
+1. **Abrir Cabecera nunca escribe tu archivo.** Solo una edición tuya dispara un guardado.
+2. **Ningún agente o programa crea contenido sin confirmación humana** (Bandeja y paleta: propuesta + clic tuyo).
+3. **Todo formato externo se sanea antes de aplicarse** (packs, líneas de bandeja): URLs solo `http/https`, dimensiones numéricas, tipos en lista blanca.
+4. **Sin servidor, sin cuentas, sin telemetría y sin credenciales almacenadas.** Tus datos viven en tu navegador o en un archivo tuyo; Cabecera no guarda tokens de servicios externos.
+5. **El intercambio con agentes es manual y explícito** (archivo o portapapeles, mediado por ti); la gramática v1 es el contrato de entrada y no se rompe en silencio.
+6. El esquema interno de `datos.json` puede evolucionar entre versiones (con migración automática); lo estable es la gramática y estos invariantes, no la estructura interna.
+
 ## Límites conocidos
 
 - Modo sincronizado y packs-desde-archivo: solo Edge/Chrome (File System Access API) y por HTTP(S), no `file://`.

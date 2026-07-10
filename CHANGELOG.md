@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.25.1] - 2026-07-10
+
+- **Corregido: «Tarea en “X”» resuelve su lista de destino en el momento del clic.** La opción de la paleta recordaba el widget exacto de cuando se pintó; si una sincronización desde otro equipo llegaba con la paleta abierta, el clic podía anunciar éxito sin guardar la tarea. Ahora el destino viaja por identificadores y se localiza contra el estado vigente al confirmar; si la lista ya no existe, se avisa en vez de fingir. Hallazgo de revisión externa; con test contra regresión.
+- **Integración continua:** cada cambio publicado en el repositorio ejecuta automáticamente la suite de tests (GitHub Actions). No cambia nada para el usuario; es una red de seguridad del proyecto.
+- **README: invariantes del proyecto.** Los compromisos que no cambian entre versiones (abrir nunca escribe, nada se crea sin confirmación humana, todo formato externo se sanea, sin cuentas ni telemetría ni credenciales almacenadas, intercambio con agentes manual y explícito) quedan enumerados como contrato público, separados del esquema interno, que sigue libre de evolucionar.
+
 ## [0.25.0] - 2026-07-10
 
 - **Corregido: editar una tarea ya no recorta su texto.** Al confirmar la edición de una tarea, el texto se truncaba a 300 caracteres — las tareas largas (pegadas o convertidas desde la Bandeja) se amputaban a mitad de palabra. Ya no hay tope al editar, igual que no lo hay al crear. Con test contra regresión.

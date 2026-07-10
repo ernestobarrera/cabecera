@@ -4020,7 +4020,10 @@ function renderResults(q){
   if (cap && cap.kind === "task"){
     const primary = state.widgets.find(x => x.type === "todo");
     state.spaces.forEach((sp, si) => (sp.widgets || []).forEach(x => {
-      if (x.type === "todo" && x.t && x.t.trim() && x !== primary) extras.push({ w: x, si, sp });
+      // solo IDs, nunca el objeto: si entra una sincronización remota con la paleta
+      // abierta, el objeto pintado queda huérfano del estado nuevo (hallazgo Codex)
+      if (x.type === "todo" && x.t && x.t.trim() && x !== primary)
+        extras.push({ wId: x.id, spId: sp.id, name: x.t.trim(), spName: sp.name || "Espacio", si });
     }));
     extras.sort((a, b) => (a.si === state.active ? 0 : 1) - (b.si === state.active ? 0 : 1));
     extras = extras.slice(0, 3);
@@ -4031,8 +4034,14 @@ function renderResults(q){
     .slice(0, cap ? 9 - extras.length : 10);
   if (cap) hits.unshift({ icon: "➕", label: CAPTURE_META[cap.kind].name + ": " + captureSummary(cap), sub: captureDest(cap),
     run: () => { applyCapture(cap); closeMenu(); } });
-  extras.forEach((x, i) => hits.splice(1 + i, 0, { icon: "➕", label: "Tarea en «" + x.w.t.trim() + "»",
-    sub: "en «" + (x.sp.name || "Espacio") + "»", run: () => { applyCapture(cap, { w: x.w, si: x.si }); closeMenu(); } }));
+  extras.forEach((x, i) => hits.splice(1 + i, 0, { icon: "➕", label: "Tarea en «" + x.name + "»",
+    sub: "en «" + x.spName + "»", run: () => {
+      // resolver el destino AHORA, contra el estado vigente en el momento del clic
+      const si = state.spaces.findIndex(s => s.id === x.spId);
+      const w = si >= 0 ? (state.spaces[si].widgets || []).find(t => t.id === x.wId && t.type === "todo") : null;
+      if (!w){ toast("Esa lista ya no existe", true); closeMenu(); return; }
+      applyCapture(cap, { w, si }); closeMenu();
+    } }));
   box.classList.add("has");
   box.innerHTML = hits.length || hint ? "" : `<div class="empty">Sin coincidencias.</div>`;
   selIdx = 0;
