@@ -416,4 +416,19 @@ if (!src.includes('extras.push({ wId:')) throw new Error('regresión: la paleta 
 if (!src.includes('s.id === x.spId')) throw new Error('regresión: el destino de lista nombrada ya no se resuelve en el clic');
 console.log('OK invariantes (audio encolado, conceptos propios saneados, sin tope de 300, sortDir presente, destino por IDs)');
 
+// --- privacidad escénica (spec 0b): priv boolean estricto + fugas cubiertas ---
+if (sanitizeWidgetShape({ type: 'notes', priv: true }).priv !== true) throw new Error('priv=true no se preserva');
+for (const bad of ['yes', 1, 'true', {}, [], 0, null])
+  if (sanitizeWidgetShape({ type: 'notes', priv: bad }).priv !== undefined) throw new Error('priv no-boolean debe descartarse: ' + JSON.stringify(bad));
+if (sanitizeWidgetShape({ type: 'notes' }).priv !== undefined) throw new Error('priv ausente debe seguir ausente');
+// el modo vive por dispositivo, nunca en el estado sincronizado
+if (!src.includes('localStorage.getItem("cabecera-privacy")')) throw new Error('regresión: el modo privacidad ya no es por dispositivo');
+if (src.includes('state.privacyOn') || src.includes('privacyOn: ')) throw new Error('regresión: privacyOn no debe viajar en datos.json');
+// fugas cubiertas: paleta (widgets enteros), etiquetas, toast de aviso, desmarcado en directo
+if (!src.includes('if (privacyOn && w.priv) continue;')) throw new Error('regresión: la paleta vuelve a listar widgets privados');
+if (!src.match(/allTags\(\)\{[\s\S]{0,200}privacyOn && w\.priv/)) throw new Error('regresión: allTags expone etiquetas de widgets privados');
+if (!src.includes('Aviso en un widget privado')) throw new Error('regresión: el toast de aviso revela texto de tarea privada');
+if (!src.includes('Desactiva el modo privacidad para cambiar marcas')) throw new Error('regresión: se puede desmarcar en directo');
+console.log('OK privacidad escénica (priv estricto en saneo, modo por dispositivo, paleta/etiquetas/toasts cubiertos, desmarcado bloqueado)');
+
 console.log('\nTODO EN VERDE');

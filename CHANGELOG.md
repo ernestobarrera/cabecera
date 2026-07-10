@@ -1,5 +1,9 @@
 # Changelog
 
+## [Sin publicar]
+
+- **Privacidad escénica: comparte pantalla sin exponer tus notas.** Marca cualquier widget como privado con el botón **👁** de su barra de título (tenue cuando está marcado) y actívala desde el **👁 del acceso inferior derecho** o el comando «Privacidad» de la paleta. Los widgets privados se cubren con un panel opaco, su título pasa al genérico del tipo y sus etiquetas se ocultan; tampoco aparecen en la paleta (ni contenido, ni título, ni enlaces, ni etiquetas), los avisos de sus tareas suenan sin mostrar el texto y el salto ⏰/📌 solo va a tareas visibles. En directo no se pueden cambiar marcas (imposible destapar por un clic accidental) y el modo es de cada dispositivo: la sincronización no puede apagarlo a distancia ni una recarga lo desactiva. **Honestidad:** es privacidad visual, no cifrado — los datos siguen en claro en tu archivo; y en directo, papelera y bandeja muestran su contenido al abrirlas. Con tests (marca estricta en el saneo, fugas de paleta/etiquetas/avisos cubiertas) y guía actualizada.
+
 ## [0.25.1] - 2026-07-10
 
 - **Corregido: «Tarea en “X”» resuelve su lista de destino en el momento del clic.** La opción de la paleta recordaba el widget exacto de cuando se pintó; si una sincronización desde otro equipo llegaba con la paleta abierta, el clic podía anunciar éxito sin guardar la tarea. Ahora el destino viaja por identificadores y se localiza contra el estado vigente al confirmar; si la lista ya no existe, se avisa en vez de fingir. Hallazgo de revisión externa; con test contra regresión.

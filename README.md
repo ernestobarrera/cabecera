@@ -97,6 +97,7 @@ Para cualquier persona o programa que se integre con Cabecera, estas reglas no c
 
 ## Límites conocidos
 
+- La **privacidad escénica** (widgets 👁 cubiertos al compartir pantalla) es visual, no cifrado: los datos siguen en claro en tu `datos.json`/navegador. Y en directo, papelera y bandeja muestran su contenido al abrirlas.
 - Modo sincronizado y packs-desde-archivo: solo Edge/Chrome (File System Access API) y por HTTP(S), no `file://`.
 - Sin fusión automática de conflictos (aviso y elección manual; con un solo usuario es raro).
 - En móvil, los widgets se apilan a ancho completo para consultar/editar (sin arrastrar ni redimensionar); el escritorio libre es para pantalla grande.

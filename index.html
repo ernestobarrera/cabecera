@@ -143,6 +143,18 @@ body{font-family:var(--font); color:var(--text); background:#10131a}
   backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px); box-shadow:0 8px 24px rgba(0,0,0,.25);
   cursor:pointer; font-family:var(--font); font-size:12.5px}
 .dock-btn:hover{background:var(--accent-soft); border-color:var(--accent); color:var(--text)}
+#desk-privacy.on{background:var(--accent-soft); border-color:var(--accent); color:var(--text)}
+/* --- privacidad escénica: el overlay OPACO es la garantía (visual, no cifrado) --- */
+.win-btn.privbtn{opacity:0; pointer-events:none; transition:opacity .14s ease}
+.win:hover .win-btn.privbtn,.win:focus-within .win-btn.privbtn{opacity:1; pointer-events:auto}
+.win.priv .win-btn.privbtn{opacity:.45; pointer-events:auto}   /* indicador en reposo: se ve qué está marcado */
+.win.priv:hover .win-btn.privbtn{opacity:1}
+@media (any-hover:none){ .win-btn.privbtn{opacity:.45; pointer-events:auto} }
+#desktop.privacy-on .win.priv .win-body{pointer-events:none; overflow:hidden; position:relative}
+#desktop.privacy-on .win.priv .win-body > *{visibility:hidden}
+#desktop.privacy-on .win.priv .win-body::after{content:"👁 privado"; position:absolute; inset:0; display:flex;
+  align-items:center; justify-content:center; background:#151a23; color:var(--text-dim); font-size:12.5px; letter-spacing:.4px; z-index:6}
+#desktop.privacy-on .win.priv .win-tags{display:none}
 .dock-key{font-weight:650; letter-spacing:.02em}
 .dock-count{min-width:15px; height:15px; padding:0 4px; border-radius:20px; background:var(--accent); color:#0b1220;
   display:none; align-items:center; justify-content:center; font-size:10px; font-weight:700}
@@ -545,6 +557,7 @@ ul.plain{list-style:none}
   <button class="dock-btn dock-key" id="desk-palette" title="Abrir paleta de comandos">Ctrl K</button>
   <button class="dock-btn" id="desk-arrange" title="Autoordenar widgets">🧭</button>
   <button class="dock-btn" id="desk-trash" title="Papelera">🗑️ <span class="dock-count" id="desk-trash-n"></span></button>
+  <button class="dock-btn" id="desk-privacy" title="Ocultar widgets privados (pantalla compartida)">👁</button>
   <button class="dock-btn dock-info" id="desk-info" title="Información del proyecto">i</button>
 </div>
 
@@ -895,6 +908,8 @@ function sanitizeWidgetShape(w){
     data: (w.data && typeof w.data === "object") ? w.data : {},
     // exacto: "user" | "pack" | "pack:<slug acotado>" (para el futuro merge no destructivo)
     source: (typeof w.source === "string" && /^(user|pack(:[a-zA-Z0-9._-]{1,40})?)$/.test(w.source)) ? w.source : "user",
+    // privacidad escénica: boolean estricto o ausente (cualquier otra cosa se descarta)
+    priv: w.priv === true ? true : undefined,
     tags: tags.length ? tags : undefined
   };
 }
@@ -1683,6 +1698,8 @@ function normTags(str){
   return [...new Set(String(str || "").split(",").map(s => s.trim().toLowerCase().slice(0, 24)).filter(Boolean))].slice(0, 8);
 }
 function editWidgetTags(w, el){
+  // el editor mostraría las etiquetas reales de un widget enmascarado
+  if (privacyOn && w.priv){ toast("Desactiva el modo privacidad para editar etiquetas", true); return; }
   el.querySelectorAll(".tag-editor").forEach(x => x.remove());
   const ed = document.createElement("div");
   ed.className = "tag-editor";
@@ -1723,8 +1740,32 @@ function paintWinTags(el, w){
 }
 function allTags(){
   const set = new Set();
-  state.spaces.forEach(sp => sp.widgets.forEach(w => (w.tags || []).forEach(t => set.add(t))));
+  state.spaces.forEach(sp => sp.widgets.forEach(w => {
+    if (privacyOn && w.priv) return;   // las etiquetas de un widget privado también son fuga
+    (w.tags || []).forEach(t => set.add(t));
+  }));
   return [...set].sort();
+}
+
+/* --- Privacidad escénica: oculta VISUALMENTE los widgets marcados 👁 (no es cifrado).
+   El modo vive POR DISPOSITIVO en localStorage, nunca en datos.json: si viajara
+   sincronizado, otro equipo podría destapar en mitad de una presentación (spec 0b). --- */
+let privacyOn = false;
+try{ privacyOn = localStorage.getItem("cabecera-privacy") === "1"; }catch(e){}
+function setPrivacy(on){
+  privacyOn = !!on;
+  try{ localStorage.setItem("cabecera-privacy", privacyOn ? "1" : "0"); }catch(e){}
+  applyPrivacyUI();
+  renderAll();
+  toast(privacyOn ? "Privacidad activa: los widgets 👁 quedan cubiertos (visual, no cifrado)" : "Privacidad desactivada: todo visible");
+}
+function applyPrivacyUI(){
+  $("#desktop").classList.toggle("privacy-on", privacyOn);
+  const b = $("#desk-privacy");
+  if (b){
+    b.classList.toggle("on", privacyOn);
+    b.title = privacyOn ? "Privacidad activa: widgets 👁 ocultos (clic para mostrar)" : "Ocultar widgets privados (pantalla compartida)";
+  }
 }
 function setTagFilter(tag){
   tagFilter = tag || null;
@@ -2002,9 +2043,13 @@ function buildWindow(w){
   const colorable = w.type === "notes" || w.type === "todo";
   const colorBtn = colorable ? `<button class="win-btn colorbtn" title="Color de la ventana"><span class="cdot"></span></button>` : "";
   const descBtn = w.type === "notes" ? `<button class="win-btn descbtn" title="Cabecera de la nota (explica qué guarda)">ⓘ</button>` : "";
+  const privBtn = `<button class="win-btn privbtn" title="${w.priv ? "Widget privado: se oculta al activar la privacidad" : "Marcar como privado (se oculta al compartir pantalla)"}">👁</button>`;
+  // con privacidad activa, el título propio también es fuga: se muestra el genérico del tipo
+  const shownName = (privacyOn && w.priv) ? t.name : (w.t || t.name);
+  if (w.priv) el.classList.add("priv");
   el.innerHTML = `
-    <div class="win-title" title="Doble clic para renombrar"><span class="ico">${t.ico}</span><span class="tname">${esc(w.t || t.name)}</span><span class="sp"></span>
-      ${dictBtn}${descBtn}${colorBtn}<button class="win-btn tagbtn" title="Etiquetas">🏷️</button><button class="win-btn maxb" title="${w.max ? "Restaurar tamaño" : "Maximizar"}">${w.max ? "❐" : "⛶"}</button><button class="win-btn collapse" title="Plegar / desplegar">${w.collapsed ? "▸" : "▾"}</button><button class="win-btn close" title="Cerrar">✕</button></div>
+    <div class="win-title" title="Doble clic para renombrar"><span class="ico">${t.ico}</span><span class="tname">${esc(shownName)}</span><span class="sp"></span>
+      ${dictBtn}${descBtn}${colorBtn}${privBtn}<button class="win-btn tagbtn" title="Etiquetas">🏷️</button><button class="win-btn maxb" title="${w.max ? "Restaurar tamaño" : "Maximizar"}">${w.max ? "❐" : "⛶"}</button><button class="win-btn collapse" title="Plegar / desplegar">${w.collapsed ? "▸" : "▾"}</button><button class="win-btn close" title="Cerrar">✕</button></div>
     <div class="win-tags"></div>
     <div class="win-body"></div>
     <div class="win-resize"></div>`;
@@ -2012,6 +2057,16 @@ function buildWindow(w){
   el.querySelector(".tagbtn").addEventListener("click", e => { e.stopPropagation(); editWidgetTags(w, el); });
   if (colorable) el.querySelector(".colorbtn").addEventListener("click", e => { e.stopPropagation(); editWinColor(w, el); });
   if (w.type === "notes") el.querySelector(".descbtn").addEventListener("click", e => { e.stopPropagation(); editNoteDesc(w, el); });
+  el.querySelector(".privbtn").addEventListener("click", e => {
+    e.stopPropagation();
+    // en directo no se cambian marcas: imposible revelar por un clic accidental (spec 0b)
+    if (privacyOn){ toast("Desactiva el modo privacidad para cambiar marcas", true); return; }
+    if (w.priv) delete w.priv; else w.priv = true;
+    el.classList.toggle("priv", !!w.priv);
+    e.currentTarget.title = w.priv ? "Widget privado: se oculta al activar la privacidad" : "Marcar como privado (se oculta al compartir pantalla)";
+    toast(w.priv ? "Marcado como privado: se cubrirá al activar 👁 en el dock" : "Ya no es privado");
+    markDirty();
+  });
   el.querySelector(".maxb").addEventListener("click", e => { e.stopPropagation(); toggleMaximize(w); });
   paintWinTags(el, w);
   el.querySelector(".collapse").addEventListener("click", e => {
@@ -2033,6 +2088,8 @@ function buildWindow(w){
   // renombrar ventana (título propio, ej. "Notas de sesión")
   el.querySelector(".win-title").addEventListener("dblclick", e => {
     if (e.target.closest("button")) return;
+    // el editor inline mostraría el título real enmascarado: bloqueado en directo
+    if (privacyOn && w.priv){ toast("Desactiva el modo privacidad para renombrar", true); return; }
     const name = el.querySelector(".tname");
     inlineRename(name, w.t || t.name, 60, v => {
       w.t = (!v || v === t.name) ? undefined : v;
@@ -2291,6 +2348,8 @@ function bodyNotes(w, el){
 // Cabecera opcional de una nota (w.data.desc): explica qué guarda el widget.
 // Se edita inline (Enter guarda, Esc cancela); vacía = se quita.
 function editNoteDesc(w, winEl){
+  // la cabecera de una nota privada también es contenido: no se edita en directo
+  if (privacyOn && w.priv){ toast("Desactiva el modo privacidad para editar la cabecera", true); return; }
   const body = winEl && winEl.querySelector(".win-body");
   if (!body || body.querySelector(".desc-edit")) return;
   body.classList.add("has-desc");
@@ -3955,6 +4014,9 @@ function paletteEntries(){
   state.spaces.forEach((sp, si) => {
     const tag = multi ? (sp.name || ("Espacio " + (si + 1))) : "";
     for (const w of sp.widgets){
+      // privacidad activa: un widget privado no aporta NINGUNA entrada — ni snippets,
+      // ni título, ni grupos de enlaces, ni buscadores (spec 0b, enmienda Codex #3)
+      if (privacyOn && w.priv) continue;
       const name = w.t || (WTYPES[w.type] || {}).name || w.type;
       const ico = (WTYPES[w.type] || {}).ico || "❔";
       if (w.type === "links"){
@@ -3981,6 +4043,8 @@ function paletteEntries(){
   add("🪟", "Permitir ventanas emergentes", "para abrir grupos de enlaces", () => { closeMenu(); $("#ov-popups").classList.add("open"); }, "popup popups ventanas emergentes bloqueadas permitir pestañas grupos enlaces");
   add("🧭", "Autoordenar widgets", "redistribuir pantalla", () => { closeMenu(); autoArrangeWidgets(); }, "autoordenar ordenar redistribuir organizar widgets pantalla");
   add("🗑️", "Papelera", "recuperar borrados", () => { closeMenu(); openTrash(); }, "papelera recuperar restaurar borrados deshacer");
+  add("👁", privacyOn ? "Privacidad: mostrar widgets privados" : "Privacidad: ocultar widgets privados", "pantalla compartida",
+    () => { closeMenu(); setPrivacy(!privacyOn); }, "privacidad privado ocultar mostrar compartir pantalla presentacion docencia escenica");
   add("📖", "Guía completa", "cómo funciona todo", () => { closeMenu(); window.open("guia.html", "_blank", "noopener"); }, "guia manual ayuda completa como funciona empezar");
   for (const [type, t] of Object.entries(WTYPES)) if (type !== "intro")
     add("➕", "Añadir " + t.name, "widget nuevo", () => { addWidget(type); closeMenu(); }, "añadir crear nuevo " + t.name);
@@ -4112,7 +4176,9 @@ function wireUI(){
   // aviso de tareas: cada clic salta a la siguiente tarea vencida o de hoy
   $("#tb-tasks").addEventListener("click", () => {
     const s = dueTaskStats();
-    const hits = [...s.overdue, ...s.today];
+    let hits = [...s.overdue, ...s.today];
+    // en directo, el salto no debe llevar el foco a un widget privado (spec 0b, P4)
+    if (privacyOn) hits = hits.filter(h => !h.w.priv);
     if (!hits.length) return;
     const h = hits[taskChipIdx++ % hits.length];
     focusWidget(h.w.id, h.si);
@@ -4120,6 +4186,8 @@ function wireUI(){
   $("#desk-palette").addEventListener("click", () => openMenu("palette"));
   $("#desk-arrange").addEventListener("click", autoArrangeWidgets);
   $("#desk-trash").addEventListener("click", openTrash);
+  $("#desk-privacy").addEventListener("click", () => setPrivacy(!privacyOn));
+  applyPrivacyUI();   // el modo sobrevive a recargas (localStorage por dispositivo)
   $("#desk-info").addEventListener("click", () => $("#ov-info").classList.add("open"));
   $("#info-close").addEventListener("click", () => $("#ov-info").classList.remove("open"));
   document.addEventListener("dblclick", e => {
@@ -4426,7 +4494,9 @@ function checkTaskAlerts(){
       it.alertedAt = stamp;
       changed = true;
       playAlertSound("soft");
-      toastAction("Aviso: " + snippet(it.t || "tarea"), "Ver", () => focusWidget(w.id, si));
+      // con privacidad activa, el texto de una tarea privada no viaja al toast (spec 0b)
+      const oculto = privacyOn && w.priv;
+      toastAction(oculto ? "Aviso en un widget privado" : "Aviso: " + snippet(it.t || "tarea"), "Ver", () => focusWidget(w.id, si));
     });
   }));
   // alertedAt viaja con el siguiente guardado humano: los avisos que saltan al abrir
@@ -4604,10 +4674,13 @@ function renderTaskChip(){
   el.textContent = (s.overdue.length ? `⏰ ${s.overdue.length}` : "") +
     (s.overdue.length && s.today.length ? "  " : "") +
     (s.today.length ? `📌 ${s.today.length}` : "");
+  // los contadores pueden incluir privadas (números, no contenido), pero el tooltip
+  // no promete un salto que la privacidad impide (spec 0b, P4)
+  const jumpable = privacyOn ? [...s.overdue, ...s.today].filter(h => !h.w.priv).length : n;
   el.title = [
     s.overdue.length ? `${s.overdue.length} tarea${s.overdue.length === 1 ? "" : "s"} vencida${s.overdue.length === 1 ? "" : "s"}` : "",
     s.today.length ? `${s.today.length} vence${s.today.length === 1 ? "" : "n"} hoy` : ""
-  ].filter(Boolean).join(" · ") + " — clic para ir a la tarea";
+  ].filter(Boolean).join(" · ") + (jumpable ? " — clic para ir a la tarea" : " — en widgets privados (ocultos ahora)");
 }
 
 /* ---------- píldora informativa de la barra ---------- */

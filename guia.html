@@ -117,7 +117,7 @@
     <div class="card"><b>📂 Archivos</b><span>Explora en lectura una carpeta local; no la recuerda salvo permiso explícito. Con buscador por nombre (incluye subcarpetas) y <b>cabeceras de columna</b> clicables — Nombre, Tipo, Fecha, Tamaño; un clic ordena, otro invierte (▲/▼).</span></div>
     <div class="card"><b>🔳 QR · 🕐 Reloj</b><span>Código QR de un texto/URL y reloj analógico o digital.</span></div>
   </div>
-  <p class="note">En la barra de título de cada widget: etiquetas y, en Nota y Tareas, color de ventana (en Nota también la cabecera ⓘ) — ocultos hasta pasar el ratón · <b>⛶</b> maximizar (❐ restaura) · <b>▾</b> plegar a la cabecera · <b>✕</b> cerrar. Doble clic en el título para renombrar inline.</p>
+  <p class="note">En la barra de título de cada widget: etiquetas, <b>👁</b> marcar como privado y, en Nota y Tareas, color de ventana (en Nota también la cabecera ⓘ) — ocultos hasta pasar el ratón · <b>⛶</b> maximizar (❐ restaura) · <b>▾</b> plegar a la cabecera · <b>✕</b> cerrar. Doble clic en el título para renombrar inline.</p>
 </section>
 
 <section id="calendario">
@@ -230,6 +230,7 @@
     <tr><td>Widget Permisos</td><td>Añadir días u horas por concepto y revisar el cómputo anual</td></tr>
     <tr><td>Rueda/flechas en Temporizador</td><td>Ajustar minutos y segundos rápidamente</td></tr>
     <tr><td>Hover en barra · <b>⛶</b> · <b>▾</b> · <b>✕</b></td><td>Etiquetar / maximizar / plegar / cerrar un widget</td></tr>
+    <tr><td><b>👁</b> (barra del widget · dock)</td><td>Marcar como privado · ocultar/mostrar todos los privados (pantalla compartida)</td></tr>
     <tr><td><kbd>Alt</kbd> mientras arrastras</td><td>Mover la ventana libre, sin imán a los bordes</td></tr>
     <tr><td><kbd>Esc</kbd></td><td>Cerrar el modal, el tour o el menú abierto</td></tr>
     <tr><td>⏰/📌 (barra)</td><td>Ir a la siguiente tarea vencida o que vence hoy</td></tr>
@@ -244,6 +245,15 @@
 <section id="privacidad">
   <h2><span class="ic">🔒</span> Privacidad y datos</h2>
   <p>Cabecera es una página estática: <b>sin cuentas, sin servidor de datos y sin telemetría</b>. Tus datos viven donde tú decidas —en el navegador o en un <code>datos.json</code> dentro de una carpeta tuya— y son legibles y portables. Puedes exportar una copia cuando quieras desde Inicio.</p>
+  <h3 style="margin-top:18px">Modo pantalla compartida (privacidad escénica)</h3>
+  <p>Para docencia, sesiones o compartir pantalla sin exponer notas personales: marca un widget como privado con el botón <b>👁</b> de su barra de título (aparece al pasar el ratón; si ya está marcado, se ve tenue). El botón <b>👁 del acceso inferior derecho</b> —o el comando «Privacidad» de la paleta— activa el modo: los widgets privados se cubren con un panel opaco, su título se sustituye por el genérico («Nota», «Tareas») y sus etiquetas se ocultan.</p>
+  <ul class="steps">
+    <li>Con el modo activo, los widgets privados <b>tampoco aparecen en la paleta</b>: ni su contenido, ni su título, ni sus enlaces o etiquetas. Buscar algo que solo está en un widget privado no lo revela.</li>
+    <li>Los avisos de tareas privadas suenan pero el mensaje no muestra el texto («Aviso en un widget privado»). El contador ⏰/📌 cuenta todo, pero el clic solo salta a tareas visibles.</li>
+    <li><b>En directo no se puede desmarcar:</b> cambiar marcas exige desactivar antes el modo — así un clic accidental nunca destapa nada.</li>
+    <li>El modo es <b>de este dispositivo</b> (no viaja con la sincronización): otro equipo no puede destaparte a distancia, y recargar la página no lo apaga.</li>
+  </ul>
+  <p class="note"><b>Honestidad:</b> es privacidad <b>visual</b>, no cifrado. Los datos siguen en claro en tu <code>datos.json</code>/navegador: quien use tu equipo puede verlos. Y dos límites en directo: la <b>papelera</b> y la <b>bandeja</b> muestran su contenido al abrirlas — no las abras compartiendo pantalla.</p>
   <p class="note"><b>Archivos locales:</b> el widget Archivos pide permiso de lectura solo sobre la carpeta que eliges. Cabecera no sube esos archivos; si abres uno, el navegador puede mostrarlo como una URL temporal <code>blob:</code>. No elijas carpetas amplias o privadas salvo que te encaje ese permiso local.</p>
   <p class="note"><b>Uso sanitario responsable:</b> no guardes datos identificables de pacientes. No es historia clínica ni soporte diagnóstico. En un equipo compartido, usa tu propio perfil de navegador.</p>
 </section>
