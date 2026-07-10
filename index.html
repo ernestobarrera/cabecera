@@ -1189,7 +1189,8 @@ let freshPending = false, hiddenAt = 0;
 async function saveNow(){
   if (backend === "fs" && freshPending){
     syncUI("saving", "comprobando sincronización…");
-    try{ await poll(); }catch(e){}
+    const clean = await poll().catch(() => false);
+    if (!clean){ setTimeout(saveNow, 2000); return; }   // sin lectura válida todavía: NO escribir, reintentar (revisión Codex 2026-07-10: el guardián era fail-open)
     freshPending = false;
     if (conflictPending) return;        // el humano decide en la barra de conflicto
   }
@@ -1215,15 +1216,16 @@ async function saveNow(){
 }
 
 /* vigilancia de cambios externos + inbox */
-async function poll(){
-  if (backend !== "fs" || !dirHandle) return;
-  // no comprobar mientras escribimos nosotros: evita auto-conflictos falsos
-  if (!saving) try{
+async function poll(){   // devuelve true si completó una lectura válida (haya o no cambios/conflicto), false si no pudo comprobar de verdad
+  if (backend !== "fs" || !dirHandle) return true;   // nada que vigilar: no hay guardián que mantener abierto
+  if (saving) return true;   // no comprobar mientras escribimos nosotros (evita auto-conflictos falsos); no es un fallo de lectura
+  let clean = true;
+  try{
     const fh = await dirHandle.getFileHandle(DATA_FILE);   // sin create: vigilar nunca fabrica el archivo
     const f = await fh.getFile();
     if (f.lastModified > lastMtime){
       let remote = null, text = "";
-      try{ text = await f.text(); remote = JSON.parse(text); }catch(e){ /* escritura a medias: reintentar en el siguiente ciclo */ }
+      try{ text = await f.text(); remote = JSON.parse(text); }catch(e){ clean = false; }   // escritura a medias: reintentar en el siguiente ciclo, lectura NO válida
       if (remote && text === lastSavedText){
         // idéntico al último texto que leímos/escribimos (p. ej. OneDrive tocó el mtime):
         // no es conflicto. Se compara el TEXTO CRUDO, no una reserialización de state ni
@@ -1241,8 +1243,9 @@ async function poll(){
         syncUI("err", "conflicto");
       }
     }
-  }catch(e){ /* transitorio de la nube, o archivo aún no creado: se reintenta en el siguiente ciclo */ }
+  }catch(e){ clean = false; }   // transitorio de la nube, o archivo aún no creado: se reintenta en el siguiente ciclo, lectura NO válida
   await pollInbox();
+  return clean;
 }
 
 async function pollInbox(){
@@ -2080,15 +2083,14 @@ function buildWindow(w){
         // umbral: hasta que hay movimiento real no es arrastre (así el clic/doble clic siguen funcionando)
         if (Math.abs(m.clientX - ev.clientX) + Math.abs(m.clientY - ev.clientY) < 4) return;
         dragging = true;
-        w.x = proj.x; w.y = proj.y; w.w = proj.w; w.h = proj.h;   // promueve el rect visible a estado real solo al confirmarse el arrastre
+        w.x = proj.x; w.y = proj.y;   // solo posición: arrastrar NO debe tocar tamaño (un plegado perdería su alto desplegado — revisión Codex 2026-07-10)
         dragRects = planViewportLayout(state.widgets.filter(x => x.id !== w.id), vp);   // imán contra lo realmente visible, no posiciones fuera de encuadre
         el.style.pointerEvents = "none";   // para que elementFromPoint vea la barra bajo el cursor
       }
       w.x = Math.max(0, Math.min(m.clientX - sx, innerWidth - 80));
       w.y = Math.max(0, Math.min(m.clientY - sy, innerHeight - 110));
       if (!m.altKey){   // imán a bordes y ventanas; Alt = movimiento libre
-        const r = widgetRect(w);
-        const s = snapPosition(w.x, w.y, r.w, r.h, dragRects, innerWidth, innerHeight);
+        const s = snapPosition(w.x, w.y, proj.w, proj.h, dragRects, innerWidth, innerHeight);
         w.x = Math.max(0, s.x); w.y = Math.max(0, s.y);
       }
       el.style.left = w.x + "px"; el.style.top = w.y + "px";
@@ -2125,7 +2127,7 @@ function buildWindow(w){
       w.h = Math.max(t.minH || 140, sh + m.clientY);
       el.style.width = w.w + "px"; el.style.height = w.h + "px";
     };
-    const up = () => { removeEventListener("pointermove", move); removeEventListener("pointerup", up); markDirty(); };
+    const up = () => { removeEventListener("pointermove", move); removeEventListener("pointerup", up); if (moved) markDirty(); };   // clic sin mover el asa no debe escribir (revisión Codex 2026-07-10)
     addEventListener("pointermove", move); addEventListener("pointerup", up);
   });
   return el;
@@ -4332,7 +4334,7 @@ function wireUI(){
     // al volver de >60 s en segundo plano, el próximo guardado FS espera un poll limpio
     if (backend === "fs" && hiddenAt && Date.now() - hiddenAt > 60000) freshPending = true;
     hiddenAt = 0;
-    poll().then(() => { freshPending = false; });
+    poll().then(clean => { if (clean) freshPending = false; });   // solo se levanta el guardián con una lectura válida
   });
 
   // avisar si Cabecera ya está abierta en otra pestaña del mismo navegador
