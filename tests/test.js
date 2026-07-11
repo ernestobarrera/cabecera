@@ -167,6 +167,59 @@ if (snapPosition(9, 9, 200, 100, [], 1400, 900).y !== 12) throw new Error('snap:
 if (snapPosition(500, 900 - 46 - 100 - 15, 200, 100, [], 1400, 900).y !== 900 - 46 - 100 - 12) throw new Error('snap: no imanta al borde inferior útil');
 console.log('OK snapPosition (imán a bordes y ventanas, umbral respetado)');
 
+// --- N1: dragTarget — destino de la sombra (spec-layout-guiado v1.1) ---
+eval('globalThis.overlapsRect = ' + pickFn('overlapsRect', 'a, b, gap = 12'));
+eval('globalThis.dragTarget = ' + pickFn('dragTarget', 'x, y, ww, hh, rects, vw, vh, thr = 8, gap = 14'));
+{
+  // dentro del umbral: destino = snap, marcado como snapped
+  const t1 = dragTarget(105, 500, 200, 100, others, 1400, 900);
+  if (t1.x !== 100 || !t1.snapped) throw new Error('dragTarget: no encaja dentro del umbral');
+  // sin candidato: destino = posición libre (respuesta SIEMPRE), sin snapped
+  const t2 = dragTarget(600, 500, 200, 100, others, 1400, 900);
+  if (t2.x !== 600 || t2.y !== 500 || t2.snapped) throw new Error('dragTarget: sin candidato debe devolver la posición libre');
+  // el destino nunca es negativo aunque el snap proponga adyacencia fuera del lienzo
+  const t3 = dragTarget(2, 2, 200, 100, [{ x: 0, y: 0, w: 195, h: 100 }], 1400, 900);
+  if (t3.x < 0 || t3.y < 0) throw new Error('dragTarget: destino negativo');
+  // metadato overlap: encima de otra ventana lo dice; lejos, no
+  if (!dragTarget(150, 150, 200, 100, others, 1400, 900).overlap) throw new Error('dragTarget: no detecta solape');
+  if (dragTarget(800, 700, 200, 100, others, 1400, 900).overlap) throw new Error('dragTarget: solape fantasma');
+}
+console.log('OK dragTarget (snap anticipado, respuesta siempre, clamp y solape)');
+
+// --- N0: planificadores puros (planAutoArrange / findSpotPlan) ---
+eval('globalThis.planAutoArrange = ' + pickFn('planAutoArrange', 'sizes, vw, vh, opts'));
+eval('globalThis.findSpotPlan = ' + pickFn('findSpotPlan', 'rects, ww, hh, vw, vh, opts'));
+{
+  // una fila que cabe: x avanza con gap, misma y
+  const p1 = planAutoArrange([{ w: 300, h: 200 }, { w: 300, h: 200 }], 1400, 900);
+  if (p1.rects[0].x !== 24 || p1.rects[0].y !== 24) throw new Error('plan: origen debe ser el margen 24');
+  if (p1.rects[1].x !== 24 + 300 + 14 || p1.rects[1].y !== 24) throw new Error('plan: segunda ventana no adyacente en fila');
+  if (p1.clipped) throw new Error('plan: clipped sin motivo');
+  // salto de fila cuando no cabe
+  const p2 = planAutoArrange([{ w: 700, h: 200 }, { w: 700, h: 300 }], 1000, 900);
+  if (p2.rects[1].x !== 24 || p2.rects[1].y !== 24 + 200 + 14) throw new Error('plan: no salta de fila');
+  // suelo VISUAL 140: un h persistido de 120 empaqueta como 140 (el CSS ya lo pintaba así — Codex C5)
+  const p3 = planAutoArrange([{ w: 700, h: 120 }, { w: 700, h: 200 }], 1000, 900);
+  if (p3.rects[1].y !== 24 + 140 + 14) throw new Error('plan: la fila debe medir con el alto visual (140), no el persistido (120)');
+  // plegados miden 42
+  const p4 = planAutoArrange([{ w: 700, h: 400, collapsed: true }, { w: 700, h: 200 }], 1000, 900);
+  if (p4.rects[1].y !== 24 + 42 + 14) throw new Error('plan: plegado no mide 42');
+  // muchos widgets: clipped avisa y ningún y deja el título inaccesible
+  const p5 = planAutoArrange(Array.from({ length: 30 }, () => ({ w: 400, h: 300 })), 900, 600);
+  if (!p5.clipped) throw new Error('plan: debería avisar de que no caben');
+  if (p5.rects.some(r => r.y + 60 > 600 - 46 - 12 + 0.001)) throw new Error('plan: título bajo el borde');
+  // hueco para widget nuevo: escritorio vacío → margen; primer hueco libre tras un ocupado
+  const s1 = findSpotPlan([], 260, 180, 1400, 900);
+  if (s1.x !== 24 || s1.y !== 24) throw new Error('spot: vacío debe dar el margen');
+  const s2 = findSpotPlan([{ x: 24, y: 24, w: 300, h: 200 }], 260, 180, 1400, 900);
+  if (s2.x <= 24 + 300 - 28 && s2.y === 24) throw new Error('spot: cae encima del ocupado');
+  // lleno: fallback abajo-izquierda, nunca null
+  const full = [{ x: 0, y: 0, w: 1400, h: 900 }];
+  const s3 = findSpotPlan(full, 260, 180, 1400, 900);
+  if (typeof s3.x !== 'number' || typeof s3.y !== 'number') throw new Error('spot: fallback roto');
+}
+console.log('OK planificadores N0 (filas con alto visual 140, plegados 42, clipped, huecos y fallback)');
+
 // --- maxRect / clampRect: geometría maximizada robusta ante cambio de monitor (hotfix v0.21.1) ---
 eval('globalThis.maxRect = ' + pickFn('maxRect', 'vw, vh'));
 eval('globalThis.clampRect = ' + pickFn('clampRect', 'x, y, ww, hh, vw, vh'));
@@ -427,6 +480,20 @@ if (!src.includes('if (it.done) playDoneClick();')) throw new Error('regresión:
 if (!src.includes('function playDoneClick()')) throw new Error('regresión: falta playDoneClick');
 if ((src.match(/parseCapture\((?:q|line), new Date\(\), customMarkIds\(\)\)/g) || []).length < 3) throw new Error('regresión: algún caller de parseCapture no pasa los conceptos propios');
 console.log('OK invariantes (audio encolado, conceptos propios saneados, sin tope de 300, sortDir presente, destino por IDs, clic de hecho, conceptos propios en gramática)');
+
+// --- Invariantes de layout guiado v1 (spec v1.1, veredicto Codex) ---
+if (!src.includes('const LAYOUT = {')) throw new Error('regresión: falta el inventario LAYOUT (N0)');
+// el drag es transacción local: durante el move NO se muta estado persistible (Codex H1)
+if (src.includes('w.x = proj.x; w.y = proj.y;   // solo posición')) throw new Error('regresión: el drag vuelve a mutar estado al arrancar');
+if (!src.includes('el estado no se toca hasta soltar')) throw new Error('regresión: el drag perdió la transacción local');
+if (!html.includes('.drop-ghost{position:absolute; pointer-events:none')) throw new Error('regresión: la sombra intercepta eventos (rompería el drop en pestañas)');
+if (!src.includes('addEventListener("pointercancel", cancel); addEventListener("blur", cancel)')) throw new Error('regresión: falta la limpieza en cancelación/pérdida de foco');
+if (!html.includes('prefers-reduced-motion: no-preference')) throw new Error('regresión: el asentamiento ignora reduced-motion');
+// el imán solo apunta a destinos visibles (filtro de etiqueta — Codex H6)
+if (!src.match(/dragRects = planViewportLayout\(state\.widgets\.filter\(x =>\s*x\.id !== w\.id && !\(tagFilter/)) throw new Error('regresión: el imán vuelve a encajar contra ventanas ocultas');
+// el saneo NO cambia con N0 (Codex H5): el suelo 140 es solo visual/planificación
+if (!src.includes('h: w.collapsed ? LAYOUT.collapsedH : Math.max(+w.h || t.h || 180, LAYOUT.minH)')) throw new Error('regresión: widgetRect perdió el suelo visual');
+console.log('OK invariantes layout guiado (LAYOUT, transacción de drag, sombra inerte, limpieza, destinos visibles, saneo intacto)');
 
 // --- privacidad escénica (spec 0b): priv boolean estricto + fugas cubiertas ---
 if (sanitizeWidgetShape({ type: 'notes', priv: true }).priv !== true) throw new Error('priv=true no se preserva');

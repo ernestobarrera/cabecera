@@ -39,6 +39,17 @@ body{font-family:var(--font); color:var(--text); background:#10131a}
   background:var(--glass); backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px);
   border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow); overflow:hidden}
 .win.active{border-color:rgba(255,255,255,.22)}
+/* N1: sombra de destino durante el arrastre. pointer-events:none es OBLIGATORIO (no puede
+   interceptar el elementFromPoint que detecta pestañas — Codex C1). Va inflada 3 px respecto
+   al destino real para que su contorno sobresalga cuando coincide con la ventana. */
+.drop-ghost{position:absolute; pointer-events:none; box-sizing:border-box;
+  border:2px dashed rgba(122,162,247,.7); border-radius:var(--radius);
+  background:rgba(122,162,247,.06)}
+.drop-ghost.over{border-color:rgba(229,72,77,.55); background:rgba(229,72,77,.05)}
+/* asentamiento al soltar: clase temporal, nunca transición permanente en left/top (lag) */
+@media (prefers-reduced-motion: no-preference){
+  .win.settling{transition:left .16s ease, top .16s ease}
+}
 .win.collapsed{height:auto !important; min-height:0 !important}
 .win.collapsed .win-body,.win.collapsed .win-resize{display:none}
 .win.collapsed .win-title{border-bottom:none}
@@ -778,7 +789,7 @@ ul.plain{list-style:none}
       — <b>Temporizador</b>: ajusta minutos y segundos con rueda o flechas, usa presets, cronómetro con vueltas y sonidos de alarma.<br>
       — En un grupo de enlaces, el botón <b>⇱ N</b> abre los N enlaces de una vez (permite los pop-ups la primera vez). También desde la paleta: «Abrir grupo: …».<br>
       — Doble clic en el título de una ventana o en una pestaña de espacio para renombrar inline. El chevron <b>▾</b> pliega una ventana; <b>⊟</b> pliega/despliega todas (al desplegar, si no caben, se reordenan solas). <b>⛶</b> maximiza una ventana y <b>❐</b> la restaura.<br>
-      — Al arrastrar una ventana se <b>alinea sola</b> con los bordes y con las demás; mantén <b>Alt</b> para moverla libre.<br>
+      — Al arrastrar una ventana, una <b>sombra</b> te enseña dónde quedará al soltar (alineada con bordes y ventanas; avisa con un tinte si va a solapar); mantén <b>Alt</b> para moverla libre, sin sombra.<br>
       — Las tareas <b>vencidas o de hoy</b> tienen su propio aviso ⏰/📌 en la barra: cada clic salta a la siguiente.<br>
       — <b>inbox.txt</b> en tu carpeta de datos: cualquier línea (una macro de teclado, un agente, el móvil vía OneDrive) aparece en la Bandeja.<br>
       — <b>?add=texto</b> añade a la Bandeja; <b>?pack=nombre|URL</b> carga un escritorio completo.<br>
@@ -1791,7 +1802,7 @@ const TOUR = [
   { sel: "#btn-inicio", pos: "top", title: "Añade widgets", body: "Desde <b>⊞ Inicio</b> agregas notas, enlaces, tareas, calendario… También con <b>Ctrl+K</b> escribiendo «Añadir»." },
   { sel: "#tb-spaces", pos: "top", title: "Espacios (escritorios)", body: "Crea escritorios con <b>＋</b>, uno por especialidad o proyecto. Clic para cambiar, doble clic para renombrar, arrastra una pestaña para reordenarla. Arrastra una ventana <b>sobre otra pestaña</b> para moverla allí. El color de cada pestaña se toma solo del fondo de ese escritorio." },
   { sel: "#btn-fold", pos: "top", title: "Ordena de un vistazo", body: "<b>⊟</b> pliega o despliega todos los widgets; cada uno también se pliega con <b>▾</b> en su barra." },
-  { sel: ".win .win-title", pos: "bottom", title: "Cada widget", body: "Al pasar el ratón por su barra aparecen las etiquetas; <b>▾</b> pliega y <b>✕</b> cierra. <b>Doble clic</b> en el título para renombrarlo." },
+  { sel: ".win .win-title", pos: "bottom", title: "Cada widget", body: "Arrástralo por su barra: una <b>sombra</b> te enseña dónde quedará (con <b>Alt</b>, libre). Al pasar el ratón aparecen las etiquetas; <b>▾</b> pliega y <b>✕</b> cierra. <b>Doble clic</b> para renombrarlo." },
   { sel: "#tb-sync", pos: "top", title: "Tus datos son tuyos", body: "Todo se guarda solo, sin cuentas ni servidor. Opcional: «Sincronizar equipos» para tener lo mismo en casa y en el trabajo." },
   { sel: null, pos: "center", title: "¡Listo!", body: "Pulsa <b>Ctrl+K</b> en cualquier momento para buscar y ejecutar. Tienes la guía completa cuando quieras.", cta: { label: "📖 Guía completa", href: "guia.html" } }
 ];
@@ -1838,11 +1849,35 @@ function showTourStep(){
   positionTourCard(card, target, step.pos, vw, vh);
 }
 
+/* ---------- N0 (spec-layout-guiado v1.1): núcleo geométrico único ----------
+   Inventario canónico de constantes del layout. NO se unifican conceptos distintos (Codex C5):
+   packing, respiración de viewport, imán y colisión son semánticas diferentes. Las funciones
+   puras extraídas por tests siguen autocontenidas (defaults literales); LAYOUT es la fuente
+   para el código impuro (adaptadores, drag). minW/minH son suelo VISUAL y de planificación
+   (coinciden con el CSS de .win) — NUNCA de saneo: sanitizeWidgetShape no se toca y ningún
+   w.h persistido se reescribe al cargar.
+   Contrato de coordenadas (Codex C4): hoy client/viewport y desktop/world COINCIDEN (no hay
+   scroll de escritorio). Todo código de layout nuevo debe declarar en qué espacio opera; el
+   futuro scroll vertical (dirección aceptada) separará ambos espacios sin otra migración. */
+const LAYOUT = {
+  bar: 46,             // alto de la barra inferior (viewport)
+  packingMargin: 24,   // origen y límite del empaquetado (autoordenar, huecos)
+  viewportPad: 12,     // respiración respecto al borde visible (imán a bordes, maximizar)
+  snapGap: 14,         // adyacencia que busca el imán y separación del empaquetado
+  snapThr: 8,          // umbral del imán (v1 sin cambios — Codex C2)
+  collisionGap: 12,    // separación de overlapsRect
+  overlapTol: -8,      // tolerancia de anyOverlap (solape «real»)
+  step: 28,            // paso del escaneo de huecos
+  collapsedH: 42,      // alto de ventana plegada
+  minW: 220, minH: 140,          // suelo visual/planificación (= CSS .win)
+  visMarginX: 80, visMarginY: 60, // mínimo de ventana que debe quedar alcanzable
+  dragClampBottom: 110 // clamp inferior del arrastre
+};
 function anyOverlap(){   // ¿hay solape real (más de unos px) entre las ventanas del espacio activo?
   const rs = state.widgets.map(widgetRect);
   for (let i = 0; i < rs.length; i++)
     for (let j = i + 1; j < rs.length; j++)
-      if (overlapsRect(rs[i], rs[j], -8)) return true;
+      if (overlapsRect(rs[i], rs[j], LAYOUT.overlapTol)) return true;
   return false;
 }
 function foldAll(){   // si hay alguno abierto, pliega todos; si todos plegados, los despliega
@@ -1856,29 +1891,42 @@ function foldAll(){   // si hay alguno abierto, pliega todos; si todos plegados,
   }
   renderAll(); markDirty();
 }
-function autoArrangeWidgets(silent){
-  const gap = 14, left0 = 24, top0 = 24, maxRight = Math.max(360, innerWidth - 24);
-  const maxBottom = innerHeight - 46 - 12;   // barra de tareas
-  let x = left0, y = top0, rowH = 0, z = zTop, clipped = false;
-  state.widgets.forEach(w => {
-    const ww = Math.min(Math.max(+w.w || WTYPES[w.type]?.w || 260, 220), Math.max(220, maxRight - left0));
-    const hh = w.collapsed ? 42 : Math.max(+w.h || WTYPES[w.type]?.h || 180, 120);
-    if (x + ww > maxRight && x > left0){
-      x = left0;
-      y += rowH + gap;
-      rowH = 0;
-    }
-    w.x = x; w.y = y; w.w = ww; w.z = ++z;
+/* Planificador PURO del autoordenado (N0, Codex H3): filas de izquierda a derecha.
+   sizes = [{ w, h, collapsed }] con números ya resueltos por el adaptador. Las alturas de
+   fila usan el alto VISUAL (suelo minH: el CSS impone 140, empaquetar con menos subestima
+   el alto real — divergencia 120/140 corregida, Codex C5). Devuelve rects planificados;
+   el h de cada rect es el visual (el adaptador NO lo persiste). Autocontenida (tests). */
+function planAutoArrange(sizes, vw, vh, opts){
+  const o = opts || {};
+  const gap = o.gap ?? 14, margin = o.margin ?? 24, bar = o.bar ?? 46, pad = o.pad ?? 12;
+  const minW = o.minW ?? 220, minH = o.minH ?? 140, collapsedH = o.collapsedH ?? 42, visY = o.visY ?? 60;
+  const maxRight = Math.max(360, vw - margin), maxBottom = vh - bar - pad;
+  let x = margin, y = margin, rowH = 0, clipped = false;
+  const rects = sizes.map(s => {
+    const ww = Math.min(Math.max(+s.w || 260, minW), Math.max(minW, maxRight - margin));
+    const hh = s.collapsed ? collapsedH : Math.max(+s.h || 180, minH);
+    if (x + ww > maxRight && x > margin){ x = margin; y += rowH + gap; rowH = 0; }
+    const r = { x, y, w: ww, h: hh };
     x += ww + gap;
     rowH = Math.max(rowH, hh);
+    return r;
   });
   // que ninguna ventana quede del todo bajo el borde: la barra de título sigue accesible
-  state.widgets.forEach(w => {
-    if (w.y + 60 > maxBottom){ w.y = Math.max(top0, maxBottom - 60); clipped = true; }
+  for (const r of rects) if (r.y + visY > maxBottom){ r.y = Math.max(margin, maxBottom - visY); clipped = true; }
+  return { rects, clipped };
+}
+function autoArrangeWidgets(silent){   // adaptador impuro: aplica el plan al estado (N0)
+  const plan = planAutoArrange(
+    state.widgets.map(w => ({ w: +w.w || WTYPES[w.type]?.w, h: +w.h || WTYPES[w.type]?.h, collapsed: !!w.collapsed })),
+    innerWidth, innerHeight,
+    { gap: LAYOUT.snapGap, margin: LAYOUT.packingMargin, bar: LAYOUT.bar, pad: LAYOUT.viewportPad,
+      minW: LAYOUT.minW, minH: LAYOUT.minH, collapsedH: LAYOUT.collapsedH, visY: LAYOUT.visMarginY });
+  state.widgets.forEach((w, i) => {
+    const r = plan.rects[i];
+    w.x = r.x; w.y = r.y; w.w = r.w; w.z = ++zTop;   // el alto visual del plan NO se persiste (Codex C5)
   });
-  zTop = z;
   renderAll(); markDirty();
-  if (!silent) toast(clipped ? "Widgets autoordenados (no caben todos: algunos quedan al borde inferior)" : "Widgets autoordenados");
+  if (!silent) toast(plan.clipped ? "Widgets autoordenados (no caben todos: algunos quedan al borde inferior)" : "Widgets autoordenados");
 }
 /* Geometría robusta frente a cambios de monitor/resolución (puras → testeables) */
 function maxRect(vw, vh){   // rect "maximizado" para el viewport actual
@@ -2132,47 +2180,84 @@ function buildWindow(w){
     markDirty();
   });
 
-  // arrastrar (y soltar sobre otra pestaña de espacio para mover el widget allí)
+  // arrastrar (y soltar sobre otra pestaña de espacio para mover el widget allí).
+  // N1 (spec-layout-guiado v1.1): el drag es una TRANSACCIÓN LOCAL — durante el movimiento no
+  // se muta estado persistible (el pointerdown general ya programó un guardado a 700 ms por el
+  // z-order: mutar w.x/w.y en caliente podía persistir una posición intermedia — Codex H1).
+  // La ventana sigue al puntero LIBRE y una sombra enseña el destino del imán; commit único en el up.
   const title = el.querySelector(".win-title");
   title.addEventListener("pointerdown", ev => {
     if (ev.target.closest("button") || isMobile()) return;   // móvil: sin arrastre (scroll táctil)
     const vp = safeViewportRect(innerWidth, innerHeight);
     const proj = planViewportLayout([w], vp)[0];   // Fase 2: origen = rect realmente visible, no el crudo guardado (evita salto al empezar a arrastrar)
     const sx = ev.clientX - proj.x, sy = ev.clientY - proj.y;
-    let overTab = null, dragging = false, dragRects = null;
+    let overTab = null, dragging = false, dragRects = null, ghost = null, raw = null, target = null;
+    const cleanup = () => {   // única puerta de salida: up, cancel y pérdida de foco pasan por aquí
+      removeEventListener("pointermove", move); removeEventListener("pointerup", up);
+      removeEventListener("pointercancel", cancel); removeEventListener("blur", cancel);
+      el.style.pointerEvents = "";
+      if (ghost){ ghost.remove(); ghost = null; }
+      if (overTab){ overTab.classList.remove("drop-target"); overTab = null; }
+    };
+    const tabUnder = (cx, cy) => {   // pestaña bajo el cursor (la sombra no intercepta: pointer-events none)
+      const under = document.elementFromPoint(cx, cy);
+      const tab = under && under.closest(".space-tab");
+      return (tab && +tab.dataset.i !== state.active) ? tab : null;
+    };
     const move = m => {
       if (!dragging){
         // umbral: hasta que hay movimiento real no es arrastre (así el clic/doble clic siguen funcionando)
         if (Math.abs(m.clientX - ev.clientX) + Math.abs(m.clientY - ev.clientY) < 4) return;
         dragging = true;
-        w.x = proj.x; w.y = proj.y;   // solo posición: arrastrar NO debe tocar tamaño (un plegado perdería su alto desplegado — revisión Codex 2026-07-10)
-        dragRects = planViewportLayout(state.widgets.filter(x => x.id !== w.id), vp);   // imán contra lo realmente visible, no posiciones fuera de encuadre
+        // imán contra lo realmente visible: proyectado al viewport Y sin las ventanas ocultas por el filtro de etiqueta (Codex H6)
+        dragRects = planViewportLayout(state.widgets.filter(x =>
+          x.id !== w.id && !(tagFilter && !(x.tags || []).includes(tagFilter))), vp);
         el.style.pointerEvents = "none";   // para que elementFromPoint vea la barra bajo el cursor
+        ghost = document.createElement("div");
+        ghost.className = "drop-ghost";
+        ghost.style.zIndex = Math.max(1, (w.z || 2) - 1);   // justo bajo la ventana arrastrada (va inflada: el borde asoma)
+        $("#desktop").appendChild(ghost);
       }
-      w.x = Math.max(0, Math.min(m.clientX - sx, innerWidth - 80));
-      w.y = Math.max(0, Math.min(m.clientY - sy, innerHeight - 110));
-      if (!m.altKey){   // imán a bordes y ventanas; Alt = movimiento libre
-        const s = snapPosition(w.x, w.y, proj.w, proj.h, dragRects, innerWidth, innerHeight);
-        w.x = Math.max(0, s.x); w.y = Math.max(0, s.y);
-      }
-      el.style.left = w.x + "px"; el.style.top = w.y + "px";
-      const under = document.elementFromPoint(m.clientX, m.clientY);
-      const tab = under && under.closest(".space-tab");
-      const cand = (tab && +tab.dataset.i !== state.active) ? tab : null;
+      raw = { x: Math.max(0, Math.min(m.clientX - sx, innerWidth - LAYOUT.visMarginX)),
+              y: Math.max(0, Math.min(m.clientY - sy, innerHeight - LAYOUT.dragClampBottom)) };
+      el.style.left = raw.x + "px"; el.style.top = raw.y + "px";   // solo DOM: el estado no se toca hasta soltar
+      const cand = tabUnder(m.clientX, m.clientY);
       if (cand !== overTab){
         if (overTab) overTab.classList.remove("drop-target");
         overTab = cand;
         if (overTab) overTab.classList.add("drop-target");
       }
+      target = m.altKey ? { ...raw, snapped: false, overlap: false }   // Alt = libre, como siempre
+        : dragTarget(raw.x, raw.y, proj.w, proj.h, dragRects, innerWidth, innerHeight, LAYOUT.snapThr, LAYOUT.snapGap);
+      if (m.altKey || overTab){ ghost.style.display = "none"; }   // Alt o pestaña bajo el cursor: sin sombra, en este mismo evento
+      else {
+        ghost.style.display = "";
+        ghost.style.left = (target.x - 3) + "px"; ghost.style.top = (target.y - 3) + "px";
+        ghost.style.width = (proj.w + 6) + "px"; ghost.style.height = (proj.h + 6) + "px";
+        ghost.classList.toggle("over", target.overlap);   // el solape se muestra, no se resuelve (Codex C6)
+      }
     };
-    const up = () => {
-      removeEventListener("pointermove", move); removeEventListener("pointerup", up);
-      if (!dragging) return;   // fue un clic: no tocar nada (deja pasar dblclick para renombrar)
-      el.style.pointerEvents = "";
-      if (overTab){ const ti = +overTab.dataset.i; overTab.classList.remove("drop-target"); moveWidgetToSpace(w.id, ti); return; }
+    const up = m => {
+      const wasDragging = dragging;
+      const tab = wasDragging ? tabUnder(m.clientX, m.clientY) : null;   // recalculado EN el up, no el del último move (Codex C1)
+      cleanup();
+      if (!wasDragging) return;   // fue un clic: no tocar geometría (deja pasar dblclick para renombrar)
+      if (tab){ moveWidgetToSpace(w.id, +tab.dataset.i); return; }   // sin asentamiento: moveWidgetToSpace es la única persistencia
+      const t = m.altKey ? raw : target;   // Alt se evalúa también al soltar (Codex C1)
+      // commit único de la transacción: estado y guardado se confirman YA; la animación es solo DOM
+      w.x = t.x; w.y = t.y;
+      el.classList.add("settling");
+      el.style.left = w.x + "px"; el.style.top = w.y + "px";
+      setTimeout(() => el.classList.remove("settling"), 200);
       markDirty();
     };
+    const cancel = () => {   // pointercancel o pérdida de foco: la transacción nunca llegó a existir
+      const wasDragging = dragging;
+      cleanup();
+      if (wasDragging){ el.style.left = proj.x + "px"; el.style.top = proj.y + "px"; }
+    };
     addEventListener("pointermove", move); addEventListener("pointerup", up);
+    addEventListener("pointercancel", cancel); addEventListener("blur", cancel);
   });
 
   // redimensionar
@@ -2196,12 +2281,14 @@ function buildWindow(w){
 }
 
 function widgetRect(w){
+  // Proyección VISUAL del widget (espacio desktop): suelo 140 = min-height del CSS, no el h
+  // persistido (que el saneo sigue admitiendo menor — Codex C5: planificar con 120 subestimaba).
   const t = WTYPES[w.type] || {};
   return {
     x: +w.x || 0,
     y: +w.y || 0,
-    w: Math.max(+w.w || t.w || 260, 220),
-    h: w.collapsed ? 42 : Math.max(+w.h || t.h || 180, 120)
+    w: Math.max(+w.w || t.w || 260, LAYOUT.minW),
+    h: w.collapsed ? LAYOUT.collapsedH : Math.max(+w.h || t.h || 180, LAYOUT.minH)
   };
 }
 function overlapsRect(a, b, gap = 12){
@@ -2221,24 +2308,38 @@ function snapPosition(x, y, ww, hh, rects, vw, vh, thr = 8, gap = 14){
   for (const c of ys){ const d = Math.abs(y - c); if (d < dy){ dy = d; by = c; } }
   return { x: bx, y: by };
 }
-function nextWidgetSpot(ww, hh){
-  const gap = 14, step = 28, left0 = 24, top0 = 24, maxRight = Math.max(360, innerWidth - 24);
-  const w = Math.min(Math.max(+ww || 260, 220), Math.max(220, maxRight - left0));
-  const h = Math.max(+hh || 180, 120);
-  const rects = state.widgets.map(widgetRect);
-  const visibleMaxY = Math.max(top0, innerHeight - 46 - gap - h);
-  const scan = limitY => {
-    for (let y = top0; y <= limitY; y += step){
-      for (let x = left0; x + w <= maxRight; x += step){
-        const cand = { x, y, w, h };
-        if (!rects.some(r => overlapsRect(cand, r, gap))) return { x, y, w };
-      }
+// N1 (spec-layout-guiado): destino del arrastre para la sombra. Envuelve el imán y garantiza
+// respuesta SIEMPRE (sin candidato, destino = posición libre). `snapped`/`overlap` son metadatos
+// no persistidos (preparación de N2 sin telemetría — Codex H7). Pura y autocontenida (tests).
+function dragTarget(x, y, ww, hh, rects, vw, vh, thr = 8, gap = 14){
+  const s = snapPosition(x, y, ww, hh, rects, vw, vh, thr, gap);
+  const tx = Math.max(0, s.x), ty = Math.max(0, s.y);
+  const rect = { x: tx, y: ty, w: ww, h: hh };
+  return { x: tx, y: ty, snapped: tx !== x || ty !== y, overlap: rects.some(r => overlapsRect(rect, r, 0)) };
+}
+/* Planificador PURO del hueco para un widget nuevo (N0, Codex H3): mismo escaneo y fallback
+   que siempre (arriba-izquierda, pasos de `step`). rects = ocupación actual (alturas visuales).
+   Autocontenida para tests: referencia solo overlapsRect. */
+function findSpotPlan(rects, ww, hh, vw, vh, opts){
+  const o = opts || {};
+  const gap = o.gap ?? 14, step = o.step ?? 28, margin = o.margin ?? 24, bar = o.bar ?? 46;
+  const minW = o.minW ?? 220, minH = o.minH ?? 140;
+  const maxRight = Math.max(360, vw - margin);
+  const w = Math.min(Math.max(+ww || 260, minW), Math.max(minW, maxRight - margin));
+  const h = Math.max(+hh || 180, minH);
+  const visibleMaxY = Math.max(margin, vh - bar - gap - h);
+  for (let y = margin; y <= visibleMaxY; y += step){
+    for (let x = margin; x + w <= maxRight; x += step){
+      const cand = { x, y, w, h };
+      if (!rects.some(r => overlapsRect(cand, r, gap))) return { x, y, w };
     }
-    return null;
-  };
-  const visible = scan(visibleMaxY);
-  if (visible) return visible;
-  return { x: left0, y: visibleMaxY, w };
+  }
+  return { x: margin, y: visibleMaxY, w };
+}
+function nextWidgetSpot(ww, hh){   // adaptador impuro (N0)
+  return findSpotPlan(state.widgets.map(widgetRect), ww, hh, innerWidth, innerHeight,
+    { gap: LAYOUT.snapGap, step: LAYOUT.step, margin: LAYOUT.packingMargin, bar: LAYOUT.bar,
+      minW: LAYOUT.minW, minH: LAYOUT.minH });
 }
 
 function addWidget(type){

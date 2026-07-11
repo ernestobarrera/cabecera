@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.27.0] - 2026-07-11
+
+- **Arrastrar con sombra de destino: ves dónde quedará la ventana antes de soltarla.** Hasta ahora, al arrastrar, la propia ventana saltaba al imán sin avisar. Ahora la ventana sigue al puntero con suavidad y una sombra discreta muestra el destino exacto (alineado con bordes y ventanas vecinas); al soltar, la ventana se asienta ahí con una transición corta (se respeta `prefers-reduced-motion`). Si el destino solapa otra ventana, la sombra lo avisa con un tinte — el solape sigue permitido: el escritorio es libre y con **Alt** la ventana queda exactamente donde la dejes, sin sombra. La sombra ya no encaja contra ventanas ocultas por el filtro de etiquetas.
+- **El arrastre ya no puede guardar posiciones a medias.** Durante el movimiento no se toca el estado: la posición se confirma una sola vez al soltar. Antes, un arrastre largo podía coincidir con el guardado automático y persistir una posición intermedia. La cancelación (pérdida de foco, gesto interrumpido) devuelve la ventana a su sitio sin escribir nada.
+- **Núcleo geométrico unificado (interno).** Las piezas de layout (imán, encuadre, autoordenar, colocación de widgets nuevos) comparten ahora un inventario único de constantes y planificadores puros con tests. Honesto: **«Autoordenar» puede dar resultados ligeramente distintos** a partir de esta versión — el empaquetado calculaba las filas con un alto mínimo menor que el real visible (120 frente a los 140 que ya pintaba el CSS) y algunos widgets podían quedar más juntos de lo que estaban en pantalla; ahora mide lo que ves. Tus tamaños y posiciones guardados no se tocan.
+- Con tests nuevos (destino del arrastre, planificadores de autoordenado y de huecos, invariantes de la transacción de arrastre) y verificación completa en navegador. Guía y tour actualizados.
+
 ## [0.26.1] - 2026-07-10
 
 - **Conceptos de calendario propios, ahora reutilizables de verdad y sin confusiones al borrar.** Tres arreglos nacidos de uso real: (1) el botón «Guardar» del editor de marcas pasa a llamarse **«Añadir marca»** — siempre creaba una marca nueva, así que tras borrar una marca parecía que el borrado «no se guardaba» cuando en realidad se estaba añadiendo otra; quitar una marca se aplica al momento (ahora lo confirma un aviso) y basta con Cerrar. (2) Quitar un **concepto** propio (✕ del chip) pide confirmación y explica la diferencia con quitar la marca de un día, para no perder conceptos sin querer. (3) Al crear un concepto, el aviso indica el paso restante («Añadir marca» lo aplica a la fecha).
