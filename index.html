@@ -236,6 +236,7 @@ body{font-family:var(--font); color:var(--text); background:#10131a}
 #toasts{position:fixed; right:14px; bottom:102px; z-index:950; display:flex; flex-direction:column; gap:8px}   /* por encima del dock, sin taparlo */
 .toast{padding:10px 14px; border-radius:11px; background:var(--glass); border:1px solid var(--border); font-size:13px; box-shadow:var(--shadow); max-width:340px}
 .toast.err{border-color:rgba(243,108,108,.5)}
+#ver-notice .mini:disabled{opacity:.45; cursor:default}
 #conflict{position:fixed; top:12px; left:50%; transform:translateX(-50%); z-index:960; display:none; align-items:center; gap:12px;
   padding:10px 16px; border-radius:12px; background:var(--glass); border:1px solid rgba(240,194,94,.5); font-size:13px; box-shadow:var(--shadow)}
 #conflict.open{display:flex}
@@ -297,7 +298,8 @@ ul.plain{list-style:none}
 .files-cols .grow{flex:1}
 /* conceptos de calendario propios */
 .mark-custom-row{display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-top:8px}
-.mark-custom-row .chip{display:inline-flex; align-items:center; gap:5px; font-size:11.5px; color:var(--text-dim); background:rgba(255,255,255,.05); border-radius:16px; padding:2px 4px 2px 9px}
+.mark-custom-row .chip{display:inline-flex; align-items:center; gap:5px; font-size:11.5px; color:var(--text-dim); background:rgba(255,255,255,.05); border-radius:16px; padding:2px 4px 2px 9px; cursor:pointer}
+.mark-custom-row .chip:hover{color:var(--text); background:rgba(255,255,255,.09)}
 .mark-custom-row .chip .dot{width:9px; height:9px; border-radius:50%; flex-shrink:0}
 .mark-custom-row .chip .rmc{border:none; background:none; color:var(--text-dim); cursor:pointer; font-size:11px; padding:1px 5px; border-radius:8px}
 .mark-custom-row .chip .rmc:hover{color:var(--danger)}
@@ -1060,6 +1062,77 @@ function syncUI(mode, txt){
     local: "Solo local. Clic para sincronizar equipos"
   };
   $("#tb-sync").title = hints[mode] || "Estado de sincronización";
+  renderVersionNotice();   // choke-point: toda transición de guardado/conflicto pasa por aquí
+}
+
+/* ---------- aviso de versión nueva (spec-aviso-version v1.1, gate de Codex superado) ----------
+   La página vive en pestañas abiertas días y solo se actualiza al recargar: si la versión
+   publicada (version.txt, MISMO origen — sin terceros, sin identificadores) supera a
+   APP_VERSION, un aviso persistente ofrece Recargar. Es ESTADO, no evento:
+   renderVersionNotice() decide siempre visibilidad (el conflicto lo oculta y al resolverse
+   reaparece) y si Recargar está activo. El descarte ✕ vive solo en memoria de la sesión.
+   Demora asumida: la CDN de Pages puede servir la versión vieja hasta ~10 min aun con
+   no-store (gobierna la caché del navegador, no la CDN); para pestañas de días, irrelevante. */
+const APP_VERSION = "0.28.0";
+let newVersionDetected = null;   // versión superior detectada; detiene futuras consultas
+let verDismissed = false;        // ✕: solo esta sesión — nunca persistido en disco
+let verCheckInflight = false;    // sin consultas concurrentes
+let verLastCheck = 0;
+// Comparación semver ESTRICTA: solo X.Y.Z bien formadas; cualquier otra cosa = false (silencio).
+function semverGt(a, b){
+  const re = /^(\d+)\.(\d+)\.(\d+)$/;
+  const pa = re.exec(String(a || "").trim()), pb = re.exec(String(b || "").trim());
+  if (!pa || !pb) return false;
+  for (let i = 1; i <= 3; i++){ const d = (+pa[i]) - (+pb[i]); if (d) return d > 0; }
+  return false;
+}
+async function checkVersion(){
+  if (location.protocol === "file:" || newVersionDetected || verCheckInflight) return;
+  verCheckInflight = true;
+  try{
+    const r = await fetch("version.txt", { cache: "no-store" });
+    if (r.ok){
+      const remote = (await r.text()).trim();
+      if (semverGt(remote, APP_VERSION)) newVersionDetected = remote;
+    }
+  }catch(e){}   // fallo de red = silencio absoluto
+  verCheckInflight = false;
+  verLastCheck = Date.now();
+  renderVersionNotice();
+}
+// Única función que decide el aviso (idempotente). No compite con la barra de conflicto:
+// mientras conflictPending, el aviso se retira y reaparece al resolverse (vía syncUI).
+function renderVersionNotice(){
+  let el = document.getElementById("ver-notice");
+  const show = newVersionDetected && !verDismissed && !conflictPending;
+  if (!show){ if (el) el.remove(); return; }
+  if (!el){
+    el = document.createElement("div");
+    el.className = "toast";
+    el.id = "ver-notice";
+    el.innerHTML = `<span>Hay una versión nueva de Cabecera</span>
+      <button class="mini vn-go" style="margin-left:6px">Recargar</button>
+      <button class="mini vn-x" title="Cerrar por ahora (volverá a avisar en la próxima sesión)">✕</button>`;
+    el.querySelector(".vn-go").addEventListener("click", () => {
+      // re-chequeo ATÓMICO: cierra la carrera entre pintar el botón habilitado y un guardado
+      // que arranca justo después — recargar jamás puede perder una edición en vuelo
+      if (dirty || saving || conflictPending){ renderVersionNotice(); return; }
+      location.reload();
+    });
+    el.querySelector(".vn-x").addEventListener("click", () => { verDismissed = true; renderVersionNotice(); });
+    $("#toasts").appendChild(el);   // persistente: sin retirada programada
+  }
+  const go = el.querySelector(".vn-go");
+  const blocked = dirty || saving;
+  go.disabled = blocked;
+  go.title = blocked ? "Hay cambios guardándose: espera un momento" : "Recargar para actualizar";
+}
+function startVersionChecks(){
+  checkVersion();   // al cargar
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible" && Date.now() - verLastCheck > 30 * 60000) checkVersion();
+  });
+  setInterval(checkVersion, 6 * 3600000);   // red de seguridad para una pestaña siempre visible
 }
 
 function plainClone(x){ return JSON.parse(JSON.stringify(x)); }
@@ -1238,6 +1311,7 @@ async function saveNow(){
     toast("No se pudo guardar: " + e.message, true);
   }finally{
     saving = false;
+    renderVersionNotice();   // `saving` termina AQUÍ (el syncUI de arriba corre con él aún en vuelo)
   }
 }
 
@@ -1321,6 +1395,7 @@ function maybeTour(want){   // tour al primer arranque local, o si llega ?tour=1
 async function boot(){
   const wantTour = !!new URLSearchParams(location.search).get("tour");
   startClock();
+  startVersionChecks();
   wireUI();
 
   if (!window.showDirectoryPicker){
@@ -3260,8 +3335,10 @@ function isMarkType(t){ return !!(CAL_MARK_TYPES[t] || customMarkType(t)); }
 function markTypeLabel(t, fb = "Otro"){ return CAL_MARK_TYPES[t] || (customMarkType(t) || {}).label || fb; }
 function markTypeOptions(selected = "vacaciones"){
   const customs = customMarkTypes();
-  return CAL_MARK_GROUPS.map(g => `<optgroup label="${esc(g.label)}">${g.types.map(t => `<option value="${t}"${t === selected ? " selected" : ""}>${esc(CAL_MARK_TYPES[t] || t)}</option>`).join("")}</optgroup>`).join("")
-    + (customs.length ? `<optgroup label="Tus conceptos">${customs.map(c => `<option value="${esc(c.id)}"${c.id === selected ? " selected" : ""}>${esc(c.label)}</option>`).join("")}</optgroup>` : "");
+  // «Tus conceptos» PRIMERO: lo propio del usuario por delante de los 19 canónicos
+  // (petición de Ernesto tras no encontrarlos al final del desplegable)
+  return (customs.length ? `<optgroup label="Tus conceptos">${customs.map(c => `<option value="${esc(c.id)}"${c.id === selected ? " selected" : ""}>${esc(c.label)}</option>`).join("")}</optgroup>` : "")
+    + CAL_MARK_GROUPS.map(g => `<optgroup label="${esc(g.label)}">${g.types.map(t => `<option value="${t}"${t === selected ? " selected" : ""}>${esc(CAL_MARK_TYPES[t] || t)}</option>`).join("")}</optgroup>`).join("");
 }
 function markColor(type){ return CAL_MARK_COLORS[type] || (customMarkType(type) || {}).color || "#e07a9c"; }
 function isoDate(y, m, d){
@@ -3394,13 +3471,17 @@ function openMarkEditor(ds){
   ov.dataset.date = ds;
   ov.classList.add("open");
 }
-// Conceptos propios: chips con su color en el modal de marcas; ✕ los quita
-// (las marcas existentes de ese concepto pasan a «Otro» conservando su etiqueta).
+// Conceptos propios: chips con su color en el modal de marcas. Clic en el chip = elegirlo
+// como Tipo de la marca; la ✕ lo quita (las marcas existentes pasan a «Otro» con su etiqueta).
 function renderCustomMarkTypes(){
   const box = $("#mark-custom-list");
   if (!box) return;
   box.innerHTML = customMarkTypes().map(c =>
-    `<span class="chip"><span class="dot" style="background:${c.color}"></span>${esc(c.label)}<button class="rmc" data-id="${esc(c.id)}" title="Quitar concepto">✕</button></span>`).join("");
+    `<span class="chip mc-pick" data-id="${esc(c.id)}" title="Elegir este concepto para la marca"><span class="dot" style="background:${c.color}"></span>${esc(c.label)}<button class="rmc" data-id="${esc(c.id)}" title="Quitar concepto">✕</button></span>`).join("");
+  box.querySelectorAll(".mc-pick").forEach(ch => ch.addEventListener("click", e => {
+    if (e.target.closest(".rmc")) return;   // la ✕ conserva su gesto de borrado
+    $("#mark-type").value = ch.dataset.id;
+  }));
   box.querySelectorAll(".rmc").forEach(b => b.addEventListener("click", () => {
     const id = b.dataset.id;
     // el ✕ del chip elimina el CONCEPTO (no la marca del día): confirmar evita perderlo sin querer

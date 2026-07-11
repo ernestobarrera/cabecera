@@ -520,4 +520,52 @@ if (!src.match(/function setPrivacy\(on\)\{[\s\S]{0,900}tagFilter = null/)) thro
 if (!src.match(/function setPrivacy\(on\)\{[\s\S]{0,900}renderResults\(/)) throw new Error('regresión P1: activar privacidad ya no recalcula la paleta abierta');
 console.log('OK privacidad escénica (priv estricto en saneo, modo por dispositivo, paleta/etiquetas/toasts cubiertos, desmarcado bloqueado, 4 fugas P1 cerradas)');
 
+// --- Aviso de versión nueva (spec-aviso-version v1.1, tests exigidos por el gate de Codex) ---
+eval('globalThis.semverGt = ' + pickFn('semverGt', 'a, b'));
+// comparación semver ESTRICTA: tabla entrada → salida (malformadas = false, silencio)
+const SEMVER_CASES = [
+  ['0.28.1', '0.28.0', true],  ['0.29.0', '0.28.9', true],  ['1.0.0', '0.99.99', true],
+  ['0.28.0', '0.28.0', false], ['0.27.9', '0.28.0', false], ['0.28.0', '0.28.1', false],
+  ['0.28', '0.28.0', false],   ['v0.29.0', '0.28.0', false], ['abc', '0.28.0', false],
+  ['0.29.0', 'abc', false],    ['', '0.28.0', false],        [null, '0.28.0', false],
+  [' 0.29.0 ', '0.28.0', true] // espacios alrededor se toleran (trim), el formato no se relaja
+];
+for (const [a, b, want] of SEMVER_CASES)
+  if (semverGt(a, b) !== want) throw new Error(`semverGt(${JSON.stringify(a)}, ${JSON.stringify(b)}) debería ser ${want}`);
+// antideriva TRIPLE: APP_VERSION === version.txt === primera versión del CHANGELOG.
+// (La suite local y la CI DETECTAN la deriva; el gate real es correr esto antes del push.)
+const appVer = (src.match(/const APP_VERSION = "([^"]+)"/) || [])[1];
+const txtVer = fs.readFileSync(path.join(__dirname, '..', 'version.txt'), 'utf8').trim();
+const chVer = (fs.readFileSync(path.join(__dirname, '..', 'CHANGELOG.md'), 'utf8').match(/^## \[(\d+\.\d+\.\d+)\]/m) || [])[1];
+if (!appVer || appVer !== txtVer || appVer !== chVer)
+  throw new Error(`deriva de versión: APP_VERSION=${appVer} version.txt=${txtVer} CHANGELOG=${chVer}`);
+// invariantes de fuente del aviso:
+if (!src.match(/if \(location\.protocol === "file:" \|\| newVersionDetected \|\| verCheckInflight\) return/))
+  throw new Error('regresión: checkVersion permite consultas concurrentes, en file: o tras detectar');
+if (!src.includes('fetch("version.txt", { cache: "no-store" })')) throw new Error('regresión: el chequeo ya no usa no-store (y no debe llevar query de cache-bust)');
+if (src.includes('version.txt?')) throw new Error('regresión: cache-bust por query (descartado por el gate: la CDN lo ignora)');
+if (!src.match(/vn-go"\)\.addEventListener\("click", \(\) => \{\s*\n[^\n]*\n\s*[^\n]*\n\s*if \(dirty \|\| saving \|\| conflictPending\)/))
+  throw new Error('regresión: Recargar perdió el re-chequeo atómico previo a location.reload()');
+if (!src.match(/const show = newVersionDetected && !verDismissed && !conflictPending/))
+  throw new Error('regresión: el aviso ya no se oculta con la barra de conflicto');
+if (!src.match(/renderVersionNotice\(\);\s*\/\/ choke-point/)) throw new Error('regresión: syncUI ya no repinta el aviso (conflicto/guardado no lo actualizarían)');
+// carrera real cazada en el smoke: el syncUI de saveNow corre con saving=true; el repintado
+// del aviso debe llegar cuando saving termina de verdad (finally), o Recargar queda bloqueado
+if (!src.match(/saving = false;\s*\n\s*renderVersionNotice\(\)/)) throw new Error('regresión: el aviso no se repinta al terminar el guardado (Recargar quedaría bloqueado)');
+// el bloque completo del aviso (de APP_VERSION al final de startVersionChecks) no debe tocar
+// almacenamiento persistente: descarte y detección viven SOLO en memoria de la sesión
+const verBlock = (src.match(/const APP_VERSION[\s\S]*?function startVersionChecks\(\)\{[\s\S]*?\n\}/) || [''])[0];
+if (!verBlock) throw new Error('regresión: no encuentro el bloque del aviso de versión');
+if (/localStorage|idbSet|sessionStorage/.test(verBlock)) throw new Error('regresión: el aviso de versión persiste estado (debe ser solo memoria de sesión)');
+if (src.match(/#ver-notice[^\n]*setTimeout|id = "ver-notice";[\s\S]{0,600}setTimeout\(\(\) => el\.remove/)) throw new Error('regresión: el aviso de versión se auto-retira (debe ser persistente)');
+console.log('OK aviso de versión (semver estricta, antideriva triple, sin concurrencia, bloqueo atómico de Recargar, estado con conflicto, descarte solo en memoria)');
+
+// --- Conceptos propios: «Tus conceptos» primero y chip clicable (v0.28.0) ---
+const mtoBody = pickFn('markTypeOptions', 'selected = "vacaciones"');
+if (!/return \(customs\.length \? `<optgroup label="Tus conceptos">/.test(mtoBody))
+  throw new Error('regresión: «Tus conceptos» ya no va primero en el desplegable de Tipo');
+if (!src.includes('querySelectorAll(".mc-pick")')) throw new Error('regresión: los chips de concepto ya no son clicables');
+if (!src.match(/mc-pick[\s\S]{0,200}closest\(".rmc"\)\) return/)) throw new Error('regresión: el clic del chip ya no respeta la ✕ de borrado');
+console.log('OK conceptos propios (grupo primero en el desplegable, chip clicable con ✕ intacta)');
+
 console.log('\nTODO EN VERDE');

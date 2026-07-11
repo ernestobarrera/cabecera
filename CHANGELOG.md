@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.28.0] - 2026-07-11
+
+- **Cabecera avisa cuando hay una versión nueva.** La página vive en pestañas abiertas durante días y solo se actualiza al recargar: era fácil estar usando una versión antigua sin saberlo (y creer que algo «no funciona» cuando ya está arreglado). Ahora la página consulta de vez en cuando su propia versión publicada — un archivo `version.txt` de una línea, servido por el mismo sitio que ya te sirve la app: sin cuentas, sin rastreo, sin terceros — y, si hay una más nueva, aparece un aviso discreto y permanente abajo a la derecha con un botón **Recargar**. El botón se desactiva solo mientras haya cambios guardándose (y lo re-comprueba en el último instante), así recargar nunca puede perder trabajo; si hay un aviso de conflicto de sincronización, el de versión se retira y vuelve al resolverse. La ✕ lo cierra por esa sesión. Honesto: tras publicar, el aviso puede tardar unos 10 minutos en aparecer (caché del servidor). Con tests (comparación de versiones estricta, versión única en app/archivo/changelog, sin consultas simultáneas, bloqueo del botón).
+- **Tus conceptos de calendario, por delante y con chips clicables.** En el editor de marcas (Mes → clic en un día), el desplegable «Tipo» muestra ahora el grupo **«Tus conceptos» al principio**, antes que los conceptos estándar; y hacer clic en el chip de un concepto lo selecciona directamente como tipo de la marca (la ✕ del chip sigue siendo borrar el concepto, con confirmación). Con tests.
+
 ## [0.27.1] - 2026-07-11
 
 - **Corregido: el clic de tarea completada ya no enmudece.** Cada sonido creaba y cerraba su propio contexto de audio; si la salida de sonido tardaba en abrirse más que el propio tono (típico con auriculares Bluetooth o tras un rato en silencio), el clic moría antes de oírse — sonaba la primera vez y luego no. Ahora todos los sonidos (avisos y clic) comparten un único contexto de audio que se mantiene vivo. Con invariantes en tests.

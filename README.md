@@ -45,6 +45,7 @@ Antes de aplicar cualquier pack se guarda copia automática del escritorio actua
 | `index.html` | Toda la aplicación (HTML+CSS+JS vanilla) |
 | `qrcode.js` | Librería QR (qrcode-generator, MIT) |
 | `packs/*.json` | Packs incluidos |
+| `version.txt` | Versión publicada (una línea); la página lo consulta para avisar de versiones nuevas |
 
 En la **carpeta de datos** (modo sincronizado): `datos.json` (estado), `inbox.txt` (bandeja de entrada), `fondo.jpg`/`fondo.png` (fondo sincronizado, opcional).
 
@@ -91,7 +92,7 @@ Para cualquier persona o programa que se integre con Cabecera, estas reglas no c
 1. **Abrir Cabecera nunca escribe tu archivo.** Solo una edición tuya dispara un guardado.
 2. **Ningún agente o programa crea contenido sin confirmación humana** (Bandeja y paleta: propuesta + clic tuyo).
 3. **Todo formato externo se sanea antes de aplicarse** (packs, líneas de bandeja): URLs solo `http/https`, dimensiones numéricas, tipos en lista blanca.
-4. **Sin servidor, sin cuentas, sin telemetría y sin credenciales almacenadas.** Tus datos viven en tu navegador o en un archivo tuyo; Cabecera no guarda tokens de servicios externos.
+4. **Sin servidor, sin cuentas, sin telemetría y sin credenciales almacenadas.** Tus datos viven en tu navegador o en un archivo tuyo; Cabecera no guarda tokens de servicios externos. La única petición de red que hace la página es consultar su propia versión publicada (`version.txt`) **en el mismo sitio que ya te sirve la app** — sin identificadores, sin datos tuyos, sin terceros — para avisarte de que recargues cuando haya una versión nueva.
 5. **El intercambio con agentes es manual y explícito** (archivo o portapapeles, mediado por ti); la gramática v1 es el contrato de entrada y no se rompe en silencio.
 6. El esquema interno de `datos.json` puede evolucionar entre versiones (con migración automática); lo estable es la gramática y estos invariantes, no la estructura interna.
 
