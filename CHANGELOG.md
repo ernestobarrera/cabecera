@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.27.1] - 2026-07-11
+
+- **Corregido: el clic de tarea completada ya no enmudece.** Cada sonido creaba y cerraba su propio contexto de audio; si la salida de sonido tardaba en abrirse más que el propio tono (típico con auriculares Bluetooth o tras un rato en silencio), el clic moría antes de oírse — sonaba la primera vez y luego no. Ahora todos los sonidos (avisos y clic) comparten un único contexto de audio que se mantiene vivo. Con invariantes en tests.
+- **Corregido: el recuento de la píldora se actualiza al cambiar de espacio.** El «🧩 N widgets · N notas» de la barra mostraba los del espacio anterior hasta el siguiente ciclo de 45 segundos; ahora se refresca con cada cambio.
+- **Archivos: la limitación de «Fecha» en carpetas, explicada donde se usa.** Las carpetas van siempre arriba y ordenadas por nombre porque el navegador no ofrece su fecha de modificación (solo la de los archivos); ahora lo cuenta el propio botón «Fecha» al pasar el ratón, y la guía lo recoge.
+
 ## [0.27.0] - 2026-07-11
 
 - **Arrastrar con sombra de destino: ves dónde quedará la ventana antes de soltarla.** Hasta ahora, al arrastrar, la propia ventana saltaba al imán sin avisar. Ahora la ventana sigue al puntero con suavidad y una sombra discreta muestra el destino exacto (alineado con bordes y ventanas vecinas); al soltar, la ventana se asienta ahí con una transición corta (se respeta `prefers-reduced-motion`). Si el destino solapa otra ventana, la sombra lo avisa con un tinte — el solape sigue permitido: el escritorio es libre y con **Alt** la ventana queda exactamente donde la dejes, sin sombra. La sombra ya no encaja contra ventanas ocultas por el filtro de etiquetas.

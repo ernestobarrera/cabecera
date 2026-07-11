@@ -1616,6 +1616,9 @@ const WTYPES = {
   intro: { ico: "👋", name: "Bienvenida",   w: 350, h: 280 }
 };
 
+// La píldora muestra recuentos del espacio ACTIVO: renderAll la repinta para que no se quede
+// con los del espacio anterior hasta el siguiente ciclo de 45 s. startPill la cablea al arrancar.
+let repaintPill = () => {};
 function renderAll(){
   applyWallpaper();
   const d = $("#desktop");
@@ -1631,6 +1634,7 @@ function renderAll(){
   renderTagFilterBar();
   renderDock();
   renderTaskChip();
+  repaintPill();
 }
 
 /* ---------- espacios (escritorios/pestañas) ---------- */
@@ -2994,10 +2998,23 @@ function unlockAlertSound(){
 }
 document.addEventListener("pointerdown", unlockAlertSound, true);
 document.addEventListener("keydown", unlockAlertSound, true);
+// Un único AudioContext compartido y perezoso para TODOS los sonidos. Crear y cerrar un
+// contexto por sonido hacía que los tonos cortos murieran antes de que el dispositivo de
+// audio terminara de abrirse (Bluetooth o salida dormida tardan más que el propio tono):
+// el clic de tarea sonaba una vez y luego no. El contexto vivo mantiene el cauce caliente.
+let sharedAC = null;
+function audioCtx(){
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC) return null;
+  if (!sharedAC || sharedAC.state === "closed") sharedAC = new AC();
+  if (sharedAC.state === "suspended") sharedAC.resume().catch(() => {});
+  return sharedAC;
+}
 function playAlertSound(kind = "soft"){
   try{
-    const ac = new (window.AudioContext || window.webkitAudioContext)();
-    if (ac.state === "suspended"){ pendingAlertSound = kind; try{ ac.close(); }catch(e){} return; }
+    const ac = audioCtx();
+    if (!ac) return;
+    if (ac.state === "suspended"){ pendingAlertSound = kind; return; }
     const seq = kind === "double" ? [660, 880, 660, 880] : kind === "beep" ? [880, 880, 880] : [523, 659, 784];
     let t = ac.currentTime;
     seq.forEach((freq, i) => {
@@ -3011,7 +3028,6 @@ function playAlertSound(kind = "soft"){
       o.start(t); o.stop(t + 0.24);
       t += i % 2 ? 0.20 : 0.28;
     });
-    setTimeout(() => ac.close(), Math.max(800, seq.length * 300));
   }catch(e){}
 }
 // Clic breve y grave→agudo al completar una tarea: refuerzo discreto del trabajo hecho.
@@ -3019,8 +3035,8 @@ function playAlertSound(kind = "soft"){
 // así que el AudioContext no está suspendido; si lo estuviera, calla (sin cola).
 function playDoneClick(){
   try{
-    const ac = new (window.AudioContext || window.webkitAudioContext)();
-    if (ac.state === "suspended"){ try{ ac.close(); }catch(e){} return; }
+    const ac = audioCtx();
+    if (!ac || ac.state === "suspended") return;
     const t = ac.currentTime;
     const o = ac.createOscillator(), g = ac.createGain();
     o.type = "sine";
@@ -3030,7 +3046,6 @@ function playDoneClick(){
     g.gain.exponentialRampToValueAtTime(0.0001, t + 0.11);
     o.connect(g); g.connect(ac.destination);
     o.start(t); o.stop(t + 0.12);
-    setTimeout(() => { try{ ac.close(); }catch(e){} }, 250);
   }catch(e){}
 }
 function fmtClock(ms, withHours = false){
@@ -3659,9 +3674,12 @@ function bodyFiles(w, el){
     const bar = el.querySelector(".files-cols");
     if (!bar) return;
     const arrow = by => w.data.sortBy === by ? (w.data.sortDir === "desc" ? " ▼" : " ▲") : "";
+    // el navegador no expone la fecha de modificación de las CARPETAS (solo de archivos):
+    // con orden por fecha siguen arriba y por nombre; el title lo cuenta sin ocupar sitio
+    const tip = by => by === "date" ? ` title="Ordena los archivos por fecha. Las carpetas van arriba y por nombre: el navegador no ofrece su fecha de modificación"` : "";
     bar.innerHTML = [["name","Nombre"],["type","Tipo"],["date","Fecha"],["size","Tamaño"]]
       .map(([by, lb], i) => (i === 2 ? `<span class="grow"></span>` : "") +
-        `<button data-by="${by}"${w.data.sortBy === by ? ` class="on"` : ""}${current ? "" : " disabled"}>${lb}${arrow(by)}</button>`).join("");
+        `<button data-by="${by}"${w.data.sortBy === by ? ` class="on"` : ""}${current ? "" : " disabled"}${tip(by)}>${lb}${arrow(by)}</button>`).join("");
     bar.querySelectorAll("button[data-by]").forEach(b => b.addEventListener("click", () => {
       const by = b.dataset.by;
       if (w.data.sortBy === by) w.data.sortDir = w.data.sortDir === "asc" ? "desc" : "asc";
@@ -4869,6 +4887,7 @@ function pillMsgs(){
 function startPill(){
   const el = $("#tb-pill");
   const paint = () => { const m = pillMsgs(); el.textContent = m[pillIdx % m.length]; };
+  repaintPill = paint;
   el.addEventListener("click", () => { pillIdx++; paint(); });
   setInterval(() => { pillIdx++; paint(); renderTaskChip(); }, 45000);   // el chip se refresca también al pasar la medianoche
   paint();

@@ -478,6 +478,11 @@ if (!src.includes('s.id === x.spId')) throw new Error('regresión: el destino de
 // pasan los conceptos propios a la gramática v.
 if (!src.includes('if (it.done) playDoneClick();')) throw new Error('regresión: falta el clic al completar tarea');
 if (!src.includes('function playDoneClick()')) throw new Error('regresión: falta playDoneClick');
+// Todos los sonidos usan UN AudioContext compartido que nunca se cierra: crear/cerrar uno por
+// sonido dejaba mudos los tonos cortos cuando el dispositivo de audio tardaba en abrirse.
+if (!src.includes('function audioCtx()')) throw new Error('regresión: falta el AudioContext compartido (audioCtx)');
+if (src.includes('setTimeout(() => ac.close()')) throw new Error('regresión: un sonido vuelve a cerrar su AudioContext');
+if ((src.match(/new (?:AC|\(window\.AudioContext)/g) || []).length > 1) throw new Error('regresión: se crea más de un AudioContext fuera de audioCtx');
 if ((src.match(/parseCapture\((?:q|line), new Date\(\), customMarkIds\(\)\)/g) || []).length < 3) throw new Error('regresión: algún caller de parseCapture no pasa los conceptos propios');
 console.log('OK invariantes (audio encolado, conceptos propios saneados, sin tope de 300, sortDir presente, destino por IDs, clic de hecho, conceptos propios en gramática)');
 
