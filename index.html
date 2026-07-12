@@ -50,6 +50,12 @@ body{font-family:var(--font); color:var(--text); background:#10131a}
   border:2px dashed rgba(122,162,247,.7); border-radius:var(--radius);
   background:rgba(122,162,247,.06)}
 .drop-ghost.over{border-color:rgba(229,72,77,.55); background:rgba(229,72,77,.05)}
+/* N2: carriles guía visibles solo durante el arrastre (inertes) + pista de reflow en los que se apartan */
+#lane-guides{position:absolute; left:0; top:0; width:100%; pointer-events:none; z-index:0}
+.lane-band{position:absolute; top:0; height:100%; border-radius:12px;
+  background:rgba(255,255,255,.028); box-shadow:inset 0 0 0 1px rgba(255,255,255,.05)}
+.lane-band.active{background:rgba(122,162,247,.07); box-shadow:inset 0 0 0 1px rgba(122,162,247,.28)}
+.win.reflow-hint{outline:2px dashed rgba(240,194,94,.55); outline-offset:2px}
 /* asentamiento al soltar: clase temporal, nunca transición permanente en left/top (lag) */
 @media (prefers-reduced-motion: no-preference){
   .win.settling{transition:left .16s ease, top .16s ease}
@@ -1993,8 +1999,25 @@ function worldViewport(){
 }
 // Extiende (nunca encoge por debajo del alto visible) el lienzo colocando el espaciador #desk-end.
 function setDeskHeight(px){
+  const h = Math.min(LAYOUT.worldMax, Math.max(deskViewH(), px));
   const end = document.getElementById("desk-end");
-  if (end) end.style.top = Math.min(LAYOUT.worldMax, Math.max(deskViewH(), px)) + "px";
+  if (end) end.style.top = h + "px";
+  const g = document.getElementById("lane-guides");   // las bandas cubren el mismo lienzo que el contenido
+  if (g) g.style.height = h + "px";
+}
+// N2 hito 3: carril activo por la x del puntero, con HISTÉRESIS — una vez dentro de un carril se
+// conserva hasta salir un gutter completo hacia el vecino; fuera de la cuadrícula → null (N1 libre).
+function pickLane(guides, x, prev){
+  const cols = guides.cols, g = guides.gutter;
+  if (prev != null && prev < cols.length){
+    const c = cols[prev];
+    if (x >= c.x - g && x <= c.x + c.w + g) return prev;   // sigue en el carril actual (gutter incluido)
+  }
+  for (let i = 0; i < cols.length; i++){
+    const c = cols[i];
+    if (x >= c.x && x <= c.x + c.w) return i;   // entra claramente en el cuerpo de un carril
+  }
+  return null;   // márgenes exteriores (4K) o entre carriles sin entrar: comportamiento N1
 }
 function updateDeskHeight(){ if (isMobile()) return; setDeskHeight(desktopWorldHeight()); }   // móvil: scroll propio por flex
 // Con una ventana maximizada el scroll del escritorio se bloquea (maximizar = viewport visible).
@@ -2059,6 +2082,20 @@ function autoArrangeWidgets(silent){   // adaptador impuro: aplica el plan al es
   deskEl().scrollTop = 0;   // el reparto empieza arriba: lleva la vista al inicio
   renderAll(); markDirty();
   if (!silent) toast("Widgets autoordenados");
+}
+// Deshacer de una transacción de carril (N2): restaura SOLO los widgets que sigan tal como los dejó
+// el gesto (misma x/y/w «después»). Si una sincronización remota los cambió, no se pisan (riesgo 3).
+function undoLayout(snap){
+  const sp = state.spaces.find(s => s.id === snap.spaceId);
+  if (!sp) return;
+  for (const it of snap.items){
+    const wg = sp.widgets.find(x => x.id === it.id);
+    if (!wg || !it.after) continue;
+    if (wg.x === it.after.x && wg.y === it.after.y && wg.w === it.after.w){
+      wg.x = it.before.x; wg.y = it.before.y; wg.w = it.before.w;
+    }
+  }
+  renderAll(); markDirty();
 }
 /* Geometría robusta frente a cambios de monitor/resolución (puras → testeables) */
 function maxRect(vw, vh, scrollTop = 0){   // rect "maximizado" para el viewport visible (en coords de mundo: +scrollTop)
@@ -2329,12 +2366,16 @@ function buildWindow(w){
     const gwx = g0.x - proj.x, gwy = g0.y - proj.y;
     let overTab = null, dragging = false, dragRects = null, ghost = null, raw = null, target = null;
     let lastM = ev, af = null;
+    let curLane = null, laneRes = null, bands = null, hinted = [];   // N2: carril activo, plan de reflow, bandas, pistas
+    const clearHints = () => { hinted.forEach(id => { const e = document.querySelector(`.win[data-id="${id}"]`); if (e) e.classList.remove("reflow-hint"); }); hinted = []; };
+    const removeBands = () => { if (bands){ bands.remove(); bands = null; } };
     const cleanup = () => {   // única puerta de salida: up, cancel y pérdida de foco pasan por aquí
       removeEventListener("pointermove", onMove); removeEventListener("pointerup", up);
       removeEventListener("pointercancel", cancel); removeEventListener("blur", cancel);
       if (af){ cancelAnimationFrame(af); af = null; }
       el.style.pointerEvents = "";
       if (ghost){ ghost.remove(); ghost = null; }
+      removeBands(); clearHints();
       if (overTab){ overTab.classList.remove("drop-target"); overTab = null; }
       updateDeskHeight();   // el lienzo vuelve a su alto por contenido (el drag pudo extenderlo)
     };
@@ -2369,6 +2410,34 @@ function buildWindow(w){
         overTab = cand;
         if (overTab) overTab.classList.add("drop-target");
       }
+      // N2 hito 3: carriles guía cuando no es Alt, ni hay pestaña bajo el cursor, ni filtro de etiqueta
+      // (con filtro se conserva el imán N1 contra lo visible — decisión del gate, no regresión).
+      const useLanes = !m.altKey && !overTab && !tagFilter;
+      clearHints();
+      if (useLanes){
+        const guides = columnGuides(deskViewW());
+        if (!bands){   // dibuja las bandas una vez, detrás de las ventanas (inertes)
+          bands = document.createElement("div"); bands.id = "lane-guides";
+          for (const c of guides.cols){ const b = document.createElement("div"); b.className = "lane-band"; b.style.left = c.x + "px"; b.style.width = c.w + "px"; bands.appendChild(b); }
+          const end = document.getElementById("desk-end");
+          bands.style.height = (end && end.style.top) || (deskViewH() + "px");
+          deskEl().insertBefore(bands, deskEl().firstChild);
+        }
+        curLane = pickLane(guides, world.x, curLane);
+        [...bands.children].forEach((b, i) => b.classList.toggle("active", i === curLane));
+        if (curLane != null){
+          const lane = guides.cols[curLane];
+          const others = planViewportLayout(state.widgets.filter(x =>
+            x.id !== w.id && !x.max && !(tagFilter && !(x.tags || []).includes(tagFilter))), worldViewport());
+          laneRes = planLaneInsert(others, lane, world.y, { h: proj.h }, { gutter: LAYOUT.snapGap, pad: LAYOUT.viewportPad });
+          ghost.style.display = ""; ghost.classList.remove("over");
+          ghost.style.left = (laneRes.placed.x - 3) + "px"; ghost.style.top = (laneRes.placed.y - 3) + "px";
+          ghost.style.width = (laneRes.placed.w + 6) + "px"; ghost.style.height = (proj.h + 6) + "px";
+          laneRes.moved.forEach(mv => { const e = document.querySelector(`.win[data-id="${mv.id}"]`); if (e){ e.classList.add("reflow-hint"); hinted.push(mv.id); } });
+          return;   // en carril no usamos el imán N1
+        }
+      } else { removeBands(); curLane = null; }
+      laneRes = null;   // Alt, pestaña, filtro, o puntero entre carriles → sombra por imán N1
       target = m.altKey ? { ...raw, snapped: false, overlap: false }   // Alt = libre, como siempre
         : dragTarget(raw.x, raw.y, proj.w, proj.h, dragRects, deskViewW(), LAYOUT.worldMax, LAYOUT.snapThr, LAYOUT.snapGap);
       if (m.altKey || overTab){ ghost.style.display = "none"; }   // Alt o pestaña bajo el cursor: sin sombra, en este mismo evento
@@ -2396,9 +2465,29 @@ function buildWindow(w){
     const up = m => {
       const wasDragging = dragging;
       const tab = wasDragging ? tabUnder(m.clientX, m.clientY) : null;   // recalculado EN el up, no el del último move (Codex C1)
+      const laneCommit = wasDragging && !m.altKey && !tab && laneRes && laneRes.placed;   // Alt evaluado al soltar (Codex C1)
       cleanup();
       if (!wasDragging) return;   // fue un clic: no tocar geometría (deja pasar dblclick para renombrar)
       if (tab){ moveWidgetToSpace(w.id, +tab.dataset.i); return; }   // sin asentamiento: moveWidgetToSpace es la única persistencia
+      if (laneCommit){
+        // Transacción de carril: ventana (adopta ancho de carril) + miembros del reflow + z-order,
+        // todo en un commit; snapshot antes/después con spaceId para un Deshacer que NO pisa una sync remota.
+        const sp = state.spaces[state.active];
+        const items = [{ id: w.id, before: { x: w.x, y: w.y, w: w.w }, after: null }];
+        w.x = laneRes.placed.x; w.y = laneRes.placed.y; w.w = laneRes.placed.w; w.z = ++zTop;
+        items[0].after = { x: w.x, y: w.y, w: w.w };
+        for (const mv of laneRes.moved){
+          const wg = sp.widgets.find(x => x.id === mv.id);
+          if (!wg) continue;
+          const before = { x: wg.x, y: wg.y, w: wg.w };
+          wg.y = mv.y;
+          items.push({ id: wg.id, before, after: { x: wg.x, y: wg.y, w: wg.w } });
+        }
+        renderAll(); markDirty();
+        const snap = { spaceId: sp.id, items };
+        toastAction(laneRes.moved.length ? "Reubicado en columna (los demás hicieron sitio)." : "Reubicado en columna.", "Deshacer", () => undoLayout(snap));
+        return;
+      }
       const t = m.altKey ? raw : target;   // Alt se evalúa también al soltar (Codex C1)
       // commit único de la transacción: estado y guardado se confirman YA; la animación es solo DOM
       w.x = t.x; w.y = t.y;

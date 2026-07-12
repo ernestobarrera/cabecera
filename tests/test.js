@@ -398,6 +398,31 @@ r = planLaneInsert([a, b], lane, 60, { h: 120 });
 if (r.moved.find(x => x.id === 'b')) throw new Error('planLaneInsert: empuja un miembro lejano que no hacía falta mover');
 console.log('OK planLaneInsert (carril vacío, reflow hacia abajo, hueco respetado, obstáculo fijo esquivado)');
 
+// --- N2 hito 3: selección de carril con histéresis (pura) + invariantes de integración ---
+eval('globalThis.pickLane = ' + pickFn('pickLane', 'guides, x, prev'));
+const gg = columnGuides(1366);   // 4 carriles
+// dentro del cuerpo de un carril entra a ese carril
+if (pickLane(gg, gg.cols[2].x + 10, null) !== 2) throw new Error('pickLane: no entra al carril bajo el puntero');
+// histéresis: estando en el carril 1, un puntero que apenas cruza al gutter NO cambia de carril
+const midGutter = gg.cols[1].x + gg.cols[1].w + Math.floor(gg.gutter / 2);
+if (pickLane(gg, midGutter, 1) !== 1) throw new Error('pickLane: pierde el carril actual dentro del gutter (histéresis rota)');
+// pero al entrar de lleno en el cuerpo del vecino, sí cambia
+if (pickLane(gg, gg.cols[2].x + 5, 1) !== 2) throw new Error('pickLane: no cambia al vecino al entrar en su cuerpo');
+// fuera de la cuadrícula (margen izquierdo de 4K) → null (comportamiento N1)
+const g4 = columnGuides(3840);
+if (pickLane(g4, 20, null) !== null) throw new Error('pickLane: el margen exterior de 4K debería ser N1 (null)');
+console.log('OK pickLane (entra al cuerpo, histéresis en el gutter, cambia al vecino, margen exterior = N1)');
+
+// invariantes de fuente de la integración:
+if (!src.includes('const useLanes = !m.altKey && !overTab && !tagFilter')) throw new Error('regresión: los carriles ya no se desactivan con Alt/pestaña/filtro de etiqueta');
+if (!src.match(/laneRes = planLaneInsert\(others, lane/)) throw new Error('regresión: el arrastre ya no calcula el reflow del carril');
+if (!src.includes('function undoLayout(')) throw new Error('regresión: falta el Deshacer de la transacción de carril');
+if (!src.match(/if \(wg\.x === it\.after\.x && wg\.y === it\.after\.y && wg\.w === it\.after\.w\)/)) throw new Error('regresión: el Deshacer ya no verifica el estado antes de restaurar (pisaría una sync remota)');
+if (!src.match(/w\.x = laneRes\.placed\.x; w\.y = laneRes\.placed\.y; w\.w = laneRes\.placed\.w; w\.z = \+\+zTop/)) throw new Error('regresión: la transacción de carril ya no incluye ancho de carril + z-order (riesgo 1 del gate)');
+if (!src.includes('!x.max &&')) throw new Error('regresión: los maximizados ya no se excluyen del reflow de carril');
+if (!html.includes('.lane-band') || !html.includes('reflow-hint')) throw new Error('regresión: falta el CSS de bandas de carril o de la pista de reflow');
+console.log('OK integración de carriles (useLanes, reflow en drag, Deshacer que verifica, transacción con ancho+z-order, maximizados fuera, CSS)');
+
 // --- gradientAvgHex: acento de pestaña calculado del degradado de fondo (sin canvas, barato) ---
 eval('globalThis.gradientAvgHex = ' + pickFn('gradientAvgHex', 'css'));
 if (gradientAvgHex('linear-gradient(135deg,#1b2735 0%,#090a0f 100%)') !== '#121922') throw new Error('gradientAvgHex: promedio de dos tonos incorrecto');
