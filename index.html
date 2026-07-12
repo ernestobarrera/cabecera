@@ -801,7 +801,7 @@ ul.plain{list-style:none}
       — <b>Temporizador</b>: ajusta minutos y segundos con rueda o flechas, usa presets, cronómetro con vueltas y sonidos de alarma.<br>
       — En un grupo de enlaces, el botón <b>⇱ N</b> abre los N enlaces de una vez (permite los pop-ups la primera vez). También desde la paleta: «Abrir grupo: …».<br>
       — Doble clic en el título de una ventana o en una pestaña de espacio para renombrar inline. El chevron <b>▾</b> pliega una ventana; <b>⊟</b> pliega/despliega todas (al desplegar, si no caben, se reordenan solas). <b>⛶</b> maximiza una ventana y <b>❐</b> la restaura.<br>
-      — Al arrastrar una ventana, una <b>sombra</b> te enseña dónde quedará al soltar (alineada con bordes y ventanas; avisa con un tinte si va a solapar); mantén <b>Alt</b> para moverla libre, sin sombra.<br>
+      — Al arrastrar una ventana aparecen <b>columnas guía</b> (2–4 según el ancho): la ventana se encaja en el carril donde apuntes y las de abajo hacen sitio; una <b>sombra</b> te enseña dónde quedará. Mantén <b>Alt</b> para moverla libre, sin carriles. El escritorio tiene <b>scroll vertical</b> si no caben todas.<br>
       — Las tareas <b>vencidas o de hoy</b> tienen su propio aviso ⏰/📌 en la barra: cada clic salta a la siguiente.<br>
       — <b>inbox.txt</b> en tu carpeta de datos: cualquier línea (una macro de teclado, un agente, el móvil vía OneDrive) aparece en la Bandeja.<br>
       — <b>?add=texto</b> añade a la Bandeja; <b>?pack=nombre|URL</b> carga un escritorio completo.<br>
@@ -1083,7 +1083,7 @@ function syncUI(mode, txt){
    reaparece) y si Recargar está activo. El descarte ✕ vive solo en memoria de la sesión.
    Demora asumida: la CDN de Pages puede servir la versión vieja hasta ~10 min aun con
    no-store (gobierna la caché del navegador, no la CDN); para pestañas de días, irrelevante. */
-const APP_VERSION = "0.28.0";
+const APP_VERSION = "0.29.0";
 let newVersionDetected = null;   // versión superior detectada; detiene futuras consultas
 let verDismissed = false;        // ✕: solo esta sesión — nunca persistido en disco
 let verCheckInflight = false;    // sin consultas concurrentes
@@ -1895,7 +1895,7 @@ const TOUR = [
   { sel: "#btn-inicio", pos: "top", title: "Añade widgets", body: "Desde <b>⊞ Inicio</b> agregas notas, enlaces, tareas, calendario… También con <b>Ctrl+K</b> escribiendo «Añadir»." },
   { sel: "#tb-spaces", pos: "top", title: "Espacios (escritorios)", body: "Crea escritorios con <b>＋</b>, uno por especialidad o proyecto. Clic para cambiar, doble clic para renombrar, arrastra una pestaña para reordenarla. Arrastra una ventana <b>sobre otra pestaña</b> para moverla allí. El color de cada pestaña se toma solo del fondo de ese escritorio." },
   { sel: "#btn-fold", pos: "top", title: "Ordena de un vistazo", body: "<b>⊟</b> pliega o despliega todos los widgets; cada uno también se pliega con <b>▾</b> en su barra." },
-  { sel: ".win .win-title", pos: "bottom", title: "Cada widget", body: "Arrástralo por su barra: una <b>sombra</b> te enseña dónde quedará (con <b>Alt</b>, libre). Al pasar el ratón aparecen las etiquetas; <b>▾</b> pliega y <b>✕</b> cierra. <b>Doble clic</b> para renombrarlo." },
+  { sel: ".win .win-title", pos: "bottom", title: "Cada widget", body: "Arrástralo por su barra: aparecen <b>columnas guía</b> y una <b>sombra</b> te enseña dónde encajará (las de abajo hacen sitio; con <b>Alt</b>, libre). Al pasar el ratón aparecen las etiquetas; <b>▾</b> pliega y <b>✕</b> cierra. <b>Doble clic</b> para renombrarlo." },
   { sel: "#tb-sync", pos: "top", title: "Tus datos son tuyos", body: "Todo se guarda solo, sin cuentas ni servidor. Opcional: «Sincronizar equipos» para tener lo mismo en casa y en el trabajo." },
   { sel: null, pos: "center", title: "¡Listo!", body: "Pulsa <b>Ctrl+K</b> en cualquier momento para buscar y ejecutar. Tienes la guía completa cuando quieras.", cta: { label: "📖 Guía completa", href: "guia.html" } }
 ];
