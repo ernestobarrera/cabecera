@@ -221,7 +221,7 @@ eval('globalThis.findSpotPlan = ' + pickFn('findSpotPlan', 'rects, ww, hh, vw, v
 console.log('OK planificadores N0 (filas con alto visual 140, plegados 42, clipped, huecos y fallback)');
 
 // --- maxRect / clampRect: geometría maximizada robusta ante cambio de monitor (hotfix v0.21.1) ---
-eval('globalThis.maxRect = ' + pickFn('maxRect', 'vw, vh'));
+eval('globalThis.maxRect = ' + pickFn('maxRect', 'vw, vh, scrollTop = 0'));
 eval('globalThis.clampRect = ' + pickFn('clampRect', 'x, y, ww, hh, vw, vh'));
 // maximizado en portátil 1366x768: llena el viewport útil (padding 12, barra 46)
 const mr = maxRect(1366, 768);
@@ -330,6 +330,26 @@ for (const [vw, vh] of buckets){
   }
 }
 console.log('OK planViewportLayout (plegados, 701-900px, maximizado no rompe, muchos widgets, 4K→todos los buckets sin salirse)');
+
+// --- N2 hito 1: lienzo con scroll vertical (worldHeight pura + invariantes de contrato) ---
+eval('globalThis.worldHeight = ' + pickFn('worldHeight', 'rects, viewH, margin, tope'));
+// vacío o todo cabe en el viewport → alto = alto visible (no encoge por debajo)
+if (worldHeight([], 700, 24, 12000) !== 700) throw new Error('worldHeight: sin widgets debe ser el alto visible');
+if (worldHeight([{ y: 10, h: 200 }], 700, 24, 12000) !== 700) throw new Error('worldHeight: contenido corto no debe encoger bajo el visible');
+// contenido más alto que el viewport → borde inferior del más bajo + margen
+if (worldHeight([{ y: 500, h: 400 }, { y: 100, h: 200 }], 700, 24, 12000) !== 924) throw new Error('worldHeight: no toma el borde inferior del más bajo + margen');
+// tope absoluto: un y disparatado (dentro del saneo y≤8000/h≤4000) no crea un lienzo infinito
+if (worldHeight([{ y: 8000, h: 4000 }], 700, 24, 12000) !== 12000) throw new Error('worldHeight: no respeta el tope de 12000');
+console.log('OK worldHeight (alto visible mínimo, borde inferior + margen, tope 12000)');
+
+// invariantes de fuente del contrato cliente↔mundo y del overflow:
+if (!src.includes('function clientToWorld(') || !src.includes('function worldToClient(')) throw new Error('regresión: faltan las conversiones cliente↔mundo (contrato N0 exigido por el autoscroll)');
+if (!src.match(/worldMax:\s*12000/)) throw new Error('regresión: LAYOUT.worldMax dejó de ser 12000 (tope del lienzo, decisión P4 del gate)');
+if (!src.match(/const world = clientToWorld\(m\.clientX, m\.clientY\)/)) throw new Error('regresión: el arrastre ya no calcula la posición en coords de mundo');
+if (!src.includes('const edgeScroll =') || !src.match(/if \(d\.scrollTop !== before\) applyMove\(\)/)) throw new Error('regresión: el autoscroll no recalcula con la última posición del puntero (riesgo 2 del gate)');
+if (!src.includes('maxRect(deskViewW(), innerHeight, deskEl().scrollTop)')) throw new Error('regresión: maximizar ya no cubre el viewport visible en coords de mundo');
+if (!src.match(/scroll-lock/) || !src.includes('function updateScrollLock(')) throw new Error('regresión: una ventana maximizada ya no bloquea el scroll del escritorio (riesgo 3 del gate)');
+console.log('OK contrato cliente↔mundo (conversiones, tope, arrastre en mundo, autoscroll con recálculo, maximizar bloquea scroll)');
 
 // --- gradientAvgHex: acento de pestaña calculado del degradado de fondo (sin canvas, barato) ---
 eval('globalThis.gradientAvgHex = ' + pickFn('gradientAvgHex', 'css'));

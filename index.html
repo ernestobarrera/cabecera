@@ -32,7 +32,11 @@ body{font-family:var(--font); color:var(--text); background:#10131a}
 #wallpaper::after{content:""; position:absolute; inset:0; background:rgba(0,0,0,.18)}
 
 /* ---------- escritorio ---------- */
-#desktop{position:fixed; inset:0 0 46px 0; z-index:1; overflow:hidden}
+/* N2 hito 1: el escritorio es un lienzo con scroll vertical (nunca horizontal). El alto
+   lógico lo marca #desk-end; con una ventana maximizada el scroll se bloquea (.scroll-lock). */
+#desktop{position:fixed; inset:0 0 46px 0; z-index:1; overflow-y:auto; overflow-x:hidden}
+#desktop.scroll-lock{overflow-y:hidden}
+#desk-end{position:absolute; left:0; width:1px; height:1px; visibility:hidden; pointer-events:none}
 
 /* ---------- ventanas ---------- */
 .win{position:absolute; display:flex; flex-direction:column; min-width:220px; min-height:140px;
@@ -565,7 +569,7 @@ ul.plain{list-style:none}
 <body>
 
 <div id="wallpaper"></div>
-<div id="desktop"></div>
+<div id="desktop"><div id="desk-end"></div></div>
 <div id="desk-dock" aria-label="Accesos rápidos">
   <button class="dock-btn dock-key" id="desk-palette" title="Abrir paleta de comandos">Ctrl K</button>
   <button class="dock-btn" id="desk-arrange" title="Autoordenar widgets">🧭</button>
@@ -1698,6 +1702,8 @@ function renderAll(){
   applyWallpaper();
   const d = $("#desktop");
   d.innerHTML = "";
+  const end = document.createElement("div"); end.id = "desk-end";   // espaciador del lienzo (se repone: innerHTML lo borró)
+  d.appendChild(end);
   zTop = 10;
   for (const w of state.widgets){
     zTop = Math.max(zTop, w.z || 1);
@@ -1710,6 +1716,8 @@ function renderAll(){
   renderDock();
   renderTaskChip();
   repaintPill();
+  updateScrollLock();
+  updateDeskHeight();
 }
 
 /* ---------- espacios (escritorios/pestañas) ---------- */
@@ -1950,8 +1958,50 @@ const LAYOUT = {
   collapsedH: 42,      // alto de ventana plegada
   minW: 220, minH: 140,          // suelo visual/planificación (= CSS .win)
   visMarginX: 80, visMarginY: 60, // mínimo de ventana que debe quedar alcanzable
-  dragClampBottom: 110 // clamp inferior del arrastre
+  dragClampBottom: 110, // clamp inferior del arrastre
+  worldMax: 12000,     // N2: tope absoluto del borde inferior del lienzo (coherente con saneo y≤8000/h≤4000)
+  edgeBand: 48         // N2: banda de autoscroll al arrastrar cerca del borde
 };
+/* ---------- N2 hito 1: lienzo con scroll vertical (contrato cliente↔mundo) ----------
+   Las coordenadas persistidas w.x/w.y son de MUNDO (dentro del lienzo desplazable). El
+   puntero llega en coordenadas de CLIENTE (pantalla). Estas conversiones son el contrato
+   que declaró N0 y que exige el autoscroll (el scroll programático no emite pointermove). */
+function deskEl(){ return $("#desktop"); }
+function deskViewW(){ const d = deskEl(); return (d && d.clientWidth) || innerWidth; }
+function deskViewH(){ const d = deskEl(); return (d && d.clientHeight) || (innerHeight - LAYOUT.bar); }
+function clientToWorld(cx, cy){ const d = deskEl(), r = d.getBoundingClientRect(); return { x: cx - r.left + d.scrollLeft, y: cy - r.top + d.scrollTop }; }
+function worldToClient(wx, wy){ const d = deskEl(), r = d.getBoundingClientRect(); return { x: wx + r.left - d.scrollLeft, y: wy + r.top - d.scrollTop }; }
+// Alto lógico del lienzo (PURO): max(alto visible, borde inferior del más bajo + margen), con tope.
+function worldHeight(rects, viewH, margin, tope){
+  let bottom = 0;
+  for (const r of rects) bottom = Math.max(bottom, (+r.y || 0) + (+r.h || 0));
+  return Math.min(tope, Math.max(viewH, bottom + margin));
+}
+function desktopWorldHeight(){
+  const rects = state.widgets
+    .filter(w => !(tagFilter && !(w.tags || []).includes(tagFilter)))
+    .map(widgetRect);
+  return worldHeight(rects, deskViewH(), LAYOUT.packingMargin, LAYOUT.worldMax);
+}
+// Encaje del lienzo: horizontal al ancho visible (no hay scroll-x), vertical al alto lógico
+// (un widget bajo el pliegue NO se sube: se llega con scroll; solo se rescata lo horizontal
+// y lo que supere el tope). Sustituye al viewport visible como marco del encuadre.
+function worldViewport(){
+  return { x: LAYOUT.viewportPad, y: LAYOUT.viewportPad,
+    w: Math.max(LAYOUT.minW, deskViewW() - LAYOUT.viewportPad * 2),
+    h: Math.max(LAYOUT.minH, desktopWorldHeight() - LAYOUT.viewportPad * 2) };
+}
+// Extiende (nunca encoge por debajo del alto visible) el lienzo colocando el espaciador #desk-end.
+function setDeskHeight(px){
+  const end = document.getElementById("desk-end");
+  if (end) end.style.top = Math.min(LAYOUT.worldMax, Math.max(deskViewH(), px)) + "px";
+}
+function updateDeskHeight(){ if (isMobile()) return; setDeskHeight(desktopWorldHeight()); }   // móvil: scroll propio por flex
+// Con una ventana maximizada el scroll del escritorio se bloquea (maximizar = viewport visible).
+function updateScrollLock(){
+  const d = deskEl(); if (!d) return;
+  d.classList.toggle("scroll-lock", !isMobile() && !!state && state.widgets.some(w => w.max));
+}
 function anyOverlap(){   // ¿hay solape real (más de unos px) entre las ventanas del espacio activo?
   const rs = state.widgets.map(widgetRect);
   for (let i = 0; i < rs.length; i++)
@@ -1995,22 +2045,25 @@ function planAutoArrange(sizes, vw, vh, opts){
   return { rects, clipped };
 }
 function autoArrangeWidgets(silent){   // adaptador impuro: aplica el plan al estado (N0)
+  // N2 hito 1: el empaquetado fluye por el LIENZO (ancho visible, alto = tope) en vez de apretujar
+  // todo en el viewport — con scroll, lo que no cabe arriba se alcanza bajando, no queda al borde.
   const plan = planAutoArrange(
     state.widgets.map(w => ({ w: +w.w || WTYPES[w.type]?.w, h: +w.h || WTYPES[w.type]?.h, collapsed: !!w.collapsed })),
-    innerWidth, innerHeight,
+    deskViewW(), LAYOUT.worldMax,
     { gap: LAYOUT.snapGap, margin: LAYOUT.packingMargin, bar: LAYOUT.bar, pad: LAYOUT.viewportPad,
       minW: LAYOUT.minW, minH: LAYOUT.minH, collapsedH: LAYOUT.collapsedH, visY: LAYOUT.visMarginY });
   state.widgets.forEach((w, i) => {
     const r = plan.rects[i];
     w.x = r.x; w.y = r.y; w.w = r.w; w.z = ++zTop;   // el alto visual del plan NO se persiste (Codex C5)
   });
+  deskEl().scrollTop = 0;   // el reparto empieza arriba: lleva la vista al inicio
   renderAll(); markDirty();
-  if (!silent) toast(plan.clipped ? "Widgets autoordenados (no caben todos: algunos quedan al borde inferior)" : "Widgets autoordenados");
+  if (!silent) toast("Widgets autoordenados");
 }
 /* Geometría robusta frente a cambios de monitor/resolución (puras → testeables) */
-function maxRect(vw, vh){   // rect "maximizado" para el viewport actual
+function maxRect(vw, vh, scrollTop = 0){   // rect "maximizado" para el viewport visible (en coords de mundo: +scrollTop)
   const pad = 12, bar = 46;
-  return { x: pad, y: pad, w: Math.max(220, vw - pad * 2), h: Math.max(140, vh - bar - pad * 2) };
+  return { x: pad, y: scrollTop + pad, w: Math.max(220, vw - pad * 2), h: Math.max(140, vh - bar - pad * 2) };
 }
 function clampRect(x, y, ww, hh, vw, vh){   // encaja un rect guardado (quizá de otro monitor) en el viewport actual
   const bar = 46;
@@ -2056,16 +2109,17 @@ function planViewportLayout(widgets, viewport){
     return { id: w.id, x: rect.x, y: rect.y, w: rect.w, h: w.collapsed ? 42 : rect.h };
   });
 }
-function toggleMaximize(w){   // ⛶ ocupa el escritorio; ❐ restaura el tamaño y posición previos
+function toggleMaximize(w){   // ⛶ ocupa el viewport visible; ❐ restaura el tamaño y posición previos
   if (isMobile()) return;
   if (w.max){
     const p = w.max; delete w.max;
-    const r = clampRect(p.x, p.y, p.w, p.h, innerWidth, innerHeight);   // lo guardado puede venir de otro monitor
+    // restaurar SIN subir un widget que quedó bajo el pliegue: clamp con alto de mundo (solo rescata lo horizontal)
+    const r = clampRect(p.x, p.y, p.w, p.h, deskViewW(), LAYOUT.worldMax);
     w.x = r.x; w.y = r.y; w.w = r.w; w.h = r.h;
   } else {
     w.max = { x: w.x, y: w.y, w: w.w, h: w.h };
     if (w.collapsed) w.collapsed = false;
-    const m = maxRect(innerWidth, innerHeight);
+    const m = maxRect(deskViewW(), innerHeight, deskEl().scrollTop);   // cubre el viewport visible actual (en coords de mundo)
     w.x = m.x; w.y = m.y; w.w = m.w; w.h = m.h;
   }
   w.z = ++zTop;
@@ -2158,15 +2212,16 @@ function renderTabs(){
 
 function buildWindow(w){
   const t = WTYPES[w.type] || { ico: "❔", name: w.type };
-  // una ventana maximizada se re-encaja SIEMPRE al viewport actual (pudo guardarse en otro monitor)
+  // una ventana maximizada se re-encaja SIEMPRE al viewport visible actual (pudo guardarse en otro
+  // monitor); con scroll bloqueado, scrollTop es estable → coords de mundo consistentes
   if (w.max && !isMobile()){
-    const m = maxRect(innerWidth, innerHeight);
+    const m = maxRect(deskViewW(), innerHeight, deskEl().scrollTop);
     w.x = m.x; w.y = m.y; w.w = m.w; w.h = m.h;
   }
-  // Fase 2 (acta 2026-07-09): proyección no destructiva — se PINTA el rect ajustado al
-  // viewport actual; lo persistido (w.x/y/w/h) no se toca aquí, solo al arrastrar/
-  // redimensionar/imantar (ver los pointerdown de título y esquina más abajo).
-  const paint = isMobile() ? widgetRect(w) : planViewportLayout([w], safeViewportRect(innerWidth, innerHeight))[0];
+  // Fase 2 (acta 2026-07-09) + N2 hito 1: proyección no destructiva sobre el LIENZO (ancho visible
+  // + alto lógico), no el viewport — un widget bajo el pliegue se pinta en su sitio y se alcanza con
+  // scroll. Lo persistido (w.x/y/w/h) no se toca aquí, solo al arrastrar/redimensionar/imantar.
+  const paint = isMobile() ? widgetRect(w) : planViewportLayout([w], worldViewport())[0];
   const el = document.createElement("div");
   el.className = "win";
   el.dataset.id = w.id;
@@ -2267,39 +2322,47 @@ function buildWindow(w){
   const title = el.querySelector(".win-title");
   title.addEventListener("pointerdown", ev => {
     if (ev.target.closest("button") || isMobile()) return;   // móvil: sin arrastre (scroll táctil)
-    const vp = safeViewportRect(innerWidth, innerHeight);
-    const proj = planViewportLayout([w], vp)[0];   // Fase 2: origen = rect realmente visible, no el crudo guardado (evita salto al empezar a arrastrar)
-    const sx = ev.clientX - proj.x, sy = ev.clientY - proj.y;
+    const proj = planViewportLayout([w], worldViewport())[0];   // origen = rect realmente visible (mundo), no el crudo guardado
+    // N2 hito 1: agarre en coords de MUNDO — así el autoscroll (que cambia scrollTop sin emitir
+    // pointermove) puede recalcular la posición con la última posición conocida del puntero.
+    const g0 = clientToWorld(ev.clientX, ev.clientY);
+    const gwx = g0.x - proj.x, gwy = g0.y - proj.y;
     let overTab = null, dragging = false, dragRects = null, ghost = null, raw = null, target = null;
+    let lastM = ev, af = null;
     const cleanup = () => {   // única puerta de salida: up, cancel y pérdida de foco pasan por aquí
-      removeEventListener("pointermove", move); removeEventListener("pointerup", up);
+      removeEventListener("pointermove", onMove); removeEventListener("pointerup", up);
       removeEventListener("pointercancel", cancel); removeEventListener("blur", cancel);
+      if (af){ cancelAnimationFrame(af); af = null; }
       el.style.pointerEvents = "";
       if (ghost){ ghost.remove(); ghost = null; }
       if (overTab){ overTab.classList.remove("drop-target"); overTab = null; }
+      updateDeskHeight();   // el lienzo vuelve a su alto por contenido (el drag pudo extenderlo)
     };
     const tabUnder = (cx, cy) => {   // pestaña bajo el cursor (la sombra no intercepta: pointer-events none)
       const under = document.elementFromPoint(cx, cy);
       const tab = under && under.closest(".space-tab");
       return (tab && +tab.dataset.i !== state.active) ? tab : null;
     };
-    const move = m => {
+    const applyMove = () => {   // recalcula ventana + sombra con lastM; lo llama el puntero Y el autoscroll
+      const m = lastM;
       if (!dragging){
-        // umbral: hasta que hay movimiento real no es arrastre (así el clic/doble clic siguen funcionando)
         if (Math.abs(m.clientX - ev.clientX) + Math.abs(m.clientY - ev.clientY) < 4) return;
         dragging = true;
-        // imán contra lo realmente visible: proyectado al viewport Y sin las ventanas ocultas por el filtro de etiqueta (Codex H6)
+        // imán contra lo realmente visible (mundo), sin las ventanas ocultas por el filtro de etiqueta (Codex H6)
         dragRects = planViewportLayout(state.widgets.filter(x =>
-          x.id !== w.id && !(tagFilter && !(x.tags || []).includes(tagFilter))), vp);
+          x.id !== w.id && !(tagFilter && !(x.tags || []).includes(tagFilter))), worldViewport());
         el.style.pointerEvents = "none";   // para que elementFromPoint vea la barra bajo el cursor
         ghost = document.createElement("div");
         ghost.className = "drop-ghost";
         ghost.style.zIndex = Math.max(1, (w.z || 2) - 1);   // justo bajo la ventana arrastrada (va inflada: el borde asoma)
         $("#desktop").appendChild(ghost);
+        af = requestAnimationFrame(edgeScroll);   // el autoscroll arranca con el arrastre real
       }
-      raw = { x: Math.max(0, Math.min(m.clientX - sx, innerWidth - LAYOUT.visMarginX)),
-              y: Math.max(0, Math.min(m.clientY - sy, innerHeight - LAYOUT.dragClampBottom)) };
+      const world = clientToWorld(m.clientX, m.clientY);
+      raw = { x: Math.max(0, Math.min(world.x - gwx, deskViewW() - LAYOUT.visMarginX)),
+              y: Math.max(0, Math.min(world.y - gwy, LAYOUT.worldMax - LAYOUT.dragClampBottom)) };
       el.style.left = raw.x + "px"; el.style.top = raw.y + "px";   // solo DOM: el estado no se toca hasta soltar
+      setDeskHeight(Math.max(desktopWorldHeight(), raw.y + proj.h + LAYOUT.packingMargin));   // crece el lienzo para poder seguir bajando
       const cand = tabUnder(m.clientX, m.clientY);
       if (cand !== overTab){
         if (overTab) overTab.classList.remove("drop-target");
@@ -2307,7 +2370,7 @@ function buildWindow(w){
         if (overTab) overTab.classList.add("drop-target");
       }
       target = m.altKey ? { ...raw, snapped: false, overlap: false }   // Alt = libre, como siempre
-        : dragTarget(raw.x, raw.y, proj.w, proj.h, dragRects, innerWidth, innerHeight, LAYOUT.snapThr, LAYOUT.snapGap);
+        : dragTarget(raw.x, raw.y, proj.w, proj.h, dragRects, deskViewW(), LAYOUT.worldMax, LAYOUT.snapThr, LAYOUT.snapGap);
       if (m.altKey || overTab){ ghost.style.display = "none"; }   // Alt o pestaña bajo el cursor: sin sombra, en este mismo evento
       else {
         ghost.style.display = "";
@@ -2315,6 +2378,20 @@ function buildWindow(w){
         ghost.style.width = (proj.w + 6) + "px"; ghost.style.height = (proj.h + 6) + "px";
         ghost.classList.toggle("over", target.overlap);   // el solape se muestra, no se resuelve (Codex C6)
       }
+    };
+    const onMove = m => { lastM = m; applyMove(); };
+    const edgeScroll = () => {   // autoscroll: el scroll programático NO emite pointermove → recalculamos a mano
+      af = requestAnimationFrame(edgeScroll);
+      if (!dragging) return;
+      const d = deskEl(), r = d.getBoundingClientRect(), b = LAYOUT.edgeBand;
+      const fromTop = lastM.clientY - r.top, fromBot = (r.top + d.clientHeight) - lastM.clientY;
+      let dv = 0;
+      if (fromTop < b) dv = -Math.ceil((b - fromTop) / 4);
+      else if (fromBot < b) dv = Math.ceil((b - fromBot) / 4);
+      if (!dv) return;
+      const before = d.scrollTop;
+      d.scrollTop = Math.max(0, Math.min(d.scrollTop + dv, d.scrollHeight - d.clientHeight));
+      if (d.scrollTop !== before) applyMove();   // el lienzo se desplazó bajo un puntero quieto: reencaja
     };
     const up = m => {
       const wasDragging = dragging;
@@ -2328,14 +2405,14 @@ function buildWindow(w){
       el.classList.add("settling");
       el.style.left = w.x + "px"; el.style.top = w.y + "px";
       setTimeout(() => el.classList.remove("settling"), 200);
-      markDirty();
+      markDirty(); updateDeskHeight();
     };
     const cancel = () => {   // pointercancel o pérdida de foco: la transacción nunca llegó a existir
       const wasDragging = dragging;
       cleanup();
       if (wasDragging){ el.style.left = proj.x + "px"; el.style.top = proj.y + "px"; }
     };
-    addEventListener("pointermove", move); addEventListener("pointerup", up);
+    addEventListener("pointermove", onMove); addEventListener("pointerup", up);
     addEventListener("pointercancel", cancel); addEventListener("blur", cancel);
   });
 
@@ -2343,7 +2420,7 @@ function buildWindow(w){
   el.querySelector(".win-resize").addEventListener("pointerdown", ev => {
     if (isMobile()) return;
     ev.preventDefault(); ev.stopPropagation();
-    const proj = planViewportLayout([w], safeViewportRect(innerWidth, innerHeight))[0];   // Fase 2: origen visible, no el crudo
+    const proj = planViewportLayout([w], worldViewport())[0];   // origen visible sobre el lienzo, no el crudo
     const sw = proj.w - ev.clientX, sh = proj.h - ev.clientY;
     const t = WTYPES[w.type];
     let moved = false;
@@ -2353,7 +2430,7 @@ function buildWindow(w){
       w.h = Math.max(t.minH || 140, sh + m.clientY);
       el.style.width = w.w + "px"; el.style.height = w.h + "px";
     };
-    const up = () => { removeEventListener("pointermove", move); removeEventListener("pointerup", up); if (moved) markDirty(); };   // clic sin mover el asa no debe escribir (revisión Codex 2026-07-10)
+    const up = () => { removeEventListener("pointermove", move); removeEventListener("pointerup", up); if (moved){ markDirty(); updateDeskHeight(); } };   // clic sin mover el asa no debe escribir (revisión Codex 2026-07-10)
     addEventListener("pointermove", move); addEventListener("pointerup", up);
   });
   return el;
@@ -4402,11 +4479,12 @@ function wireUI(){
     if (isMobile() || !state) return;
     state.widgets.forEach(w => {
       if (!w.max) return;
-      const m = maxRect(innerWidth, innerHeight);
+      const m = maxRect(deskViewW(), innerHeight, deskEl().scrollTop);
       w.x = m.x; w.y = m.y; w.w = m.w; w.h = m.h;
       const el = document.querySelector(`.win[data-id="${w.id}"]`);
       if (el){ el.style.left = m.x + "px"; el.style.top = m.y + "px"; el.style.width = m.w + "px"; el.style.height = m.h + "px"; }
     });
+    updateDeskHeight();   // el cambio de tamaño altera el alto lógico del lienzo
   });
   // aviso de tareas: cada clic salta a la siguiente tarea vencida o de hoy
   $("#tb-tasks").addEventListener("click", () => {
