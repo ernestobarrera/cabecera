@@ -351,6 +351,53 @@ if (!src.includes('maxRect(deskViewW(), innerHeight, deskEl().scrollTop)')) thro
 if (!src.match(/scroll-lock/) || !src.includes('function updateScrollLock(')) throw new Error('regresión: una ventana maximizada ya no bloquea el scroll del escritorio (riesgo 3 del gate)');
 console.log('OK contrato cliente↔mundo (conversiones, tope, arrastre en mundo, autoscroll con recálculo, maximizar bloquea scroll)');
 
+// --- N2 hito 2: planificadores puros de columnas guiadas (spec v1.1, gate de Codex) ---
+eval('globalThis.columnGuides = ' + pickFn('columnGuides', 'vw, opts'));
+eval('globalThis.planLaneInsert = ' + pickFn('planLaneInsert', 'rects, lane, pointerY, dragged, opts'));
+// nº de carriles por ancho (fórmula con gutters descontados, P1): 2/3/4 según COL_MIN=320
+const nCols = vw => columnGuides(vw).n;
+if (nCols(800) !== 2) throw new Error('columnGuides: 800px debería dar 2 carriles, da ' + nCols(800));
+if (nCols(1024) !== 3) throw new Error('columnGuides: 1024px debería dar 3 carriles, da ' + nCols(1024));
+if (nCols(1366) !== 4) throw new Error('columnGuides: 1366px debería dar 4 carriles, da ' + nCols(1366));
+if (nCols(640) !== 2) throw new Error('columnGuides: mínimo 2 carriles aunque sea estrecho');
+if (nCols(6000) !== 4) throw new Error('columnGuides: máximo 4 carriles aunque sea muy ancho');
+// los carriles no se solapan y caben en el ancho útil
+for (const vw of [800, 1024, 1366, 1920, 2560, 3840]){
+  const g = columnGuides(vw);
+  for (let i = 1; i < g.cols.length; i++)
+    if (g.cols[i].x < g.cols[i-1].x + g.cols[i-1].w) throw new Error('columnGuides: carriles solapados en ' + vw);
+  if (g.cols[g.cols.length-1].x + g.cols[g.cols.length-1].w > vw) throw new Error('columnGuides: la cuadrícula se sale del ancho en ' + vw);
+}
+// COL_MAX: en 4K los carriles no superan 520 y la cuadrícula queda centrada
+const g4k = columnGuides(3840);
+if (g4k.cols.some(c => c.w > 520)) throw new Error('columnGuides: 4K supera COL_MAX=520');
+const marginL = g4k.cols[0].x, marginR = 3840 - (g4k.cols[3].x + g4k.cols[3].w);
+if (Math.abs(marginL - marginR) > 2) throw new Error('columnGuides: la cuadrícula 4K no está centrada (márgenes ' + marginL + ' vs ' + marginR + ')');
+console.log('OK columnGuides (2/3/4 por ancho, sin solape, COL_MAX y centrado en 4K)');
+
+// planLaneInsert: carril vacío → la ventana entra en pointerY, nadie se mueve
+const lane = { x: 100, w: 320 };
+let r = planLaneInsert([], lane, 300, { h: 200 });
+if (r.moved.length || !r.placed || r.placed.x !== 100 || r.placed.w !== 320) throw new Error('planLaneInsert: carril vacío no coloca la ventana con el ancho del carril');
+// insertar ARRIBA de un miembro: ese miembro baja por debajo (reflow en cascada)
+const m1 = { id: 'm1', x: 110, y: 60, w: 300, h: 200 };   // miembro del carril (mayoría dentro)
+r = planLaneInsert([m1], lane, 40, { h: 180 });
+if (!r.moved.find(x => x.id === 'm1')) throw new Error('planLaneInsert: insertar arriba no desplaza al miembro de abajo');
+if (r.moved[0].y < r.placed.y + r.placed.h) throw new Error('planLaneInsert: el desplazado no queda por debajo de la ventana insertada');
+// insertar DEBAJO del miembro (hueco libre): el miembro NO se mueve (solo lo imprescindible)
+r = planLaneInsert([m1], lane, 600, { h: 180 });
+if (r.moved.length) throw new Error('planLaneInsert: mover innecesariamente un miembro que ya tenía hueco');
+// obstáculo que cruza el carril (widget ancho, <50% dentro): NO se mueve; la ventana salta por debajo
+const wide = { id: 'W', x: 300, y: 50, w: 800, h: 150 };   // solo ~150/800 dentro del carril → obstáculo fijo
+r = planLaneInsert([wide], lane, 60, { h: 180 });
+if (r.moved.find(x => x.id === 'W')) throw new Error('planLaneInsert: un obstáculo fijo (widget que cruza) no debe moverse');
+if (r.placed.y < wide.y + wide.h) throw new Error('planLaneInsert: la ventana no saltó por debajo del obstáculo fijo');
+// reflow en cascada respeta el hueco existente entre dos miembros holgados
+const a = { id: 'a', x: 110, y: 40, w: 300, h: 150 }, b = { id: 'b', x: 110, y: 700, w: 300, h: 150 };
+r = planLaneInsert([a, b], lane, 60, { h: 120 });
+if (r.moved.find(x => x.id === 'b')) throw new Error('planLaneInsert: empuja un miembro lejano que no hacía falta mover');
+console.log('OK planLaneInsert (carril vacío, reflow hacia abajo, hueco respetado, obstáculo fijo esquivado)');
+
 // --- gradientAvgHex: acento de pestaña calculado del degradado de fondo (sin canvas, barato) ---
 eval('globalThis.gradientAvgHex = ' + pickFn('gradientAvgHex', 'css'));
 if (gradientAvgHex('linear-gradient(135deg,#1b2735 0%,#090a0f 100%)') !== '#121922') throw new Error('gradientAvgHex: promedio de dos tonos incorrecto');

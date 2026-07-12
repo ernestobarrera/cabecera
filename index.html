@@ -2473,6 +2473,67 @@ function dragTarget(x, y, ww, hh, rects, vw, vh, thr = 8, gap = 14){
   const rect = { x: tx, y: ty, w: ww, h: hh };
   return { x: tx, y: ty, snapped: tx !== x || ty !== y, overlap: rects.some(r => overlapsRect(rect, r, 0)) };
 }
+/* N2 hito 2 — planificadores PUROS de columnas guiadas (spec-layout-n2-columnas v1.1).
+   columnGuides: carriles deterministas del viewport (2/3/4 según ancho; COL_MIN/COL_MAX del gate).
+   Fórmula con gutters descontados (P1). En 4K la cuadrícula se centra y los márgenes son zona N1.
+   Autocontenida (defaults literales dentro; los tests la evalúan sin `LAYOUT`). */
+function columnGuides(vw, opts){
+  const o = opts || {};
+  const pad = o.pad ?? 12, gutter = o.gutter ?? 14, colMin = o.colMin ?? 320, colMax = o.colMax ?? 520;
+  const usable = Math.max(colMin, vw - pad * 2);
+  const n = Math.max(2, Math.min(4, Math.floor((usable + gutter) / (colMin + gutter))));
+  let w = (usable - (n - 1) * gutter) / n;
+  let x0 = pad;
+  if (w > colMax){   // ancho máximo: en 4K, 4 carriles a ancho libre agigantarían widgets pequeños
+    w = colMax;
+    const gridW = n * w + (n - 1) * gutter;
+    x0 = Math.round((vw - gridW) / 2);   // cuadrícula centrada; márgenes exteriores = zona N1 libre
+  }
+  const cols = [];
+  for (let i = 0; i < n; i++) cols.push({ x: Math.round(x0 + i * (w + gutter)), w: Math.round(w) });
+  return { cols, gutter, n };
+}
+/* planLaneInsert: inserta un widget en un carril y calcula el reflow local hacia abajo (P3).
+   rects = otros widgets (mundo, con id/x/y/w/h). lane = {x,w}. pointerY = y de mundo del puntero.
+   dragged = {h} (la ventana toma el ancho del carril; conserva su alto). Devuelve
+   { placed:{x,y,w,h}, moved:[{id,y}] } — moved SOLO los miembros que de verdad se desplazan.
+   Miembro = mayoría (>50%) de su ancho en el carril (móvil); si cruza el carril sin mayoría =
+   OBSTÁCULO FIJO (nunca se mueve; los móviles saltan por debajo). Reflow en cascada
+   newY = max(oldY, previousBottom + gutter), aprovechando huecos. Puro, autocontenido (tests). */
+function planLaneInsert(rects, lane, pointerY, dragged, opts){
+  const o = opts || {};
+  const gutter = o.gutter ?? 14, laneTop = o.pad ?? 12;
+  const overlapX = r => Math.min(r.x + r.w, lane.x + lane.w) - Math.max(r.x, lane.x);
+  const members = [], obstacles = [];
+  for (const r of rects){
+    const ov = overlapX(r);
+    if (ov <= 0) continue;                 // no toca el carril: irrelevante
+    if (ov > r.w / 2) members.push(r);     // mayoría de su ancho dentro → miembro móvil del carril
+    else obstacles.push(r);                // cruza el carril sin mayoría → obstáculo fijo
+  }
+  members.sort((a, b) => a.y - b.y);
+  const obs = obstacles.slice().sort((a, b) => a.y - b.y);
+  // inserción: antes del primer miembro cuyo centro vertical queda por debajo del puntero
+  let idx = members.findIndex(m => m.y + m.h / 2 > pointerY);
+  if (idx < 0) idx = members.length;
+  const seq = members.slice();
+  seq.splice(idx, 0, { inserted: true, h: dragged.h, y: Math.max(laneTop, pointerY - dragged.h / 2) });
+  const moved = [];
+  let placed = null, cursor = laneTop;   // cursor = borde inferior por encima del cual no cabe nada
+  for (const item of seq){
+    let y = Math.max(item.y, cursor);
+    let bumped = true;                    // salta cualquier obstáculo fijo que se interponga
+    while (bumped){
+      bumped = false;
+      for (const ob of obs)
+        if (y < ob.y + ob.h + gutter && y + item.h + gutter > ob.y){ y = Math.max(y, ob.y + ob.h + gutter); bumped = true; }
+    }
+    if (item.inserted) placed = { x: lane.x, y, w: lane.w, h: item.h };
+    else if (y !== item.y) moved.push({ id: item.id, y });
+    cursor = y + item.h + gutter;
+  }
+  return { placed, moved };
+}
 /* Planificador PURO del hueco para un widget nuevo (N0, Codex H3): mismo escaneo y fallback
    que siempre (arriba-izquierda, pasos de `step`). rects = ocupación actual (alturas visuales).
    Autocontenida para tests: referencia solo overlapsRect. */
