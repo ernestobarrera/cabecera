@@ -233,6 +233,12 @@ body{font-family:var(--font); color:var(--text); background:#10131a}
 .btn.primary:hover{filter:brightness(1.1)}
 .btn.danger{color:var(--danger); border-color:rgba(243,108,108,.4)}
 .hint{font-size:12px; color:var(--text-dim); margin-top:10px; line-height:1.5}
+/* diálogo propio del sitio (sustituye confirm/prompt nativos): coherente con el resto de modales */
+.dlg-panel{width:min(440px, 92vw)}
+.dlg-field{display:flex; flex-direction:column; gap:5px; font-size:12px; color:var(--text-dim); margin-top:12px}
+.dlg-inp{padding:9px 12px; border-radius:10px; border:1px solid var(--border-soft); background:rgba(255,255,255,.05); color:var(--text); font-family:var(--font); font-size:14px}
+.dlg-inp:focus{outline:none; border-color:var(--accent)}
+.dlg-actions{justify-content:flex-end}
 
 /* fondos */
 .wp-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-top:8px}
@@ -333,7 +339,8 @@ ul.plain{list-style:none}
 .todo-search{flex:1; min-width:110px; padding:5px 9px; border-radius:8px; border:1px solid var(--border-soft); background:rgba(255,255,255,.05); color:var(--text); font-family:var(--font); font-size:13px}
 .todo-search:focus{border-color:var(--accent); outline:none}
 .task-edit{flex:1; min-width:80px; padding:5px 8px; border-radius:8px; border:1px solid var(--accent);
-  background:rgba(0,0,0,.24); color:var(--text); font-family:var(--font); font-size:13px}
+  background:rgba(0,0,0,.24); color:var(--text); font-family:var(--font); font-size:13px;
+  resize:none; overflow:hidden; line-height:1.4; max-height:50vh; outline:none}
 .it-del:hover{color:var(--danger); background:rgba(243,108,108,.12)}
 .it-edit:hover,.it-up:hover,.it-down:hover,.it-drag:hover{color:var(--text); background:rgba(255,255,255,.1)}
 .todo-it.drag-over{outline:1px solid rgba(90,169,247,.55); background:var(--accent-soft)}
@@ -1083,7 +1090,7 @@ function syncUI(mode, txt){
    reaparece) y si Recargar está activo. El descarte ✕ vive solo en memoria de la sesión.
    Demora asumida: la CDN de Pages puede servir la versión vieja hasta ~10 min aun con
    no-store (gobierna la caché del navegador, no la CDN); para pestañas de días, irrelevante. */
-const APP_VERSION = "0.29.0";
+const APP_VERSION = "0.30.0";
 let newVersionDetected = null;   // versión superior detectada; detiene futuras consultas
 let verDismissed = false;        // ✕: solo esta sesión — nunca persistido en disco
 let verCheckInflight = false;    // sin consultas concurrentes
@@ -1145,6 +1152,54 @@ function startVersionChecks(){
   setInterval(checkVersion, 6 * 3600000);   // red de seguridad para una pestaña siempre visible
 }
 
+/* ---------- Diálogo modal propio del sitio (una sola base para todos) ----------
+   Sustituye los diálogos nativos del navegador (feos e incoherentes) por un overlay
+   con el MISMO estilo que el resto de modales. Devuelve una promesa: Esc = cancelar,
+   Enter = acción primaria, foco atrapado, restaura el foco previo al cerrar. */
+function siteDialog(opts){
+  return new Promise(resolve => {
+    const prev = document.activeElement;
+    const ov = document.createElement("div");
+    ov.className = "overlay open dlg";
+    const inputs = (opts.fields || []).map(f =>
+      `<label class="dlg-field"><span>${esc(f.label || "")}</span><input class="dlg-inp" data-k="${esc(f.key)}" value="${esc(f.value == null ? "" : String(f.value))}" placeholder="${esc(f.placeholder || "")}"></label>`).join("");
+    ov.innerHTML = `<div class="modal dlg-panel" role="dialog" aria-modal="true">
+      ${opts.title ? `<h2>${esc(opts.title)}</h2>` : ""}
+      ${opts.message ? `<p>${esc(opts.message)}</p>` : ""}
+      ${inputs}
+      <div class="row dlg-actions"></div></div>`;
+    const done = val => { document.removeEventListener("keydown", onKey, true); ov.remove(); if (prev && prev.focus) try{ prev.focus(); }catch(e){} resolve(val); };
+    const collect = () => { const out = {}; ov.querySelectorAll(".dlg-inp").forEach(i => out[i.dataset.k] = i.value); return out; };
+    const bar = ov.querySelector(".dlg-actions");
+    opts.actions.forEach(a => {
+      const b = document.createElement("button");
+      b.className = "btn" + (a.primary ? " primary" : "") + (a.danger ? " danger" : "");
+      b.textContent = a.label;
+      b.addEventListener("click", () => done(a.collect ? collect() : a.value));
+      bar.appendChild(b);
+    });
+    const primary = opts.actions.find(a => a.primary || a.danger) || opts.actions[opts.actions.length - 1];
+    const cancelVal = (opts.actions.find(a => a.cancel) || {}).value;
+    const onKey = e => {
+      if (e.key === "Escape"){ e.preventDefault(); e.stopPropagation(); done(cancelVal); }
+      else if (e.key === "Enter"){ e.preventDefault(); done(primary.collect ? collect() : primary.value); }
+    };
+    document.addEventListener("keydown", onKey, true);
+    document.body.appendChild(ov);
+    const first = ov.querySelector(".dlg-inp") || bar.querySelector(".btn.primary") || bar.querySelector(".btn");
+    setTimeout(() => { if (first){ first.focus(); if (first.select) first.select(); } }, 30);
+  });
+}
+function dlgConfirm(message, o = {}){
+  return siteDialog({ title: o.title || "", message,
+    actions: [{ label: o.cancelLabel || "Cancelar", value: false, cancel: true },
+              { label: o.okLabel || "Aceptar", value: true, primary: !o.danger, danger: !!o.danger }] });
+}
+function dlgPrompt(fields, o = {}){   // fields: [{ key, label, value, placeholder }] → objeto de valores, o null si cancela
+  return siteDialog({ title: o.title || "", fields,
+    actions: [{ label: o.cancelLabel || "Cancelar", value: null, cancel: true },
+              { label: o.okLabel || "Guardar", collect: true, primary: true }] });
+}
 function plainClone(x){ return JSON.parse(JSON.stringify(x)); }
 function pushTrash(kind, label, data){
   if (!Array.isArray(state.trash)) state.trash = [];
@@ -1602,9 +1657,10 @@ async function applyPack(pack, opts = {}){
   if (!np){ toast("El pack no es válido o no contiene widgets utilizables", true); return false; }
   const add = !!opts.add;
   const ask = opts.ask !== false;
-  if (ask && !confirm(add
+  if (ask && !(await dlgConfirm(add
     ? `¿Añadir los ${np.widgets.length} widgets del pack "${np.name || "sin nombre"}" a tu escritorio actual?`
-    : `¿Aplicar el pack "${np.name || "sin nombre"}"?\nSustituye tu escritorio actual (se guarda una copia local automática).`)) return false;
+    : `¿Aplicar el pack "${np.name || "sin nombre"}"? Sustituye tu escritorio actual (se guarda una copia local automática).`,
+    { title: add ? "Añadir pack" : "Aplicar pack", okLabel: add ? "Añadir" : "Aplicar" }))) return false;
   try{ localStorage.setItem("cabecera-backup-antes-pack", JSON.stringify(state)); }catch(e){}
   if (add){
     // se suma al escritorio activo, con un pequeño desplazamiento para verse; el fondo no se toca
@@ -1774,11 +1830,11 @@ function renameSpace(i, tab){
     renderTabs();
   });
 }
-function deleteSpace(i){
+async function deleteSpace(i){
   if (state.spaces.length <= 1){ toast("No puedes eliminar el único espacio", true); return; }
   const sp = state.spaces[i]; if (!sp) return;
   const n = (sp.widgets || []).length;
-  if (!confirm(`¿Eliminar el espacio "${sp.name}"${n ? " y sus " + n + " widgets" : ""}?`)) return;
+  if (!(await dlgConfirm(`¿Eliminar el espacio «${sp.name}»${n ? " y sus " + n + " widgets" : ""}?`, { title: "Eliminar espacio", okLabel: "Eliminar", danger: true }))) return;
   const copy = plainClone(sp);
   state.spaces.splice(i, 1);
   state.active = nextActiveAfterDelete(state.active, i, state.spaces.length);
@@ -2359,11 +2415,11 @@ function buildWindow(w){
   const title = el.querySelector(".win-title");
   title.addEventListener("pointerdown", ev => {
     if (ev.target.closest("button") || isMobile()) return;   // móvil: sin arrastre (scroll táctil)
-    const proj = planViewportLayout([w], worldViewport())[0];   // origen = rect realmente visible (mundo), no el crudo guardado
+    let proj = planViewportLayout([w], worldViewport())[0];   // origen = rect realmente visible (mundo), no el crudo guardado
     // N2 hito 1: agarre en coords de MUNDO — así el autoscroll (que cambia scrollTop sin emitir
     // pointermove) puede recalcular la posición con la última posición conocida del puntero.
     const g0 = clientToWorld(ev.clientX, ev.clientY);
-    const gwx = g0.x - proj.x, gwy = g0.y - proj.y;
+    let gwx = g0.x - proj.x, gwy = g0.y - proj.y;
     let overTab = null, dragging = false, dragRects = null, ghost = null, raw = null, target = null;
     let lastM = ev, af = null;
     let curLane = null, laneRes = null, bands = null, hinted = [];   // N2: carril activo, plan de reflow, bandas, pistas
@@ -2389,6 +2445,15 @@ function buildWindow(w){
       if (!dragging){
         if (Math.abs(m.clientX - ev.clientX) + Math.abs(m.clientY - ev.clientY) < 4) return;
         dragging = true;
+        if (w.max){   // arrastrar una maximizada la RESTAURA a su tamaño previo (como en el SO); el puntero se queda en la barra
+          const p = w.max; delete w.max;
+          const rw = Math.max(LAYOUT.minW, +p.w || proj.w), rh = Math.max(LAYOUT.minH, +p.h || proj.h);
+          gwx = Math.min(gwx / proj.w * rw, rw - 24); gwy = Math.min(gwy, 28);   // agarre proporcional en la barra restaurada
+          proj = { x: proj.x, y: proj.y, w: rw, h: rh };
+          w.w = rw; w.h = rh;
+          el.style.width = rw + "px"; el.style.height = rh + "px";
+          updateScrollLock();   // ya no hay ninguna maximizada: el scroll vuelve
+        }
         // imán contra lo realmente visible (mundo), sin las ventanas ocultas por el filtro de etiqueta (Codex H6)
         dragRects = planViewportLayout(state.widgets.filter(x =>
           x.id !== w.id && !(tagFilter && !(x.tags || []).includes(tagFilter))), worldViewport());
@@ -2877,19 +2942,24 @@ function bodyTodo(w, el){
     const span = li.querySelector(".t");
     if (!span || li.querySelector(".task-edit")) return;
     const old = it.t;
-    const input = document.createElement("input");
+    // textarea (no input de una línea): una tarea larga se ve ENTERA al editarla, ajustando el alto al texto
+    const input = document.createElement("textarea");
     input.className = "task-edit";
+    input.rows = 1;
     input.value = old;
+    const grow = () => { input.style.height = "auto"; input.style.height = input.scrollHeight + "px"; };
     span.replaceWith(input);
+    grow();
     const commit = () => {
-      const v = input.value.trim();
+      const v = input.value.replace(/\s+$/, "").trim();
       if (!v){ it.t = old; paint(); return; }
       it.t = v;
       paint(); markDirty();
     };
     const cancel = () => { it.t = old; paint(); };
+    input.addEventListener("input", grow);
     input.addEventListener("keydown", e => {
-      if (e.key === "Enter") commit();
+      if (e.key === "Enter" && !e.shiftKey){ e.preventDefault(); commit(); }   // Enter confirma; Mayús+Enter no aplica (la tarea es una línea lógica)
       if (e.key === "Escape") cancel();
     });
     input.addEventListener("blur", commit);
@@ -3092,14 +3162,17 @@ function bodyLinks(w, el){
           <button class="it-act cp" title="Copiar URL">⧉</button>
           <button class="it-del" title="Borrar">✕</button>`;
         d.addEventListener("click", e => { if (!e.target.closest("button")) window.open(l.u, "_blank", "noopener"); });
-        d.querySelector(".ed").addEventListener("click", () => {
-          const nt = prompt("Título:", l.t); if (nt === null) return;
-          let nu = prompt("URL:", l.u); if (nu === null) return;
-          nu = nu.trim();
+        d.querySelector(".ed").addEventListener("click", async () => {
+          const r = await dlgPrompt(
+            [{ key: "t", label: "Título", value: l.t, placeholder: "Nombre del enlace" },
+             { key: "u", label: "URL", value: l.u, placeholder: "https://…" }],
+            { title: "Editar enlace" });
+          if (r === null) return;
+          let nu = (r.u || "").trim();
           if (nu && !/^[a-z]+:\/\//i.test(nu)) nu = "https://" + nu;
           try{ const x = new URL(nu); if (x.protocol !== "https:" && x.protocol !== "http:") throw 0; }
           catch(e){ toast("URL no válida", true); return; }
-          l.t = nt.trim() || l.t; l.u = nu;
+          l.t = (r.t || "").trim() || l.t; l.u = nu;
           paint(); markDirty();
         });
         d.querySelector(".cp").addEventListener("click", async () => { await navigator.clipboard.writeText(l.u); toast("URL copiada"); });
@@ -3709,10 +3782,10 @@ function renderCustomMarkTypes(){
     if (e.target.closest(".rmc")) return;   // la ✕ conserva su gesto de borrado
     $("#mark-type").value = ch.dataset.id;
   }));
-  box.querySelectorAll(".rmc").forEach(b => b.addEventListener("click", () => {
+  box.querySelectorAll(".rmc").forEach(b => b.addEventListener("click", async () => {
     const id = b.dataset.id;
     // el ✕ del chip elimina el CONCEPTO (no la marca del día): confirmar evita perderlo sin querer
-    if (!confirm(`¿Quitar el concepto «${markTypeLabel(id)}» de tu lista? Sus marcas pasan a «Otro». Para quitar solo la marca de un día, usa el ✕ de la lista de marcas.`)) return;
+    if (!(await dlgConfirm(`¿Quitar el concepto «${markTypeLabel(id)}» de tu lista? Sus marcas pasan a «Otro». Para quitar solo la marca de un día, usa el ✕ de la lista de marcas.`, { title: "Quitar concepto", okLabel: "Quitar", danger: true }))) return;
     state.customMarkTypes = customMarkTypes().filter(c => c.id !== id);
     if (!state.customMarkTypes.length) delete state.customMarkTypes;
     (state.calendarMarks || []).forEach(m => { if (m.type === id) m.type = "otro"; });
@@ -4343,6 +4416,9 @@ function parseCapture(line, now, customIds){
       ? `${y}-${String(mo).padStart(2, "0")}-${String(d).padStart(2, "0")}` : null;
   };
   if (/^https?:\/\/\S+$/.test(s)) return { kind: "link", url: s, title: "" };
+  // dominio pelado sin esquema (p. ej. «ejemplo.com», «www.foo.org/x»): conservador — sin espacios ni
+  // @, con TLD de 2+ letras — se ofrece como enlace https:// (ambas superficies exigen clic, no auto-aplica)
+  if (/^(?=.{4,})([a-z0-9-]+\.)+[a-z]{2,24}(\/\S*)?$/i.test(s)) return { kind: "link", url: "https://" + s, title: "" };
   const m = s.match(/^([tncev]) +(\S[\s\S]*)$/);
   if (!m) return null;
   const rest = m[2].trim();
@@ -4777,17 +4853,17 @@ function wireUI(){
     a.download = "cabecera-copia-" + new Date().toISOString().slice(0, 10) + ".json";
     a.click(); URL.revokeObjectURL(a.href);
   });
-  $("#act-restore").addEventListener("click", () => {
+  $("#act-restore").addEventListener("click", async () => {
     closeMenu();
-    const tryRestore = (key, label) => {
+    const tryRestore = async (key, label) => {
       const raw = localStorage.getItem(key);
       if (!raw) return false;
-      if (!confirm(label)) return false;
+      if (!(await dlgConfirm(label, { title: "Restaurar copia", okLabel: "Restaurar" }))) return false;
       try{ setState(JSON.parse(raw), "restore"); renderAll(); markDirty(); toast("Copia restaurada"); return true; }
       catch(e){ toast("Esa copia está dañada", true); return false; }
     };
-    if (tryRestore("cabecera-backup-antes-pack", "¿Restaurar el escritorio previo al último pack aplicado?")) return;
-    if (tryRestore("cabecera-local-prev", "¿Restaurar tu escritorio local previo a conectar la carpeta?")) return;
+    if (await tryRestore("cabecera-backup-antes-pack", "¿Restaurar el escritorio previo al último pack aplicado?")) return;
+    if (await tryRestore("cabecera-local-prev", "¿Restaurar tu escritorio local previo a conectar la carpeta?")) return;
     toast("No hay copias locales guardadas");
   });
   $("#act-import").addEventListener("click", () => {

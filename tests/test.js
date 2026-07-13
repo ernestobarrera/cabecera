@@ -423,6 +423,18 @@ if (!src.includes('!x.max &&')) throw new Error('regresión: los maximizados ya 
 if (!html.includes('.lane-band') || !html.includes('reflow-hint')) throw new Error('regresión: falta el CSS de bandas de carril o de la pista de reflow');
 console.log('OK integración de carriles (useLanes, reflow en drag, Deshacer que verifica, transacción con ancho+z-order, maximizados fuera, CSS)');
 
+// --- v0.30.0: sistema de modales propio + 3 fixes (invariantes de fuente) ---
+// ningún diálogo NATIVO debe quedar (confirm/prompt feos e incoherentes)
+if (/[^a-zA-Z.]confirm\s*\(/.test(src)) throw new Error('regresión: vuelve un confirm() nativo (usar dlgConfirm)');
+if (/[^a-zA-Z.]prompt\s*\(/.test(src)) throw new Error('regresión: vuelve un prompt() nativo (usar dlgPrompt)');
+if (!src.includes('function siteDialog(') || !src.includes('function dlgConfirm(') || !src.includes('function dlgPrompt(')) throw new Error('regresión: falta el sistema de modales propio');
+if (!html.includes('.dlg-panel') || !html.includes('.dlg-inp')) throw new Error('regresión: falta el CSS del diálogo propio');
+// bug maximizada+arrastre: arrastrar una maximizada la restaura
+if (!src.includes('const p = w.max; delete w.max;') || !src.match(/dragging = true;[\s\S]{0,120}if \(w\.max\)/)) throw new Error('regresión: arrastrar una maximizada ya no la restaura al iniciar el arrastre');
+// bug edición larga: el editor de tarea es un textarea que crece, no un input de una línea
+if (!src.includes('createElement("textarea")') || !src.match(/input\.style\.height = input\.scrollHeight/)) throw new Error('regresión: el editor de tarea vuelve a ser de una sola línea');
+console.log('OK v0.30.0 (modales propios sin confirm/prompt nativos, maximizada se restaura al arrastrar, edición de tarea multilínea)');
+
 // --- gradientAvgHex: acento de pestaña calculado del degradado de fondo (sin canvas, barato) ---
 eval('globalThis.gradientAvgHex = ' + pickFn('gradientAvgHex', 'css'));
 if (gradientAvgHex('linear-gradient(135deg,#1b2735 0%,#090a0f 100%)') !== '#121922') throw new Error('gradientAvgHex: promedio de dos tonos incorrecto');
@@ -470,6 +482,12 @@ eq(parseCapture('https://pubmed.ncbi.nlm.nih.gov/', NOW), { kind: 'link', url: '
 eq(parseCapture('e https://x.com Mi sitio', NOW), { kind: 'link', url: 'https://x.com', title: 'Mi sitio' }, 'enlace con título');
 if (parseCapture('e sin-url', NOW) !== null) throw new Error('e sin URL debe ser null');
 if (parseCapture('javascript:alert(1)', NOW) !== null) throw new Error('URI no http(s) debe ser null');
+// dominio pelado sin esquema → enlace https:// (fix del bug «enlaces desde Ctrl+K no aparecen»)
+eq(parseCapture('ejemplo.com', NOW), { kind: 'link', url: 'https://ejemplo.com', title: '' }, 'dominio pelado → https://');
+eq(parseCapture('www.hospital.org/citas', NOW), { kind: 'link', url: 'https://www.hospital.org/citas', title: '' }, 'dominio con subdominio y ruta');
+if (parseCapture('a.b', NOW) !== null) throw new Error('TLD de 1 letra no debe ser enlace');
+if (parseCapture('hola mundo.com', NOW) !== null) throw new Error('con espacios no es dominio pelado');
+if (parseCapture('correo@dominio.com', NOW) !== null) throw new Error('un email (@) no debe ser enlace');
 
 // marcas de calendario (estricto: fecha inválida o concepto no canónico → null)
 eq(parseCapture('v 12-16/8', NOW), { kind: 'mark', start: '2026-08-12', end: '2026-08-16', type: 'vacaciones' }, 'rango vacaciones por defecto');

@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.30.0] - 2026-07-13
+
+- **Ventanas de diálogo propias, coherentes en todo el sitio.** Los avisos de confirmación (borrar un espacio, quitar un concepto, aplicar un pack, restaurar una copia) y el editor de enlaces dejan de usar los cuadros grises del navegador y pasan a un diálogo propio, con el mismo estilo minimalista que el resto de la aplicación: Esc cancela, Enter confirma la acción principal. El **editor de enlaces** es ahora un formulario con Título y URL en un solo diálogo (antes eran dos ventanitas seguidas del navegador).
+- **Arrastrar una ventana maximizada la restaura.** Antes había que restaurarla (❐) antes de moverla; ahora, si agarras una ventana maximizada por su barra y la arrastras, se restaura sola a su tamaño anterior y la llevas donde quieras — como en el escritorio del sistema.
+- **Editar una tarea larga muestra el texto entero.** El editor de una tarea pasa de una sola línea a un cuadro que crece con el texto, así ves y editas toda la tarea aunque sea larga (Enter confirma).
+- **Enlaces desde Ctrl+K aunque no escribas `https://`.** Si tecleas un dominio a secas (`hospitalclinic.org`, `www.sitio.com/ruta`), la paleta lo reconoce y lo ofrece como enlace, completándolo con `https://`. Antes solo funcionaba con la dirección completa o el prefijo `e`.
+
 ## [0.29.0] - 2026-07-12
 
 - **Columnas guiadas al arrastrar (estilo Netvibes).** Al mover una ventana, el escritorio muestra 2, 3 o 4 carriles según el ancho de tu pantalla; la ventana se **encaja en el carril** donde apuntes (adopta el ancho del carril y conserva su alto) y las ventanas que estaban debajo **hacen sitio hacia abajo** — se marcan mientras arrastras para que veas quién se moverá. Al soltar, todo se reordena en un solo paso con un botón **Deshacer**. La tecla **Alt** sigue dejando la ventana libre, exactamente donde la sueltes, sin carriles. Los carriles solo aparecen durante el arrastre; una vez dentro de un carril te mantienes en él hasta que cruzas de lleno al vecino (sin parpadeos). Con un filtro de etiqueta activo se mantiene el comportamiento anterior (no se recolocan ventanas ocultas). Es el nivel 1 de tu idea; construido sobre revisión externa del diseño, con tests y prueba en navegador.
