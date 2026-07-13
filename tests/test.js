@@ -398,6 +398,14 @@ r = planLaneInsert([a, b], lane, 60, { h: 120 });
 if (r.moved.find(x => x.id === 'b')) throw new Error('planLaneInsert: empuja un miembro lejano que no hacía falta mover');
 console.log('OK planLaneInsert (carril vacío, reflow hacia abajo, hueco respetado, obstáculo fijo esquivado)');
 
+// planMaxBottom + rechazo P4 (hallazgo Codex sobre v0.29.0): el drop se rechaza si el reflow sale del lienzo
+eval('globalThis.planMaxBottom = ' + pickFn('planMaxBottom', 'placed, draggedH, movedRects'));
+if (planMaxBottom({ x: 0, y: 100, w: 300 }, 200, []) !== 300) throw new Error('planMaxBottom: solo la ventana insertada');
+if (planMaxBottom({ x: 0, y: 100, w: 300 }, 200, [{ y: 500, h: 400 }]) !== 900) throw new Error('planMaxBottom: debe tomar el miembro más bajo');
+if (planMaxBottom({ x: 0, y: 11900, w: 300 }, 200, []) <= 12000) throw new Error('planMaxBottom: un plan que se sale debe superar worldMax');
+if (!src.match(/if \(planMaxBottom\(laneRes\.placed, proj\.h, movedRects\) > LAYOUT\.worldMax\)/)) throw new Error('regresión P4: la transacción de carril ya no rechaza un reflow fuera del lienzo');
+console.log('OK planMaxBottom + rechazo P4 (drop rechazado sin clamp si el reflow excede worldMax)');
+
 // --- N2 hito 3: selección de carril con histéresis (pura) + invariantes de integración ---
 eval('globalThis.pickLane = ' + pickFn('pickLane', 'guides, x, prev'));
 const gg = columnGuides(1366);   // 4 carriles

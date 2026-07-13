@@ -1090,7 +1090,7 @@ function syncUI(mode, txt){
    reaparece) y si Recargar está activo. El descarte ✕ vive solo en memoria de la sesión.
    Demora asumida: la CDN de Pages puede servir la versión vieja hasta ~10 min aun con
    no-store (gobierna la caché del navegador, no la CDN); para pestañas de días, irrelevante. */
-const APP_VERSION = "0.30.0";
+const APP_VERSION = "0.30.1";
 let newVersionDetected = null;   // versión superior detectada; detiene futuras consultas
 let verDismissed = false;        // ✕: solo esta sesión — nunca persistido en disco
 let verCheckInflight = false;    // sin consultas concurrentes
@@ -2538,6 +2538,14 @@ function buildWindow(w){
         // Transacción de carril: ventana (adopta ancho de carril) + miembros del reflow + z-order,
         // todo en un commit; snapshot antes/después con spaceId para un Deshacer que NO pisa una sync remota.
         const sp = state.spaces[state.active];
+        // P4 (hallazgo de Codex sobre v0.29.0): si el reflow saliera del área máxima del lienzo,
+        // se RECHAZA el drop entero — nunca clamp silencioso ni transacción parcial (spec §3.5).
+        const movedRects = laneRes.moved.map(mv => { const wg = sp.widgets.find(x => x.id === mv.id); return { y: mv.y, h: wg ? widgetRect(wg).h : 0 }; });
+        if (planMaxBottom(laneRes.placed, proj.h, movedRects) > LAYOUT.worldMax){
+          el.style.left = proj.x + "px"; el.style.top = proj.y + "px";   // vuelve a su sitio, sin tocar el estado
+          toast("No cabe ahí: el reflow se saldría del área máxima. Prueba más arriba.", true);
+          return;
+        }
         const items = [{ id: w.id, before: { x: w.x, y: w.y, w: w.w }, after: null }];
         w.x = laneRes.placed.x; w.y = laneRes.placed.y; w.w = laneRes.placed.w; w.z = ++zTop;
         items[0].after = { x: w.x, y: w.y, w: w.w };
@@ -2687,6 +2695,13 @@ function planLaneInsert(rects, lane, pointerY, dragged, opts){
     cursor = y + item.h + gutter;
   }
   return { placed, moved };
+}
+// Borde inferior de un plan de carril (ventana insertada + miembros desplazados). PURO.
+// Sirve para el rechazo P4: si supera LAYOUT.worldMax, el drop se rechaza entero (nunca clamp).
+function planMaxBottom(placed, draggedH, movedRects){
+  let b = (placed ? placed.y + draggedH : 0);
+  for (const r of (movedRects || [])) b = Math.max(b, r.y + r.h);
+  return b;
 }
 /* Planificador PURO del hueco para un widget nuevo (N0, Codex H3): mismo escaneo y fallback
    que siempre (arriba-izquierda, pasos de `step`). rects = ocupación actual (alturas visuales).

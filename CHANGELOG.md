@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.30.1] - 2026-07-13
+
+- **Corrección interna del arrastre por columnas:** si al soltar una ventana en una columna el reacomodo de las de debajo se saliera del área máxima del escritorio, la operación se cancela con un aviso («no cabe ahí») en vez de dejar alguna ventana fuera de alcance. Caso extremo (columnas muy cargadas cerca del fondo); no cambia el uso normal. Con test.
+
 ## [0.30.0] - 2026-07-13
 
 - **Ventanas de diálogo propias, coherentes en todo el sitio.** Los avisos de confirmación (borrar un espacio, quitar un concepto, aplicar un pack, restaurar una copia) y el editor de enlaces dejan de usar los cuadros grises del navegador y pasan a un diálogo propio, con el mismo estilo minimalista que el resto de la aplicación: Esc cancela, Enter confirma la acción principal. El **editor de enlaces** es ahora un formulario con Título y URL en un solo diálogo (antes eran dos ventanitas seguidas del navegador).
