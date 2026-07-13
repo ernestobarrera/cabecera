@@ -353,6 +353,7 @@ console.log('OK contrato cliente↔mundo (conversiones, tope, arrastre en mundo,
 
 // --- N2 hito 2: planificadores puros de columnas guiadas (spec v1.1, gate de Codex) ---
 eval('globalThis.columnGuides = ' + pickFn('columnGuides', 'vw, opts'));
+eval('globalThis.laneClassify = ' + pickFn('laneClassify', 'rects, lane'));   // fuente única de pertenencia, usada por planLaneInsert
 eval('globalThis.planLaneInsert = ' + pickFn('planLaneInsert', 'rects, lane, pointerY, dragged, opts'));
 // nº de carriles por ancho (fórmula con gutters descontados, P1): 2/3/4 según COL_MIN=320
 const nCols = vw => columnGuides(vw).n;
@@ -403,7 +404,7 @@ eval('globalThis.planMaxBottom = ' + pickFn('planMaxBottom', 'placed, draggedH, 
 if (planMaxBottom({ x: 0, y: 100, w: 300 }, 200, []) !== 300) throw new Error('planMaxBottom: solo la ventana insertada');
 if (planMaxBottom({ x: 0, y: 100, w: 300 }, 200, [{ y: 500, h: 400 }]) !== 900) throw new Error('planMaxBottom: debe tomar el miembro más bajo');
 if (planMaxBottom({ x: 0, y: 11900, w: 300 }, 200, []) <= 12000) throw new Error('planMaxBottom: un plan que se sale debe superar worldMax');
-if (!src.match(/if \(planMaxBottom\(laneRes\.placed, proj\.h, movedRects\) > LAYOUT\.worldMax\)/)) throw new Error('regresión P4: la transacción de carril ya no rechaza un reflow fuera del lienzo');
+if (!src.match(/if \(planMaxBottom\(placed, proj\.h, movedRects\) > LAYOUT\.worldMax\)/)) throw new Error('regresión P4: la transacción de carril ya no rechaza un reflow fuera del lienzo');
 console.log('OK planMaxBottom + rechazo P4 (drop rechazado sin clamp si el reflow excede worldMax)');
 
 // --- N2 hito 3: selección de carril con histéresis (pura) + invariantes de integración ---
@@ -421,15 +422,77 @@ const g4 = columnGuides(3840);
 if (pickLane(g4, 20, null) !== null) throw new Error('pickLane: el margen exterior de 4K debería ser N1 (null)');
 console.log('OK pickLane (entra al cuerpo, histéresis en el gutter, cambia al vecino, margen exterior = N1)');
 
+// --- N2 pulido: alignedLane (activación por x+w) + planColumnCompact (compactación de origen) ---
+eval('globalThis.alignedLane = ' + pickFn('alignedLane', 'rect, guides, tol'));
+const gAl = columnGuides(1366);
+const c1 = gAl.cols[1];
+if (alignedLane({ x: c1.x, y: 40, w: c1.w }, gAl) !== 1) throw new Error('alignedLane: no reconoce un rect alineado al carril');
+if (alignedLane({ x: c1.x + 1, y: 40, w: c1.w - 1 }, gAl) !== 1) throw new Error('alignedLane: la tolerancia de redondeo (2px) debería aceptar');
+// un widget colocado a mano que solo SOLAPA mayoritariamente el carril pero no coincide en x/w → null
+if (alignedLane({ x: c1.x + 40, y: 40, w: c1.w }, gAl) !== null) throw new Error('alignedLane: un widget desalineado (solo solapa) no debe contar como columna');
+if (alignedLane({ x: c1.x, y: 40, w: c1.w + 60 }, gAl) !== null) throw new Error('alignedLane: distinto ancho no debe contar como columna');
+console.log('OK alignedLane (activa solo con x+w coincidentes, tolerancia de redondeo, ignora los solo-solapan)');
+
+eval('globalThis.planColumnCompact = ' + pickFn('planColumnCompact', 'members, obstacles, holeTop, above, opts'));
+// hueco en medio: los de debajo suben a cerrarlo; los de encima no se tocan
+const cm = planColumnCompact(
+  [{ id: 'top', y: 12, h: 150 }, { id: 'mid', y: 500, h: 150 }, { id: 'low', y: 700, h: 150 }],
+  [], 400, 162, { gutter: 14, laneTop: 12 });
+if (cm.moved.find(m => m.id === 'top')) throw new Error('planColumnCompact: no debe mover un miembro por ENCIMA del hueco');
+const midMv = cm.moved.find(m => m.id === 'mid');
+if (!midMv || midMv.y !== 176) throw new Error('planColumnCompact: el primer miembro bajo el hueco no sube a cerrar el gap (esperado 176, ' + (midMv && midMv.y) + ')');
+// sin hueco real (ya compactado) → nadie se mueve
+const cm2 = planColumnCompact([{ id: 'a', y: 12, h: 150 }, { id: 'b', y: 176, h: 150 }], [], 176, 162, { gutter: 14, laneTop: 12 });
+if (cm2.moved.length) throw new Error('planColumnCompact: no debe mover si ya está compactado');
+// nunca baja un miembro (solo hacia arriba)
+const cm3 = planColumnCompact([{ id: 'x', y: 300, h: 100 }], [], 250, 500, { gutter: 14, laneTop: 12 });
+if (cm3.moved.length) throw new Error('planColumnCompact: no debe BAJAR un miembro (solo compacta hacia arriba)');
+console.log('OK planColumnCompact (sube los de debajo del hueco, respeta los de encima, no baja, no toca lo ya compacto)');
+
+// planLaneRepack (mismo carril) + planResizeReflow (§B)
+eval('globalThis.planLaneRepack = ' + pickFn('planLaneRepack', 'members, obstacles, insert, opts'));
+const rp = planLaneRepack([{ id: 'a', y: 12, h: 150 }, { id: 'b', y: 800, h: 150 }], [], { y: 200, h: 120 }, { gutter: 14, laneTop: 12, laneX: 100, laneW: 320 });
+if (!rp.placed || rp.placed.x !== 100 || rp.placed.w !== 320) throw new Error('planLaneRepack: no coloca el insertado con el ancho del carril');
+if (rp.placed.y !== 176) throw new Error('planLaneRepack: el insertado no se empaqueta tras el primero (esperado 176, ' + rp.placed.y + ')');
+if (!rp.moved.find(m => m.id === 'b')) throw new Error('planLaneRepack: no compacta el miembro lejano hacia arriba');
+eval('globalThis.planResizeReflow = ' + pickFn('planResizeReflow', 'members, obstacles, anchor, opts'));
+// el ancla crece y empuja al de debajo que colisiona
+const rr = planResizeReflow([{ id: 'lo', y: 300, h: 150 }], [], { y: 40, h: 320 }, { gutter: 14 });
+if (!rr.moved.find(m => m.id === 'lo') || rr.moved[0].y !== 374) throw new Error('planResizeReflow: el de abajo no baja al crecer el ancla (esperado 374, ' + (rr.moved[0] && rr.moved[0].y) + ')');
+// si hay hueco de sobra, no se mueve nadie
+const rr2 = planResizeReflow([{ id: 'lo', y: 800, h: 150 }], [], { y: 40, h: 200 }, { gutter: 14 });
+if (rr2.moved.length) throw new Error('planResizeReflow: mueve un miembro que no colisionaba');
+console.log('OK planLaneRepack + planResizeReflow (reempaquetado de columna, empuje al crecer, respeta huecos)');
+
+// columnGuides override configurable (§columnas-configurables): effectiveN = auto ? autoFit : min(requestedN, autoFit)
+if (columnGuides(1366, { forceN: 2 }).n !== 2) throw new Error('columnGuides: forceN=2 debería dar 2 carriles');
+if (columnGuides(1366, { forceN: 3 }).n !== 3) throw new Error('columnGuides: forceN=3 debería dar 3 carriles');
+if (columnGuides(800, { forceN: 4 }).n !== 2) throw new Error('columnGuides: forceN=4 en 800px se recorta a lo que cabe (2)');
+if (columnGuides(1366, { forceN: 9 }).n !== 4) throw new Error('columnGuides: forceN inválido → auto (4 en 1366)');
+console.log('OK columnGuides override (forceN respeta el clamp por viewport, inválido → auto)');
+
 // invariantes de fuente de la integración:
 if (!src.includes('const useLanes = !m.altKey && !overTab && !tagFilter')) throw new Error('regresión: los carriles ya no se desactivan con Alt/pestaña/filtro de etiqueta');
 if (!src.match(/laneRes = planLaneInsert\(others, lane/)) throw new Error('regresión: el arrastre ya no calcula el reflow del carril');
 if (!src.includes('function undoLayout(')) throw new Error('regresión: falta el Deshacer de la transacción de carril');
-if (!src.match(/if \(wg\.x === it\.after\.x && wg\.y === it\.after\.y && wg\.w === it\.after\.w\)/)) throw new Error('regresión: el Deshacer ya no verifica el estado antes de restaurar (pisaría una sync remota)');
-if (!src.match(/w\.x = laneRes\.placed\.x; w\.y = laneRes\.placed\.y; w\.w = laneRes\.placed\.w; w\.z = \+\+zTop/)) throw new Error('regresión: la transacción de carril ya no incluye ancho de carril + z-order (riesgo 1 del gate)');
+if (!src.includes('if (sameRect(rectSnap(wg), it.after))')) throw new Error('regresión: el Deshacer ya no verifica el rect completo antes de restaurar (pisaría una sync remota)');
+if (!src.match(/wg\.x = it\.before\.x; wg\.y = it\.before\.y; wg\.w = it\.before\.w; wg\.h = it\.before\.h/)) throw new Error('regresión: el Deshacer no restaura la geometría completa x/y/w/h');
+if (!src.match(/w\.x = placed\.x; w\.y = placed\.y; w\.w = placed\.w; w\.z = \+\+zTop/)) throw new Error('regresión: la transacción de carril ya no incluye ancho de carril + z-order (riesgo 1 del gate)');
 if (!src.includes('!x.max &&')) throw new Error('regresión: los maximizados ya no se excluyen del reflow de carril');
 if (!html.includes('.lane-band') || !html.includes('reflow-hint')) throw new Error('regresión: falta el CSS de bandas de carril o de la pista de reflow');
 console.log('OK integración de carriles (useLanes, reflow en drag, Deshacer que verifica, transacción con ancho+z-order, maximizados fuera, CSS)');
+
+// --- N2 pulido v0.31.0: integración (compactación, resize-reflow, FLIP, columnas configurables) ---
+if (!src.includes('const originLane = alignedLane(startRect, guides)')) throw new Error('regresión: el drop ya no detecta la columna de origen para compactar');
+if (!src.match(/originLane !== null && originLane === destLane/)) throw new Error('regresión: falta el plan único para el mismo carril (planLaneRepack)');
+if (!src.includes('planColumnCompact(oc.members, oc.obstacles, startRect.y, above, copt)')) throw new Error('regresión: el drop cruzando columnas ya no compacta el origen');
+if (!src.includes('flipLayout(items,')) throw new Error('regresión: el drop ya no usa la animación FLIP');
+if (!src.includes('function flipLayout(') || !src.includes('prefers-reduced-motion: reduce')) throw new Error('regresión: FLIP sin respetar reduced-motion');
+if (!src.includes('planResizeReflow(cls.members, cls.obstacles')) throw new Error('regresión: el resize ya no dispara reflow de su columna');
+if (!src.match(/w\.h > beforeSnap\.h && laneA !== null && laneA === laneB/)) throw new Error('regresión: el resize-reflow ya no exige crecer en alto y misma alineación antes/después');
+if (!src.includes('function colsOpt(') || !src.match(/sp\.settings\.cols !== 2 && sp\.settings\.cols !== 3 && sp\.settings\.cols !== 4/)) throw new Error('regresión: columnas configurables sin saneo estricto');
+if (!src.includes('if (isMobile()){ b.style.display = "none"')) throw new Error('regresión: el control de columnas no se oculta en móvil');
+console.log('OK pulido v0.31.0 (compactación origen/mismo-carril, resize-reflow con guardas, FLIP reduced-motion, columnas configurables saneadas + móvil)');
 
 // --- v0.30.0: sistema de modales propio + 3 fixes (invariantes de fuente) ---
 // ningún diálogo NATIVO debe quedar (confirm/prompt feos e incoherentes)

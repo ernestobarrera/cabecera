@@ -141,6 +141,15 @@ body{font-family:var(--font); color:var(--text); background:#10131a}
   background:rgba(0,0,0,.28); color:var(--text); font:inherit; outline:none}
 #space-add{background:transparent; border:1px dashed var(--border-soft); color:var(--text-dim); border-radius:9px; width:28px; height:28px; cursor:pointer; flex-shrink:0; font-size:15px; line-height:1}
 #space-add:hover{border-color:var(--accent); color:var(--text)}
+#tb-cols{background:rgba(255,255,255,.05); border:1px solid var(--border-soft); color:var(--text-dim); border-radius:9px; height:28px; padding:0 9px; cursor:pointer; flex-shrink:0; font-size:12px; font-family:var(--font); white-space:nowrap}
+#tb-cols:hover{border-color:var(--accent); color:var(--text)}
+#tb-cols.on{color:var(--text); border-color:var(--accent)}
+#cols-menu{position:fixed; z-index:940; display:none; flex-direction:column; gap:2px; padding:5px;
+  background:var(--glass); border:1px solid var(--border); border-radius:11px; box-shadow:var(--shadow)}
+#cols-menu.open{display:flex}
+#cols-menu button{border:none; background:none; color:var(--text); font-family:var(--font); font-size:13px; text-align:left; padding:7px 14px; border-radius:7px; cursor:pointer; white-space:nowrap}
+#cols-menu button:hover{background:rgba(255,255,255,.09)}
+#cols-menu button.sel{color:var(--accent); font-weight:600}
 .tb-item{display:flex; align-items:center; gap:6px; padding:5px 10px; border-radius:8px; font-size:12.5px; color:var(--text-dim); cursor:pointer; border:1px solid transparent}
 .tb-item:hover{background:rgba(255,255,255,.07); color:var(--text)}
 #tb-inbox{display:none}
@@ -596,6 +605,7 @@ ul.plain{list-style:none}
   <button id="btn-fold" title="Plegar / desplegar todos los widgets">⊟</button>
   <div id="tb-spaces" title="Espacios (escritorios): clic para cambiar, doble clic para renombrar, arrastra para reordenar"></div>
   <button id="space-add" title="Nuevo espacio">＋</button>
+  <button id="tb-cols" title="Columnas guía al arrastrar (solo afecta a los siguientes arrastres; no recoloca lo existente)">▤ Auto</button>
   <div id="tb-spacer"></div>
   <div class="tb-item" id="tb-filter" title="Filtro por etiqueta activo" style="display:none"></div>
   <div class="tb-item" id="tb-tasks" title="Tareas vencidas o que vencen hoy"></div>
@@ -604,6 +614,8 @@ ul.plain{list-style:none}
   <div class="tb-item" id="tb-sync" title="Estado de sincronización"><span class="dot"></span><span id="tb-sync-t">—</span></div>
   <div class="tb-item" id="tb-clock"><div><div class="h"></div><div class="d"></div></div></div>
 </div>
+
+<div id="cols-menu" role="menu" aria-label="Columnas guía"></div>
 
 <div id="menu">
   <input id="menu-search" type="text" placeholder="Buscar en todo y ejecutar…  ( Ctrl+K )" autocomplete="off">
@@ -951,6 +963,8 @@ function sanitizeState(s){
     sp.id = (typeof sp.id === "string" && sp.id) ? sp.id.slice(0, 64) : "s_" + uid();
     sp.name = (typeof sp.name === "string") ? sp.name.slice(0, 80) : "Escritorio";
     if (!sp.settings || typeof sp.settings !== "object") sp.settings = { wallpaper: { type: "preset", value: 0 } };
+    // override de columnas guía: solo 2|3|4; cualquier otra cosa (incl. "auto") → sin override
+    if (sp.settings.cols !== 2 && sp.settings.cols !== 3 && sp.settings.cols !== 4) delete sp.settings.cols;
     sp.widgets = (Array.isArray(sp.widgets) ? sp.widgets : []).filter(w => w && WTYPES[w.type]).map(sanitizeWidgetShape);
     return sp;
   });
@@ -1090,7 +1104,7 @@ function syncUI(mode, txt){
    reaparece) y si Recargar está activo. El descarte ✕ vive solo en memoria de la sesión.
    Demora asumida: la CDN de Pages puede servir la versión vieja hasta ~10 min aun con
    no-store (gobierna la caché del navegador, no la CDN); para pestañas de días, irrelevante. */
-const APP_VERSION = "0.30.1";
+const APP_VERSION = "0.31.0";
 let newVersionDetected = null;   // versión superior detectada; detiene futuras consultas
 let verDismissed = false;        // ✕: solo esta sesión — nunca persistido en disco
 let verCheckInflight = false;    // sin consultas concurrentes
@@ -1778,6 +1792,7 @@ function renderAll(){
   renderDock();
   renderTaskChip();
   repaintPill();
+  renderColsControl();
   updateScrollLock();
   updateDeskHeight();
 }
@@ -2139,16 +2154,79 @@ function autoArrangeWidgets(silent){   // adaptador impuro: aplica el plan al es
   renderAll(); markDirty();
   if (!silent) toast("Widgets autoordenados");
 }
-// Deshacer de una transacción de carril (N2): restaura SOLO los widgets que sigan tal como los dejó
-// el gesto (misma x/y/w «después»). Si una sincronización remota los cambió, no se pisan (riesgo 3).
+// Geometría completa de un widget para snapshots de transacción (x/y/w/h): base común de todas las
+// transacciones de layout (drop de columna, compactación, resize-reflow) — estándar único (Codex).
+function rectSnap(w){ return { x: +w.x || 0, y: +w.y || 0, w: +w.w || 0, h: +w.h || 0 }; }
+function sameRect(a, b){ return !!a && !!b && a.x === b.x && a.y === b.y && a.w === b.w && a.h === b.h; }
+// Override del nº de carriles por espacio (§columnas-configurables): auto | 2 | 3 | 4.
+function colsOpt(){
+  const c = state && state.settings && state.settings.cols;
+  return (c === 2 || c === 3 || c === 4) ? { forceN: c } : {};
+}
+function colsLabel(){   // muestra el valor y, si el viewport lo recorta, «4→2 en esta pantalla»
+  const c = state && state.settings && state.settings.cols;
+  if (c !== 2 && c !== 3 && c !== 4) return "Auto";
+  const eff = columnGuides(deskViewW(), { forceN: c }).n;
+  return eff < c ? (c + "→" + eff) : String(c);
+}
+function renderColsControl(){
+  const b = document.getElementById("tb-cols"); if (!b) return;
+  if (isMobile()){ b.style.display = "none"; closeColsMenu(); return; }   // móvil: sin arrastre ni carriles → control oculto (preferencia conservada)
+  b.style.display = "";
+  const c = state && state.settings && state.settings.cols;
+  b.textContent = "▤ " + colsLabel();
+  b.classList.toggle("on", c === 2 || c === 3 || c === 4);
+}
+function closeColsMenu(){ const m = document.getElementById("cols-menu"); if (m) m.classList.remove("open"); }
+function openColsMenu(){
+  const b = document.getElementById("tb-cols"), menu = document.getElementById("cols-menu");
+  if (!b || !menu) return;
+  if (menu.classList.contains("open")){ closeColsMenu(); return; }
+  const cur = (state.settings && state.settings.cols) || "auto";
+  const opts = [["auto", "Auto (según el ancho)"], ["2", "2 columnas"], ["3", "3 columnas"], ["4", "4 columnas"]];
+  menu.innerHTML = opts.map(([v, l]) => `<button data-v="${v}"${(String(cur) === v) ? ' class="sel"' : ""}>${esc(l)}</button>`).join("");
+  menu.querySelectorAll("button").forEach(btn => btn.addEventListener("click", () => {
+    const v = btn.dataset.v;
+    if (v === "auto") delete state.settings.cols; else state.settings.cols = +v;
+    closeColsMenu(); renderColsControl(); markDirty();
+  }));
+  menu.classList.add("open");   // mostrar para medir, luego posicionar encima del botón
+  const r = b.getBoundingClientRect();
+  menu.style.left = Math.max(8, Math.min(r.left, innerWidth - menu.offsetWidth - 8)) + "px";
+  menu.style.top = (r.top - menu.offsetHeight - 6) + "px";
+  setTimeout(() => document.addEventListener("pointerdown", function onDoc(e){ if (!menu.contains(e.target) && e.target !== b) closeColsMenu(); else document.addEventListener("pointerdown", onDoc, { once: true }); }, { once: true }), 0);
+}
+// Animación FLIP breve al reubicar (§C): captura rects «antes», aplica el render (que recrea las
+// ventanas en su sitio final), y hace «viajar» a cada afectada desde su posición previa. Respeta
+// prefers-reduced-motion (sin animación). Nunca en vivo durante el arrastre.
+function flipLayout(items, apply){
+  const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (reduce || !items || !items.length){ apply(); return; }
+  const before = new Map();
+  for (const it of items){ const e = document.querySelector(`.win[data-id="${it.id}"]`); if (e) before.set(it.id, e.getBoundingClientRect()); }
+  apply();
+  for (const it of items){
+    const b = before.get(it.id); if (!b) continue;
+    const e = document.querySelector(`.win[data-id="${it.id}"]`); if (!e) continue;
+    const a = e.getBoundingClientRect();
+    const dx = b.left - a.left, dy = b.top - a.top;
+    if (!dx && !dy) continue;
+    e.style.transition = "none";
+    e.style.transform = `translate(${dx}px, ${dy}px)`;
+    requestAnimationFrame(() => { e.style.transition = "transform .16s ease"; e.style.transform = ""; });
+    setTimeout(() => { if (e.isConnected){ e.style.transition = ""; e.style.transform = ""; } }, 240);
+  }
+}
+// Deshacer de una transacción de layout: restaura SOLO los widgets que sigan EXACTAMENTE como los
+// dejó el gesto (rect «después» completo). Si una sincronización remota los cambió, no se pisan.
 function undoLayout(snap){
   const sp = state.spaces.find(s => s.id === snap.spaceId);
   if (!sp) return;
   for (const it of snap.items){
     const wg = sp.widgets.find(x => x.id === it.id);
     if (!wg || !it.after) continue;
-    if (wg.x === it.after.x && wg.y === it.after.y && wg.w === it.after.w){
-      wg.x = it.before.x; wg.y = it.before.y; wg.w = it.before.w;
+    if (sameRect(rectSnap(wg), it.after)){
+      wg.x = it.before.x; wg.y = it.before.y; wg.w = it.before.w; wg.h = it.before.h;
     }
   }
   renderAll(); markDirty();
@@ -2416,6 +2494,7 @@ function buildWindow(w){
   title.addEventListener("pointerdown", ev => {
     if (ev.target.closest("button") || isMobile()) return;   // móvil: sin arrastre (scroll táctil)
     let proj = planViewportLayout([w], worldViewport())[0];   // origen = rect realmente visible (mundo), no el crudo guardado
+    const startRect = { x: proj.x, y: proj.y, w: proj.w, h: proj.h };   // §A: rect de partida para detectar la columna de ORIGEN (si estaba alineado)
     // N2 hito 1: agarre en coords de MUNDO — así el autoscroll (que cambia scrollTop sin emitir
     // pointermove) puede recalcular la posición con la última posición conocida del puntero.
     const g0 = clientToWorld(ev.clientX, ev.clientY);
@@ -2480,7 +2559,7 @@ function buildWindow(w){
       const useLanes = !m.altKey && !overTab && !tagFilter;
       clearHints();
       if (useLanes){
-        const guides = columnGuides(deskViewW());
+        const guides = columnGuides(deskViewW(), colsOpt());
         if (!bands){   // dibuja las bandas una vez, detrás de las ventanas (inertes)
           bands = document.createElement("div"); bands.id = "lane-guides";
           for (const c of guides.cols){ const b = document.createElement("div"); b.className = "lane-band"; b.style.left = c.x + "px"; b.style.width = c.w + "px"; bands.appendChild(b); }
@@ -2538,27 +2617,49 @@ function buildWindow(w){
         // Transacción de carril: ventana (adopta ancho de carril) + miembros del reflow + z-order,
         // todo en un commit; snapshot antes/después con spaceId para un Deshacer que NO pisa una sync remota.
         const sp = state.spaces[state.active];
-        // P4 (hallazgo de Codex sobre v0.29.0): si el reflow saliera del área máxima del lienzo,
-        // se RECHAZA el drop entero — nunca clamp silencioso ni transacción parcial (spec §3.5).
-        const movedRects = laneRes.moved.map(mv => { const wg = sp.widgets.find(x => x.id === mv.id); return { y: mv.y, h: wg ? widgetRect(wg).h : 0 }; });
-        if (planMaxBottom(laneRes.placed, proj.h, movedRects) > LAYOUT.worldMax){
+        const guides = columnGuides(deskViewW(), colsOpt());
+        const destLane = curLane, dest = guides.cols[destLane];
+        const originLane = alignedLane(startRect, guides);   // §A: solo si el widget venía alineado a un carril
+        const others = planViewportLayout(state.widgets.filter(x =>
+          x.id !== w.id && !x.max && !(tagFilter && !(x.tags || []).includes(tagFilter))), worldViewport());
+        const copt = { gutter: LAYOUT.snapGap, pad: LAYOUT.viewportPad, laneTop: LAYOUT.viewportPad };
+        // Plan: mismo carril → reempaquetado ÚNICO (Codex); distinto → insertar en destino + compactar origen.
+        let placed, moved;
+        if (originLane !== null && originLane === destLane){
+          const cls = laneClassify(others, dest);
+          const r = planLaneRepack(cls.members, cls.obstacles, { y: laneRes.placed.y, h: proj.h }, { ...copt, laneX: dest.x, laneW: dest.w });
+          placed = r.placed; moved = r.moved;
+        } else {
+          placed = laneRes.placed; moved = laneRes.moved.slice();
+          if (originLane !== null){   // compacta la columna que PIERDE el widget (el hueco queda en el origen)
+            const oc = laneClassify(others, guides.cols[originLane]);
+            const aboveBottoms = oc.members.filter(mm => mm.y + mm.h <= startRect.y).map(mm => mm.y + mm.h);
+            const above = aboveBottoms.length ? Math.max(...aboveBottoms) : LAYOUT.viewportPad;
+            const comp = planColumnCompact(oc.members, oc.obstacles, startRect.y, above, copt);
+            for (const mv of comp.moved) if (!moved.find(x => x.id === mv.id)) moved.push(mv);   // dedupe por id
+          }
+        }
+        // P4 (Codex): si el plan combinado saliera del área máxima, se RECHAZA el drop entero (sin clamp).
+        const movedRects = moved.map(mv => { const wg = sp.widgets.find(x => x.id === mv.id); return { y: mv.y, h: wg ? widgetRect(wg).h : 0 }; });
+        if (planMaxBottom(placed, proj.h, movedRects) > LAYOUT.worldMax){
           el.style.left = proj.x + "px"; el.style.top = proj.y + "px";   // vuelve a su sitio, sin tocar el estado
-          toast("No cabe ahí: el reflow se saldría del área máxima. Prueba más arriba.", true);
+          toast("No cabe ahí: el reacomodo se saldría del área máxima. Prueba más arriba.", true);
           return;
         }
-        const items = [{ id: w.id, before: { x: w.x, y: w.y, w: w.w }, after: null }];
-        w.x = laneRes.placed.x; w.y = laneRes.placed.y; w.w = laneRes.placed.w; w.z = ++zTop;
-        items[0].after = { x: w.x, y: w.y, w: w.w };
-        for (const mv of laneRes.moved){
+        // Transacción única con geometría COMPLETA (x/y/w/h) para todos los afectados + z-order.
+        const items = [{ id: w.id, before: rectSnap(w), after: null }];
+        w.x = placed.x; w.y = placed.y; w.w = placed.w; w.z = ++zTop;
+        items[0].after = rectSnap(w);
+        for (const mv of moved){
           const wg = sp.widgets.find(x => x.id === mv.id);
           if (!wg) continue;
-          const before = { x: wg.x, y: wg.y, w: wg.w };
+          const before = rectSnap(wg);
           wg.y = mv.y;
-          items.push({ id: wg.id, before, after: { x: wg.x, y: wg.y, w: wg.w } });
+          items.push({ id: wg.id, before, after: rectSnap(wg) });
         }
-        renderAll(); markDirty();
+        flipLayout(items, () => { renderAll(); markDirty(); });   // §C: animación FLIP breve al soltar
         const snap = { spaceId: sp.id, items };
-        toastAction(laneRes.moved.length ? "Reubicado en columna (los demás hicieron sitio)." : "Reubicado en columna.", "Deshacer", () => undoLayout(snap));
+        toastAction(moved.length ? "Reubicado en columna (los demás se acomodaron)." : "Reubicado en columna.", "Deshacer", () => undoLayout(snap));
         return;
       }
       const t = m.altKey ? raw : target;   // Alt se evalúa también al soltar (Codex C1)
@@ -2583,6 +2684,7 @@ function buildWindow(w){
     if (isMobile()) return;
     ev.preventDefault(); ev.stopPropagation();
     const proj = planViewportLayout([w], worldViewport())[0];   // origen visible sobre el lienzo, no el crudo
+    const beforeSnap = rectSnap(w);   // §B: estado previo al gesto (para reflow, rechazo P4 y Deshacer)
     const sw = proj.w - ev.clientX, sh = proj.h - ev.clientY;
     const t = WTYPES[w.type];
     let moved = false;
@@ -2592,7 +2694,34 @@ function buildWindow(w){
       w.h = Math.max(t.minH || 140, sh + m.clientY);
       el.style.width = w.w + "px"; el.style.height = w.h + "px";
     };
-    const up = () => { removeEventListener("pointermove", move); removeEventListener("pointerup", up); if (moved){ markDirty(); updateDeskHeight(); } };   // clic sin mover el asa no debe escribir (revisión Codex 2026-07-10)
+    const up = () => {
+      removeEventListener("pointermove", move); removeEventListener("pointerup", up);
+      if (!moved) return;   // clic sin mover el asa no debe escribir (revisión Codex 2026-07-10)
+      // §B resize-reflow: solo si creció en ALTO y sigue alineado al MISMO carril antes y después
+      const guides = columnGuides(deskViewW(), colsOpt());
+      const laneA = alignedLane({ x: beforeSnap.x, w: beforeSnap.w }, guides);
+      const laneB = alignedLane({ x: w.x, w: w.w }, guides);
+      if (w.h > beforeSnap.h && laneA !== null && laneA === laneB){
+        const sp = state.spaces[state.active];
+        const others = planViewportLayout(state.widgets.filter(x => x.id !== w.id && !x.max && !(tagFilter && !(x.tags || []).includes(tagFilter))), worldViewport());
+        const cls = laneClassify(others, guides.cols[laneB]);
+        const r = planResizeReflow(cls.members, cls.obstacles, { y: w.y, h: w.h }, { gutter: LAYOUT.snapGap });
+        const movedRects = r.moved.map(mv => { const wg = sp.widgets.find(x => x.id === mv.id); return { y: mv.y, h: wg ? widgetRect(wg).h : 0 }; });
+        if (planMaxBottom({ y: w.y }, w.h, movedRects) > LAYOUT.worldMax){
+          w.x = beforeSnap.x; w.y = beforeSnap.y; w.w = beforeSnap.w; w.h = beforeSnap.h;   // rechazo P4: restaurar el rect original, sin transacción parcial
+          renderAll(); toast("No cabe: el reacomodo se saldría del área máxima.", true); return;
+        }
+        if (r.moved.length){
+          const items = [{ id: w.id, before: beforeSnap, after: rectSnap(w) }];
+          for (const mv of r.moved){ const wg = sp.widgets.find(x => x.id === mv.id); if (!wg) continue; const before = rectSnap(wg); wg.y = mv.y; items.push({ id: wg.id, before, after: rectSnap(wg) }); }
+          flipLayout(items, () => { renderAll(); markDirty(); });
+          const snap = { spaceId: sp.id, items };
+          toastAction("Redimensionado (los de abajo hicieron sitio).", "Deshacer", () => undoLayout(snap));
+          return;
+        }
+      }
+      markDirty(); updateDeskHeight();
+    };
     addEventListener("pointermove", move); addEventListener("pointerup", up);
   });
   return el;
@@ -2643,7 +2772,10 @@ function columnGuides(vw, opts){
   const o = opts || {};
   const pad = o.pad ?? 12, gutter = o.gutter ?? 14, colMin = o.colMin ?? 320, colMax = o.colMax ?? 520;
   const usable = Math.max(colMin, vw - pad * 2);
-  const n = Math.max(2, Math.min(4, Math.floor((usable + gutter) / (colMin + gutter))));
+  const autoFit = Math.max(2, Math.min(4, Math.floor((usable + gutter) / (colMin + gutter))));
+  // override configurable (§columnas-configurables): effectiveN = auto ? autoFit : min(requestedN, autoFit)
+  const req = (o.forceN === 2 || o.forceN === 3 || o.forceN === 4) ? o.forceN : null;
+  const n = req ? Math.min(req, autoFit) : autoFit;
   let w = (usable - (n - 1) * gutter) / n;
   let x0 = pad;
   if (w > colMax){   // ancho máximo: en 4K, 4 carriles a ancho libre agigantarían widgets pequeños
@@ -2662,17 +2794,22 @@ function columnGuides(vw, opts){
    Miembro = mayoría (>50%) de su ancho en el carril (móvil); si cruza el carril sin mayoría =
    OBSTÁCULO FIJO (nunca se mueve; los móviles saltan por debajo). Reflow en cascada
    newY = max(oldY, previousBottom + gutter), aprovechando huecos. Puro, autocontenido (tests). */
+// Clasifica los widgets respecto a un carril (fuente única de «pertenencia»): mayoría de ancho
+// dentro → miembro móvil; cruza el carril sin mayoría → obstáculo fijo. PURO.
+function laneClassify(rects, lane){
+  const members = [], obstacles = [];
+  for (const r of rects){
+    const ov = Math.min(r.x + r.w, lane.x + lane.w) - Math.max(r.x, lane.x);
+    if (ov <= 0) continue;
+    if (ov > r.w / 2) members.push(r); else obstacles.push(r);
+  }
+  return { members, obstacles };
+}
 function planLaneInsert(rects, lane, pointerY, dragged, opts){
   const o = opts || {};
   const gutter = o.gutter ?? 14, laneTop = o.pad ?? 12;
-  const overlapX = r => Math.min(r.x + r.w, lane.x + lane.w) - Math.max(r.x, lane.x);
-  const members = [], obstacles = [];
-  for (const r of rects){
-    const ov = overlapX(r);
-    if (ov <= 0) continue;                 // no toca el carril: irrelevante
-    if (ov > r.w / 2) members.push(r);     // mayoría de su ancho dentro → miembro móvil del carril
-    else obstacles.push(r);                // cruza el carril sin mayoría → obstáculo fijo
-  }
+  const cls = laneClassify(rects, lane);
+  const members = cls.members.slice(), obstacles = cls.obstacles;
   members.sort((a, b) => a.y - b.y);
   const obs = obstacles.slice().sort((a, b) => a.y - b.y);
   // inserción: antes del primer miembro cuyo centro vertical queda por debajo del puntero
@@ -2702,6 +2839,89 @@ function planMaxBottom(placed, draggedH, movedRects){
   let b = (placed ? placed.y + draggedH : 0);
   for (const r of (movedRects || [])) b = Math.max(b, r.y + r.h);
   return b;
+}
+// Carril con el que un rect está ALINEADO inequívocamente: x Y w coinciden con el carril (no solo
+// mayoría de ancho — eso marcaría como columna widgets colocados a mano, Codex). tol = redondeo.
+// Condición para ACTIVAR compactación de origen (§A) y resize-reflow (§B). Devuelve índice o null.
+function alignedLane(rect, guides, tol){
+  const t = (tol == null) ? 2 : tol;
+  const cols = (guides && guides.cols) || [];
+  for (let i = 0; i < cols.length; i++)
+    if (Math.abs(rect.x - cols[i].x) <= t && Math.abs(rect.w - cols[i].w) <= t) return i;
+  return null;
+}
+// Compactación de una columna al perder un widget (§A): sube SOLO los miembros que estaban por
+// debajo del hueco, cerrando el gap contra el borde inferior de lo que quede encima (o el techo del
+// carril), saltando obstáculos fijos hacia arriba. PURO. members = miembros de la columna SIN el que
+// se fue (con id/y/h); above = borde inferior del último miembro por encima del hueco (o laneTop).
+function planColumnCompact(members, obstacles, holeTop, above, opts){
+  const o = opts || {};
+  const gutter = o.gutter ?? 14;
+  const below = members.filter(m => m.y >= holeTop).sort((a, b) => a.y - b.y);
+  const obs = (obstacles || []).slice().sort((a, b) => a.y - b.y);
+  const moved = [];
+  let cursor = above;   // borde inferior por encima del cual no cabe nada
+  for (const m of below){
+    let y = Math.max(cursor + gutter, o.laneTop ?? 12);
+    y = Math.min(y, m.y);   // solo hacia ARRIBA: nunca bajar un miembro al compactar
+    let bumped = true;      // no solaparse con obstáculos fijos (se colocan por debajo de ellos)
+    while (bumped){
+      bumped = false;
+      for (const ob of obs)
+        if (y < ob.y + ob.h + gutter && y + m.h + gutter > ob.y && ob.y + ob.h <= m.y){ const ny = ob.y + ob.h + gutter; if (ny > y && ny <= m.y){ y = ny; bumped = true; } }
+    }
+    if (y < m.y) moved.push({ id: m.id, y });
+    cursor = Math.max(cursor, y + m.h);
+  }
+  return { moved };
+}
+// Reflow al REDIMENSIONAR (§B): el widget crece y empuja hacia abajo SOLO los miembros de su carril
+// que colisionan (cascada), conservándolo como ANCLA (no es una inserción). members = otros del
+// carril; anchor = {y,h} del redimensionado; obstáculos fijos. Devuelve { moved:[{id,y}] }. PURO.
+function planResizeReflow(members, obstacles, anchor, opts){
+  const o = opts || {};
+  const gutter = o.gutter ?? 14;
+  const below = members.filter(m => m.y >= anchor.y).sort((a, b) => a.y - b.y);
+  const obs = (obstacles || []).slice().sort((a, b) => a.y - b.y);
+  const moved = [];
+  let cursor = anchor.y + anchor.h;   // borde inferior del ancla; los de debajo no pueden solaparlo
+  for (const m of below){
+    let y = Math.max(m.y, cursor + gutter);
+    let bumped = true;
+    while (bumped){
+      bumped = false;
+      for (const ob of obs)
+        if (y < ob.y + ob.h + gutter && y + m.h + gutter > ob.y){ y = Math.max(y, ob.y + ob.h + gutter); bumped = true; }
+    }
+    if (y !== m.y) moved.push({ id: m.id, y });
+    cursor = Math.max(cursor, y + m.h);
+  }
+  return { moved };
+}
+// Reempaquetado ÚNICO de una columna cuando el widget se mueve DENTRO de su misma columna (Codex:
+// inserción + compactación en un solo plan, no dos planificadores que se contradigan). members = los
+// otros miembros; insert = {y,h} del arrastrado en su nueva posición; empaqueta todo hacia arriba
+// preservando el orden por y (cierra el hueco viejo y hace sitio en el nuevo a la vez). PURO.
+function planLaneRepack(members, obstacles, insert, opts){
+  const o = opts || {};
+  const gutter = o.gutter ?? 14, laneTop = o.laneTop ?? 12;
+  const seq = members.map(m => ({ id: m.id, y: m.y, h: m.h })).concat([{ inserted: true, y: insert.y, h: insert.h }]);
+  seq.sort((a, b) => a.y - b.y);
+  const obs = (obstacles || []).slice().sort((a, b) => a.y - b.y);
+  const moved = []; let placed = null, cursor = laneTop - gutter;
+  for (const it of seq){
+    let y = Math.max(cursor + gutter, laneTop);
+    let bumped = true;
+    while (bumped){
+      bumped = false;
+      for (const ob of obs)
+        if (y < ob.y + ob.h + gutter && y + it.h + gutter > ob.y){ const ny = ob.y + ob.h + gutter; if (ny > y){ y = ny; bumped = true; } }
+    }
+    if (it.inserted) placed = { x: o.laneX, y, w: o.laneW, h: it.h };
+    else if (y !== it.y) moved.push({ id: it.id, y });
+    cursor = y + it.h;
+  }
+  return { placed, moved };
 }
 /* Planificador PURO del hueco para un widget nuevo (N0, Codex H3): mismo escaneo y fallback
    que siempre (arriba-izquierda, pasos de `step`). rects = ocupación actual (alturas visuales).
@@ -4704,6 +4924,7 @@ function wireUI(){
   $("#btn-inicio").addEventListener("click", () => $("#menu").classList.contains("open") ? closeMenu() : openMenu("start"));
   $("#btn-fold").addEventListener("click", foldAll);
   $("#space-add").addEventListener("click", addSpace);
+  $("#tb-cols").addEventListener("click", openColsMenu);
   // barra de espacios: rueda = desplazamiento horizontal; desvanecidos según posición
   const spacesBox = $("#tb-spaces");
   spacesBox.addEventListener("wheel", e => {

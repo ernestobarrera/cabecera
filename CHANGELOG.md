@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.31.0] - 2026-07-13
+
+- **Las columnas ahora ocupan el hueco.** Al sacar una ventana de una columna para llevarla a otra, las que quedaban debajo **suben a cerrar el hueco** que deja; y si la mueves dentro de su misma columna, esa columna se reorganiza de una vez. Todo con botón **Deshacer**.
+- **Estirar una ventana recoloca las de debajo.** Si agrandas hacia abajo una ventana que está en una columna y pisa a la de debajo, esta **baja para hacer sitio** al soltar (con Deshacer). Solo ocurre al crecer en alto dentro de una columna; estirar a lo ancho o fuera de una columna no recoloca nada.
+- **Animación de flujo.** Las ventanas que se recolocan **viajan** suavemente a su nuevo sitio (~150 ms) en vez de saltar, para dar sensación de continuidad. Respeta la preferencia del sistema «reducir movimiento» (sin animación si la tienes activada).
+- **Elegir el número de columnas.** Un control **«▤»** en la barra inferior permite fijar las guías de arrastre en **Auto, 2, 3 o 4** columnas por escritorio (Auto = según el ancho de la pantalla, como hasta ahora). Solo afecta a los siguientes arrastres: no recoloca lo que ya tienes. Si eliges más columnas de las que caben en tu pantalla, lo indica (por ejemplo «4→2»). En el móvil el control se oculta (no hay arrastre), pero tu elección se conserva.
+
 ## [0.30.1] - 2026-07-13
 
 - **Corrección interna del arrastre por columnas:** si al soltar una ventana en una columna el reacomodo de las de debajo se saliera del área máxima del escritorio, la operación se cancela con un aviso («no cabe ahí») en vez de dejar alguna ventana fuera de alcance. Caso extremo (columnas muy cargadas cerca del fondo); no cambia el uso normal. Con test.
