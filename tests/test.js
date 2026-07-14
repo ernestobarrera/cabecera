@@ -353,7 +353,8 @@ console.log('OK contrato cliente↔mundo (conversiones, tope, arrastre en mundo,
 
 // --- N2 hito 2: planificadores puros de columnas guiadas (spec v1.1, gate de Codex) ---
 eval('globalThis.columnGuides = ' + pickFn('columnGuides', 'vw, opts'));
-eval('globalThis.laneClassify = ' + pickFn('laneClassify', 'rects, lane'));   // fuente única de pertenencia, usada por planLaneInsert
+eval('globalThis.ownerLane = ' + pickFn('ownerLane', 'rect, guides'));   // N3: pertenencia ÚNICA (mayor solape)
+eval('globalThis.laneClassify = ' + pickFn('laneClassify', 'rects, guides, laneIdx, tol'));   // fuente única de pertenencia, usada por planLaneInsert
 eval('globalThis.planLaneInsert = ' + pickFn('planLaneInsert', 'rects, lane, pointerY, dragged, opts'));
 // nº de carriles por ancho (fórmula con gutters descontados, P1): 2/3/4 según COL_MIN=320
 const nCols = vw => columnGuides(vw).n;
@@ -376,28 +377,89 @@ const marginL = g4k.cols[0].x, marginR = 3840 - (g4k.cols[3].x + g4k.cols[3].w);
 if (Math.abs(marginL - marginR) > 2) throw new Error('columnGuides: la cuadrícula 4K no está centrada (márgenes ' + marginL + ' vs ' + marginR + ')');
 console.log('OK columnGuides (2/3/4 por ancho, sin solape, COL_MAX y centrado en 4K)');
 
+// --- N3: pertenencia única (ownerLane) + clasificación con umbral de invasión snapGap ---
+const gN3 = { cols: [{ x: 100, w: 320 }, { x: 434, w: 320 }], gutter: 14 };
+if (ownerLane({ x: 110, w: 300 }, gN3) !== 0) throw new Error('ownerLane: mayoría clara en el carril 0');
+if (ownerLane({ x: 400, w: 300 }, gN3) !== 1) throw new Error('ownerLane: el propietario es el de MAYOR solape, no el primero que toca');
+if (ownerLane({ x: 0, w: 50 }, gN3) !== null) throw new Error('ownerLane: sin solape con ningún carril → null');
+// invasión pequeña (≤ snapGap) se IGNORA en el carril vecino (caso real de Ernesto 2026-07-14)
+const inv10 = { id: 'inv', x: 410, y: 0, w: 320, h: 100 };   // propietario carril 1; invade 10px el cuerpo del 0
+let cls = laneClassify([inv10], gN3, 0, 14);
+if (cls.members.length || cls.obstacles.length) throw new Error('laneClassify: una invasión de ≤14px debe ignorarse (ni miembro ni obstáculo)');
+// invasión mayor → obstáculo del vecino (sigue sin ser miembro)
+const inv30 = { id: 'inv', x: 390, y: 0, w: 320, h: 100 };
+cls = laneClassify([inv30], gN3, 0, 14);
+if (cls.members.length || !cls.obstacles.find(o => o.id === 'inv')) throw new Error('laneClassify: una invasión >14px debe contar como obstáculo');
+// el propietario lo tiene como MIEMBRO aunque sobresalga
+cls = laneClassify([inv30], gN3, 1, 14);
+if (!cls.members.find(o => o.id === 'inv') || cls.obstacles.length) throw new Error('laneClassify: el carril propietario debe tenerlo como miembro');
+console.log('OK ownerLane + laneClassify N3 (propietario único, 1–14px ignorados, invasión mayor = obstáculo)');
+
 // planLaneInsert: carril vacío → la ventana entra en pointerY, nadie se mueve
-const lane = { x: 100, w: 320 };
-let r = planLaneInsert([], lane, 300, { h: 200 });
+const lane = gN3.cols[0];
+const iOpts = { gutter: 14, pad: 12, guides: gN3, laneIdx: 0 };
+let r = planLaneInsert([], lane, 300, { h: 200 }, iOpts);
 if (r.moved.length || !r.placed || r.placed.x !== 100 || r.placed.w !== 320) throw new Error('planLaneInsert: carril vacío no coloca la ventana con el ancho del carril');
 // insertar ARRIBA de un miembro: ese miembro baja por debajo (reflow en cascada)
-const m1 = { id: 'm1', x: 110, y: 60, w: 300, h: 200 };   // miembro del carril (mayoría dentro)
-r = planLaneInsert([m1], lane, 40, { h: 180 });
+const m1 = { id: 'm1', x: 110, y: 60, w: 300, h: 200 };   // miembro del carril (propietario)
+r = planLaneInsert([m1], lane, 40, { h: 180 }, iOpts);
 if (!r.moved.find(x => x.id === 'm1')) throw new Error('planLaneInsert: insertar arriba no desplaza al miembro de abajo');
 if (r.moved[0].y < r.placed.y + r.placed.h) throw new Error('planLaneInsert: el desplazado no queda por debajo de la ventana insertada');
 // insertar DEBAJO del miembro (hueco libre): el miembro NO se mueve (solo lo imprescindible)
-r = planLaneInsert([m1], lane, 600, { h: 180 });
+r = planLaneInsert([m1], lane, 600, { h: 180 }, iOpts);
 if (r.moved.length) throw new Error('planLaneInsert: mover innecesariamente un miembro que ya tenía hueco');
-// obstáculo que cruza el carril (widget ancho, <50% dentro): NO se mueve; la ventana salta por debajo
-const wide = { id: 'W', x: 300, y: 50, w: 800, h: 150 };   // solo ~150/800 dentro del carril → obstáculo fijo
-r = planLaneInsert([wide], lane, 60, { h: 180 });
-if (r.moved.find(x => x.id === 'W')) throw new Error('planLaneInsert: un obstáculo fijo (widget que cruza) no debe moverse');
+// obstáculo que cruza el carril (propietario = el vecino, invade este de sobra): NO se mueve; la ventana salta por debajo
+const wide = { id: 'W', x: 300, y: 50, w: 800, h: 150 };   // propietario carril 1; invade 120px el 0 → obstáculo fijo
+r = planLaneInsert([wide], lane, 60, { h: 180 }, iOpts);
+if (r.moved.find(x => x.id === 'W')) throw new Error('planLaneInsert: un obstáculo fijo (widget de otro carril) no debe moverse');
 if (r.placed.y < wide.y + wide.h) throw new Error('planLaneInsert: la ventana no saltó por debajo del obstáculo fijo');
 // reflow en cascada respeta el hueco existente entre dos miembros holgados
 const a = { id: 'a', x: 110, y: 40, w: 300, h: 150 }, b = { id: 'b', x: 110, y: 700, w: 300, h: 150 };
-r = planLaneInsert([a, b], lane, 60, { h: 120 });
+r = planLaneInsert([a, b], lane, 60, { h: 120 }, iOpts);
 if (r.moved.find(x => x.id === 'b')) throw new Error('planLaneInsert: empuja un miembro lejano que no hacía falta mover');
 console.log('OK planLaneInsert (carril vacío, reflow hacia abajo, hueco respetado, obstáculo fijo esquivado)');
+
+// --- N3: planSpaceRepack (Reordenar este escritorio) ---
+eval('globalThis.planSpaceRepack = ' + pickFn('planSpaceRepack', 'rects, guides, opts'));
+const prIn = [
+  { id: 'a', x: 110, y: 40, w: 300, h: 150 },    // carril 0
+  { id: 'c', x: 120, y: 400, w: 200, h: 100 },   // carril 0, debajo
+  { id: 'b', x: 440, y: 10, w: 200, h: 200 },    // carril 1
+  { id: 'm', x: 1200, y: 50, w: 100, h: 100 }    // margen sin solape → carril más cercano (1)
+];
+const pr = planSpaceRepack(prIn, gN3, { gutter: 14, laneTop: 24 });
+const prBy = id => pr.placed.find(p => p.id === id);
+if (prBy('a').x !== 100 || prBy('a').w !== 320 || prBy('a').y !== 24) throw new Error('planSpaceRepack: el primero del carril no adopta x/ancho de carril desde laneTop');
+if (prBy('c').y !== 24 + 150 + 14) throw new Error('planSpaceRepack: el segundo no se apila con gutter (esperado 188, ' + prBy('c').y + ')');
+if (prBy('b').x !== 434 || prBy('b').y !== 24) throw new Error('planSpaceRepack: el carril 1 no se apila independientemente');
+if (prBy('m').x !== 434 || prBy('m').y !== 24 + 200 + 14) throw new Error('planSpaceRepack: un widget sin solape no cae al carril más cercano');
+if (pr.maxBottom !== Math.max(188 + 100, 238 + 100)) throw new Error('planSpaceRepack: maxBottom incorrecto (' + pr.maxBottom + ')');
+// orden estable: a igual y, decide x; a igual y+x, el índice original
+const prTie = planSpaceRepack([
+  { id: 'p', x: 200, y: 40, w: 100, h: 50 }, { id: 'q', x: 110, y: 40, w: 100, h: 50 }
+], gN3, { gutter: 14, laneTop: 24 });
+if (prTie.placed.find(p => p.id === 'q').y !== 24) throw new Error('planSpaceRepack: a igual y debe ir primero el de menor x');
+console.log('OK planSpaceRepack (apilado por carril, x/ancho adoptados, huérfanos al más cercano, orden estable)');
+
+// --- N3: ancho completo sin COL_MAX cuando el nº de columnas es explícito; Auto lo conserva ---
+const gFull = columnGuides(3840, { forceN: 3 });
+if (gFull.cols[0].x !== 12) throw new Error('columnGuides explícito: el primer carril debe empezar en pad');
+const gFullEnd = gFull.cols[2].x + gFull.cols[2].w;
+if (Math.abs(gFullEnd - (3840 - 12)) > 2) throw new Error('columnGuides explícito: la cuadrícula debe llegar al borde útil (acaba en ' + gFullEnd + ')');
+if (gFull.cols.some(cc => cc.w <= 520)) throw new Error('columnGuides explícito: en 4K los carriles deben superar COL_MAX (ancho completo)');
+console.log('OK columnGuides N3 (explícito = ancho útil completo; Auto conserva COL_MAX — test previo)');
+
+// invariantes de fuente N3: reordenado explícito con guardas, undo atómico, capa ambiental propia
+if (!src.includes('function repackSpace(')) throw new Error('regresión N3: falta repackSpace');
+if (!src.includes('Reordenar este escritorio')) throw new Error('regresión N3: falta el botón «Reordenar este escritorio» en el popover');
+if ((src.match(/repackSpace\(\)/g) || []).length !== 2) throw new Error('regresión N3: repackSpace debe tener UN único punto de invocación (el popover) — jamás automático');
+if (!src.match(/function repackSpace[\s\S]{0,600}tagFilter/) || !src.match(/function repackSpace[\s\S]{0,800}some\(x => x\.max\)/)) throw new Error('regresión N3: repackSpace perdió las guardas de filtro/maximizada');
+if (!src.match(/function undoRepack[\s\S]{0,700}sort\(\)\.join/)) throw new Error('regresión N3: undoRepack ya no valida el conjunto exacto de IDs (todo-o-nada)');
+if (!src.match(/items\.length > 20\) apply\(\); else flipLayout/)) throw new Error('regresión N3: falta el umbral anti-jank de la animación del reordenado');
+if (!src.includes('function renderLaneAmbient(') || !html.includes('#lane-ambient')) throw new Error('regresión N3: falta la capa ambiental #lane-ambient (CSS o render)');
+if (!src.match(/const amb = document\.getElementById\("lane-ambient"\)/)) throw new Error('regresión N3: setDeskHeight ya no mantiene el alto de #lane-ambient');
+if (!src.match(/laneClassify\(others, guides, destLane, LAYOUT\.snapGap\)/) || !src.match(/laneClassify\(others, guides, laneB, LAYOUT\.snapGap\)/)) throw new Error('regresión N3: el motor N2 no usa la clasificación de pertenencia única en drop/resize');
+console.log('OK invariantes N3 (reordenado solo humano con guardas, undo todo-o-nada, ambient propia, pertenencia única cableada)');
 
 // planMaxBottom + rechazo P4 (hallazgo Codex sobre v0.29.0): el drop se rechaza si el reflow sale del lienzo
 eval('globalThis.planMaxBottom = ' + pickFn('planMaxBottom', 'placed, draggedH, movedRects'));

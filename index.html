@@ -52,6 +52,11 @@ body{font-family:var(--font); color:var(--text); background:#10131a}
 .drop-ghost.over{border-color:rgba(229,72,77,.55); background:rgba(229,72,77,.05)}
 /* N2: carriles guía visibles solo durante el arrastre (inertes) + pista de reflow en los que se apartan */
 #lane-guides{position:absolute; left:0; top:0; width:100%; pointer-events:none; z-index:0}
+#lane-ambient{position:absolute; left:0; top:0; width:100%; pointer-events:none; z-index:0}
+#lane-ambient .lane-sep{position:absolute; top:0; height:100%; width:1px; background:rgba(255,255,255,.055)}
+#cols-menu .sep{height:1px; background:var(--border-soft); margin:4px 6px}
+#cols-menu button:disabled{opacity:.38; cursor:default}
+#cols-menu button:disabled:hover{background:none}
 .lane-band{position:absolute; top:0; height:100%; border-radius:12px;
   background:rgba(255,255,255,.028); box-shadow:inset 0 0 0 1px rgba(255,255,255,.05)}
 .lane-band.active{background:rgba(122,162,247,.07); box-shadow:inset 0 0 0 1px rgba(122,162,247,.28)}
@@ -1104,7 +1109,7 @@ function syncUI(mode, txt){
    reaparece) y si Recargar está activo. El descarte ✕ vive solo en memoria de la sesión.
    Demora asumida: la CDN de Pages puede servir la versión vieja hasta ~10 min aun con
    no-store (gobierna la caché del navegador, no la CDN); para pestañas de días, irrelevante. */
-const APP_VERSION = "0.32.0";
+const APP_VERSION = "0.33.0";
 let newVersionDetected = null;   // versión superior detectada; detiene futuras consultas
 let verDismissed = false;        // ✕: solo esta sesión — nunca persistido en disco
 let verCheckInflight = false;    // sin consultas concurrentes
@@ -1793,6 +1798,7 @@ function renderAll(){
   renderTaskChip();
   repaintPill();
   renderColsControl();
+  renderLaneAmbient();
   updateScrollLock();
   updateDeskHeight();
 }
@@ -2075,6 +2081,8 @@ function setDeskHeight(px){
   if (end) end.style.top = h + "px";
   const g = document.getElementById("lane-guides");   // las bandas cubren el mismo lienzo que el contenido
   if (g) g.style.height = h + "px";
+  const amb = document.getElementById("lane-ambient");   // los separadores N3 cubren el alto lógico completo
+  if (amb) amb.style.height = h + "px";
 }
 // N2 hito 3: carril activo por la x del puntero, con HISTÉRESIS — una vez dentro de un carril se
 // conserva hasta salir un gutter completo hacia el vecino; fuera de la cuadrícula → null (N1 libre).
@@ -2178,17 +2186,51 @@ function renderColsControl(){
   b.classList.toggle("on", c === 2 || c === 3 || c === 4);
 }
 function closeColsMenu(){ const m = document.getElementById("cols-menu"); if (m) m.classList.remove("open"); }
+// N3: separadores ambientales — SOLO con nº de columnas explícito. Línea de 1 px en el centro de
+// cada gutter, bajo los widgets, sin interacción y sin persistir nada. Capa PROPIA (#lane-ambient):
+// #lane-guides pertenece al drag y su cleanup() la destruye. Se recalcula al renderizar, cambiar
+// de espacio (renderAll) o redimensionar; su alto lo mantiene setDeskHeight.
+function renderLaneAmbient(){
+  const d = deskEl(); if (!d) return;
+  const old = document.getElementById("lane-ambient"); if (old) old.remove();
+  const c = state && state.settings && state.settings.cols;
+  if (isMobile() || (c !== 2 && c !== 3 && c !== 4)) return;
+  const guides = columnGuides(deskViewW(), colsOpt());
+  const amb = document.createElement("div"); amb.id = "lane-ambient";
+  for (let i = 1; i < guides.cols.length; i++){
+    const s = document.createElement("div"); s.className = "lane-sep";
+    s.style.left = Math.round(guides.cols[i].x - guides.gutter / 2) + "px";
+    amb.appendChild(s);
+  }
+  const end = document.getElementById("desk-end");
+  amb.style.height = (end && end.style.top) || (deskViewH() + "px");
+  d.insertBefore(amb, d.firstChild);
+}
 function openColsMenu(){
   const b = document.getElementById("tb-cols"), menu = document.getElementById("cols-menu");
   if (!b || !menu) return;
   if (menu.classList.contains("open")){ closeColsMenu(); return; }
   const cur = (state.settings && state.settings.cols) || "auto";
   const opts = [["auto", "Auto (según el ancho)"], ["2", "2 columnas"], ["3", "3 columnas"], ["4", "4 columnas"]];
-  menu.innerHTML = opts.map(([v, l]) => `<button data-v="${v}"${(String(cur) === v) ? ' class="sel"' : ""}>${esc(l)}</button>`).join("");
+  // N3: reordenar es un GESTO aparte (nunca efecto de elegir N) y el deshacer masivo vive aquí
+  // hasta el siguiente reordenado o la recarga — 20 s de toast no dan para revisar un escritorio.
+  const filterOn = !!tagFilter, maxOn = state.widgets.some(x => x.max);
+  const canRepack = cur !== "auto" && !filterOn && !maxOn;
+  const whyNot = cur === "auto" ? "Elige 2, 3 o 4 columnas primero"
+    : filterOn ? "Quita el filtro de etiqueta primero"
+    : maxOn ? "Restaura la ventana maximizada primero"
+    : "Coloca todos los widgets en las columnas, a su ancho (con Deshacer)";
+  const canUndo = lastRepack && lastRepack.spaceId === state.spaces[state.active].id;
+  menu.innerHTML = opts.map(([v, l]) => `<button data-v="${v}"${(String(cur) === v) ? ' class="sel"' : ""}>${esc(l)}</button>`).join("")
+    + '<div class="sep"></div>'
+    + `<button data-v="repack"${canRepack ? "" : " disabled"} title="${esc(whyNot)}">⇅ Reordenar este escritorio</button>`
+    + (canUndo ? '<button data-v="undo">↩ Deshacer último reordenado</button>' : "");
   menu.querySelectorAll("button").forEach(btn => btn.addEventListener("click", () => {
     const v = btn.dataset.v;
+    if (v === "repack"){ closeColsMenu(); repackSpace(); return; }
+    if (v === "undo"){ closeColsMenu(); undoRepack(); return; }
     if (v === "auto") delete state.settings.cols; else state.settings.cols = +v;
-    closeColsMenu(); renderColsControl(); markDirty();
+    closeColsMenu(); renderColsControl(); renderLaneAmbient(); markDirty();
   }));
   menu.classList.add("open");   // mostrar para medir, luego posicionar encima del botón
   const r = b.getBoundingClientRect();
@@ -2230,6 +2272,62 @@ function undoLayout(snap){
     }
   }
   renderAll(); markDirty();
+}
+/* N3 — reordenado explícito del escritorio (botón del popover ▤). SOLO gesto humano: jamás se
+   dispara al cargar, sincronizar, redimensionar, cambiar de monitor, aplicar packs o restaurar.
+   Snapshot todo-o-nada en `lastRepack` (memoria de sesión, no persiste). */
+let lastRepack = null;
+function repackSpace(){
+  if (isMobile() || !state) return;
+  const c = state.settings && state.settings.cols;
+  if (c !== 2 && c !== 3 && c !== 4){ toast("Elige 2, 3 o 4 columnas para poder reordenar", true); return; }
+  if (tagFilter){ toast("Quita el filtro de etiqueta para reordenar", true); return; }
+  if (state.widgets.some(x => x.max)){ toast("Restaura la ventana maximizada para reordenar", true); return; }
+  const guides = columnGuides(deskViewW(), colsOpt());
+  const sp = state.spaces[state.active];
+  // los plegados reservan su altura COMPLETA (la de desplegado): no solaparán al desplegarlos
+  const rects = sp.widgets.map(w => {
+    const t = WTYPES[w.type] || {};
+    return { id: w.id, x: +w.x || 0, y: +w.y || 0,
+      w: Math.max(+w.w || t.w || 260, LAYOUT.minW), h: Math.max(+w.h || t.h || 180, LAYOUT.minH) };
+  });
+  const plan = planSpaceRepack(rects, guides, { gutter: LAYOUT.snapGap, laneTop: LAYOUT.packingMargin });
+  // P4: el reordenado se rechaza ENTERO si se sale del área máxima (nunca clamp)
+  if (plan.maxBottom + LAYOUT.packingMargin > LAYOUT.worldMax){
+    toast("No cabe: el reordenado se saldría del área máxima del escritorio.", true); return;
+  }
+  const items = sp.widgets.map(w => ({ id: w.id, before: rectSnap(w), after: null }));
+  for (const p of plan.placed){
+    const wg = sp.widgets.find(x => x.id === p.id); if (!wg) continue;
+    wg.x = p.x; wg.y = p.y; wg.w = p.w;   // h, contenido, plegado y z se conservan
+  }
+  for (const it of items){ const wg = sp.widgets.find(x => x.id === it.id); it.after = rectSnap(wg); }
+  deskEl().scrollTop = 0;   // el reparto empieza arriba: lleva la vista al resultado
+  const apply = () => { renderAll(); markDirty(); };
+  if (items.length > 20) apply(); else flipLayout(items, apply);   // umbral anti-jank (gate)
+  lastRepack = { spaceId: sp.id, ids: sp.widgets.map(x => x.id).sort().join(","), items };
+  toastAction("Escritorio reordenado en " + guides.n + " columnas.", "Deshacer", undoRepack);
+}
+/* Deshacer del reordenado: TODO O NADA (gate N3). Solo restaura si el espacio activo es el del
+   snapshot, el conjunto de widgets es EXACTAMENTE el mismo y todos siguen en su rect «después»;
+   cualquier adición, borrado o cambio geométrico lo invalida entero (nada de escritorios híbridos). */
+function undoRepack(){
+  const snap = lastRepack;
+  if (!snap) return;
+  const sp = state.spaces.find(s => s.id === snap.spaceId);
+  if (!sp || state.spaces[state.active] !== sp){ toast("Ese reordenado es de otro escritorio", true); return; }
+  if (sp.widgets.map(x => x.id).sort().join(",") !== snap.ids){ toast("El escritorio cambió: ya no se puede deshacer", true); return; }
+  for (const it of snap.items){
+    const wg = sp.widgets.find(x => x.id === it.id);
+    if (!wg || !sameRect(rectSnap(wg), it.after)){ toast("El escritorio cambió: ya no se puede deshacer", true); return; }
+  }
+  for (const it of snap.items){
+    const wg = sp.widgets.find(x => x.id === it.id);
+    wg.x = it.before.x; wg.y = it.before.y; wg.w = it.before.w; wg.h = it.before.h;
+  }
+  lastRepack = null;
+  renderAll(); markDirty();
+  toast("Reordenado deshecho");
 }
 /* Geometría robusta frente a cambios de monitor/resolución (puras → testeables) */
 function maxRect(vw, vh, scrollTop = 0){   // rect "maximizado" para el viewport visible (en coords de mundo: +scrollTop)
@@ -2573,7 +2671,7 @@ function buildWindow(w){
           const lane = guides.cols[curLane];
           const others = planViewportLayout(state.widgets.filter(x =>
             x.id !== w.id && !x.max && !(tagFilter && !(x.tags || []).includes(tagFilter))), worldViewport());
-          laneRes = planLaneInsert(others, lane, world.y, { h: proj.h }, { gutter: LAYOUT.snapGap, pad: LAYOUT.viewportPad });
+          laneRes = planLaneInsert(others, lane, world.y, { h: proj.h }, { gutter: LAYOUT.snapGap, pad: LAYOUT.viewportPad, guides, laneIdx: curLane });
           ghost.style.display = ""; ghost.classList.remove("over");
           ghost.style.left = (laneRes.placed.x - 3) + "px"; ghost.style.top = (laneRes.placed.y - 3) + "px";
           ghost.style.width = (laneRes.placed.w + 6) + "px"; ghost.style.height = (proj.h + 6) + "px";
@@ -2626,13 +2724,13 @@ function buildWindow(w){
         // Plan: mismo carril → reempaquetado ÚNICO (Codex); distinto → insertar en destino + compactar origen.
         let placed, moved;
         if (originLane !== null && originLane === destLane){
-          const cls = laneClassify(others, dest);
+          const cls = laneClassify(others, guides, destLane, LAYOUT.snapGap);
           const r = planLaneRepack(cls.members, cls.obstacles, { y: laneRes.placed.y, h: proj.h }, { ...copt, laneX: dest.x, laneW: dest.w });
           placed = r.placed; moved = r.moved;
         } else {
           placed = laneRes.placed; moved = laneRes.moved.slice();
           if (originLane !== null){   // compacta la columna que PIERDE el widget (el hueco queda en el origen)
-            const oc = laneClassify(others, guides.cols[originLane]);
+            const oc = laneClassify(others, guides, originLane, LAYOUT.snapGap);
             const aboveBottoms = oc.members.filter(mm => mm.y + mm.h <= startRect.y).map(mm => mm.y + mm.h);
             const above = aboveBottoms.length ? Math.max(...aboveBottoms) : LAYOUT.viewportPad;
             const comp = planColumnCompact(oc.members, oc.obstacles, startRect.y, above, copt);
@@ -2704,7 +2802,7 @@ function buildWindow(w){
       if (w.h > beforeSnap.h && laneA !== null && laneA === laneB){
         const sp = state.spaces[state.active];
         const others = planViewportLayout(state.widgets.filter(x => x.id !== w.id && !x.max && !(tagFilter && !(x.tags || []).includes(tagFilter))), worldViewport());
-        const cls = laneClassify(others, guides.cols[laneB]);
+        const cls = laneClassify(others, guides, laneB, LAYOUT.snapGap);
         const r = planResizeReflow(cls.members, cls.obstacles, { y: w.y, h: w.h }, { gutter: LAYOUT.snapGap });
         const movedRects = r.moved.map(mv => { const wg = sp.widgets.find(x => x.id === mv.id); return { y: mv.y, h: wg ? widgetRect(wg).h : 0 }; });
         if (planMaxBottom({ y: w.y }, w.h, movedRects) > LAYOUT.worldMax){
@@ -2778,7 +2876,9 @@ function columnGuides(vw, opts){
   const n = req ? Math.min(req, autoFit) : autoFit;
   let w = (usable - (n - 1) * gutter) / n;
   let x0 = pad;
-  if (w > colMax){   // ancho máximo: en 4K, 4 carriles a ancho libre agigantarían widgets pequeños
+  // COL_MAX solo en Auto: con N EXPLÍCITO los carriles reparten el ancho útil completo
+  // (gate N3: petición literal «que ocupen todo el ancho», sin clamp intermedio).
+  if (!req && w > colMax){   // ancho máximo: en 4K, 4 carriles a ancho libre agigantarían widgets pequeños
     w = colMax;
     const gridW = n * w + (n - 1) * gutter;
     x0 = Math.round((vw - gridW) / 2);   // cuadrícula centrada; márgenes exteriores = zona N1 libre
@@ -2791,24 +2891,48 @@ function columnGuides(vw, opts){
    rects = otros widgets (mundo, con id/x/y/w/h). lane = {x,w}. pointerY = y de mundo del puntero.
    dragged = {h} (la ventana toma el ancho del carril; conserva su alto). Devuelve
    { placed:{x,y,w,h}, moved:[{id,y}] } — moved SOLO los miembros que de verdad se desplazan.
-   Miembro = mayoría (>50%) de su ancho en el carril (móvil); si cruza el carril sin mayoría =
-   OBSTÁCULO FIJO (nunca se mueve; los móviles saltan por debajo). Reflow en cascada
+   Pertenencia (gate N3): miembro = el carril es su PROPIETARIO (ownerLane, mayor solape);
+   obstáculo fijo = pertenece a otro carril pero invade este más de snapGap (nunca se mueve;
+   los móviles saltan por debajo); invasión menor se ignora. Reflow en cascada
    newY = max(oldY, previousBottom + gutter), aprovechando huecos. Puro, autocontenido (tests). */
-// Clasifica los widgets respecto a un carril (fuente única de «pertenencia»): mayoría de ancho
-// dentro → miembro móvil; cruza el carril sin mayoría → obstáculo fijo. PURO.
-function laneClassify(rects, lane){
+// Carril propietario ÚNICO de un rect (gate N3): el de mayor solape horizontal; empate →
+// centro más cercano (y a igualdad total, el primero). Sin solape con ninguno → null.
+// Fuente única de pertenencia de TODO el motor de columnas. PURO.
+function ownerLane(rect, guides){
+  const cols = (guides && guides.cols) || [];
+  const rc = rect.x + rect.w / 2;
+  let best = null, bestOv = 0, bestDc = Infinity;
+  for (let i = 0; i < cols.length; i++){
+    const c = cols[i];
+    const ov = Math.min(rect.x + rect.w, c.x + c.w) - Math.max(rect.x, c.x);
+    if (ov <= 0) continue;
+    const dc = Math.abs(rc - (c.x + c.w / 2));
+    if (ov > bestOv || (ov === bestOv && dc < bestDc)){ best = i; bestOv = ov; bestDc = dc; }
+  }
+  return best;
+}
+// Clasifica los widgets respecto al carril guides.cols[laneIdx] con PERTENENCIA ÚNICA (gate N3):
+// miembro = su carril propietario es este; obstáculo = pertenece a otro (o a ninguno) pero invade
+// el CUERPO del carril más de `tol` (≈snapGap, el umbral semántico del gutter). Una invasión menor
+// se IGNORA: un widget que sobresale unos px no interfiere al carril vecino (caso real 2026-07-14). PURO.
+function laneClassify(rects, guides, laneIdx, tol){
+  const t = (tol == null) ? 14 : tol;
+  const lane = guides.cols[laneIdx];
   const members = [], obstacles = [];
   for (const r of rects){
     const ov = Math.min(r.x + r.w, lane.x + lane.w) - Math.max(r.x, lane.x);
     if (ov <= 0) continue;
-    if (ov > r.w / 2) members.push(r); else obstacles.push(r);
+    if (ownerLane(r, guides) === laneIdx) members.push(r);
+    else if (ov > t) obstacles.push(r);
   }
   return { members, obstacles };
 }
 function planLaneInsert(rects, lane, pointerY, dragged, opts){
   const o = opts || {};
   const gutter = o.gutter ?? 14, laneTop = o.pad ?? 12;
-  const cls = laneClassify(rects, lane);
+  const gs = o.guides || { cols: [lane] };   // standalone (tests): un solo carril conocido
+  const li = (o.laneIdx == null) ? Math.max(0, gs.cols.indexOf(lane)) : o.laneIdx;
+  const cls = laneClassify(rects, gs, li, o.tol ?? gutter);
   const members = cls.members.slice(), obstacles = cls.obstacles;
   members.sort((a, b) => a.y - b.y);
   const obs = obstacles.slice().sort((a, b) => a.y - b.y);
@@ -2922,6 +3046,37 @@ function planLaneRepack(members, obstacles, insert, opts){
     cursor = y + it.h;
   }
   return { placed, moved };
+}
+/* Reempaquetado GLOBAL del espacio (N3 §2.2 — «Reordenar este escritorio»): asigna cada rect a su
+   carril propietario (ownerLane; sin solape con ninguno → el de centro más cercano), ordena estable
+   por y → x → índice original y apila cada carril INDEPENDIENTEMENTE desde `laneTop` con `gutter`.
+   Todo miembro adopta x/ancho de carril; conserva su h (los plegados deben venir con su altura
+   COMPLETA: el adaptador la reserva para que no solapen al desplegar). Devuelve
+   { placed:[{id,x,y,w}], maxBottom } — el adaptador rechaza entero por worldMax (P4). PURO. */
+function planSpaceRepack(rects, guides, opts){
+  const o = opts || {};
+  const gutter = o.gutter ?? 14, laneTop = o.laneTop ?? 24;
+  const lanes = guides.cols.map(() => []);
+  rects.forEach((r, i) => {
+    let own = ownerLane(r, guides);
+    if (own == null){   // márgenes sin solape (p. ej. tras pasar de Auto-4K a explícito): al más cercano
+      let bd = Infinity; const rc = r.x + r.w / 2;
+      guides.cols.forEach((c, j) => { const d = Math.abs(rc - (c.x + c.w / 2)); if (d < bd){ bd = d; own = j; } });
+    }
+    lanes[own].push({ r, i });
+  });
+  const placed = []; let maxBottom = 0;
+  lanes.forEach((items, li) => {
+    const c = guides.cols[li];
+    items.sort((a, b) => (a.r.y - b.r.y) || (a.r.x - b.r.x) || (a.i - b.i));
+    let y = laneTop;
+    for (const it of items){
+      placed.push({ id: it.r.id, x: c.x, y, w: c.w });
+      maxBottom = Math.max(maxBottom, y + it.r.h);
+      y += it.r.h + gutter;
+    }
+  });
+  return { placed, maxBottom };
 }
 /* Planificador PURO del hueco para un widget nuevo (N0, Codex H3): mismo escaneo y fallback
    que siempre (arriba-izquierda, pasos de `step`). rects = ocupación actual (alturas visuales).
@@ -4974,6 +5129,7 @@ function wireUI(){
       if (el){ el.style.left = m.x + "px"; el.style.top = m.y + "px"; el.style.width = m.w + "px"; el.style.height = m.h + "px"; }
     });
     updateDeskHeight();   // el cambio de tamaño altera el alto lógico del lienzo
+    renderLaneAmbient();  // los separadores N3 se recolocan al nuevo ancho (solo visual: los widgets NO se recolocan — A1)
   });
   // aviso de tareas: cada clic salta a la siguiente tarea vencida o de hoy
   $("#tb-tasks").addEventListener("click", () => {

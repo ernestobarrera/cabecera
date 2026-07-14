@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.33.0] - 2026-07-14
+
+- **«Reordenar este escritorio»: columnas de verdad, cuando tú lo pidas.** En el menú **▤** de la barra hay un botón nuevo que coloca de una vez todos los widgets del escritorio en las columnas elegidas: cada uno adopta el ancho de su columna y se apilan sin huecos, en el orden en que estaban (los plegados reservan su altura real, para que nada se solape al desplegarlos). Es siempre un gesto tuyo — elegir el número de columnas sigue sin mover nada, y Cabecera jamás recoloca sola al cargar, sincronizar o cambiar de pantalla. Deshacer doble: el botón del aviso y «Deshacer último reordenado» en el propio menú, que se queda ahí hasta el siguiente reordenado o la recarga; restaura todo o nada (si algo cambió entre medias, no deja el escritorio a medias). Si el resultado no cupiera en el área máxima del escritorio, se cancela entero con un aviso.
+- **Con columnas fijas, ocupan todo el ancho.** Al fijar 2, 3 o 4 columnas, los carriles reparten el ancho completo de la pantalla (como los escritorios de columnas clásicos); en Auto se mantiene el ancho moderado con la cuadrícula centrada de siempre.
+- **Las columnas se ven.** Con un número fijo, unos separadores verticales finísimos marcan las columnas en todo momento (no solo al arrastrar), sin estorbar: están debajo de los widgets y no se pueden clicar. En Auto desaparecen.
+- **Un widget que sobresale ya no molesta a la columna de al lado.** Cada widget pertenece ahora a una sola columna (aquella donde tiene la mayor parte); si sobresale unos pocos píxeles hacia la vecina, esa invasión pequeña se ignora al recolocar — antes podía empujar hacia abajo a los widgets de la columna vecina.
+
 ## [0.32.0] - 2026-07-14
 
 - **Los escritorios se leen mejor con cualquier fondo.** Las pestañas de espacio de la barra inferior tienen ahora texto más luminoso y un relleno sutil, la barra es un poco más opaca, y el velo oscuro que la página pone sobre el fondo **se adapta solo a la claridad del fondo elegido**: con fondos claros el velo aumenta para que el texto siga leyéndose bien, con fondos oscuros no cambia nada.
