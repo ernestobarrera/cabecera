@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.32.0] - 2026-07-14
+
+- **Los escritorios se leen mejor con cualquier fondo.** Las pestañas de espacio de la barra inferior tienen ahora texto más luminoso y un relleno sutil, la barra es un poco más opaca, y el velo oscuro que la página pone sobre el fondo **se adapta solo a la claridad del fondo elegido**: con fondos claros el velo aumenta para que el texto siga leyéndose bien, con fondos oscuros no cambia nada.
+- **Más fondos de serie: de 6 a 14.** Nuevos degradados (océano, púrpura noche, granate, arena, niebla, tierra) y dos colores lisos oscuros. Los 6 originales conservan su sitio: si ya tenías uno elegido, no cambia.
+- **Cabecera ⓘ también en las listas de tareas.** El botón ⓘ de la barra de título (visible al pasar el ratón) permite ponerle a una lista de tareas una línea que explica qué guarda, igual que en las notas: discreta, y nítida al pasar el ratón. Clic en la línea para editarla; vacía, se quita.
+
 ## [0.31.0] - 2026-07-13
 
 - **Las columnas ahora ocupan el hueco.** Al sacar una ventana de una columna para llevarla a otra, las que quedaban debajo **suben a cerrar el hueco** que deja; y si la mueves dentro de su misma columna, esa columna se reorganiza de una vez. Todo con botón **Deshacer**.

@@ -515,6 +515,24 @@ if (gradientAvgHex('') !== null) throw new Error('gradientAvgHex: cadena vacía 
 if (gradientAvgHex(null) !== null) throw new Error('gradientAvgHex: entrada no-string debe ser null');
 console.log('OK gradientAvgHex (acento de pestaña = promedio de los tonos del degradado)');
 
+// --- wpScrim: velo adaptativo del fondo según luminancia media (v0.32.0) ---
+eval('globalThis.wpScrim = ' + pickFn('wpScrim', 'css'));
+if (wpScrim('linear-gradient(135deg,#1b2735 0%,#090a0f 100%)') !== 0.18) throw new Error('wpScrim: fondo oscuro debe llevar el velo base .18');
+if (wpScrim('linear-gradient(135deg,#3e5151 0%,#decba4 100%)') !== 0.26) throw new Error('wpScrim: fondo medio debe llevar velo .26');
+if (wpScrim('#ffffff') !== 0.34) throw new Error('wpScrim: fondo claro debe llevar el velo máximo .34');
+if (wpScrim('url("foo.jpg") center/cover') !== 0.18) throw new Error('wpScrim: sin tono calculable debe caer al velo por defecto');
+// los presets ampliados: solo se añade al final (índices guardados en datos.json) y el picker los pinta todos
+const wpArr = src.match(/const WP_PRESETS = \[([\s\S]*?)\];/)[1].match(/"(linear-gradient[^"]*|#[0-9a-fA-F]{6})"/g);
+if (!wpArr || wpArr.length < 14) throw new Error('WP_PRESETS: la colección ampliada debe tener al menos 14 fondos');
+if (!wpArr[0].includes('#1b2735') || !wpArr[5].includes('#134e5e')) throw new Error('WP_PRESETS: los 6 fondos originales deben conservar su índice (datos.json guarda el índice)');
+if (!src.includes('--wp-scrim')) throw new Error('regresión: el velo del fondo ya no es adaptativo (falta --wp-scrim)');
+console.log('OK wpScrim (velo adaptativo por luminancia; presets ampliados sin romper índices)');
+
+// --- cabecera ⓘ también en Tareas (v0.32.0): misma mecánica que en Nota ---
+if (!src.match(/w\.type === "notes" \|\| w\.type === "todo"\) \? `<button class="win-btn descbtn"/)) throw new Error('regresión: el botón ⓘ debe ofrecerse en Nota y en Tareas');
+if (!src.match(/function bodyTodo[\s\S]{0,400}notes-desc/)) throw new Error('regresión: bodyTodo debe pintar la cabecera opcional (notes-desc)');
+console.log('OK cabecera ⓘ en Tareas (botón + render en bodyTodo)');
+
 // espacios: índice activo tras borrar
 eval('globalThis.nextActiveAfterDelete = ' + pickFn('nextActiveAfterDelete', 'active, removed, len'));
 if (nextActiveAfterDelete(2, 0, 3) !== 1) throw new Error('borrar espacio anterior al activo: active debe bajar');
