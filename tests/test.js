@@ -576,10 +576,39 @@ if (!src.includes('planColumnCompact(oc.members, oc.obstacles, startRect.y, abov
 if (!src.includes('flipLayout(items,')) throw new Error('regresión: el drop ya no usa la animación FLIP');
 if (!src.includes('function flipLayout(') || !src.includes('prefers-reduced-motion: reduce')) throw new Error('regresión: FLIP sin respetar reduced-motion');
 if (!src.includes('planResizeReflow(cls.members, cls.obstacles')) throw new Error('regresión: el resize ya no dispara reflow de su columna');
-if (!src.match(/w\.h > beforeSnap\.h && laneA !== null && laneA === laneB/)) throw new Error('regresión: el resize-reflow ya no exige crecer en alto y misma alineación antes/después');
+if (!src.match(/w\.y \+ w\.h > beforeSnap\.y \+ beforeSnap\.h && laneA !== null && laneA === laneB/)) throw new Error('regresión: el resize-reflow ya no exige que avance el borde inferior con misma alineación antes/después');
 if (!src.includes('function colsOpt(') || !src.match(/sp\.settings\.cols !== 2 && sp\.settings\.cols !== 3 && sp\.settings\.cols !== 4/)) throw new Error('regresión: columnas configurables sin saneo estricto');
 if (!src.includes('if (isMobile()){ b.style.display = "none"')) throw new Error('regresión: el control de columnas no se oculta en móvil');
 console.log('OK pulido v0.31.0 (compactación origen/mismo-carril, resize-reflow con guardas, FLIP reduced-motion, columnas configurables saneadas + móvil)');
+
+// --- N3 release 3: resize por 8 asas (resizeRect pura por ancla + transacción SOLO-DOM) ---
+eval('globalThis.resizeRect = ' + pickFn('resizeRect', 'start, dir, dx, dy, minW, minH'));
+const st = { x: 100, y: 80, w: 300, h: 200 };
+let rz = resizeRect(st, 'se', 50, 30, 220, 140);
+if (rz.x !== 100 || rz.y !== 80 || rz.w !== 350 || rz.h !== 230) throw new Error('resizeRect se: debe crecer con el puntero sin mover el origen');
+rz = resizeRect(st, 'e', 40, 999, 220, 140);
+if (rz.w !== 340 || rz.h !== 200) throw new Error('resizeRect e: debe ignorar dy');
+rz = resizeRect(st, 's', 999, 25, 220, 140);
+if (rz.h !== 225 || rz.w !== 300) throw new Error('resizeRect s: debe ignorar dx');
+rz = resizeRect(st, 'w', -60, 0, 220, 140);
+if (rz.x !== 40 || rz.w !== 360 || rz.x + rz.w !== st.x + st.w) throw new Error('resizeRect w: el borde derecho debe quedar anclado');
+rz = resizeRect(st, 'n', 0, -50, 220, 140);
+if (rz.y !== 30 || rz.h !== 250 || rz.y + rz.h !== st.y + st.h) throw new Error('resizeRect n: el borde inferior debe quedar anclado');
+rz = resizeRect(st, 'nw', -20, -30, 220, 140);
+if (rz.x + rz.w !== 400 || rz.y + rz.h !== 280) throw new Error('resizeRect nw: la esquina opuesta debe quedar anclada');
+rz = resizeRect(st, 'w', 500, 0, 220, 140);
+if (rz.w !== 220 || rz.x + rz.w !== 400) throw new Error('resizeRect: encoger de más se detiene en minW con el ancla fija');
+rz = resizeRect(st, 'n', 0, 500, 220, 140);
+if (rz.h !== 140 || rz.y + rz.h !== 280) throw new Error('resizeRect: encoger de más se detiene en minH con el ancla fija');
+rz = resizeRect(st, 'nw', -500, -500, 220, 140);
+if (rz.x !== 0 || rz.y !== 0) throw new Error('resizeRect: x/y jamás negativos (borde del lienzo)');
+// invariantes de integración: 8 asas en plantilla, draft SOLO-DOM, limpieza y guardas
+if ((html.match(/data-rz="/g) || []).length !== 8) throw new Error('regresión resize: la plantilla debe tener exactamente 8 asas data-rz');
+if (!src.match(/const startResize = ev =>[\s\S]{0,900}let draft = null/)) throw new Error('regresión resize: falta el borrador SOLO-DOM (el estado no debe mutar durante el gesto)');
+if (!src.match(/if \(!commit \|\| !draft\)/)) throw new Error('regresión resize: cancelación/clic seco debe restaurar el DOM sin escribir');
+if (!src.match(/addEventListener\("pointercancel", cancel\); addEventListener\("blur", cancel\)/)) throw new Error('regresión resize: faltan pointercancel/blur en la limpieza');
+if (!src.match(/if \(isMobile\(\) \|\| w\.max\) return/)) throw new Error('regresión resize: falta la guarda móvil/maximizada');
+console.log('OK resize 8 asas (ancla por borde opuesto, mínimos, clamps, draft solo-DOM, limpieza total)');
 
 // --- v0.30.0: sistema de modales propio + 3 fixes (invariantes de fuente) ---
 // ningún diálogo NATIVO debe quedar (confirm/prompt feos e incoherentes)

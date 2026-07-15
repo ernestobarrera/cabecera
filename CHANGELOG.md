@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.35.0] - 2026-07-14
+
+- **Redimensionar desde cualquier borde.** Las ventanas se estiran ahora desde sus **cuatro bordes y cuatro esquinas** (antes, solo la esquina inferior derecha): el cursor cambia al acercarte y el lado opuesto queda fijo, como en las ventanas del sistema. Durante el gesto no se guarda nada — el tamaño se confirma al soltar, y si el gesto se cancela (por ejemplo al cambiar de ventana), todo vuelve exactamente a como estaba. La recolocación de la columna al crecer hacia abajo funciona igual desde cualquier asa.
+
 ## [0.34.0] - 2026-07-14
 
 - **Panel de configuración general (⚙).** La rueda dentada que faltaba: en el acceso inferior derecho (y en Inicio y la paleta como «Ajustes generales»). Nada se aplica hasta pulsar **Guardar** — abrir, mirar o cancelar no toca nada — y las preferencias viajan con tus datos entre equipos. Dos ajustes de estreno, elegidos por tener uso real hoy:

@@ -108,6 +108,17 @@ body{font-family:var(--font); color:var(--text); background:#10131a}
 .dict-dest.warn{color:#d9822b}
 .win-body{flex:1; min-height:0; overflow:auto; padding:10px; font-size:13.5px}
 .win-resize{position:absolute; right:0; bottom:0; width:16px; height:16px; cursor:nwse-resize; opacity:.5}
+/* N3: asas de redimensionado en los 4 bordes y las otras 3 esquinas — zonas discretas e invisibles,
+   fuera del cuerpo (±3px) para no estorbar al contenido ni al arrastre por la barra de título */
+.rz{position:absolute; z-index:6}
+.rz-n{top:-3px; left:12px; right:12px; height:7px; cursor:ns-resize}
+.rz-s{bottom:-3px; left:12px; right:18px; height:7px; cursor:ns-resize}
+.rz-e{right:-3px; top:12px; bottom:18px; width:7px; cursor:ew-resize}
+.rz-w{left:-3px; top:12px; bottom:12px; width:7px; cursor:ew-resize}
+.rz-ne{top:-3px; right:-3px; width:14px; height:14px; cursor:nesw-resize}
+.rz-nw{top:-3px; left:-3px; width:14px; height:14px; cursor:nwse-resize}
+.rz-sw{bottom:-3px; left:-3px; width:14px; height:14px; cursor:nesw-resize}
+.win.collapsed .rz{display:none}
 .win-resize::after{content:""; position:absolute; right:4px; bottom:4px; width:8px; height:8px;
   border-right:2px solid var(--text-dim); border-bottom:2px solid var(--text-dim); border-radius:2px}
 
@@ -570,7 +581,7 @@ ul.plain{list-style:none}
      tope para los muy altos, con scroll del cuerpo. */
   .win{position:static !important; left:auto !important; top:auto !important;
     width:100% !important; min-width:0; max-height:82vh; z-index:auto !important; flex:0 0 auto}
-  .win-resize{display:none}
+  .win-resize,.rz{display:none}
   .win-btn.maxb{display:none}
   #tb-pill, #tb-sync{display:none}
   #tb-spaces{max-width:none; flex:1}
@@ -1184,7 +1195,7 @@ function syncUI(mode, txt){
    reaparece) y si Recargar está activo. El descarte ✕ vive solo en memoria de la sesión.
    Demora asumida: la CDN de Pages puede servir la versión vieja hasta ~10 min aun con
    no-store (gobierna la caché del navegador, no la CDN); para pestañas de días, irrelevante. */
-const APP_VERSION = "0.34.0";
+const APP_VERSION = "0.35.0";
 let newVersionDetected = null;   // versión superior detectada; detiene futuras consultas
 let verDismissed = false;        // ✕: solo esta sesión — nunca persistido en disco
 let verCheckInflight = false;    // sin consultas concurrentes
@@ -2423,6 +2434,18 @@ function clampRect(x, y, ww, hh, vw, vh){   // encaja un rect guardado (quizá d
     h: Math.min(numOr(hh, 180, 140, 4000), Math.max(140, vh - bar - 24))
   };
 }
+// N3 resize 8 asas (spec §2.7): rect nuevo desde el rect inicial, la dirección del asa y el
+// desplazamiento del puntero. El ANCLA es el borde/esquina opuesto (jamás se mueve); mínimos
+// respetados incluso arrastrando en contra; x/y nunca negativos. dir ∈ n|s|e|w|ne|nw|se|sw. PURO.
+function resizeRect(start, dir, dx, dy, minW, minH){
+  let x = start.x, y = start.y, w = start.w, h = start.h;
+  const right = start.x + start.w, bottom = start.y + start.h;
+  if (dir.indexOf("e") >= 0) w = Math.max(minW, start.w + dx);
+  if (dir.indexOf("s") >= 0) h = Math.max(minH, start.h + dy);
+  if (dir.indexOf("w") >= 0){ x = Math.max(0, Math.min(start.x + dx, right - minW)); w = right - x; }
+  if (dir.indexOf("n") >= 0){ y = Math.max(0, Math.min(start.y + dy, bottom - minH)); h = bottom - y; }
+  return { x, y, w, h };
+}
 /* ---------- Fase 1 (contraste Codex↔Claude, acta 2026-07-09): motor de encuadre puro,
    aún SIN conectar a render/drag/resize/datos.json. safeViewportRect reutiliza maxRect
    (mismo área útil, sin duplicar cálculo). widgetLayoutSpec deriva mínimos de WTYPES SIN
@@ -2588,7 +2611,8 @@ function buildWindow(w){
       ${dictBtn}${descBtn}${colorBtn}${privBtn}<button class="win-btn tagbtn" title="Etiquetas">🏷️</button><button class="win-btn maxb" title="${w.max ? "Restaurar tamaño" : "Maximizar"}">${w.max ? "❐" : "⛶"}</button><button class="win-btn collapse" title="Plegar / desplegar">${w.collapsed ? "▸" : "▾"}</button><button class="win-btn close" title="Cerrar">✕</button></div>
     <div class="win-tags"></div>
     <div class="win-body"></div>
-    <div class="win-resize"></div>`;
+    <div class="win-resize" data-rz="se"></div>
+    <div class="rz rz-n" data-rz="n"></div><div class="rz rz-s" data-rz="s"></div><div class="rz rz-e" data-rz="e"></div><div class="rz rz-w" data-rz="w"></div><div class="rz rz-ne" data-rz="ne"></div><div class="rz rz-nw" data-rz="nw"></div><div class="rz rz-sw" data-rz="sw"></div>`;
   if (w.collapsed) el.classList.add("collapsed");
   el.querySelector(".tagbtn").addEventListener("click", e => { e.stopPropagation(); editWidgetTags(w, el); });
   if (colorable) el.querySelector(".colorbtn").addEventListener("click", e => { e.stopPropagation(); editWinColor(w, el); });
@@ -2857,29 +2881,42 @@ function buildWindow(w){
     addEventListener("pointercancel", cancel); addEventListener("blur", cancel);
   });
 
-  // redimensionar
-  el.querySelector(".win-resize").addEventListener("pointerdown", ev => {
-    if (isMobile()) return;
+  // redimensionar — N3 (8 asas, spec §2.7): transacción SOLO-DOM durante el gesto (draft visual
+  // vía resizeRect pura, ancla en el borde opuesto); el estado muta ÚNICAMENTE en pointerup
+  // (commit único) — ningún guardado a 700 ms puede capturar geometría intermedia.
+  // pointercancel/blur devuelven el DOM exacto al inicio y no tocan estado.
+  const startResize = ev => {
+    if (isMobile() || w.max) return;
+    const dir = ev.currentTarget.dataset.rz;
     ev.preventDefault(); ev.stopPropagation();
     const proj = planViewportLayout([w], worldViewport())[0];   // origen visible sobre el lienzo, no el crudo
     const beforeSnap = rectSnap(w);   // §B: estado previo al gesto (para reflow, rechazo P4 y Deshacer)
-    const sw = proj.w - ev.clientX, sh = proj.h - ev.clientY;
     const t = WTYPES[w.type];
-    let moved = false;
+    const sx = ev.clientX, sy = ev.clientY;
+    let draft = null;   // clic seco (sin move) no debe escribir (revisión Codex 2026-07-10)
     const move = m => {
-      if (!moved){ moved = true; w.x = proj.x; w.y = proj.y; }   // promueve posición solo si de verdad hay redimensionado
-      w.w = Math.max(t.minW || 220, sw + m.clientX);
-      w.h = Math.max(t.minH || 140, sh + m.clientY);
-      el.style.width = w.w + "px"; el.style.height = w.h + "px";
+      draft = resizeRect({ x: proj.x, y: proj.y, w: proj.w, h: proj.h }, dir,
+        m.clientX - sx, m.clientY - sy, t.minW || 220, t.minH || 140);
+      if (draft.y + draft.h > LAYOUT.worldMax) draft.h = LAYOUT.worldMax - draft.y;   // el lienzo tiene tope
+      el.style.left = draft.x + "px"; el.style.top = draft.y + "px";
+      el.style.width = draft.w + "px"; el.style.height = draft.h + "px";
     };
-    const up = () => {
+    const finish = commit => {
       removeEventListener("pointermove", move); removeEventListener("pointerup", up);
-      if (!moved) return;   // clic sin mover el asa no debe escribir (revisión Codex 2026-07-10)
-      // §B resize-reflow: solo si creció en ALTO y sigue alineado al MISMO carril antes y después
+      removeEventListener("pointercancel", cancel); removeEventListener("blur", cancel);
+      if (!commit || !draft){   // cancelación o clic seco: DOM exacto como al empezar, estado intacto
+        el.style.left = proj.x + "px"; el.style.top = proj.y + "px";
+        el.style.width = proj.w + "px"; el.style.height = proj.h + "px";
+        return;
+      }
+      w.x = draft.x; w.y = draft.y; w.w = draft.w; w.h = draft.h;   // commit único de la transacción
+      // §B resize-reflow: solo si el BORDE INFERIOR avanzó (crecer hacia arriba no reflowea: el
+      // ancla inferior no se mueve y no hay reflow hacia arriba — poda vigente) y sigue alineado
+      // al MISMO carril antes y después
       const guides = columnGuides(deskViewW(), colsOpt());
       const laneA = alignedLane({ x: beforeSnap.x, w: beforeSnap.w }, guides);
       const laneB = alignedLane({ x: w.x, w: w.w }, guides);
-      if (w.h > beforeSnap.h && laneA !== null && laneA === laneB){
+      if (w.y + w.h > beforeSnap.y + beforeSnap.h && laneA !== null && laneA === laneB){
         const sp = state.spaces[state.active];
         const others = planViewportLayout(state.widgets.filter(x => x.id !== w.id && !x.max && !(tagFilter && !(x.tags || []).includes(tagFilter))), worldViewport());
         const cls = laneClassify(others, guides, laneB, LAYOUT.snapGap);
@@ -2900,8 +2937,12 @@ function buildWindow(w){
       }
       markDirty(); updateDeskHeight();
     };
+    const up = () => finish(true);
+    const cancel = () => finish(false);
     addEventListener("pointermove", move); addEventListener("pointerup", up);
-  });
+    addEventListener("pointercancel", cancel); addEventListener("blur", cancel);
+  };
+  el.querySelectorAll("[data-rz]").forEach(hd => hd.addEventListener("pointerdown", startResize));
   return el;
 }
 
