@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.34.0] - 2026-07-14
+
+- **Panel de configuración general (⚙).** La rueda dentada que faltaba: en el acceso inferior derecho (y en Inicio y la paleta como «Ajustes generales»). Nada se aplica hasta pulsar **Guardar** — abrir, mirar o cancelar no toca nada — y las preferencias viajan con tus datos entre equipos. Dos ajustes de estreno, elegidos por tener uso real hoy:
+  - **Tipografía de todo el sitio:** tres familias cuidadas (Sistema, Humanista, Clásica), con vista previa en vivo al cambiar el selector (Cancelar o Esc la revierten). El código sigue monoespaciado. Por seguridad solo se guardan identificadores de una lista cerrada — nunca nombres de fuente arbitrarios.
+  - **Columnas de los escritorios nuevos:** con qué número de columnas (o Auto) nace un escritorio al crearlo. Los existentes no cambian, y solo el gesto de crear espacio consulta esta preferencia: cargar, sincronizar o restaurar jamás recolocan nada.
+
 ## [0.33.0] - 2026-07-14
 
 - **«Reordenar este escritorio»: columnas de verdad, cuando tú lo pidas.** En el menú **▤** de la barra hay un botón nuevo que coloca de una vez todos los widgets del escritorio en las columnas elegidas: cada uno adopta el ancho de su columna y se apilan sin huecos, en el orden en que estaban (los plegados reservan su altura real, para que nada se solape al desplegarlos). Es siempre un gesto tuyo — elegir el número de columnas sigue sin mover nada, y Cabecera jamás recoloca sola al cargar, sincronizar o cambiar de pantalla. Deshacer doble: el botón del aviso y «Deshacer último reordenado» en el propio menú, que se queda ahí hasta el siguiente reordenado o la recarga; restaura todo o nada (si algo cambió entre medias, no deja el escritorio a medias). Si el resultado no cupiera en el área máxima del escritorio, se cancela entero con un aviso.

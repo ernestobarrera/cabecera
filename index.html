@@ -261,6 +261,9 @@ body{font-family:var(--font); color:var(--text); background:#10131a}
 .field{display:flex; gap:8px; margin-top:10px}
 .field input{flex:1; padding:8px 11px; border-radius:9px; border:1px solid var(--border-soft); background:rgba(0,0,0,.25); color:var(--text); font-size:13px; font-family:var(--font); outline:none}
 .field input:focus{border-color:var(--accent)}
+.cfg-sel{padding:8px 11px; border-radius:9px; border:1px solid var(--border-soft); background:rgba(0,0,0,.25); color:var(--text); font-size:13px; font-family:var(--font); outline:none}
+.cfg-sel:focus{border-color:var(--accent)}
+.cfg-sel option{background:#1a1f28}
 
 /* ---------- toasts / conflicto ---------- */
 #toasts{position:fixed; right:14px; bottom:102px; z-index:950; display:flex; flex-direction:column; gap:8px}   /* por encima del dock, sin taparlo */
@@ -602,6 +605,7 @@ ul.plain{list-style:none}
   <button class="dock-btn" id="desk-arrange" title="Autoordenar widgets">🧭</button>
   <button class="dock-btn" id="desk-trash" title="Papelera">🗑️ <span class="dock-count" id="desk-trash-n"></span></button>
   <button class="dock-btn" id="desk-privacy" title="Ocultar widgets privados (pantalla compartida)">👁</button>
+  <button class="dock-btn" id="desk-config" title="Configuración general">⚙</button>
   <button class="dock-btn dock-info" id="desk-info" title="Información del proyecto">i</button>
 </div>
 
@@ -648,6 +652,7 @@ ul.plain{list-style:none}
   </div>
   <div id="menu-actions">
     <h4 style="width:100%">Configuración</h4>
+    <button class="act" id="act-config">⚙ Ajustes generales</button>
     <button class="act" id="act-ayuda">❓ Guía</button>
     <button class="act" id="act-packs">🧩 Packs</button>
     <button class="act" id="act-wallpaper">🖼️ Fondo</button>
@@ -731,6 +736,35 @@ ul.plain{list-style:none}
     <div class="row">
       <button class="btn" id="wp-file">🖼️ Usar fondo.jpg de la carpeta</button>
       <button class="btn" id="wp-close">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- configuración general (panel ⚙) — edición transaccional: solo Guardar toca el estado -->
+<div class="overlay" id="ov-config">
+  <div class="modal">
+    <h2>⚙ Configuración</h2>
+    <p>Preferencias generales del sitio. Nada se aplica hasta que pulses <b>Guardar</b>; se sincronizan entre tus equipos.</p>
+    <div class="field" style="flex-direction:column; align-items:stretch; gap:4px">
+      <label for="cfg-font" style="font-size:13px"><b>Tipografía</b> <span style="color:var(--text-dim)">— todo el sitio; el código sigue monoespaciado</span></label>
+      <select id="cfg-font" class="cfg-sel">
+        <option value="system">Sistema (Segoe UI)</option>
+        <option value="humanist">Humanista (Verdana)</option>
+        <option value="classic">Clásica (Georgia)</option>
+      </select>
+    </div>
+    <div class="field" style="flex-direction:column; align-items:stretch; gap:4px">
+      <label for="cfg-defcols" style="font-size:13px"><b>Columnas de los escritorios nuevos</b> <span style="color:var(--text-dim)">— los existentes no cambian; cada escritorio conserva su ▤</span></label>
+      <select id="cfg-defcols" class="cfg-sel">
+        <option value="auto">Auto (según el ancho)</option>
+        <option value="2">2 columnas</option>
+        <option value="3">3 columnas</option>
+        <option value="4">4 columnas</option>
+      </select>
+    </div>
+    <div class="row">
+      <button class="btn" id="cfg-save">💾 Guardar</button>
+      <button class="btn" id="cfg-cancel">Cancelar</button>
     </div>
   </div>
 </div>
@@ -1009,9 +1043,50 @@ function sanitizeState(s){
     const hours = unit === "hours" ? numOr(m.hours, 0, 0, 24 * 366) : undefined;
     return { id: (typeof m.id === "string" && m.id) ? m.id.slice(0, 64) : "cm_" + uid(), start, end, type, label, unit, ...(hours ? { hours } : {}) };
   }).filter(Boolean).slice(0, 240);
+  // preferencias GLOBALES del panel ⚙ (spec panel-configuracion v1.1): whitelist estricta;
+  // lo inválido se elimina (defaults en memoria). NUNCA se crea aquí: la ausencia es el estado
+  // canónico hasta que el usuario guarda algo («abrir jamás escribe»). Este saneo tampoco
+  // recoloca nada: defaultCols solo lo consulta el gesto humano de crear espacio (addSpace).
+  if (s.appSettings && typeof s.appSettings === "object"){
+    const a = {};
+    if (s.appSettings.font === "humanist" || s.appSettings.font === "classic") a.font = s.appSettings.font;   // "system" = default → ausencia
+    if (s.appSettings.defaultCols === 2 || s.appSettings.defaultCols === 3 || s.appSettings.defaultCols === 4) a.defaultCols = s.appSettings.defaultCols;
+    if (Object.keys(a).length) s.appSettings = a; else delete s.appSettings;
+  } else if ("appSettings" in s) delete s.appSettings;
   s.version = 2;
   if (typeof s.updatedAt !== "number") s.updatedAt = Date.now();
   return s;
+}
+// Pilas tipográficas CURADAS del panel ⚙: se persiste SOLO el id (whitelist); jamás cadenas CSS,
+// URLs ni fuentes remotas — ninguna selección puede inyectar estilo arbitrario. Locales todas.
+const FONT_STACKS = {
+  system: '"Segoe UI", system-ui, -apple-system, sans-serif',
+  humanist: 'Verdana, "Segoe UI", Geneva, Tahoma, sans-serif',
+  classic: 'Georgia, "Iowan Old Style", "Times New Roman", serif'
+};
+function appSettings(){ return (state && state.appSettings && typeof state.appSettings === "object") ? state.appSettings : {}; }
+function applyFont(){
+  const id = FONT_STACKS[appSettings().font] ? appSettings().font : "system";
+  document.documentElement.style.setProperty("--font", FONT_STACKS[id]);
+}
+// Panel ⚙ — edición TRANSACCIONAL (gate): el modal es un borrador; la preview tipográfica es solo
+// DOM; el estado se toca ÚNICAMENTE en Guardar (un markDirty). Cancelar/Esc revierte la preview.
+function openConfig(){
+  const a = appSettings();
+  $("#cfg-font").value = FONT_STACKS[a.font] ? a.font : "system";
+  $("#cfg-defcols").value = (a.defaultCols === 2 || a.defaultCols === 3 || a.defaultCols === 4) ? String(a.defaultCols) : "auto";
+  $("#ov-config").classList.add("open");
+}
+function saveConfig(){
+  const a = {};
+  const f = $("#cfg-font").value;
+  if (f !== "system" && FONT_STACKS[f]) a.font = f;   // se persiste SOLO el id de la whitelist
+  const dc = +$("#cfg-defcols").value;
+  if (dc === 2 || dc === 3 || dc === 4) a.defaultCols = dc;
+  if (Object.keys(a).length) state.appSettings = a;
+  else delete state.appSettings;   // todo por defecto = ausencia (el estado canónico)
+  $("#ov-config").classList.remove("open");
+  applyFont(); markDirty(); toast("Configuración guardada");
 }
 
 // Enlaza state.widgets / state.settings al espacio activo. No enumerables → no se serializan (evita duplicar).
@@ -1109,7 +1184,7 @@ function syncUI(mode, txt){
    reaparece) y si Recargar está activo. El descarte ✕ vive solo en memoria de la sesión.
    Demora asumida: la CDN de Pages puede servir la versión vieja hasta ~10 min aun con
    no-store (gobierna la caché del navegador, no la CDN); para pestañas de días, irrelevante. */
-const APP_VERSION = "0.33.0";
+const APP_VERSION = "0.34.0";
 let newVersionDetected = null;   // versión superior detectada; detiene futuras consultas
 let verDismissed = false;        // ✕: solo esta sesión — nunca persistido en disco
 let verCheckInflight = false;    // sin consultas concurrentes
@@ -1781,6 +1856,7 @@ const WTYPES = {
 let repaintPill = () => {};
 function renderAll(){
   applyWallpaper();
+  applyFont();
   const d = $("#desktop");
   d.innerHTML = "";
   const end = document.createElement("div"); end.id = "desk-end";   // espaciador del lienzo (se repone: innerHTML lo borró)
@@ -1817,6 +1893,10 @@ function setActive(i){
 function addSpace(){
   const sp = blankSpace();
   sp.name = "Escritorio " + (state.spaces.length + 1);
+  // panel ⚙: columnas por defecto SOLO aquí (el gesto humano de crear espacio) — jamás en
+  // blankSpace/saneo/migraciones/packs/restauraciones (gate del panel, corrección 4)
+  const dc = appSettings().defaultCols;
+  if (dc === 2 || dc === 3 || dc === 4) sp.settings.cols = dc;
   state.spaces.push(sp);
   state.active = state.spaces.length - 1;
   markDirty();
@@ -5002,7 +5082,7 @@ function paletteEntries(){
   add("📖", "Guía completa", "cómo funciona todo", () => { closeMenu(); window.open("guia.html", "_blank", "noopener"); }, "guia manual ayuda completa como funciona empezar");
   for (const [type, t] of Object.entries(WTYPES)) if (type !== "intro")
     add("➕", "Añadir " + t.name, "widget nuevo", () => { addWidget(type); closeMenu(); }, "añadir crear nuevo " + t.name);
-  [["❓","Guía","act-ayuda"],["🧩","Packs","act-packs"],["🖼️","Fondo","act-wallpaper"],["📁","Sincronizar equipos","act-folder"],["🧭","Autoordenar","act-arrange"],["🗑️","Papelera","act-trash"],["⬇️","Exportar copia","act-export"],["⬆️","Importar copia","act-import"],["♻️","Restaurar copia","act-restore"]]
+  [["⚙","Ajustes generales","act-config"],["❓","Guía","act-ayuda"],["🧩","Packs","act-packs"],["🖼️","Fondo","act-wallpaper"],["📁","Sincronizar equipos","act-folder"],["🧭","Autoordenar","act-arrange"],["🗑️","Papelera","act-trash"],["⬇️","Exportar copia","act-export"],["⬆️","Importar copia","act-import"],["♻️","Restaurar copia","act-restore"]]
     .forEach(([ic, label, id]) => add(ic, label, "acción", () => { closeMenu(); const b = $("#" + id); if (b) b.click(); }, label + " configuración"));
   return E;
 }
@@ -5165,7 +5245,7 @@ function wireUI(){
     if (e.key === "Escape"){
       // cierra lo más superficial: modal abierto (salvo reconectar, que espera decisión) > tour > menú
       const ov = $$(".overlay.open").filter(x => x.id !== "ov-reconnect").pop();
-      if (ov){ ov.classList.remove("open"); return; }
+      if (ov){ if (ov.id === "ov-config") applyFont(); ov.classList.remove("open"); return; }   // ⚙: Esc también revierte la preview
       if ($("#tour").classList.contains("open")){ endTour(); return; }
       closeMenu();
     }
@@ -5202,6 +5282,16 @@ function wireUI(){
     if (backend !== "fs"){ toast("Necesitas una carpeta de datos conectada", true); return; }
     state.settings.wallpaper = { type: "file" }; applyWallpaper(); markDirty();
   });
+
+  // panel ⚙ de configuración general
+  $("#desk-config").addEventListener("click", () => { closeMenu(); openConfig(); });
+  $("#act-config").addEventListener("click", () => { closeMenu(); openConfig(); });
+  $("#cfg-font").addEventListener("change", () => {
+    const id = $("#cfg-font").value;
+    if (FONT_STACKS[id]) document.documentElement.style.setProperty("--font", FONT_STACKS[id]);   // preview: solo DOM, sin tocar estado
+  });
+  $("#cfg-cancel").addEventListener("click", () => { $("#ov-config").classList.remove("open"); applyFont(); });
+  $("#cfg-save").addEventListener("click", saveConfig);
 
   // packs
   $("#act-packs").addEventListener("click", async () => {

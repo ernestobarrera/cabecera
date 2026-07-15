@@ -151,6 +151,31 @@ if (!wt || wt.length !== 3 || wt[0] !== 'clínica' || wt[2].length !== 24) throw
 if (sanitizeWidgetShape({ type: 'notes' }).tags !== undefined) throw new Error('tags vacío debe ser undefined');
 console.log('OK esquema v2 (migración, accesores no-enumerables, serialización, saneo estructural, source/id/tags estrictos)');
 
+// --- panel ⚙: state.appSettings raíz enumerable, whitelist estricta, sin escritura de defaults ---
+// ausencia = canónico: el saneo NUNCA lo crea
+if ('appSettings' in sanitizeState(migrate({ version: 2, active: 0, spaces: [{ widgets: [] }] }))) throw new Error('appSettings: el saneo no debe CREARLO (ausencia = defaults en memoria)');
+// whitelist: font solo humanist|classic (system = ausencia); defaultCols solo 2|3|4
+let aps = sanitizeState(migrate({ version: 2, active: 0, spaces: [{ widgets: [] }], appSettings: { font: 'classic', defaultCols: 3 } })).appSettings;
+if (!aps || aps.font !== 'classic' || aps.defaultCols !== 3) throw new Error('appSettings: valores válidos perdidos');
+aps = sanitizeState(migrate({ version: 2, active: 0, spaces: [{ widgets: [] }], appSettings: { font: 'evil;url(x)', defaultCols: 9 } }));
+if ('appSettings' in aps) throw new Error('appSettings: todo inválido debe eliminarse entero');
+aps = sanitizeState(migrate({ version: 2, active: 0, spaces: [{ widgets: [] }], appSettings: { font: 'system', defaultCols: 4, extra: 1 } })).appSettings;
+if (!aps || aps.font !== undefined || aps.defaultCols !== 4 || aps.extra !== undefined) throw new Error('appSettings: system debe caer a ausencia y los extras descartarse');
+// raíz enumerable: sobrevive al round-trip y NO depende del espacio activo
+const apsState = bindSpace(sanitizeState(migrate({ version: 2, active: 0, spaces: [{ widgets: [] }, { widgets: [] }], appSettings: { font: 'humanist' } })));
+apsState.active = 1;
+if (apsState.appSettings.font !== 'humanist') throw new Error('appSettings: cambiar de espacio no debe alterarlo (era el bug de esquema de la spec v1.0)');
+if (JSON.parse(JSON.stringify(apsState)).appSettings.font !== 'humanist') throw new Error('appSettings: no sobrevive a la serialización');
+// invariantes de fuente: tipografía solo por id de whitelist; defaultCols SOLO en addSpace; panel transaccional
+if (!src.match(/FONT_STACKS = \{[\s\S]*?\}/)) throw new Error('regresión ⚙: falta la whitelist FONT_STACKS');
+if (!src.match(/setProperty\("--font", FONT_STACKS\[id\]\)/g) || (src.match(/setProperty\("--font"/g) || []).length !== 2) throw new Error('regresión ⚙: --font debe fijarse SOLO vía FONT_STACKS (applyFont + preview)');
+if (!src.match(/function addSpace[\s\S]{0,700}defaultCols/)) throw new Error('regresión ⚙: addSpace ya no consulta defaultCols');
+if (src.match(/function blankSpace[\s\S]{0,300}defaultCols/)) throw new Error('regresión ⚙: blankSpace NO debe consultar defaultCols (solo el gesto de crear espacio)');
+const cfgWiring = src.match(/panel ⚙ de configuración general[\s\S]*?\$\("#cfg-save"\)/);
+if (!cfgWiring || cfgWiring[0].includes('markDirty')) throw new Error('regresión ⚙: abrir/preview/cancelar no deben escribir (markDirty solo en saveConfig)');
+if (!src.match(/function saveConfig[\s\S]{0,700}markDirty/)) throw new Error('regresión ⚙: saveConfig debe ser el único commit');
+console.log('OK panel ⚙ (appSettings raíz con whitelist, sin auto-creación, independiente del espacio, transaccional)');
+
 // --- snapPosition: imán de arrastre (bordes del escritorio y de otras ventanas) ---
 eval('globalThis.snapPosition = ' + pickFn('snapPosition', 'x, y, ww, hh, rects, vw, vh, thr = 8, gap = 14'));
 const others = [ { x: 100, y: 100, w: 300, h: 200 } ];
