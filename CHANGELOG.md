@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.36.0] - 2026-07-16
+
+- **Arrastra marcadores al widget de Enlaces.** Un marcador arrastrado desde la barra del navegador — o un enlace desde cualquier página — se suelta encima del widget y se añade al grupo donde lo dejes (el widget se ilumina al pasar por encima). Solo se aceptan direcciones http(s); si el arrastre trae título (según el navegador), se usa; si no, se pone el dominio y lo editas con ✎.
+- **Reordena los enlaces arrastrándolos.** Cada enlace tiene ahora un asa ⋮⋮ (visible al pasar el ratón, como en Tareas): arrastra para cambiar el orden, moverlo a otro grupo o llevarlo a otro widget de enlaces.
+- **Soltar algo fuera de un widget ya no navega la página.** Antes, si al arrastrar un marcador fallabas el destino, el navegador abandonaba Cabecera para abrir esa URL; ahora el suelto fuera de un destino válido simplemente no hace nada.
+
 ## [0.35.0] - 2026-07-14
 
 - **Redimensionar desde cualquier borde.** Las ventanas se estiran ahora desde sus **cuatro bordes y cuatro esquinas** (antes, solo la esquina inferior derecha): el cursor cambia al acercarte y el lado opuesto queda fijo, como en las ventanas del sistema. Durante el gesto no se guarda nada — el tamaño se confirma al soltar, y si el gesto se cancela (por ejemplo al cambiar de ventana), todo vuelve exactamente a como estaba. La recolocación de la columna al crecer hacia abajo funciona igual desde cualquier asa.

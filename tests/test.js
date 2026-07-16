@@ -883,4 +883,39 @@ if (!src.includes('querySelectorAll(".mc-pick")')) throw new Error('regresión: 
 if (!src.match(/mc-pick[\s\S]{0,200}closest\(".rmc"\)\) return/)) throw new Error('regresión: el clic del chip ya no respeta la ✕ de borrado');
 console.log('OK conceptos propios (grupo primero en el desplegable, chip clicable con ✕ intacta)');
 
+// --- parseLinkDrop: arrastres del navegador → enlaces http(s) (v0.36.0) ---
+eval('globalThis.parseLinkDrop = ' + pickFn('parseLinkDrop', 'dt'));
+// marcador Chrome/Edge: uri-list + plain con la misma URL → 1 enlace, título = dominio sin www
+let pld = parseLinkDrop({ uriList: 'https://www.semfyc.es/formacion', plain: 'https://www.semfyc.es/formacion' });
+if (pld.length !== 1 || pld[0].u !== 'https://www.semfyc.es/formacion' || pld[0].t !== 'semfyc.es') throw new Error('drop de marcador simple: ' + JSON.stringify(pld));
+// uri-list multilínea con comentarios y CRLF (RFC 2483)
+pld = parseLinkDrop({ uriList: '# comentario\r\nhttps://a.example/x\r\nhttps://b.example/y\r\n' });
+if (pld.length !== 2 || pld[0].u !== 'https://a.example/x' || pld[1].u !== 'https://b.example/y') throw new Error('uri-list multilínea: ' + JSON.stringify(pld));
+// esquemas peligrosos o no web: fuera, aunque vengan mezclados con uno bueno
+pld = parseLinkDrop({ uriList: 'javascript:alert(1)\ndata:text/html,x\nftp://f/x\nhttps://ok.example/' });
+if (pld.length !== 1 || pld[0].u !== 'https://ok.example/') throw new Error('esquema no http(s) aceptado: ' + JSON.stringify(pld));
+// Firefox: text/x-moz-url trae pares URL\ntítulo
+pld = parseLinkDrop({ mozUrl: 'https://pubmed.ncbi.nlm.nih.gov/\nPubMed' });
+if (pld.length !== 1 || pld[0].t !== 'PubMed') throw new Error('x-moz-url con título: ' + JSON.stringify(pld));
+// enlace arrastrado desde una página: título desde el ancla del text/html (sin etiquetas ni entidades)
+pld = parseLinkDrop({ uriList: 'https://x.example/a', html: '<a href="https://x.example/a"><b>Guía &amp; consejos</b></a>' });
+if (pld[0].t !== 'Guía & consejos') throw new Error('título del ancla html: ' + JSON.stringify(pld));
+// texto plano que NO es URL no fabrica enlace
+pld = parseLinkDrop({ plain: 'esto es solo texto' });
+if (pld.length !== 0) throw new Error('texto plano no-URL fabricó enlace: ' + JSON.stringify(pld));
+// duplicados dentro del mismo arrastre se funden
+pld = parseLinkDrop({ uriList: 'https://dup.example/\nhttps://dup.example/' });
+if (pld.length !== 1) throw new Error('duplicados del mismo arrastre no fundidos');
+// título humano en text/plain cuando la URL viaja en uri-list
+pld = parseLinkDrop({ uriList: 'https://t.example/', plain: 'Título humano' });
+if (pld[0].t !== 'Título humano') throw new Error('título desde plain: ' + JSON.stringify(pld));
+// el título se recorta a 120 (el enlace nunca se rechaza por título largo)
+pld = parseLinkDrop({ uriList: 'https://l.example/', plain: 'x'.repeat(300) });
+if (pld[0].t.length !== 120) throw new Error('título sin tope de 120');
+console.log('OK parseLinkDrop (marcador, multilínea, esquemas seguros, títulos moz/html/plain, dedupe, tope 120)');
+// invariantes: guardián anti-navegación de drops perdidos y asa de reordenado en enlaces
+if (!src.includes('document.addEventListener("drop", e => { e.preventDefault(); })')) throw new Error('regresión: falta el guardián anti-navegación de drops fuera de destino');
+if (!src.match(/link-it[\s\S]{0,400}it-drag" draggable="true"/)) throw new Error('regresión: los enlaces perdieron el asa de arrastre ⋮⋮');
+console.log('OK enlaces arrastrables (guardián de documento + asa presente)');
+
 console.log('\nTODO EN VERDE');
