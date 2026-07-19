@@ -225,7 +225,7 @@
   <ul class="steps">
     <li>Inicio → «Sincronizar equipos» → eliges una carpeta (p. ej. <code>OneDrive\cabecera-datos</code>). Tus datos pasan a un <code>datos.json</code> en esa carpeta.</li>
     <li>Cada equipo elige su carpeta una vez; la ruta puede ser distinta en cada uno.</li>
-    <li>Si dos equipos editan a la vez, la página avisa del conflicto y eliges con cuál quedarte.</li>
+    <li>Si dos equipos editan a la vez, Cabecera <b>combina sola</b> los cambios cuando afectan a widgets distintos (verás un aviso «Combinado con cambios de otro equipo»). La barra de conflicto solo aparece si los dos lados tocaron <b>el mismo widget</b>: te dice cuál es, y los botones deciden únicamente sobre eso — el resto ya está combinado. Antes de cada combinación se guarda una copia de tu escritorio, recuperable en Inicio → «Restaurar copia».</li>
     <li>Si conectas una carpeta que aún no tiene <code>datos.json</code>, Cabecera pregunta antes de crear nada: puede ser la primera vez que la usas, o que tu nube todavía esté bajando el archivo desde otro equipo (típico justo al encender el ordenador). Puedes <b>reintentar</b>, <b>crear aquí</b> o elegir otra carpeta si no era la que esperabas.</li>
     <li>El indicador de sincronización de la barra inferior también sirve para conectar o comprobar la carpeta.</li>
     <li><b>Bandeja:</b> cualquier línea en <code>inbox.txt</code> (desde el móvil, una macro o un agente) aparece para convertirla en nota/tarea. Si la línea sigue la <a href="#buscar">gramática de captura</a> (<code>t tarea @mañana</code>, <code>v 12-16/8</code>…), la conversión sugerida se ofrece con un clic.</li>

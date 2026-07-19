@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.37.0] - 2026-07-18
+
+- **Editar en dos equipos a la vez ya casi nunca molesta.** Hasta ahora, si tu archivo cambiaba en otro equipo mientras editabas aquí, salía siempre la barra de conflicto y tenías que elegir un lado entero. Ahora Cabecera **combina sola** los dos lados cuando los cambios afectan a widgets distintos (que es lo normal): verás un aviso «Combinado con cambios de otro equipo» y sigues a lo tuyo.
+- **La barra de conflicto, solo para el choque real — y te dice cuál es.** Aparece únicamente si los dos equipos tocaron **el mismo widget**, nombrándolo («Cambió en los dos lados: “…”»). Los botones de siempre deciden solo sobre lo que choca; todo lo demás ya viene combinado, y lo que escribas mientras la barra está abierta no se pierde.
+- **Copia de seguridad antes de cada combinación.** Tu escritorio previo queda guardado en este equipo y se recupera en Inicio → «Restaurar copia», por si una combinación no te convence.
+
 ## [0.36.0] - 2026-07-16
 
 - **Arrastra marcadores al widget de Enlaces.** Un marcador arrastrado desde la barra del navegador — o un enlace desde cualquier página — se suelta encima del widget y se añade al grupo donde lo dejes (el widget se ilumina al pasar por encima). Solo se aceptan direcciones http(s); si el arrastre trae título (según el navegador), se usa; si no, se pone el dominio y lo editas con ✎.

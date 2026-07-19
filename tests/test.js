@@ -918,4 +918,98 @@ if (!src.includes('document.addEventListener("drop", e => { e.preventDefault(); 
 if (!src.match(/link-it[\s\S]{0,400}it-drag" draggable="true"/)) throw new Error('regresión: los enlaces perdieron el asa de arrastre ⋮⋮');
 console.log('OK enlaces arrastrables (guardián de documento + asa presente)');
 
+// --- mergeStates: fusión a tres bandas por widget (spec-merge-por-widget, v0.37.0) ---
+eval('globalThis.canonJSON = ' + pickFn('canonJSON', 'v'));
+eval('globalThis.mergeStates = ' + pickFn('mergeStates', 'base, local, remote, prefer'));
+{
+  const mkW = (id, data, over) => Object.assign({ id, type: 'notes', x: 40, y: 40, w: 300, h: 220, z: 1, data: data || { text: '' }, source: 'user' }, over || {});
+  const S = (id, name, widgets) => ({ id, name, settings: { wallpaper: { type: 'preset', value: 0 } }, widgets });
+  const mkState = spaces => ({ version: 2, updatedAt: 1000, active: 0, spaces, calendarMarks: [], trash: [] });
+  const B = () => mkState([S('s1', 'Escritorio', [mkW('wa', { text: 'a' }), mkW('wb', { text: 'b' })])]);
+  const gw = (st, id) => { for (const sp of st.spaces) for (const w of sp.widgets) if (w.id === id) return w; };
+
+  // el caso del incidente real (2026-07-09): cada lado edita un widget DISTINTO → combinado, sin barra
+  let L = B(); L.spaces[0].widgets[0].data.text = 'a-local';
+  let R = B(); R.spaces[0].widgets[1].data.text = 'b-remoto';
+  let res = mergeStates(B(), L, R, 'local');
+  if (res.conflicts.length) throw new Error('fusión disjunta dio conflicto: ' + JSON.stringify(res.conflicts));
+  if (gw(res.merged, 'wa').data.text !== 'a-local' || gw(res.merged, 'wb').data.text !== 'b-remoto') throw new Error('fusión disjunta no conservó ambos lados');
+
+  // mismo widget tocado en los dos lados → conflicto real nombrado; prefer decide solo eso
+  L = B(); L.spaces[0].widgets[0].data.text = 'local';
+  R = B(); R.spaces[0].widgets[0].data.text = 'remoto';
+  res = mergeStates(B(), L, R, 'local');
+  if (res.conflicts.length !== 1 || res.conflicts[0].kind !== 'widget' || res.conflicts[0].id !== 'wa') throw new Error('conflicto real no detectado: ' + JSON.stringify(res.conflicts));
+  if (gw(res.merged, 'wa').data.text !== 'local') throw new Error('prefer local no respetado');
+  if (gw(mergeStates(B(), L, R, 'remote').merged, 'wa').data.text !== 'remoto') throw new Error('prefer remote no respetado');
+
+  // creación con id nuevo en cada lado → ambos sobreviven
+  L = B(); L.spaces[0].widgets.push(mkW('wl', { text: 'nuevo-l' }));
+  R = B(); R.spaces[0].widgets.push(mkW('wr', { text: 'nuevo-r' }));
+  res = mergeStates(B(), L, R, 'local');
+  if (res.conflicts.length || !gw(res.merged, 'wl') || !gw(res.merged, 'wr')) throw new Error('creaciones no fusionadas');
+
+  // borrado remoto de un widget intacto aquí → desaparece sin conflicto
+  L = B();
+  R = B(); R.spaces[0].widgets = R.spaces[0].widgets.filter(w => w.id !== 'wb');
+  res = mergeStates(B(), L, R, 'local');
+  if (res.conflicts.length || gw(res.merged, 'wb')) throw new Error('borrado remoto no aplicado');
+
+  // borrado remoto vs edición local del MISMO widget → conflicto (decisión Codex)
+  L = B(); L.spaces[0].widgets[1].data.text = 'editado';
+  res = mergeStates(B(), L, R, 'local');
+  if (res.conflicts.length !== 1 || res.conflicts[0].id !== 'wb') throw new Error('borrado-vs-edición sin conflicto');
+  if (!gw(res.merged, 'wb')) throw new Error('prefer local debería conservar el editado');
+  if (gw(mergeStates(B(), L, R, 'remote').merged, 'wb')) throw new Error('prefer remote debería aplicar el borrado');
+
+  // la unidad widget incluye su colocación: mover de espacio aquí + editar allí = conflicto;
+  // mover solo aquí = gana el movimiento
+  const B2 = () => mkState([S('s1', 'Uno', [mkW('wa', { text: 'a' })]), S('s2', 'Dos', [])]);
+  L = B2(); L.spaces[1].widgets.push(L.spaces[0].widgets.pop());
+  R = B2(); R.spaces[0].widgets[0].data.text = 'remoto';
+  if (mergeStates(B2(), L, R, 'local').conflicts.length !== 1) throw new Error('mover-vs-editar debería chocar');
+  res = mergeStates(B2(), L, B2(), 'local');
+  if (res.conflicts.length || res.merged.spaces[1].widgets.length !== 1) throw new Error('mover local no respetado');
+
+  // meta de espacio y widgets son unidades separadas: renombrar allí + editar aquí no chocan
+  L = B(); L.spaces[0].widgets[0].data.text = 'x';
+  R = B(); R.spaces[0].name = 'Renombrado';
+  res = mergeStates(B(), L, R, 'local');
+  if (res.conflicts.length || res.merged.spaces[0].name !== 'Renombrado' || gw(res.merged, 'wa').data.text !== 'x') throw new Error('meta de espacio y widget no se fusionan aparte');
+
+  // updatedAt excluido de toda comparación (decisión Codex); merged lleva el máximo
+  L = B(); L.updatedAt = 5000; R = B(); R.updatedAt = 9000;
+  res = mergeStates(B(), L, R, 'local');
+  if (res.conflicts.length || res.merged.updatedAt !== 9000) throw new Error('updatedAt debe excluirse y llevar el máximo');
+
+  // active lo resuelve el LOCAL sin conflicto (decisión Codex)
+  L = B(); R = B(); R.active = 1; R.spaces.push(S('s9', 'Otro', []));
+  res = mergeStates(B(), L, R, 'local');
+  if (res.merged.active !== 0 || res.conflicts.length) throw new Error('active debe conservar el local sin conflicto');
+
+  // marcas de calendario por id: añadir en ambos lados → unión sin conflicto
+  L = B(); L.calendarMarks = [{ id: 'm1', start: '2026-08-01', end: '2026-08-01', type: 'otro', label: 'L', unit: 'days' }];
+  R = B(); R.calendarMarks = [{ id: 'm2', start: '2026-08-02', end: '2026-08-02', type: 'otro', label: 'R', unit: 'days' }];
+  res = mergeStates(B(), L, R, 'local');
+  if (res.conflicts.length || res.merged.calendarMarks.length !== 2) throw new Error('unión de marcas fallida');
+
+  // papelera: unión deduplicada (red de seguridad, jamás conflicto)
+  L = B(); L.trash = [{ kind: 'widget', a: 1 }];
+  R = B(); R.trash = [{ kind: 'widget', a: 1 }, { kind: 'widget', b: 2 }];
+  if (mergeStates(B(), L, R, 'local').merged.trash.length !== 2) throw new Error('papelera mal unida');
+
+  // ⚙ cambiado distinto en los dos lados → conflicto de configuración nombrado
+  L = B(); L.appSettings = { font: 'humanist' };
+  R = B(); R.appSettings = { font: 'classic' };
+  if (mergeStates(B(), L, R, 'local').conflicts.filter(c => c.kind === 'config').length !== 1) throw new Error('choque de ⚙ sin conflicto');
+}
+console.log('OK mergeStates (disjunta sin barra, choque nombrado, crear/borrar/mover, borrado-vs-edición, espacios aparte, updatedAt fuera, active local, marcas, papelera, ⚙)');
+// invariantes de integración de la fusión
+if (!src.includes('mergeStates(baseS, localSnap, remote, "local")')) throw new Error('regresión: poll ya no intenta la fusión antes de la barra');
+if (!src.includes('localStorage.setItem("cabecera-premerge"')) throw new Error('regresión: la fusión no guarda copia local previa');
+if (!src.includes('tryRestore("cabecera-premerge"')) throw new Error('regresión: la copia pre-fusión no es restaurable desde ♻️');
+if (!src.includes('resolveMergeConflict("remote")') || !src.includes('resolveMergeConflict("local")')) throw new Error('regresión: los botones de la barra ya no resuelven solo lo que choca');
+if (!src.includes('function renderConflictBar(')) throw new Error('regresión: la barra ya no nombra lo que choca');
+console.log('OK integración de la fusión (poll, copia previa restaurable, resolución por unidad)');
+
 console.log('\nTODO EN VERDE');

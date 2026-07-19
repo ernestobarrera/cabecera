@@ -895,7 +895,7 @@ ul.plain{list-style:none}
 </div>
 
 <div id="conflict">
-  ⚠️ <b>datos.json</b> cambió en otro equipo mientras editabas aquí.
+  ⚠️ <span id="conflict-msg"><b>datos.json</b> cambió en otro equipo mientras editabas aquí.</span>
   <button class="mini" id="cf-reload">Cargar lo remoto</button>
   <button class="mini warn" id="cf-force">Mantener lo mío</button>
 </div>
@@ -931,6 +931,7 @@ let lastMtime = 0;           // mtime de datos.json que ya tenemos cargado
 let dirty = false;
 let saveTimer = null;
 let conflictPending = false;
+let pendingMerge = null;     // { remote, text, mtime } cuando la barra viene de una fusión con choque real
 let inboxLines = [];
 let zTop = 10;
 let isFirstRun = false;
@@ -1196,7 +1197,7 @@ function syncUI(mode, txt){
    reaparece) y si Recargar está activo. El descarte ✕ vive solo en memoria de la sesión.
    Demora asumida: la CDN de Pages puede servir la versión vieja hasta ~10 min aun con
    no-store (gobierna la caché del navegador, no la CDN); para pestañas de días, irrelevante. */
-const APP_VERSION = "0.36.0";
+const APP_VERSION = "0.37.0";
 let newVersionDetected = null;   // versión superior detectada; detiene futuras consultas
 let verDismissed = false;        // ✕: solo esta sesión — nunca persistido en disco
 let verCheckInflight = false;    // sin consultas concurrentes
@@ -1394,6 +1395,146 @@ async function fsPerm(handle, ask){
   }catch(e){ return false; }
 }
 
+/* ---------- fusión a tres bandas por widget (spec-merge-por-widget; respuestas de Codex 0.8h) ----------
+   Cuando el poll detecta cambio remoto CON edición local pendiente, en vez de abrir la barra de
+   conflicto de archivo entero se fusiona: BASE (lastSavedText: la última foto común), LOCAL (state)
+   y REMOTO (lo que llega). La barra queda solo para el choque real: la MISMA unidad tocada en los
+   dos lados, y sus botones deciden solo sobre lo que choca (el resto ya viene fusionado).
+   Peor caso = comportamiento anterior (todo a la barra); nunca peor que antes. */
+
+// JSON canónico (claves ordenadas, undefined fuera) para comparar unidades por contenido, no por forma
+function canonJSON(v){
+  if (v === undefined) return "und";
+  if (v === null || typeof v !== "object") return JSON.stringify(v);
+  if (Array.isArray(v)) return "[" + v.map(x => canonJSON(x === undefined ? null : x)).join(",") + "]";
+  return "{" + Object.keys(v).filter(k => v[k] !== undefined).sort().map(k => JSON.stringify(k) + ":" + canonJSON(v[k])).join(",") + "}";
+}
+
+// Fusión pura a tres bandas de estados v2 PLANOS (sin accesores). `prefer` decide el lado que gana
+// en los choques reales ("local" | "remote"); devuelve { merged, conflicts:[{kind,id,label}] }.
+// merged es un estado nuevo sin aliasing con los argumentos. updatedAt queda excluido de toda
+// comparación (decisión Codex). Unidades: widget (colocación+contenido, por id), espacio (meta),
+// marca de calendario, concepto propio, appSettings. Efímeros de UI (active, dictTargetId, orden
+// de pestañas) los resuelve el LOCAL sin conflicto; la papelera es unión acotada.
+function mergeStates(base, local, remote, prefer){
+  prefer = prefer === "remote" ? "remote" : "local";
+  const conflicts = [];
+  const clone = v => v === undefined ? undefined : JSON.parse(JSON.stringify(v));
+  const pick3 = (b, l, r, conflict) => {
+    const cb = canonJSON(b), cl = canonJSON(l), cr = canonJSON(r);
+    if (cl === cb && cr !== cb) return r;   // solo cambió el otro lado
+    if (cr === cb && cl !== cb) return l;   // solo cambié yo
+    if (cl === cr) return l;                // iguales (o ambos borraron)
+    conflicts.push(conflict);               // choque real
+    return prefer === "remote" ? r : l;
+  };
+  // efímeros de UI: el remoto solo gana si el local no lo tocó; jamás conflicto (sin pérdida de contenido)
+  const pick3Silent = (b, l, r) => (canonJSON(l) === canonJSON(b) && canonJSON(r) !== canonJSON(b)) ? r : l;
+
+  const spaceMap = st => { const m = new Map(); (st.spaces || []).forEach(sp => sp && sp.id && m.set(sp.id, sp)); return m; };
+  const widgetMap = st => { const m = new Map(); (st.spaces || []).forEach(sp => sp && (sp.widgets || []).forEach(w => w && w.id && m.set(w.id, { s: sp.id, w }))); return m; };
+  const bS = spaceMap(base), lS = spaceMap(local), rS = spaceMap(remote);
+  const bW = widgetMap(base), lW = widgetMap(local), rW = widgetMap(remote);
+
+  // widgets: unidad = colocación (espacio) + contenido; creación = id nuevo en un lado;
+  // borrado = ausente en un lado; borrado vs edición del mismo id = conflicto real (decisión Codex)
+  const mergedW = new Map();
+  for (const id of new Set([...bW.keys(), ...lW.keys(), ...rW.keys()])){
+    const b = bW.get(id), l = lW.get(id), r = rW.get(id);
+    const pickLabel = u => u && (u.w.t || u.w.type);
+    const win = pick3(b, l, r, { kind: "widget", id, label: pickLabel(l) || pickLabel(r) || pickLabel(b) || id });
+    if (win !== undefined) mergedW.set(id, clone(win));
+  }
+
+  // espacios: metadatos (nombre + settings) por id; sus widgets van aparte
+  const mergedSMeta = new Map();
+  for (const id of new Set([...bS.keys(), ...lS.keys(), ...rS.keys()])){
+    const unit = sp => sp === undefined ? undefined : { name: sp.name, settings: sp.settings };
+    const b = unit(bS.get(id)), l = unit(lS.get(id)), r = unit(rS.get(id));
+    const win = pick3(b, l, r, { kind: "space", id, label: (l && l.name) || (r && r.name) || (b && b.name) || id });
+    if (win !== undefined) mergedSMeta.set(id, clone(win));
+  }
+  // resurrección: un widget superviviente cuyo espacio perdió la existencia conserva su espacio
+  // (regla: la fusión nunca pierde contenido por efecto colateral)
+  for (const u of mergedW.values()){
+    if (!mergedSMeta.has(u.s)){
+      const src = lS.get(u.s) || rS.get(u.s) || bS.get(u.s);
+      if (src) mergedSMeta.set(u.s, { name: src.name, settings: clone(src.settings) });
+    }
+  }
+
+  // orden de pestañas: efímero de UI (misma familia que `active`)
+  const orderOf = st => (st.spaces || []).map(sp => sp && sp.id).filter(Boolean);
+  const spaceOrder = [];
+  for (const id of pick3Silent(orderOf(base), orderOf(local), orderOf(remote)))
+    if (mergedSMeta.has(id) && !spaceOrder.includes(id)) spaceOrder.push(id);
+  for (const id of mergedSMeta.keys()) if (!spaceOrder.includes(id)) spaceOrder.push(id);
+
+  // orden de widgets: manda el LOCAL para los que conoce; los nuevos remotos, al final en su orden
+  const rank = new Map(); let ri = 0;
+  for (const st of [local, remote]) (st.spaces || []).forEach(sp => sp && (sp.widgets || []).forEach(w => { if (w && w.id && !rank.has(w.id)) rank.set(w.id, ri++); }));
+  for (const id of mergedW.keys()) if (!rank.has(id)) rank.set(id, ri++);
+
+  const spaces = spaceOrder.map(id => ({ id, name: mergedSMeta.get(id).name, settings: mergedSMeta.get(id).settings, widgets: [] }));
+  const spaceIx = new Map(spaces.map((sp, ix) => [sp.id, ix]));
+  for (const [id, u] of [...mergedW.entries()].sort((a, b) => rank.get(a[0]) - rank.get(b[0])))
+    spaces[spaceIx.has(u.s) ? spaceIx.get(u.s) : 0].widgets.push(u.w);
+  if (!spaces.length) spaces.push({ id: "s_" + Math.random().toString(36).slice(2, 10), name: "Escritorio", settings: { wallpaper: { type: "preset", value: 0 } }, widgets: [] });
+
+  // colecciones por id (marcas de calendario, conceptos propios)
+  const mergeById = (key, kind, labelOf) => {
+    const byId = arr => { const m = new Map(); (arr || []).forEach(x => x && x.id && m.set(x.id, x)); return m; };
+    const bM = byId(base[key]), lM = byId(local[key]), rM = byId(remote[key]);
+    const ids = [];
+    for (const arr of [local[key], remote[key], base[key]])
+      (arr || []).forEach(x => { if (x && x.id && !ids.includes(x.id)) ids.push(x.id); });
+    const out = [];
+    for (const id of ids){
+      const b = bM.get(id), l = lM.get(id), r = rM.get(id);
+      const win = pick3(b, l, r, { kind, id, label: labelOf(l || r || b) || id });
+      if (win !== undefined) out.push(clone(win));
+    }
+    return out;
+  };
+  const calendarMarks = mergeById("calendarMarks", "mark", x => x && x.label);
+  const customMarkTypes = mergeById("customMarkTypes", "concepto", x => x && x.label);
+
+  // papelera: unión deduplicada y acotada — red de seguridad, nunca conflicto
+  const seen = new Set(); const trash = [];
+  for (const t of [...(local.trash || []), ...(remote.trash || [])]){
+    const c = canonJSON(t);
+    if (!seen.has(c)){ seen.add(c); trash.push(clone(t)); }
+  }
+
+  const merged = {
+    version: 2,
+    updatedAt: Math.max(local.updatedAt || 0, remote.updatedAt || 0),
+    active: typeof local.active === "number" ? local.active : 0,   // decisión Codex: conserva el local
+    spaces,
+    calendarMarks,
+    trash: trash.slice(0, 30),
+    dictTargetId: pick3Silent(base.dictTargetId, local.dictTargetId, remote.dictTargetId)
+  };
+  if (customMarkTypes.length) merged.customMarkTypes = customMarkTypes;
+  const appS = pick3(base.appSettings, local.appSettings, remote.appSettings, { kind: "config", id: "appSettings", label: "Ajustes generales (⚙)" });
+  if (appS !== undefined) merged.appSettings = clone(appS);
+  if (base.migratedCalH300 || local.migratedCalH300 || remote.migratedCalH300) merged.migratedCalH300 = true;
+  return { merged, conflicts };
+}
+
+// La barra de conflicto nombra lo que choca cuando la fusión encontró choques reales;
+// sin lista (null) vuelve al mensaje clásico de archivo entero.
+function renderConflictBar(conflicts){
+  const el = $("#conflict-msg");
+  if (!el) return;
+  if (conflicts && conflicts.length){
+    const names = conflicts.slice(0, 3).map(c => "«" + (c.label || c.id) + "»").join(", ");
+    el.textContent = "Cambió en los dos lados: " + names + (conflicts.length > 3 ? " y " + (conflicts.length - 3) + " más" : "") + ". El resto ya está combinado; elige solo para lo que choca.";
+  } else {
+    el.innerHTML = "<b>datos.json</b> cambió en otro equipo mientras editabas aquí.";
+  }
+}
+
 async function readDataFile(){
   let fh;
   try{ fh = await dirHandle.getFileHandle(DATA_FILE); }   // sin create: leer nunca fabrica el archivo
@@ -1417,6 +1558,9 @@ async function writeDataFile(){
     if (curText === lastSavedText){
       lastMtime = cur.lastModified;   // mismo contenido (OneDrive tocó el mtime): no es conflicto, seguimos
     } else {
+      // el siguiente poll intentará la fusión por widget con este remoto (autocuración)
+      pendingMerge = null;
+      renderConflictBar(null);
       conflictPending = true;
       $("#conflict").classList.add("open");
       syncUI("err", "conflicto");
@@ -1509,9 +1653,38 @@ async function poll(){   // devuelve true si completó una lectura válida (haya
         renderAll();
         toast("Actualizado desde otro equipo");
       } else if (remote && dirty){
-        conflictPending = true;
-        $("#conflict").classList.add("open");
-        syncUI("err", "conflicto");
+        // fusión a tres bandas por widget antes de molestar (spec-merge-por-widget)
+        if (conflictPending && pendingMerge && pendingMerge.text === text){
+          // mismo remoto que ya está en la barra: nada nuevo que calcular
+        } else {
+          let res = null, localSnap = null;
+          try{
+            const baseS = lastSavedText ? JSON.parse(lastSavedText) : null;
+            if (baseS && baseS.version === 2 && remote.version === 2 && Array.isArray(remote.spaces)){
+              localSnap = JSON.parse(JSON.stringify(state));   // los accesores no se serializan: clon v2 plano
+              res = mergeStates(baseS, localSnap, remote, "local");
+            }
+          }catch(e){ res = null; }
+          if (res && !res.conflicts.length){
+            // fusión silenciosa disjunta: copia local previa + adoptar + guardar (re-CAS en writeDataFile)
+            try{ localStorage.setItem("cabecera-premerge", JSON.stringify(localSnap)); }catch(e){}
+            setState(res.merged, "merge");
+            lastSavedText = text;               // el remoto pasa a ser la BASE hasta que escribamos
+            lastMtime = f.lastModified;
+            conflictPending = false; pendingMerge = null;
+            $("#conflict").classList.remove("open");
+            renderAll();
+            toast("Combinado con cambios de otro equipo");
+            markDirty();
+          } else {
+            // choque real (o fusión no disponible): barra, nombrando lo que choca si se sabe
+            pendingMerge = res ? { remote, text, mtime: f.lastModified } : null;
+            renderConflictBar(res ? res.conflicts : null);
+            conflictPending = true;
+            $("#conflict").classList.add("open");
+            syncUI("err", "conflicto");
+          }
+        }
       }
     }
   }catch(e){ clean = false; }   // transitorio de la nube, o archivo aún no creado: se reintenta en el siguiente ciclo, lectura NO válida
@@ -5523,6 +5696,7 @@ function wireUI(){
       try{ setState(JSON.parse(raw), "restore"); renderAll(); markDirty(); toast("Copia restaurada"); return true; }
       catch(e){ toast("Esa copia está dañada", true); return false; }
     };
+    if (await tryRestore("cabecera-premerge", "¿Restaurar tu escritorio previo a la última combinación con otro equipo?")) return;
     if (await tryRestore("cabecera-backup-antes-pack", "¿Restaurar el escritorio previo al último pack aplicado?")) return;
     if (await tryRestore("cabecera-local-prev", "¿Restaurar tu escritorio local previo a conectar la carpeta?")) return;
     toast("No hay copias locales guardadas");
@@ -5578,13 +5752,35 @@ function wireUI(){
     location.reload();
   });
 
-  // conflicto
+  // conflicto — con pendingMerge la decisión aplica SOLO a las unidades que chocan (el resto ya
+  // viene fusionado); se re-fusiona con el estado FRESCO al pulsar, para no perder lo tecleado
+  // con la barra abierta. Sin pendingMerge, comportamiento clásico de archivo entero.
+  const resolveMergeConflict = prefer => {
+    if (!pendingMerge) return false;
+    try{
+      const baseS = lastSavedText ? JSON.parse(lastSavedText) : null;
+      if (!baseS) return false;
+      const snap = JSON.parse(JSON.stringify(state));
+      const res = mergeStates(baseS, snap, pendingMerge.remote, prefer);
+      try{ localStorage.setItem("cabecera-premerge", JSON.stringify(snap)); }catch(e){}
+      setState(res.merged, "conflict-" + prefer);
+      lastSavedText = pendingMerge.text;
+      lastMtime = pendingMerge.mtime;
+      pendingMerge = null; conflictPending = false;
+      $("#conflict").classList.remove("open");
+      renderAll(); markDirty();
+      toast(prefer === "remote" ? "Combinado conservando lo del otro equipo en lo que chocaba" : "Combinado conservando lo tuyo en lo que chocaba");
+      return true;
+    }catch(e){ return false; }
+  };
   $("#cf-reload").addEventListener("click", async () => {
-    conflictPending = false; dirty = false; $("#conflict").classList.remove("open");
+    if (resolveMergeConflict("remote")) return;
+    conflictPending = false; dirty = false; pendingMerge = null; $("#conflict").classList.remove("open");
     lastMtime = 0; await startFS();
   });
   $("#cf-force").addEventListener("click", async () => {
-    conflictPending = false; $("#conflict").classList.remove("open");
+    if (resolveMergeConflict("local")) return;
+    conflictPending = false; pendingMerge = null; $("#conflict").classList.remove("open");
     lastMtime = Infinity;      // fuerza la siguiente escritura
     await saveNow();
     lastMtime = 0; const fh = await dirHandle.getFileHandle(DATA_FILE); lastMtime = (await fh.getFile()).lastModified;
