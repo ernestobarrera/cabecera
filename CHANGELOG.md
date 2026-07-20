@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.39.0] - 2026-07-20
+
+- **Si pides 4 columnas, son 4.** Hasta ahora, elegir 4 (o 3) en el control **▤** podía quedarse en 2 en pantallas medianas, aunque las columnas hubieran cabido de sobra. La causa: un único ancho mínimo de columna servía a la vez para decidir cuántas columnas pone **Auto** y para recortar tu elección manual. Ahora son dos cosas distintas: Auto sigue igual de conservador (prefiere columnas anchas antes que apretadas), pero **el número que eliges a mano se respeta mientras las ventanas quepan de verdad**. El aviso «4→2» solo aparece ya cuando ni así caben.
+- **Arrastra marcadores también a Notas y Tareas.** Lo que ya funcionaba en el widget de Enlaces vale ahora para los otros dos destinos naturales: suelta un marcador de la barra del navegador (o un enlace de cualquier página) sobre una **Nota** y se añade al final, una línea por enlace; suéltalo sobre una lista de **Tareas** y se convierte en tarea, con su URL clicable. El widget se resalta al pasar por encima, y si el título del marcador no aporta nada más que el dominio, se deja solo la dirección.
+
 ## [0.38.0] - 2026-07-20
 
 - **Un solo botón «Ordenar».** «Autoordenar» y «Reordenar este escritorio» eran dos comandos distintos con resultados distintos; ahora es uno: **🧭 Ordenar** (barra inferior, menú Inicio, Ctrl+K) coloca el escritorio según tu política de columnas actual, y el control **▤** elige Auto/2/3/4 y lo aplica en el mismo gesto — ya no hace falta un paso aparte. Como siempre, es un gesto tuyo: Cabecera nunca reordena sola al cargar, sincronizar, cambiar de pantalla, aplicar un pack o restaurar una copia.

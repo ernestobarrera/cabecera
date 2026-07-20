@@ -613,7 +613,9 @@ console.log('OK planLaneRepack + planResizePush (colisión real sin carril, tole
 // columnGuides override configurable (§columnas-configurables): effectiveN = auto ? autoFit : min(requestedN, autoFit)
 if (columnGuides(1366, { forceN: 2 }).n !== 2) throw new Error('columnGuides: forceN=2 debería dar 2 carriles');
 if (columnGuides(1366, { forceN: 3 }).n !== 3) throw new Error('columnGuides: forceN=3 debería dar 3 carriles');
-if (columnGuides(800, { forceN: 4 }).n !== 2) throw new Error('columnGuides: forceN=4 en 800px se recorta a lo que cabe (2)');
+// v0.39.0: el recorte de N explícito pasó del suelo de gusto (320) al geométrico (220 = min-width
+// real de .win), así que en 800px caben 3 carriles de ~249 px, no 2. Auto no cambia.
+if (columnGuides(800, { forceN: 4 }).n !== 3) throw new Error('columnGuides: forceN=4 en 800px se recorta a lo que cabe de verdad (3)');
 if (columnGuides(1366, { forceN: 9 }).n !== 4) throw new Error('columnGuides: forceN inválido → auto (4 en 1366)');
 console.log('OK columnGuides override (forceN respeta el clamp por viewport, inválido → auto)');
 
@@ -976,6 +978,54 @@ console.log('OK parseLinkDrop (marcador, multilínea, esquemas seguros, títulos
 if (!src.includes('document.addEventListener("drop", e => { e.preventDefault(); })')) throw new Error('regresión: falta el guardián anti-navegación de drops fuera de destino');
 if (!src.match(/link-it[\s\S]{0,400}it-drag" draggable="true"/)) throw new Error('regresión: los enlaces perdieron el asa de arrastre ⋮⋮');
 console.log('OK enlaces arrastrables (guardián de documento + asa presente)');
+
+// --- columnGuides: suelo de gusto vs suelo geométrico (v0.39.0) ---
+// Parte de fallo real de Ernesto: «pongo 4 columnas y pasan a 2» en su pantalla (~1000 px).
+// Auto sigue exigiendo 320 px por columna; una elección EXPLÍCITA solo se recorta contra los
+// 220 px de min-width real de .win.
+{
+  const vw = 1000;   // su caso: con el suelo único de 320 daba autoFit=2 y 4→2
+  if (columnGuides(vw).n !== 2) throw new Error('Auto debe seguir siendo conservador (2) a 1000px');
+  const g4 = columnGuides(vw, { forceN: 4 });
+  if (g4.n !== 4) throw new Error('4 explícitas deben caber a 1000px, salieron ' + g4.n);
+  for (const c of g4.cols) if (c.w < 220) throw new Error('carril por debajo del min-width real de .win: ' + c.w);
+  // sin solapes y dentro del viewport
+  for (let i = 1; i < g4.cols.length; i++)
+    if (g4.cols[i].x < g4.cols[i - 1].x + g4.cols[i - 1].w) throw new Error('carriles solapados con N explícito');
+  const last = g4.cols[g4.cols.length - 1];
+  if (last.x + last.w > vw) throw new Error('los carriles se salen del viewport');
+  // el recorte sigue existiendo donde la geometría NO da: 4 columnas no caben en 800px
+  const g800 = columnGuides(800, { forceN: 4 });
+  if (g800.n >= 4) throw new Error('a 800px, 4 columnas deberían recortarse');
+  for (const c of g800.cols) if (c.w < 220) throw new Error('recorte insuficiente a 800px: ' + c.w);
+  // el umbral geométrico: a 946px entran 4 justas (220 exactos); por debajo, no
+  if (columnGuides(946, { forceN: 4 }).n !== 4) throw new Error('946px debería admitir 4 carriles de 220');
+  if (columnGuides(930, { forceN: 4 }).n === 4) throw new Error('930px no da para 4 carriles de 220');
+  // Auto no cambia en absoluto respecto a antes (no regresión de la cuadrícula centrada en 4K)
+  const g4k = columnGuides(3840);
+  if (g4k.n !== 4 || g4k.cols[0].w !== 520) throw new Error('Auto en 4K alterado: ' + JSON.stringify(g4k.cols[0]));
+}
+console.log('OK columnGuides suelo doble (Auto conservador con 320, N explícito hasta 220 real, recorte donde no cabe)');
+
+// --- linkCaptureText + captura por arrastre en Nota/Tareas (v0.39.0) ---
+eval('globalThis.linkCaptureText = ' + pickFn('linkCaptureText', 'l'));
+if (linkCaptureText({ u: 'https://pubmed.ncbi.nlm.nih.gov/', t: 'PubMed' }) !== 'PubMed https://pubmed.ncbi.nlm.nih.gov/')
+  throw new Error('título + URL mal compuesto');
+// parseLinkDrop rellena el dominio cuando no hay título: no repetirlo delante de su propia URL
+if (linkCaptureText({ u: 'https://www.semfyc.es/x', t: 'semfyc.es' }) !== 'https://www.semfyc.es/x')
+  throw new Error('el dominio como título debe omitirse');
+if (linkCaptureText({ u: 'https://a.example/', t: 'https://a.example/' }) !== 'https://a.example/')
+  throw new Error('título idéntico a la URL debe omitirse');
+if (linkCaptureText({ u: 'https://a.example/', t: '' }) !== 'https://a.example/') throw new Error('sin título debe quedar la URL');
+// invariantes de cableado: una sola vez por nodo, handler siempre el del render vigente
+if (!src.includes('function wireLinkCapture(')) throw new Error('regresión: falta la zona de captura por arrastre');
+if (!src.includes('zone._linkCapture = onLinks;')) throw new Error('regresión: el handler de captura no se refresca por render (repintaría nodos viejos)');
+if (!src.includes('if (zone.dataset.linkCapture) return;')) throw new Error('regresión: los listeners de captura pueden acumularse al repintar');
+if (!src.match(/e\.preventDefault\(\); e\.stopPropagation\(\);[\s\S]{0,200}parseLinkDrop/)) throw new Error('regresión: el drop de captura no detiene su propagación (duplicaría en Enlaces)');
+if (!src.match(/wireLinkCapture\(el, links => \{[\s\S]{0,400}w\.data\.text/)) throw new Error('regresión: la Nota ya no acepta enlaces soltados');
+if (!src.match(/wireLinkCapture\(el, links => \{[\s\S]{0,400}w\.data\.items\.push/)) throw new Error('regresión: la lista de Tareas ya no acepta enlaces soltados');
+if (!html.includes('.win-body.ext-drop')) throw new Error('regresión: la zona de captura no se resalta al arrastrar encima');
+console.log('OK captura por arrastre en Nota/Tareas (texto compuesto, sin dominio redundante, cableado sin fugas)');
 
 // --- mergeStates: fusión a tres bandas por widget (spec-merge-por-widget, v0.37.0) ---
 eval('globalThis.canonJSON = ' + pickFn('canonJSON', 'v'));

@@ -374,7 +374,7 @@ ul.plain{list-style:none}
 .todo-it.drag-over,.link-it.drag-over{outline:1px solid rgba(90,169,247,.55); background:var(--accent-soft)}
 .todo-it.drag-over.drop-after,.link-it.drag-over.drop-after{box-shadow:inset 0 -2px 0 var(--accent)}
 .todo-it.drag-over:not(.drop-after),.link-it.drag-over:not(.drop-after){box-shadow:inset 0 2px 0 var(--accent)}
-.link-groups.ext-drop{outline:2px dashed var(--accent); outline-offset:-2px; border-radius:9px; background:var(--accent-soft)}
+.link-groups.ext-drop,.win-body.ext-drop{outline:2px dashed var(--accent); outline-offset:-2px; border-radius:9px; background:var(--accent-soft)}
 .clip-it{display:flex; align-items:flex-start; gap:8px; padding:7px 8px; border-radius:9px; border:1px solid var(--border-soft); margin-bottom:7px; background:rgba(255,255,255,.02)}
 .clip-it .t{flex:1; word-break:break-word; white-space:pre-wrap; font-size:12.8px; max-height:76px; overflow:auto}
 .link-group{margin-bottom:12px}
@@ -1197,7 +1197,7 @@ function syncUI(mode, txt){
    reaparece) y si Recargar está activo. El descarte ✕ vive solo en memoria de la sesión.
    Demora asumida: la CDN de Pages puede servir la versión vieja hasta ~10 min aun con
    no-store (gobierna la caché del navegador, no la CDN); para pestañas de días, irrelevante. */
-const APP_VERSION = "0.38.0";
+const APP_VERSION = "0.39.0";
 let newVersionDetected = null;   // versión superior detectada; detiene futuras consultas
 let verDismissed = false;        // ✕: solo esta sesión — nunca persistido en disco
 let verCheckInflight = false;    // sin consultas concurrentes
@@ -3212,11 +3212,19 @@ function dragTarget(x, y, ww, hh, rects, vw, vh, thr = 8, gap = 14){
 function columnGuides(vw, opts){
   const o = opts || {};
   const pad = o.pad ?? 12, gutter = o.gutter ?? 14, colMin = o.colMin ?? 320, colMax = o.colMax ?? 520;
+  // DOS suelos distintos, no uno (parte de fallo de Ernesto 2026-07-20: «pongo 4 columnas y
+  // pasan a 2»). colMin (320) es criterio de GUSTO: evita que Auto invente columnas apretadas.
+  // colHardMin (220 = min-width real de .win y LAYOUT.minW) es el suelo GEOMÉTRICO: por debajo,
+  // el widget no cabría en su carril. Una elección explícita del usuario manda sobre el gusto y
+  // solo se recorta contra la geometría — mismo principio que ya rige COL_MAX (gate N3: «que
+  // ocupen todo el ancho» solo con N explícito).
+  const colHardMin = o.colHardMin ?? 220;
   const usable = Math.max(colMin, vw - pad * 2);
-  const autoFit = Math.max(2, Math.min(4, Math.floor((usable + gutter) / (colMin + gutter))));
-  // override configurable (§columnas-configurables): effectiveN = auto ? autoFit : min(requestedN, autoFit)
+  const fitFor = min => Math.max(2, Math.min(4, Math.floor((usable + gutter) / (min + gutter))));
+  const autoFit = fitFor(colMin);
+  // override configurable (§columnas-configurables): effectiveN = auto ? autoFit : min(requestedN, hardFit)
   const req = (o.forceN === 2 || o.forceN === 3 || o.forceN === 4) ? o.forceN : null;
-  const n = req ? Math.min(req, autoFit) : autoFit;
+  const n = req ? Math.min(req, fitFor(colHardMin)) : autoFit;
   let w = (usable - (n - 1) * gutter) / n;
   let x0 = pad;
   // COL_MAX solo en Auto: con N EXPLÍCITO los carriles reparten el ancho útil completo
@@ -3575,6 +3583,16 @@ function bodyNotes(w, el){
   ta.addEventListener("input", () => { w.data.text = ta.value; markDirty(); });
   const line = el.querySelector(".notes-desc");
   if (line) line.addEventListener("click", () => editNoteDesc(w, el.closest(".win")));
+  // marcador o enlace soltado sobre la nota → se añade al final, una línea por enlace
+  wireLinkCapture(el, links => {
+    const add = links.map(linkCaptureText).join("\n");
+    const cur = String(w.data.text || "").replace(/\s+$/, "");
+    w.data.text = cur ? cur + "\n" + add : add;
+    ta.value = w.data.text;
+    ta.scrollTop = ta.scrollHeight;
+    toast(links.length === 1 ? "Enlace añadido a la nota" : links.length + " enlaces añadidos a la nota");
+    markDirty();
+  });
 }
 // Cabecera opcional de una nota o lista de tareas (w.data.desc): explica qué guarda el widget.
 // Se edita inline (Enter guarda, Esc cancela); vacía = se quita.
@@ -3652,6 +3670,13 @@ function bodyTodo(w, el){
   inp.addEventListener("keydown", e => { if (e.key === "Enter") add(); });
   toggle.addEventListener("click", () => { view = view === "pend" ? "done" : "pend"; search.value = ""; paint(); });
   search.addEventListener("input", paint);
+  // marcador o enlace soltado sobre la lista → una tarea por enlace (la URL queda clicable)
+  wireLinkCapture(el, links => {
+    for (const l of links) w.data.items.push({ t: linkCaptureText(l), done: false });
+    view = "pend";
+    toast(links.length === 1 ? "Tarea creada desde el enlace" : links.length + " tareas creadas desde los enlaces");
+    paint(); markDirty();
+  });
 
   const dueMeta = it => {
     if (!it.due) return null;
@@ -3903,6 +3928,50 @@ function parseLinkDrop(dt){
    anulado a nivel de documento; los destinos reales gestionan su drop antes de que llegue aquí. */
 document.addEventListener("dragover", e => { e.preventDefault(); });
 document.addEventListener("drop", e => { e.preventDefault(); });
+
+/* Texto con el que un enlace capturado entra en una Nota o una Tarea (PURA). «Título URL», o solo
+   la URL cuando el título no aporta nada (parseLinkDrop rellena el dominio como último recurso:
+   repetirlo delante de su propia URL sería ruido). En Tareas, linkifyEsc la vuelve clicable. */
+function linkCaptureText(l){
+  let host = "";
+  try{ host = new URL(l.u).hostname.replace(/^www\./, ""); }catch(e){}
+  const t = String(l.t || "").trim();
+  return (t && t !== host && t !== l.u) ? t + " " + l.u : l.u;
+}
+/* Zona de captura por arrastre (v0.39): un marcador del navegador o un enlace de cualquier página
+   soltado sobre una Nota o una lista de Tareas. Reutiliza parseLinkDrop (pura, probada en v0.36).
+   Dos lecciones de v0.36 cableadas aquí: (1) `renderBody` puede repintar el MISMO `.win-body`
+   (refreshWidget), así que los listeners se ponen UNA vez por nodo pero el handler se refresca en
+   cada render — si se capturara el del primer render, repintaría sobre nodos ya desechados;
+   (2) todo drop propio para su propagación, o acaba también en el handler de marcadores externos
+   del widget de Enlaces y duplica. */
+function wireLinkCapture(zone, onLinks){
+  if (!zone) return;
+  zone._linkCapture = onLinks;            // siempre el handler del render vigente
+  if (zone.dataset.linkCapture) return;   // listeners: una sola vez por nodo del DOM
+  zone.dataset.linkCapture = "1";
+  const usable = e => {
+    if (linkDragSrc || !e.dataTransfer) return false;   // el reordenado interno tiene su propia vía
+    const types = Array.from(e.dataTransfer.types || []);
+    return types.includes("text/uri-list") || types.includes("text/plain");
+  };
+  zone.addEventListener("dragover", e => {
+    if (!usable(e)) return;
+    e.preventDefault(); e.dataTransfer.dropEffect = "copy";
+    zone.classList.add("ext-drop");
+  });
+  zone.addEventListener("dragleave", e => { if (!zone.contains(e.relatedTarget)) zone.classList.remove("ext-drop"); });
+  zone.addEventListener("drop", e => {
+    zone.classList.remove("ext-drop");
+    if (!usable(e)) return;
+    e.preventDefault(); e.stopPropagation();
+    const links = parseLinkDrop({
+      uriList: e.dataTransfer.getData("text/uri-list"), plain: e.dataTransfer.getData("text/plain"),
+      html: e.dataTransfer.getData("text/html"), mozUrl: e.dataTransfer.getData("text/x-moz-url") });
+    if (!links.length){ toast("Eso no era un enlace http(s).", true); return; }
+    if (typeof zone._linkCapture === "function") zone._linkCapture(links);
+  });
+}
 
 // Arrastre de un enlace ENTRE widgets/grupos de enlaces (origen vivo mientras dura el gesto)
 let linkDragSrc = null;
