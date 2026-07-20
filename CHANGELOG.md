@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.38.0] - 2026-07-20
+
+- **Un solo botón «Ordenar».** «Autoordenar» y «Reordenar este escritorio» eran dos comandos distintos con resultados distintos; ahora es uno: **🧭 Ordenar** (barra inferior, menú Inicio, Ctrl+K) coloca el escritorio según tu política de columnas actual, y el control **▤** elige Auto/2/3/4 y lo aplica en el mismo gesto — ya no hace falta un paso aparte. Como siempre, es un gesto tuyo: Cabecera nunca reordena sola al cargar, sincronizar, cambiar de pantalla, aplicar un pack o restaurar una copia.
+- **Tareas, Enlaces y Portapapeles se ajustan a su contenido al Ordenar.** Si una lista de tareas solo tiene 2 ítems, ya no se queda con un hueco enorme debajo: su alto se ajusta a lo que realmente ocupa (con un mínimo y un máximo razonables; más allá del máximo, scroll interno). El resto de widgets —notas, calendario, archivos…— conserva su alto tal cual, porque ahí el espacio es tuyo, no sobra.
+- **Estirar una ventana ya no exige que quede perfectamente alineada a su columna.** Antes, para que la de abajo hiciera sitio, tenías que crecer sin salirte del carril. Ahora, si al agrandar hacia abajo invades a otra ventana de verdad —esté o no en tu misma columna—, esa ventana baja; y si encoges desde el borde inferior, las de abajo suben para cerrar el hueco. Encoger desde el borde superior no recoloca nada (el inferior queda fijo). Deshacer, como siempre.
+- **Deshacer de Ordenar restaura también el número de columnas**, no solo las posiciones.
+
 ## [0.37.0] - 2026-07-18
 
 - **Editar en dos equipos a la vez ya casi nunca molesta.** Hasta ahora, si tu archivo cambiaba en otro equipo mientras editabas aquí, salía siempre la barra de conflicto y tenías que elegir un lado entero. Ahora Cabecera **combina sola** los dos lados cuando los cambios afectan a widgets distintos (que es lo normal): verás un aviso «Combinado con cambios de otro equipo» y sigues a lo tuyo.

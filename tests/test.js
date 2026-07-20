@@ -474,17 +474,45 @@ if (Math.abs(gFullEnd - (3840 - 12)) > 2) throw new Error('columnGuides explíci
 if (gFull.cols.some(cc => cc.w <= 520)) throw new Error('columnGuides explícito: en 4K los carriles deben superar COL_MAX (ancho completo)');
 console.log('OK columnGuides N3 (explícito = ancho útil completo; Auto conserva COL_MAX — test previo)');
 
-// invariantes de fuente N3: reordenado explícito con guardas, undo atómico, capa ambiental propia
-if (!src.includes('function repackSpace(')) throw new Error('regresión N3: falta repackSpace');
-if (!src.includes('Reordenar este escritorio')) throw new Error('regresión N3: falta el botón «Reordenar este escritorio» en el popover');
-if ((src.match(/repackSpace\(\)/g) || []).length !== 2) throw new Error('regresión N3: repackSpace debe tener UN único punto de invocación (el popover) — jamás automático');
-if (!src.match(/function repackSpace[\s\S]{0,600}tagFilter/) || !src.match(/function repackSpace[\s\S]{0,800}some\(x => x\.max\)/)) throw new Error('regresión N3: repackSpace perdió las guardas de filtro/maximizada');
-if (!src.match(/function undoRepack[\s\S]{0,700}sort\(\)\.join/)) throw new Error('regresión N3: undoRepack ya no valida el conjunto exacto de IDs (todo-o-nada)');
-if (!src.match(/items\.length > 20\) apply\(\); else flipLayout/)) throw new Error('regresión N3: falta el umbral anti-jank de la animación del reordenado');
-if (!src.includes('function renderLaneAmbient(') || !html.includes('#lane-ambient')) throw new Error('regresión N3: falta la capa ambiental #lane-ambient (CSS o render)');
-if (!src.match(/const amb = document\.getElementById\("lane-ambient"\)/)) throw new Error('regresión N3: setDeskHeight ya no mantiene el alto de #lane-ambient');
-if (!src.match(/laneClassify\(others, guides, destLane, LAYOUT\.snapGap\)/) || !src.match(/laneClassify\(others, guides, laneB, LAYOUT\.snapGap\)/)) throw new Error('regresión N3: el motor N2 no usa la clasificación de pertenencia única en drop/resize');
-console.log('OK invariantes N3 (reordenado solo humano con guardas, undo todo-o-nada, ambient propia, pertenencia única cableada)');
+// invariantes de fuente: «Ordenar» unificado (veredicto 2026-07-18) — UNA sola acción visible,
+// transacción cols+geometría, guardas, undo atómico que incluye la política, ambient propia
+if (!src.includes('function orderSpace(')) throw new Error('regresión: falta orderSpace (la acción única «Ordenar»)');
+if (src.includes('function repackSpace(') || src.includes('Reordenar este escritorio')) throw new Error('regresión: sobrevive el comando viejo «Reordenar este escritorio» (queda solo «Ordenar»)');
+if ((src.match(/autoArrangeWidgets\(\)/g) || []).length !== 0) throw new Error('regresión: autoArrangeWidgets vuelve a estar expuesto al usuario (solo foldAll puede usarlo, en silencio)');
+if (!src.match(/function orderSpace[\s\S]{0,300}tagFilter/) || !src.match(/function orderSpace[\s\S]{0,400}some\(x => x\.max\)/)) throw new Error('regresión: orderSpace perdió las guardas de filtro/maximizada');
+if (!src.includes('orderSpace(v === "auto" ? "auto" : +v)')) throw new Error('regresión: elegir la política en ▤ ya no ordena al instante (veredicto 2026-07-18)');
+if (!src.match(/lastRepack = \{ spaceId: sp\.id, ids: [\s\S]{0,80}items, colsBefore, colsAfter \}/)) throw new Error('regresión: el snapshot de Ordenar ya no incluye la política de columnas (cols antes/después)');
+if (!src.match(/function undoRepack[\s\S]{0,700}sort\(\)\.join/)) throw new Error('regresión: undoRepack ya no valida el conjunto exacto de IDs (todo-o-nada)');
+if (!src.match(/function undoRepack[\s\S]{0,1200}curCols !== snap\.colsAfter/)) throw new Error('regresión: undoRepack ya no verifica/restaura la política de columnas de la transacción');
+if (!src.match(/items\.length > 20\) apply\(\); else flipLayout/)) throw new Error('regresión: falta el umbral anti-jank de la animación del orden');
+if (!src.includes('function renderLaneAmbient(') || !html.includes('#lane-ambient')) throw new Error('regresión: falta la capa ambiental #lane-ambient (CSS o render)');
+if (!src.match(/const amb = document\.getElementById\("lane-ambient"\)/)) throw new Error('regresión: setDeskHeight ya no mantiene el alto de #lane-ambient');
+if (!src.match(/laneClassify\(others, guides, destLane, LAYOUT\.snapGap\)/)) throw new Error('regresión: el drop ya no usa la clasificación de pertenencia única');
+console.log('OK invariantes «Ordenar» (acción única, política transaccional con undo, guardas, ambient propia)');
+
+// alto al contenido (P6 del gate): pura de estabilidad + solo enumerables + medición al ancho final
+eval('globalThis.stableHeight = ' + pickFn('stableHeight', 'current, measured, minH, maxH'));
+if (stableHeight(200, 402, 140, 640) !== 404) throw new Error('stableHeight: no redondea a múltiplos de 4 (esperado 404)');
+if (stableHeight(400, 405, 140, 640) !== 400) throw new Error('stableHeight: la banda muerta de 8px no evita la oscilación');
+if (stableHeight(200, 90, 140, 640) !== 140) throw new Error('stableHeight: no respeta el suelo minH');
+if (stableHeight(200, 2000, 140, 640) !== 640) throw new Error('stableHeight: no respeta el techo (scroll interno a partir de ahí)');
+if (stableHeight(636, 2000, 140, 640) !== 636) throw new Error('stableHeight: la banda muerta debe aplicarse también contra el techo');
+if (!src.includes('const AUTO_H_TYPES = { todo: 1, links: 1, clips: 1 }')) throw new Error('regresión: el alto-al-contenido no está limitado a los tipos enumerables');
+if (!src.includes('measureContentH(wg, p.w)')) throw new Error('regresión: el contenido ya no se mide al ANCHO FINAL del carril (corrección 4 del gate)');
+if ((src.match(/measureContentH\(/g) || []).length !== 2) throw new Error('regresión: measureContentH debe usarse SOLO dentro de Ordenar');
+if (!src.match(/heights\.has\(r\.id\) \? \{ \.\.\.r, h: heights\.get\(r\.id\) \} : r/)) throw new Error('regresión: P4 ya no se comprueba con los altos FINALES (corrección 3 del gate)');
+if (!src.match(/wg\.collapsed \|\| !AUTO_H_TYPES\[wg\.type\]/)) throw new Error('regresión: los plegados o los tipos no enumerables vuelven a cambiar de alto');
+console.log('OK alto al contenido (stableHeight estable y acotada, solo enumerables abiertos, medición al ancho final, P4 con altos finales)');
+
+// FLIP también anima cambios de TAMAÑO (corrección 1 del gate: solo-anchos era invisible)
+if (!src.includes('scale(${sx}, ${sy})')) throw new Error('regresión: flipLayout vuelve a animar solo dx/dy (un orden que solo cambia tamaños sería invisible)');
+if (!src.match(/transformOrigin = "top left"/)) throw new Error('regresión: el FLIP de tamaño perdió el origen top-left');
+console.log('OK FLIP de tamaño (translate+scale, origen top-left)');
+
+// el tooltip de ▤ no debe volver a prometer «no recoloca lo existente» (dejó de ser cierto: P1)
+if (html.includes('no recoloca lo existente') || html.includes('solo afecta a los siguientes arrastres'))
+  throw new Error('regresión: el tooltip de ▤ vuelve a describir el comportamiento antiguo (elegir política ahora ordena al instante)');
+console.log('OK tooltip de ▤ actualizado (elegir política ya no promete «no recoloca»)');
 
 // planMaxBottom + rechazo P4 (hallazgo Codex sobre v0.29.0): el drop se rechaza si el reflow sale del lienzo
 eval('globalThis.planMaxBottom = ' + pickFn('planMaxBottom', 'placed, draggedH, movedRects'));
@@ -536,20 +564,51 @@ const cm3 = planColumnCompact([{ id: 'x', y: 300, h: 100 }], [], 250, 500, { gut
 if (cm3.moved.length) throw new Error('planColumnCompact: no debe BAJAR un miembro (solo compacta hacia arriba)');
 console.log('OK planColumnCompact (sube los de debajo del hueco, respeta los de encima, no baja, no toca lo ya compacto)');
 
-// planLaneRepack (mismo carril) + planResizeReflow (§B)
+// planLaneRepack (mismo carril) + planResizePush (empuje por colisión real, etapa 2)
 eval('globalThis.planLaneRepack = ' + pickFn('planLaneRepack', 'members, obstacles, insert, opts'));
 const rp = planLaneRepack([{ id: 'a', y: 12, h: 150 }, { id: 'b', y: 800, h: 150 }], [], { y: 200, h: 120 }, { gutter: 14, laneTop: 12, laneX: 100, laneW: 320 });
 if (!rp.placed || rp.placed.x !== 100 || rp.placed.w !== 320) throw new Error('planLaneRepack: no coloca el insertado con el ancho del carril');
 if (rp.placed.y !== 176) throw new Error('planLaneRepack: el insertado no se empaqueta tras el primero (esperado 176, ' + rp.placed.y + ')');
 if (!rp.moved.find(m => m.id === 'b')) throw new Error('planLaneRepack: no compacta el miembro lejano hacia arriba');
-eval('globalThis.planResizeReflow = ' + pickFn('planResizeReflow', 'members, obstacles, anchor, opts'));
-// el ancla crece y empuja al de debajo que colisiona
-const rr = planResizeReflow([{ id: 'lo', y: 300, h: 150 }], [], { y: 40, h: 320 }, { gutter: 14 });
-if (!rr.moved.find(m => m.id === 'lo') || rr.moved[0].y !== 374) throw new Error('planResizeReflow: el de abajo no baja al crecer el ancla (esperado 374, ' + (rr.moved[0] && rr.moved[0].y) + ')');
-// si hay hueco de sobra, no se mueve nadie
-const rr2 = planResizeReflow([{ id: 'lo', y: 800, h: 150 }], [], { y: 40, h: 200 }, { gutter: 14 });
-if (rr2.moved.length) throw new Error('planResizeReflow: mueve un miembro que no colisionaba');
-console.log('OK planLaneRepack + planResizeReflow (reempaquetado de columna, empuje al crecer, respeta huecos)');
+// planResizePush (etapa 2 del veredicto 2026-07-18: colisión REAL, sin gate de carril)
+eval('globalThis.planResizePush = ' + pickFn('planResizePush', 'others, startRect, finalRect, opts'));
+// crecer hacia abajo sobre el de debajo: baja con gutter
+let pp = planResizePush([{ id: 'lo', x: 100, y: 300, w: 300, h: 150 }],
+  { x: 100, y: 40, w: 300, h: 200 }, { x: 100, y: 40, w: 300, h: 320 }, { gap: 14 });
+if (!pp.moved.find(m => m.id === 'lo') || pp.moved[0].y !== 374) throw new Error('planResizePush: el de abajo no baja al crecer (esperado 374, ' + (pp.moved[0] && pp.moved[0].y) + ')');
+// sin colisión real, nadie se mueve
+pp = planResizePush([{ id: 'lo', x: 100, y: 800, w: 300, h: 150 }],
+  { x: 100, y: 40, w: 300, h: 200 }, { x: 100, y: 40, w: 300, h: 300 }, { gap: 14 });
+if (pp.moved.length) throw new Error('planResizePush: mueve a quien no colisionaba');
+// invasión ≤ tolerancia se ignora (coherente con ownerLane)
+pp = planResizePush([{ id: 'lo', x: 100, y: 250, w: 300, h: 150 }],
+  { x: 100, y: 40, w: 300, h: 200 }, { x: 100, y: 40, w: 300, h: 214 }, { gap: 14 });
+if (pp.moved.length) throw new Error('planResizePush: una invasión ≤ snapGap no debe empujar');
+// SIN alineación de carril: ensanchar hasta solapar al vecino de otra columna también lo empuja
+pp = planResizePush([{ id: 'v', x: 380, y: 100, w: 300, h: 150 }],
+  { x: 100, y: 40, w: 300, h: 200 }, { x: 100, y: 40, w: 500, h: 200 }, { gap: 14 });
+if (!pp.moved.find(m => m.id === 'v') || pp.moved[0].y !== 254) throw new Error('planResizePush: el vecino desalineado que solapa de verdad no hace sitio (esperado 254)');
+// cascada global: el empujado empuja al siguiente
+pp = planResizePush([{ id: 'a', x: 100, y: 300, w: 300, h: 100 }, { id: 'b', x: 100, y: 420, w: 300, h: 100 }],
+  { x: 100, y: 40, w: 300, h: 260 }, { x: 100, y: 40, w: 300, h: 320 }, { gap: 14 });
+if (pp.moved.length !== 2 || pp.moved.find(m => m.id === 'b').y !== 488) throw new Error('planResizePush: la cascada no se propaga (b esperado en 488)');
+// compactación inversa: al encoger desde abajo, el de debajo sube a cerrar el hueco
+pp = planResizePush([{ id: 'lo', x: 100, y: 360, w: 300, h: 150 }],
+  { x: 100, y: 40, w: 300, h: 300 }, { x: 100, y: 40, w: 300, h: 150 }, { gap: 14 });
+if (!pp.moved.find(m => m.id === 'lo') || pp.moved[0].y !== 204) throw new Error('planResizePush: la compactación inversa no cierra el hueco (esperado 204)');
+// encoger desde ARRIBA (borde inferior fijo) no compacta nada (corrección del gate)
+pp = planResizePush([{ id: 'lo', x: 100, y: 360, w: 300, h: 150 }],
+  { x: 100, y: 40, w: 300, h: 300 }, { x: 100, y: 190, w: 300, h: 150 }, { gap: 14 });
+if (pp.moved.length) throw new Error('planResizePush: encoger desde el borde superior no debe compactar la zona inferior');
+// la subida respeta a los obstáculos que quedan encima del candidato
+pp = planResizePush([{ id: 'ob', x: 100, y: 204, w: 300, h: 60 }, { id: 'lo', x: 100, y: 400, w: 300, h: 150 }],
+  { x: 100, y: 40, w: 300, h: 300 }, { x: 100, y: 40, w: 300, h: 150 }, { gap: 14 });
+if (pp.moved.find(m => m.id === 'lo').y !== 278) throw new Error('planResizePush: la subida inversa atraviesa un obstáculo (esperado 278)');
+// maxBottom para el rechazo P4
+pp = planResizePush([{ id: 'lo', x: 100, y: 11800, w: 300, h: 150 }],
+  { x: 100, y: 11600, w: 300, h: 150 }, { x: 100, y: 11600, w: 300, h: 260 }, { gap: 14 });
+if (pp.maxBottom <= 12000) throw new Error('planResizePush: un plan que se sale debe declarar maxBottom > worldMax');
+console.log('OK planLaneRepack + planResizePush (colisión real sin carril, tolerancia, cascada global, inversa con obstáculos, P4)');
 
 // columnGuides override configurable (§columnas-configurables): effectiveN = auto ? autoFit : min(requestedN, autoFit)
 if (columnGuides(1366, { forceN: 2 }).n !== 2) throw new Error('columnGuides: forceN=2 debería dar 2 carriles');
@@ -575,8 +634,8 @@ if (!src.match(/originLane !== null && originLane === destLane/)) throw new Erro
 if (!src.includes('planColumnCompact(oc.members, oc.obstacles, startRect.y, above, copt)')) throw new Error('regresión: el drop cruzando columnas ya no compacta el origen');
 if (!src.includes('flipLayout(items,')) throw new Error('regresión: el drop ya no usa la animación FLIP');
 if (!src.includes('function flipLayout(') || !src.includes('prefers-reduced-motion: reduce')) throw new Error('regresión: FLIP sin respetar reduced-motion');
-if (!src.includes('planResizeReflow(cls.members, cls.obstacles')) throw new Error('regresión: el resize ya no dispara reflow de su columna');
-if (!src.match(/w\.y \+ w\.h > beforeSnap\.y \+ beforeSnap\.h && laneA !== null && laneA === laneB/)) throw new Error('regresión: el resize-reflow ya no exige que avance el borde inferior con misma alineación antes/después');
+if (!src.includes('planResizePush(others, beforeSnap, rectSnap(w)')) throw new Error('regresión: el resize ya no calcula el empuje por colisión real');
+if (src.includes('laneA !== null && laneA === laneB')) throw new Error('regresión: vuelve el gate alignedLane al resize (el veredicto 2026-07-18 lo sustituyó por colisión real)');
 if (!src.includes('function colsOpt(') || !src.match(/sp\.settings\.cols !== 2 && sp\.settings\.cols !== 3 && sp\.settings\.cols !== 4/)) throw new Error('regresión: columnas configurables sin saneo estricto');
 if (!src.includes('if (isMobile()){ b.style.display = "none"')) throw new Error('regresión: el control de columnas no se oculta en móvil');
 console.log('OK pulido v0.31.0 (compactación origen/mismo-carril, resize-reflow con guardas, FLIP reduced-motion, columnas configurables saneadas + móvil)');

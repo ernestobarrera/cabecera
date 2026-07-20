@@ -614,7 +614,7 @@ ul.plain{list-style:none}
 <div id="desktop"><div id="desk-end"></div></div>
 <div id="desk-dock" aria-label="Accesos rápidos">
   <button class="dock-btn dock-key" id="desk-palette" title="Abrir paleta de comandos">Ctrl K</button>
-  <button class="dock-btn" id="desk-arrange" title="Autoordenar widgets">🧭</button>
+  <button class="dock-btn" id="desk-arrange" title="Ordenar el escritorio (según tus columnas)">🧭</button>
   <button class="dock-btn" id="desk-trash" title="Papelera">🗑️ <span class="dock-count" id="desk-trash-n"></span></button>
   <button class="dock-btn" id="desk-privacy" title="Ocultar widgets privados (pantalla compartida)">👁</button>
   <button class="dock-btn" id="desk-config" title="Configuración general">⚙</button>
@@ -626,7 +626,7 @@ ul.plain{list-style:none}
   <button id="btn-fold" title="Plegar / desplegar todos los widgets">⊟</button>
   <div id="tb-spaces" title="Espacios (escritorios): clic para cambiar, doble clic para renombrar, arrastra para reordenar"></div>
   <button id="space-add" title="Nuevo espacio">＋</button>
-  <button id="tb-cols" title="Columnas guía al arrastrar (solo afecta a los siguientes arrastres; no recoloca lo existente)">▤ Auto</button>
+  <button id="tb-cols" title="Columnas: Auto, 2, 3 o 4. Elegir una ordena el escritorio al instante (con Deshacer) y rige los carriles al arrastrar">▤ Auto</button>
   <div id="tb-spacer"></div>
   <div class="tb-item" id="tb-filter" title="Filtro por etiqueta activo" style="display:none"></div>
   <div class="tb-item" id="tb-tasks" title="Tareas vencidas o que vencen hoy"></div>
@@ -669,7 +669,7 @@ ul.plain{list-style:none}
     <button class="act" id="act-packs">🧩 Packs</button>
     <button class="act" id="act-wallpaper">🖼️ Fondo</button>
     <button class="act" id="act-folder">📁 Sincronizar equipos</button>
-    <button class="act" id="act-arrange">🧭 Autoordenar</button>
+    <button class="act" id="act-arrange">🧭 Ordenar</button>
     <button class="act" id="act-trash">🗑️ Papelera</button>
     <button class="act" id="act-export">⬇️ Exportar copia</button>
     <button class="act" id="act-import">⬆️ Importar copia</button>
@@ -861,7 +861,7 @@ ul.plain{list-style:none}
       — Copias: menú Inicio → «Exportar copia»; y «Restaurar copia» si algo sale mal.</p>
     </details>
     <details><summary>Atajos e integraciones</summary>
-      <p class="hint">— <b>Ctrl+K</b> (o <b>/</b>) abre la paleta: busca en todos los espacios y ejecuta comandos; también tienes acceso abajo a la derecha junto a Autoordenar, Papelera e información del proyecto.<br>
+      <p class="hint">— <b>Ctrl+K</b> (o <b>/</b>) abre la paleta: busca en todos los espacios y ejecuta comandos; también tienes acceso abajo a la derecha junto a Ordenar, Papelera e información del proyecto.<br>
       — <b>Captura rápida en la paleta</b>: escribe <code>t llamar a Juan @mañana</code> (tarea), <code>n una idea</code> (nota), <code>c fragmento</code> (clip), pega una URL (enlace) o <code>v 12-16/8</code> (vacaciones en el calendario; admite concepto: <code>v 12/8 guardia</code>). La primera opción muestra qué se creará y dónde; Enter confirma. Fechas: <code>@hoy</code>, <code>@mañana</code>, <code>@12/8</code> (año actual) o <code>@12/8/2027</code>. La misma gramática funciona en la Bandeja: las líneas que la sigan (escritas por ti, una macro o un agente en <b>inbox.txt</b>) ofrecen su conversión con un clic.<br>
       — <b>Espacios</b>: usa <b>＋</b> en la barra para crear escritorios (uno por especialidad o proyecto); clic para cambiar, doble clic para renombrar, ✕ para eliminar. Cada espacio tiene su propio fondo. <b>Arrastra una ventana sobre otra pestaña</b> para mover ese widget a ese espacio.<br>
       — <b>Etiquetas</b>: pasa el ratón por la barra de una ventana para mostrar el botón de etiquetas; haz clic en una etiqueta (o búscala en Ctrl+K) para dejar a la vista solo los widgets con esa etiqueta, en cualquier espacio.<br>
@@ -1197,7 +1197,7 @@ function syncUI(mode, txt){
    reaparece) y si Recargar está activo. El descarte ✕ vive solo en memoria de la sesión.
    Demora asumida: la CDN de Pages puede servir la versión vieja hasta ~10 min aun con
    no-store (gobierna la caché del navegador, no la CDN); para pestañas de días, irrelevante. */
-const APP_VERSION = "0.37.0";
+const APP_VERSION = "0.38.0";
 let newVersionDetected = null;   // versión superior detectada; detiene futuras consultas
 let verDismissed = false;        // ✕: solo esta sesión — nunca persistido en disco
 let verCheckInflight = false;    // sin consultas concurrentes
@@ -2308,7 +2308,8 @@ const LAYOUT = {
   visMarginX: 80, visMarginY: 60, // mínimo de ventana que debe quedar alcanzable
   dragClampBottom: 110, // clamp inferior del arrastre
   worldMax: 12000,     // N2: tope absoluto del borde inferior del lienzo (coherente con saneo y≤8000/h≤4000)
-  edgeBand: 48         // N2: banda de autoscroll al arrastrar cerca del borde
+  edgeBand: 48,        // N2: banda de autoscroll al arrastrar cerca del borde
+  autoMaxH: 640        // «Ordenar»: techo del alto-al-contenido (más allá, scroll interno del widget)
 };
 /* ---------- N2 hito 1: lienzo con scroll vertical (contrato cliente↔mundo) ----------
    Las coordenadas persistidas w.x/w.y son de MUNDO (dentro del lienzo desplazable). El
@@ -2477,25 +2478,17 @@ function openColsMenu(){
   if (menu.classList.contains("open")){ closeColsMenu(); return; }
   const cur = (state.settings && state.settings.cols) || "auto";
   const opts = [["auto", "Auto (según el ancho)"], ["2", "2 columnas"], ["3", "3 columnas"], ["4", "4 columnas"]];
-  // N3: reordenar es un GESTO aparte (nunca efecto de elegir N) y el deshacer masivo vive aquí
-  // hasta el siguiente reordenado o la recarga — 20 s de toast no dan para revisar un escritorio.
-  const filterOn = !!tagFilter, maxOn = state.widgets.some(x => x.max);
-  const canRepack = cur !== "auto" && !filterOn && !maxOn;
-  const whyNot = cur === "auto" ? "Elige 2, 3 o 4 columnas primero"
-    : filterOn ? "Quita el filtro de etiqueta primero"
-    : maxOn ? "Restaura la ventana maximizada primero"
-    : "Coloca todos los widgets en las columnas, a su ancho (con Deshacer)";
+  // Veredicto 2026-07-18: elegir la política ES ordenar — se aplica al instante en una transacción
+  // única (cols + geometría, con Deshacer). El deshacer masivo vive aquí hasta el siguiente
+  // Ordenar o la recarga — 20 s de toast no dan para revisar un escritorio.
   const canUndo = lastRepack && lastRepack.spaceId === state.spaces[state.active].id;
   menu.innerHTML = opts.map(([v, l]) => `<button data-v="${v}"${(String(cur) === v) ? ' class="sel"' : ""}>${esc(l)}</button>`).join("")
-    + '<div class="sep"></div>'
-    + `<button data-v="repack"${canRepack ? "" : " disabled"} title="${esc(whyNot)}">⇅ Reordenar este escritorio</button>`
-    + (canUndo ? '<button data-v="undo">↩ Deshacer último reordenado</button>' : "");
+    + (canUndo ? '<div class="sep"></div><button data-v="undo">↩ Deshacer último orden</button>' : "");
   menu.querySelectorAll("button").forEach(btn => btn.addEventListener("click", () => {
     const v = btn.dataset.v;
-    if (v === "repack"){ closeColsMenu(); repackSpace(); return; }
     if (v === "undo"){ closeColsMenu(); undoRepack(); return; }
-    if (v === "auto") delete state.settings.cols; else state.settings.cols = +v;
-    closeColsMenu(); renderColsControl(); renderLaneAmbient(); markDirty();
+    closeColsMenu();
+    orderSpace(v === "auto" ? "auto" : +v);   // aplica la política YA (transacción con Deshacer)
   }));
   menu.classList.add("open");   // mostrar para medir, luego posicionar encima del botón
   const r = b.getBoundingClientRect();
@@ -2517,11 +2510,15 @@ function flipLayout(items, apply){
     const e = document.querySelector(`.win[data-id="${it.id}"]`); if (!e) continue;
     const a = e.getBoundingClientRect();
     const dx = b.left - a.left, dy = b.top - a.top;
-    if (!dx && !dy) continue;
+    // FLIP también de TAMAÑO (corrección del gate 2026-07-18: un reordenado que solo cambiaba
+    // anchos/altos era invisible): viaja desde la geometría previa con translate+scale.
+    const sx = a.width ? b.width / a.width : 1, sy = a.height ? b.height / a.height : 1;
+    if (!dx && !dy && Math.abs(sx - 1) < 0.001 && Math.abs(sy - 1) < 0.001) continue;
     e.style.transition = "none";
-    e.style.transform = `translate(${dx}px, ${dy}px)`;
+    e.style.transformOrigin = "top left";
+    e.style.transform = `translate(${dx}px, ${dy}px) scale(${sx}, ${sy})`;
     requestAnimationFrame(() => { e.style.transition = "transform .16s ease"; e.style.transform = ""; });
-    setTimeout(() => { if (e.isConnected){ e.style.transition = ""; e.style.transform = ""; } }, 240);
+    setTimeout(() => { if (e.isConnected){ e.style.transition = ""; e.style.transform = ""; e.style.transformOrigin = ""; } }, 240);
   }
 }
 // Deshacer de una transacción de layout: restaura SOLO los widgets que sigan EXACTAMENTE como los
@@ -2538,40 +2535,88 @@ function undoLayout(snap){
   }
   renderAll(); markDirty();
 }
-/* N3 — reordenado explícito del escritorio (botón del popover ▤). SOLO gesto humano: jamás se
-   dispara al cargar, sincronizar, redimensionar, cambiar de monitor, aplicar packs o restaurar.
-   Snapshot todo-o-nada en `lastRepack` (memoria de sesión, no persiste). */
+/* «Ordenar» — LA acción única de layout (veredicto Codex 2026-07-18, spec-ordenar-unificado).
+   Coloca el escritorio según la política de columnas del espacio (Auto = nº automático por ancho;
+   2/3/4 = guías explícitas a ancho completo), ajusta el alto de los tipos ENUMERABLES a su
+   contenido (acotado) y anima el viaje. Elegir política en ▤ la aplica inmediatamente: cambio de
+   `cols` y geometría son UNA transacción con un solo guardado — si falla P4 no cambia ninguna de
+   las dos. SOLO gesto humano: jamás al cargar, sincronizar, redimensionar, cambiar de monitor,
+   aplicar packs, restaurar o sanear. Snapshot todo-o-nada en `lastRepack` (memoria de sesión). */
 let lastRepack = null;
-function repackSpace(){
+// Tipos cuyo alto se ajusta al contenido en «Ordenar» (P6 del gate: solo enumerables — en el
+// resto, el espacio en blanco es funcional o preferencia del usuario y no se toca).
+const AUTO_H_TYPES = { todo: 1, links: 1, clips: 1 };
+// Alto estable al contenido (PURA): redondeo a múltiplos de 4 px contra la oscilación por
+// scrollbars, banda muerta de 8 px para no «respirar» entre Ordenar y Ordenar, acotado
+// [minH, maxH] — más allá del techo, scroll interno del propio widget.
+function stableHeight(current, measured, minH, maxH){
+  const m = Math.max(minH, Math.min(maxH, Math.round(measured / 4) * 4));
+  return Math.abs(m - current) <= 8 ? current : m;
+}
+// Adaptador IMPURO de medición (corrección 4 del gate): el contenido se mide AL ANCHO FINAL del
+// carril en una superficie oculta (el wrapping cambia con el ancho); el estado no se toca. El
+// cuerpo se reconstruye con el mismo builder del render — en Tareas eso mide la vista canónica
+// de pendientes (el histórico vive en estado efímero del render real y aquí nace cerrado).
+function measureContentH(w, width){
+  const host = document.createElement("div");
+  host.className = "win";
+  host.style.cssText = "position:absolute; left:-10000px; top:0; width:" + width + "px; height:auto; min-height:0; visibility:hidden; pointer-events:none";
+  host.innerHTML = '<div class="win-title"><span class="ico">·</span><span class="tname">m</span><span class="sp"></span></div><div class="win-tags"></div><div class="win-body"></div>';
+  document.body.appendChild(host);
+  try{
+    renderBody(w, host.querySelector(".win-body"));
+    return host.offsetHeight;
+  }finally{ host.remove(); }
+}
+function orderSpace(nextCols){
   if (isMobile() || !state) return;
-  const c = state.settings && state.settings.cols;
-  if (c !== 2 && c !== 3 && c !== 4){ toast("Elige 2, 3 o 4 columnas para poder reordenar", true); return; }
-  if (tagFilter){ toast("Quita el filtro de etiqueta para reordenar", true); return; }
-  if (state.widgets.some(x => x.max)){ toast("Restaura la ventana maximizada para reordenar", true); return; }
-  const guides = columnGuides(deskViewW(), colsOpt());
+  if (tagFilter){ toast("Quita el filtro de etiqueta para ordenar", true); return; }
+  if (state.widgets.some(x => x.max)){ toast("Restaura la ventana maximizada para ordenar", true); return; }
   const sp = state.spaces[state.active];
-  // los plegados reservan su altura COMPLETA (la de desplegado): no solaparán al desplegarlos
-  const rects = sp.widgets.map(w => {
+  const colsBefore = (state.settings && state.settings.cols) || "auto";
+  const colsAfter = nextCols === undefined ? colsBefore : nextCols;
+  const force = (colsAfter === 2 || colsAfter === 3 || colsAfter === 4) ? { forceN: colsAfter } : {};
+  const guides = columnGuides(deskViewW(), force);
+  // paso 1: carril y ANCHO final de cada widget (los plegados reservan su altura de desplegado)
+  const baseRects = sp.widgets.map(w => {
     const t = WTYPES[w.type] || {};
     return { id: w.id, x: +w.x || 0, y: +w.y || 0,
       w: Math.max(+w.w || t.w || 260, LAYOUT.minW), h: Math.max(+w.h || t.h || 180, LAYOUT.minH) };
   });
+  const pre = planSpaceRepack(baseRects, guides, { gutter: LAYOUT.snapGap, laneTop: LAYOUT.packingMargin });
+  // paso 2: alto al contenido, medido al ancho final (solo enumerables abiertos)
+  const heights = new Map();
+  for (const p of pre.placed){
+    const wg = sp.widgets.find(x => x.id === p.id);
+    if (!wg || wg.collapsed || !AUTO_H_TYPES[wg.type]) continue;
+    const cur = Math.max(+wg.h || 0, LAYOUT.minH);
+    heights.set(p.id, stableHeight(cur, measureContentH(wg, p.w), LAYOUT.minH, LAYOUT.autoMaxH));
+  }
+  // paso 3: replanificar con los altos FINALES — P4 se comprueba con estos, no con los viejos
+  const rects = baseRects.map(r => heights.has(r.id) ? { ...r, h: heights.get(r.id) } : r);
   const plan = planSpaceRepack(rects, guides, { gutter: LAYOUT.snapGap, laneTop: LAYOUT.packingMargin });
-  // P4: el reordenado se rechaza ENTERO si se sale del área máxima (nunca clamp)
   if (plan.maxBottom + LAYOUT.packingMargin > LAYOUT.worldMax){
-    toast("No cabe: el reordenado se saldría del área máxima del escritorio.", true); return;
+    // rechazo TOTAL (P4): ni la geometría ni la preferencia de columnas cambian
+    toast("No cabe: el orden se saldría del área máxima del escritorio. No se ha cambiado nada.", true);
+    return;
+  }
+  // transacción única: política + geometría, un solo markDirty (en apply)
+  if (nextCols !== undefined){
+    if (colsAfter === "auto") delete state.settings.cols; else state.settings.cols = colsAfter;
   }
   const items = sp.widgets.map(w => ({ id: w.id, before: rectSnap(w), after: null }));
   for (const p of plan.placed){
     const wg = sp.widgets.find(x => x.id === p.id); if (!wg) continue;
-    wg.x = p.x; wg.y = p.y; wg.w = p.w;   // h, contenido, plegado y z se conservan
+    wg.x = p.x; wg.y = p.y; wg.w = p.w;
+    if (heights.has(p.id)) wg.h = heights.get(p.id);   // contenido, plegado y z se conservan
   }
   for (const it of items){ const wg = sp.widgets.find(x => x.id === it.id); it.after = rectSnap(wg); }
   deskEl().scrollTop = 0;   // el reparto empieza arriba: lleva la vista al resultado
+  renderColsControl(); renderLaneAmbient();
   const apply = () => { renderAll(); markDirty(); };
   if (items.length > 20) apply(); else flipLayout(items, apply);   // umbral anti-jank (gate)
-  lastRepack = { spaceId: sp.id, ids: sp.widgets.map(x => x.id).sort().join(","), items };
-  toastAction("Escritorio reordenado en " + guides.n + " columnas.", "Deshacer", undoRepack);
+  lastRepack = { spaceId: sp.id, ids: sp.widgets.map(x => x.id).sort().join(","), items, colsBefore, colsAfter };
+  toastAction("Escritorio ordenado en " + guides.n + " columnas.", "Deshacer", undoRepack);
 }
 /* Deshacer del reordenado: TODO O NADA (gate N3). Solo restaura si el espacio activo es el del
    snapshot, el conjunto de widgets es EXACTAMENTE el mismo y todos siguen en su rect «después»;
@@ -2580,8 +2625,11 @@ function undoRepack(){
   const snap = lastRepack;
   if (!snap) return;
   const sp = state.spaces.find(s => s.id === snap.spaceId);
-  if (!sp || state.spaces[state.active] !== sp){ toast("Ese reordenado es de otro escritorio", true); return; }
+  if (!sp || state.spaces[state.active] !== sp){ toast("Ese orden es de otro escritorio", true); return; }
   if (sp.widgets.map(x => x.id).sort().join(",") !== snap.ids){ toast("El escritorio cambió: ya no se puede deshacer", true); return; }
+  // la transacción incluyó la política de columnas: si alguien la cambió después, no se deshace a medias
+  const curCols = (sp.settings && sp.settings.cols) || "auto";
+  if (snap.colsAfter !== undefined && curCols !== snap.colsAfter){ toast("El escritorio cambió: ya no se puede deshacer", true); return; }
   for (const it of snap.items){
     const wg = sp.widgets.find(x => x.id === it.id);
     if (!wg || !sameRect(rectSnap(wg), it.after)){ toast("El escritorio cambió: ya no se puede deshacer", true); return; }
@@ -2590,9 +2638,13 @@ function undoRepack(){
     const wg = sp.widgets.find(x => x.id === it.id);
     wg.x = it.before.x; wg.y = it.before.y; wg.w = it.before.w; wg.h = it.before.h;
   }
+  if (snap.colsBefore !== undefined){
+    if (snap.colsBefore === "auto") delete sp.settings.cols; else sp.settings.cols = snap.colsBefore;
+    renderColsControl(); renderLaneAmbient();
+  }
   lastRepack = null;
   renderAll(); markDirty();
-  toast("Reordenado deshecho");
+  toast("Orden deshecho");
 }
 /* Geometría robusta frente a cambios de monitor/resolución (puras → testeables) */
 function maxRect(vw, vh, scrollTop = 0){   // rect "maximizado" para el viewport visible (en coords de mundo: +scrollTop)
@@ -3084,30 +3136,26 @@ function buildWindow(w){
         return;
       }
       w.x = draft.x; w.y = draft.y; w.w = draft.w; w.h = draft.h;   // commit único de la transacción
-      // §B resize-reflow: solo si el BORDE INFERIOR avanzó (crecer hacia arriba no reflowea: el
-      // ancla inferior no se mueve y no hay reflow hacia arriba — poda vigente) y sigue alineado
-      // al MISMO carril antes y después
-      const guides = columnGuides(deskViewW(), colsOpt());
-      const laneA = alignedLane({ x: beforeSnap.x, w: beforeSnap.w }, guides);
-      const laneB = alignedLane({ x: w.x, w: w.w }, guides);
-      if (w.y + w.h > beforeSnap.y + beforeSnap.h && laneA !== null && laneA === laneB){
-        const sp = state.spaces[state.active];
-        const others = planViewportLayout(state.widgets.filter(x => x.id !== w.id && !x.max && !(tagFilter && !(x.tags || []).includes(tagFilter))), worldViewport());
-        const cls = laneClassify(others, guides, laneB, LAYOUT.snapGap);
-        const r = planResizeReflow(cls.members, cls.obstacles, { y: w.y, h: w.h }, { gutter: LAYOUT.snapGap });
-        const movedRects = r.moved.map(mv => { const wg = sp.widgets.find(x => x.id === mv.id); return { y: mv.y, h: wg ? widgetRect(wg).h : 0 }; });
-        if (planMaxBottom({ y: w.y }, w.h, movedRects) > LAYOUT.worldMax){
-          w.x = beforeSnap.x; w.y = beforeSnap.y; w.w = beforeSnap.w; w.h = beforeSnap.h;   // rechazo P4: restaurar el rect original, sin transacción parcial
-          renderAll(); toast("No cabe: el reacomodo se saldría del área máxima.", true); return;
-        }
-        if (r.moved.length){
-          const items = [{ id: w.id, before: beforeSnap, after: rectSnap(w) }];
-          for (const mv of r.moved){ const wg = sp.widgets.find(x => x.id === mv.id); if (!wg) continue; const before = rectSnap(wg); wg.y = mv.y; items.push({ id: wg.id, before, after: rectSnap(wg) }); }
-          flipLayout(items, () => { renderAll(); markDirty(); });
-          const snap = { spaceId: sp.id, items };
-          toastAction("Redimensionado (los de abajo hicieron sitio).", "Deshacer", () => undoLayout(snap));
-          return;
-        }
+      // Empuje por colisión REAL (etapa 2, veredicto 2026-07-18): ya no exige carril alineado —
+      // el rect final hace sitio hacia abajo a quien solape de verdad (cascada global, funcione
+      // el widget en un carril, en varios o en ninguno); si el borde inferior retrocedió, los de
+      // debajo suben a cerrar el hueco. Solo al soltar; nada se mueve durante el gesto.
+      const sp = state.spaces[state.active];
+      const others = state.widgets
+        .filter(x => x.id !== w.id && !x.max && !(tagFilter && !(x.tags || []).includes(tagFilter)))
+        .map(x => ({ id: x.id, ...widgetRect(x) }));
+      const plan = planResizePush(others, beforeSnap, rectSnap(w), { gap: LAYOUT.snapGap });
+      if (plan.maxBottom > LAYOUT.worldMax){
+        w.x = beforeSnap.x; w.y = beforeSnap.y; w.w = beforeSnap.w; w.h = beforeSnap.h;   // rechazo P4: restaurar el rect original, sin transacción parcial
+        renderAll(); toast("No cabe: el reacomodo se saldría del área máxima.", true); return;
+      }
+      if (plan.moved.length){
+        const items = [{ id: w.id, before: beforeSnap, after: rectSnap(w) }];
+        for (const mv of plan.moved){ const wg = sp.widgets.find(x => x.id === mv.id); if (!wg) continue; const before = rectSnap(wg); wg.y = mv.y; items.push({ id: wg.id, before, after: rectSnap(wg) }); }
+        flipLayout(items, () => { renderAll(); markDirty(); updateDeskHeight(); });
+        const snap = { spaceId: sp.id, items };
+        toastAction("Redimensionado: los demás hicieron sitio.", "Deshacer", () => undoLayout(snap));
+        return;
       }
       markDirty(); updateDeskHeight();
     };
@@ -3294,28 +3342,49 @@ function planColumnCompact(members, obstacles, holeTop, above, opts){
   }
   return { moved };
 }
-// Reflow al REDIMENSIONAR (§B): el widget crece y empuja hacia abajo SOLO los miembros de su carril
-// que colisionan (cascada), conservándolo como ANCLA (no es una inserción). members = otros del
-// carril; anchor = {y,h} del redimensionado; obstáculos fijos. Devuelve { moved:[{id,y}] }. PURO.
-function planResizeReflow(members, obstacles, anchor, opts){
+/* Empuje por colisión REAL al redimensionar (etapa 2 del veredicto 2026-07-18; sustituye al gate
+   `alignedLane` del §B previo). Parte del rect FINAL del gesto: todo rect que lo solape de verdad
+   (horizontal Y vertical, más allá de `tol` — la invasión ≤ snapGap se ignora, como en ownerLane)
+   baja lo mínimo para hacer sitio, con cascada GLOBAL: un rect empujado puede empujar a otros,
+   crucen o no carriles — un solo plan, nunca dos planes contradictorios. Si el borde inferior
+   RETROCEDIÓ respecto al inicio, los rects bajo él que lo solapan horizontalmente suben a cerrar
+   el hueco (compactación inversa), sin pasar nunca por encima de otro obstáculo y sin bajar por
+   esta vía. Solo se mueve `y`. Devuelve { moved:[{id,y}], maxBottom }. PURO. */
+function planResizePush(others, startRect, finalRect, opts){
   const o = opts || {};
-  const gutter = o.gutter ?? 14;
-  const below = members.filter(m => m.y >= anchor.y).sort((a, b) => a.y - b.y);
-  const obs = (obstacles || []).slice().sort((a, b) => a.y - b.y);
-  const moved = [];
-  let cursor = anchor.y + anchor.h;   // borde inferior del ancla; los de debajo no pueden solaparlo
-  for (const m of below){
-    let y = Math.max(m.y, cursor + gutter);
+  const gap = o.gap ?? 14, tol = o.tol ?? o.gap ?? 14;
+  const hOv = (a, b) => Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x) > tol;
+  const vOv = (a, b) => Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y) > tol;
+  const orig = new Map(others.map(r => [r.id, r.y]));
+  const fin = { x: +finalRect.x, y: +finalRect.y, w: +finalRect.w, h: +finalRect.h };
+  // fase 1 — empuje hacia abajo en cascada (el redimensionado es el primer obstáculo)
+  const work = [];
+  const obstacles = [fin];
+  for (const r of [...others].sort((a, b) => (a.y - b.y) || (a.x - b.x))){
+    const cur = { id: r.id, x: r.x, y: r.y, w: r.w, h: r.h };
     let bumped = true;
     while (bumped){
       bumped = false;
-      for (const ob of obs)
-        if (y < ob.y + ob.h + gutter && y + m.h + gutter > ob.y){ y = Math.max(y, ob.y + ob.h + gutter); bumped = true; }
+      for (const p of obstacles)
+        if (hOv(cur, p) && vOv(cur, p)){ cur.y = p.y + p.h + gap; bumped = true; }
     }
-    if (y !== m.y) moved.push({ id: m.id, y });
-    cursor = Math.max(cursor, y + m.h);
+    obstacles.push(cur); work.push(cur);
   }
-  return { moved };
+  // fase 2 — compactación inversa: solo si el borde inferior retrocedió (encoger desde abajo);
+  // redimensionar desde el borde superior deja el inferior fijo y por tanto no compacta nada
+  const newBottom = fin.y + fin.h;
+  if (newBottom < startRect.y + startRect.h - tol){
+    for (const c of work.filter(r => hOv(r, fin) && r.y > newBottom).sort((a, b) => a.y - b.y)){
+      let ceil = newBottom + gap;
+      for (const p of work)
+        if (p.id !== c.id && hOv(c, p) && p.y + p.h <= c.y + tol) ceil = Math.max(ceil, p.y + p.h + gap);
+      if (ceil < c.y) c.y = ceil;   // solo sube; jamás baja por esta vía
+    }
+  }
+  const moved = work.filter(r => r.y !== orig.get(r.id)).map(r => ({ id: r.id, y: r.y }));
+  let maxBottom = newBottom;
+  for (const r of work) maxBottom = Math.max(maxBottom, r.y + r.h);
+  return { moved, maxBottom };
 }
 // Reempaquetado ÚNICO de una columna cuando el widget se mueve DENTRO de su misma columna (Codex:
 // inserción + compactación en un solo plan, no dos planificadores que se contradigan). members = los
@@ -3342,7 +3411,7 @@ function planLaneRepack(members, obstacles, insert, opts){
   }
   return { placed, moved };
 }
-/* Reempaquetado GLOBAL del espacio (N3 §2.2 — «Reordenar este escritorio»): asigna cada rect a su
+/* Reempaquetado GLOBAL del espacio (N3 §2.2 — usado por «Ordenar»): asigna cada rect a su
    carril propietario (ownerLane; sin solape con ninguno → el de centro más cercano), ordena estable
    por y → x → índice original y apila cada carril INDEPENDIENTEMENTE desde `laneTop` con `gutter`.
    Todo miembro adopta x/ancho de carril; conserva su h (los plegados deben venir con su altura
@@ -5400,14 +5469,14 @@ function paletteEntries(){
     add("🏷️", "Quitar filtro de etiqueta", tagFilter, () => { closeMenu(); setTagFilter(null); }, "quitar limpiar filtro etiqueta");
   add("▶", "Tour interactivo", "recorrido guiado", () => { closeMenu(); startTour(); }, "tour recorrido guiado interactivo empezar como funciona");
   add("🪟", "Permitir ventanas emergentes", "para abrir grupos de enlaces", () => { closeMenu(); $("#ov-popups").classList.add("open"); }, "popup popups ventanas emergentes bloqueadas permitir pestañas grupos enlaces");
-  add("🧭", "Autoordenar widgets", "redistribuir pantalla", () => { closeMenu(); autoArrangeWidgets(); }, "autoordenar ordenar redistribuir organizar widgets pantalla");
+  add("🧭", "Ordenar el escritorio", "colocar en columnas", () => { closeMenu(); orderSpace(); }, "ordenar autoordenar reordenar redistribuir organizar columnas widgets pantalla");
   add("🗑️", "Papelera", "recuperar borrados", () => { closeMenu(); openTrash(); }, "papelera recuperar restaurar borrados deshacer");
   add("👁", privacyOn ? "Privacidad: mostrar widgets privados" : "Privacidad: ocultar widgets privados", "pantalla compartida",
     () => { closeMenu(); setPrivacy(!privacyOn); }, "privacidad privado ocultar mostrar compartir pantalla presentacion docencia escenica");
   add("📖", "Guía completa", "cómo funciona todo", () => { closeMenu(); window.open("guia.html", "_blank", "noopener"); }, "guia manual ayuda completa como funciona empezar");
   for (const [type, t] of Object.entries(WTYPES)) if (type !== "intro")
     add("➕", "Añadir " + t.name, "widget nuevo", () => { addWidget(type); closeMenu(); }, "añadir crear nuevo " + t.name);
-  [["⚙","Ajustes generales","act-config"],["❓","Guía","act-ayuda"],["🧩","Packs","act-packs"],["🖼️","Fondo","act-wallpaper"],["📁","Sincronizar equipos","act-folder"],["🧭","Autoordenar","act-arrange"],["🗑️","Papelera","act-trash"],["⬇️","Exportar copia","act-export"],["⬆️","Importar copia","act-import"],["♻️","Restaurar copia","act-restore"]]
+  [["⚙","Ajustes generales","act-config"],["❓","Guía","act-ayuda"],["🧩","Packs","act-packs"],["🖼️","Fondo","act-wallpaper"],["📁","Sincronizar equipos","act-folder"],["🧭","Ordenar","act-arrange"],["🗑️","Papelera","act-trash"],["⬇️","Exportar copia","act-export"],["⬆️","Importar copia","act-import"],["♻️","Restaurar copia","act-restore"]]
     .forEach(([ic, label, id]) => add(ic, label, "acción", () => { closeMenu(); const b = $("#" + id); if (b) b.click(); }, label + " configuración"));
   return E;
 }
@@ -5547,7 +5616,7 @@ function wireUI(){
     focusWidget(h.w.id, h.si);
   });
   $("#desk-palette").addEventListener("click", () => openMenu("palette"));
-  $("#desk-arrange").addEventListener("click", autoArrangeWidgets);
+  $("#desk-arrange").addEventListener("click", () => orderSpace());
   $("#desk-trash").addEventListener("click", openTrash);
   $("#desk-privacy").addEventListener("click", () => setPrivacy(!privacyOn));
   applyPrivacyUI();   // el modo sobrevive a recargas (localStorage por dispositivo)
@@ -5663,7 +5732,7 @@ function wireUI(){
 
   // carpeta / exportar / importar
   $("#act-folder").addEventListener("click", () => { closeMenu(); $("#ov-boot").classList.add("open"); });
-  $("#act-arrange").addEventListener("click", () => { closeMenu(); autoArrangeWidgets(); });
+  $("#act-arrange").addEventListener("click", () => { closeMenu(); orderSpace(); });
   $("#act-trash").addEventListener("click", () => { closeMenu(); openTrash(); });
   $("#trash-close").addEventListener("click", () => $("#ov-trash").classList.remove("open"));
   $("#mark-save").addEventListener("click", saveCalendarMark);
