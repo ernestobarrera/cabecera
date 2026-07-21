@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.39.1] - 2026-07-21 — actualización de seguridad
+
+Tres fallos en la importación de packs, encontrados en una revisión de seguridad externa y **verificados reproduciendo el ataque** antes y después del arreglo. Afectaban solo a quien abriera un pack de terceros (archivo o enlace `?pack=`); los packs propios y los incluidos nunca estuvieron implicados. **Si usas packs compartidos, recarga la página (F5) para tener esta versión.**
+
+- **Un pack podía ejecutar código en tu página.** El campo de imagen de un pack se aceptaba comprobando solo que empezara por `data:image/`, y luego se insertaba tal cual en el HTML: una comilla bastaba para salir del atributo y colar JavaScript, que se ejecutaba con todos tus datos delante. Ahora se exige exactamente el formato que genera la propia app y, además, la imagen nunca se inserta como texto en el HTML — se asigna como propiedad, así que una cadena manipulada no puede convertirse en código. Doble capa, con prueba automática que intenta el ataque.
+- **Aplicar un pack borraba mucho más de lo que decía.** El aviso hablaba de sustituir «tu escritorio actual», pero en realidad se llevaba por delante **todos los demás escritorios**, las marcas del calendario, tus conceptos propios, la papelera y los ajustes de ⚙. Ahora sustituye únicamente los widgets del escritorio en el que estás —el aviso lo dice con su nombre— y el resto queda intacto. Además, si la copia de seguridad previa no se puede guardar, ya **no se aplica nada**: antes ese fallo se ignoraba y te quedabas sin escritorio y sin copia.
+- **Un enlace podía aplicar un pack sin preguntarte.** En la primera visita, `?pack=<dirección>` se descargaba y aplicaba sin ninguna confirmación. Ahora siempre se pregunta, y en dos pasos: primero si quieres conectar con ese servidor (avisando de que verá tu dirección IP), y después si quieres aplicar lo que ha llegado. La descarga tampoco envía ya cookies ni la dirección de procedencia.
+
 ## [0.39.0] - 2026-07-20
 
 - **Si pides 4 columnas, son 4.** Hasta ahora, elegir 4 (o 3) en el control **▤** podía quedarse en 2 en pantallas medianas, aunque las columnas hubieran cabido de sobra. La causa: un único ancho mínimo de columna servía a la vez para decidir cuántas columnas pone **Auto** y para recortar tu elección manual. Ahora son dos cosas distintas: Auto sigue igual de conservador (prefiere columnas anchas antes que apretadas), pero **el número que eliges a mano se respeta mientras las ventanas quepan de verdad**. El aviso «4→2» solo aparece ya cuando ni así caben.

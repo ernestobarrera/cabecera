@@ -1197,7 +1197,7 @@ function syncUI(mode, txt){
    reaparece) y si Recargar está activo. El descarte ✕ vive solo en memoria de la sesión.
    Demora asumida: la CDN de Pages puede servir la versión vieja hasta ~10 min aun con
    no-store (gobierna la caché del navegador, no la CDN); para pestañas de días, irrelevante. */
-const APP_VERSION = "0.39.0";
+const APP_VERSION = "0.39.1";
 let newVersionDetected = null;   // versión superior detectada; detiene futuras consultas
 let verDismissed = false;        // ✕: solo esta sesión — nunca persistido en disco
 let verCheckInflight = false;    // sin consultas concurrentes
@@ -1897,8 +1897,13 @@ function normalizePack(p){
     else if (w.type === "leave") data.year = num(d.year, new Date().getFullYear(), 1970, 2100);
     else if (w.type === "files") data.folderName = txt(d.folderName, 120);
     else if (w.type === "img"){
+      // XSS REAL cerrado (hallazgo de Codex 2026-07-21): bastaba `startsWith("data:image/")`, así que
+      // una comilla en la cadena escapaba del atributo src y permitía inyectar onerror= con JavaScript
+      // arbitrario, alcanzable desde ?pack=<URL>. Ahora se exige la forma EXACTA que produce la propia
+      // app (`toDataURL` → base64): sin comillas, sin espacios, sin nada interpretable como atributo.
+      // `svg+xml` queda fuera a propósito: la app nunca lo genera y el SVG puede transportar script.
       const s = String(d.img || "");
-      if (!s.startsWith("data:image/") || s.length > 2500000) continue;
+      if (!/^data:image\/(png|jpeg|gif|webp|avif);base64,[A-Za-z0-9+/]+={0,2}$/.test(s) || s.length > 2500000) continue;
       data.img = s;
     }
     else if (w.type === "search"){
@@ -1936,22 +1941,29 @@ async function applyPack(pack, opts = {}){
   if (!np){ toast("El pack no es válido o no contiene widgets utilizables", true); return false; }
   const add = !!opts.add;
   const ask = opts.ask !== false;
+  const spName = (state && state.spaces && state.spaces[state.active] && state.spaces[state.active].name) || "este escritorio";
   if (ask && !(await dlgConfirm(add
     ? `¿Añadir los ${np.widgets.length} widgets del pack "${np.name || "sin nombre"}" a tu escritorio actual?`
-    : `¿Aplicar el pack "${np.name || "sin nombre"}"? Sustituye tu escritorio actual (se guarda una copia local automática).`,
+    : `¿Aplicar el pack "${np.name || "sin nombre"}"? Sustituye los widgets de «${spName}» (se guarda una copia local automática). Tus demás escritorios, el calendario y la papelera no se tocan.`,
     { title: add ? "Añadir pack" : "Aplicar pack", okLabel: add ? "Añadir" : "Aplicar" }))) return false;
-  try{ localStorage.setItem("cabecera-backup-antes-pack", JSON.stringify(state)); }catch(e){}
+  // La copia previa es la ÚNICA red de este gesto: si falla (cuota de localStorage), se ABORTA.
+  // Antes el fallo se tragaba en silencio y la sustitución seguía igual, dejando al usuario sin
+  // escritorio y sin vuelta atrás (hallazgo de Codex 2026-07-21).
+  try{ localStorage.setItem("cabecera-backup-antes-pack", JSON.stringify(state)); }
+  catch(e){ toast("No se pudo guardar la copia de seguridad previa, así que no se ha aplicado nada. Libera espacio del navegador e inténtalo de nuevo.", true); return false; }
   if (add){
     // se suma al escritorio activo, con un pequeño desplazamiento para verse; el fondo no se toca
     for (const w of np.widgets) state.widgets.push({ id: uid(), z: ++zTop, source: "pack", ...w, x: w.x + 24, y: w.y + 24 });
   } else {
+    // Sustituye SOLO el espacio activo. Antes se fabricaba un estado v1 de un único espacio que, al
+    // migrar, BORRABA los demás escritorios, las marcas de calendario, los conceptos propios, la
+    // papelera y los ajustes ⚙ — mucho más de lo que anunciaba el diálogo (hallazgo de Codex).
+    const next = JSON.parse(JSON.stringify(state));   // v2 plano: los accesores no se serializan
+    const sp = next.spaces[next.active];
+    sp.settings = Object.assign({}, sp.settings, np.settings);
     let z = 0;
-    setState({
-      version: 1,
-      updatedAt: Date.now(),
-      settings: Object.assign({}, state && state.settings, np.settings),
-      widgets: np.widgets.map(w => ({ id: uid(), z: ++z, source: "pack", ...w }))
-    }, "pack");
+    sp.widgets = np.widgets.map(w => ({ id: uid(), z: ++z, source: "pack", ...w }));
+    setState(next, "pack");
   }
   renderAll(); markDirty();
   toast(`Pack "${np.name || ""}" ${add ? "añadido" : "aplicado"}`);
@@ -1971,10 +1983,20 @@ async function handlePackParam(){
   const ref = (new URLSearchParams(location.search).get("pack") || "").trim();
   if (!ref) return;
   history.replaceState(null, "", location.pathname);
-  const opts = { ask: !isFirstRun };
+  // SIEMPRE se pregunta. Antes era `ask: !isFirstRun`: en la primera visita un enlace ajeno podía
+  // aplicar un pack remoto SIN confirmación alguna — y encadenado al XSS de imagen daba ejecución
+  // de código con un solo clic sobre un enlace (hallazgo de Codex 2026-07-21).
+  const opts = { ask: true };
   if (/^https?:\/\//i.test(ref)){
+    // dos decisiones humanas: la conexión al servidor ajeno es la primera, y ocurre ANTES del fetch
+    // (descargar ya revela IP y momento a ese servidor); aplicar el contenido es la segunda.
+    let host = ref;
+    try{ host = new URL(ref).hostname; }catch(e){}
+    if (!(await dlgConfirm(`Este enlace quiere traer un escritorio desde «${host}». Al continuar, tu navegador se conectará a ese servidor y le revelará tu dirección IP. Después podrás ver qué contiene antes de aplicarlo.`,
+      { title: "Pack de otro sitio", okLabel: "Conectar y ver" }))) return;
     try{
-      const r = await fetch(ref, { cache: "no-store" });
+      const r = await fetch(ref, { cache: "no-store", credentials: "omit", referrerPolicy: "no-referrer" });
+      if (!r.ok) throw new Error("HTTP " + r.status);
       await applyPack(await r.json(), opts);
     }catch(e){ toast("No se pudo cargar el pack de esa URL (¿CORS o JSON inválido?)", true); }
   } else if (BUILTIN_PACKS[ref]){
@@ -4271,7 +4293,11 @@ function bodyImg(w, el){
   };
   const paint = () => {
     if (w.data.img){
-      el.innerHTML = `<div class="img-box"><img src="${w.data.img}" alt=""><div class="img-bar"><button class="mini rm">✕ Quitar</button></div></div>`;
+      // la fuente NUNCA se interpola en innerHTML: se asigna como propiedad, así una cadena con
+      // comillas no puede convertirse en atributos (segunda capa del XSS cerrado en v0.39.1; el
+      // saneo de normalizePack es la primera, pero esto protege también a un datos.json manipulado)
+      el.innerHTML = `<div class="img-box"><img alt=""><div class="img-bar"><button class="mini rm">✕ Quitar</button></div></div>`;
+      el.querySelector("img").src = w.data.img;
       el.querySelector(".rm").addEventListener("click", () => { w.data.img = null; paint(); markDirty(); });
     } else {
       el.innerHTML = `<div class="dropzone" tabindex="0">Pega una imagen (Ctrl+V) o suéltala aquí<br>

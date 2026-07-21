@@ -1027,6 +1027,57 @@ if (!src.match(/wireLinkCapture\(el, links => \{[\s\S]{0,400}w\.data\.items\.pus
 if (!html.includes('.win-body.ext-drop')) throw new Error('regresión: la zona de captura no se resalta al arrastrar encima');
 console.log('OK captura por arrastre en Nota/Tareas (texto compuesto, sin dominio redundante, cableado sin fugas)');
 
+// --- Endurecimiento del importador de packs (v0.39.1; los 3 bloqueos que halló Codex 2026-07-21) ---
+{
+  // (1) XSS REAL: `startsWith("data:image/")` dejaba pasar comillas → escapar del atributo src e
+  // inyectar onerror=. Alcanzable desde ?pack=<URL>. Payloads que DEBEN rechazarse:
+  const evilImgs = [
+    'data:image/png," onerror="alert(1)',
+    'data:image/png,x" onload="alert(1)',
+    "data:image/png,x' onerror='alert(1)",
+    'data:image/svg+xml,<svg onload="alert(1)"></svg>',                 // svg fuera a propósito
+    'data:image/svg+xml;base64,PHN2ZyBvbmxvYWQ9ImFsZXJ0KDEpIj48L3N2Zz4=',
+    'data:image/png;base64,AAAA onerror=alert(1)',                       // espacio = atributo nuevo
+    'data:image/png;base64,AA<AA',
+    'data:image/png;base64,AA>AA',
+    'javascript:alert(1)',
+    'data:text/html;base64,PHNjcmlwdD5hbGVydCgxKTwvc2NyaXB0Pg=='
+  ];
+  for (const img of evilImgs){
+    const np = normalizePack({ cabeceraPack: 1, widgets: [{ type: 'img', data: { img } }, { type: 'clock' }] });
+    const got = (np && np.widgets.find(w => w.type === 'img'));
+    if (got) throw new Error('XSS: imagen maliciosa aceptada → ' + JSON.stringify(img));
+  }
+  // una imagen legítima (la forma que produce toDataURL) debe seguir pasando
+  const okImg = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAA==';
+  const npOk = normalizePack({ cabeceraPack: 1, widgets: [{ type: 'img', data: { img: okImg } }] });
+  if (!npOk || npOk.widgets[0].data.img !== okImg) throw new Error('una imagen legítima fue rechazada');
+  // segunda capa: la fuente jamás se interpola en innerHTML
+  if (/innerHTML\s*=\s*`[^`]*<img src="\$\{/.test(src)) throw new Error('XSS: bodyImg vuelve a interpolar la fuente en innerHTML');
+  if (!src.includes('el.querySelector("img").src = w.data.img;')) throw new Error('regresión: la fuente de la imagen ya no se asigna como propiedad');
+
+  // (2) aplicar un pack NO puede destruir más de lo que anuncia
+  if (/setState\(\{\s*\n?\s*version: 1,[\s\S]{0,200}widgets: np\.widgets/.test(src))
+    throw new Error('regresión: applyPack vuelve a fabricar un estado v1 (borraría los demás espacios y el calendario)');
+  if (!src.includes('const next = JSON.parse(JSON.stringify(state));   // v2 plano: los accesores no se serializan'))
+    throw new Error('regresión: applyPack ya no preserva el resto del estado');
+  if (!src.match(/catch\(e\)\{ toast\("No se pudo guardar la copia de seguridad previa[\s\S]{0,120}return false; \}/))
+    throw new Error('regresión: el fallo de la copia previa vuelve a ignorarse y la sustitución seguiría');
+  if (/localStorage\.setItem\("cabecera-backup-antes-pack", JSON\.stringify\(state\)\); \}catch\(e\)\{\}/.test(src))
+    throw new Error('regresión: la copia previa vuelve a fallar en silencio');
+
+  // (3) ninguna invitación hace fetch ni aplica sin gesto humano
+  // (el comentario del código cita `ask: !isFirstRun` para explicar el fallo, así que se busca
+  // la forma EJECUTABLE, no la cadena suelta)
+  if (/const opts = \{ ask: !isFirstRun/.test(src)) throw new Error('regresión: ?pack= vuelve a autoaplicar en la primera visita');
+  if (!src.match(/const opts = \{ ask: true \}/)) throw new Error('regresión: handlePackParam ya no exige confirmación siempre');
+  if (!src.match(/dlgConfirm\(`Este enlace quiere traer un escritorio desde[\s\S]{0,400}\)\)\) return;[\s\S]{0,200}fetch\(ref/))
+    throw new Error('regresión: se descarga el pack remoto ANTES de la confirmación humana');
+  if (!src.match(/fetch\(ref, \{ cache: "no-store", credentials: "omit", referrerPolicy: "no-referrer" \}\)/))
+    throw new Error('regresión: el fetch remoto vuelve a mandar credenciales o referer');
+}
+console.log('OK importador de packs endurecido (XSS de imagen cerrado en 2 capas, sustitución acotada, copia previa que aborta, sin fetch ni aplicación sin gesto humano)');
+
 // --- mergeStates: fusión a tres bandas por widget (spec-merge-por-widget, v0.37.0) ---
 eval('globalThis.canonJSON = ' + pickFn('canonJSON', 'v'));
 eval('globalThis.mergeStates = ' + pickFn('mergeStates', 'base, local, remote, prefer'));
