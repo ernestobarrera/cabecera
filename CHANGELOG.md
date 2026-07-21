@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.39.2] - 2026-07-21 — segunda vuelta de seguridad en packs
+
+Continuación de la 0.39.1, cerrando lo que quedaba de la misma revisión externa. Sigue afectando solo a packs de terceros.
+
+- **Un pack que se actualiza solo ya no puede traer «capacidades», solo contenido.** Al seguir una fuente (por dirección o por archivo compartido) confías no solo en lo que ves hoy, sino en todo lo que llegue mañana. Por eso, desde una fuente seguida solo se aceptan **enlaces, notas, tareas, portapapeles y markdown**. Queda fuera, entre otros, el widget de Buscadores: un pack ajeno podría haber instalado un buscador que enviara **tus búsquedas al servidor de quien lo publicó**. Abrir un pack suelto desde un archivo, que ves entero y una sola vez, no cambia.
+- **Un pack ya no puede hacerse pasar por tus widgets de trabajo con agentes.** Los nombres reservados (los que empiezan por «Cabecera ·») se descartan al importar, para que un pack no pueda colar texto en lo que tus asistentes leen por nombre.
+- **Todas las descargas de packs pasan ya por la misma puerta.** El campo «Packs → dirección» hacía su propia descarga y se había quedado sin las protecciones que sí tenía el enlace `?pack=`. Ahora hay una única vía: pregunta antes de conectar, rechaza direcciones con credenciales dentro, no envía cookies ni procedencia, comprueba la respuesta y limita el tamaño antes de leerla.
+
 ## [0.39.1] - 2026-07-21 — actualización de seguridad
 
 Tres fallos en la importación de packs, encontrados en una revisión de seguridad externa y **verificados reproduciendo el ataque** antes y después del arreglo. Afectaban solo a quien abriera un pack de terceros (archivo o enlace `?pack=`); los packs propios y los incluidos nunca estuvieron implicados. **Si usas packs compartidos, recarga la página (F5) para tener esta versión.**

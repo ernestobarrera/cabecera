@@ -1197,7 +1197,7 @@ function syncUI(mode, txt){
    reaparece) y si Recargar está activo. El descarte ✕ vive solo en memoria de la sesión.
    Demora asumida: la CDN de Pages puede servir la versión vieja hasta ~10 min aun con
    no-store (gobierna la caché del navegador, no la CDN); para pestañas de días, irrelevante. */
-const APP_VERSION = "0.39.1";
+const APP_VERSION = "0.39.2";
 let newVersionDetected = null;   // versión superior detectada; detiene futuras consultas
 let verDismissed = false;        // ✕: solo esta sesión — nunca persistido en disco
 let verCheckInflight = false;    // sin consultas concurrentes
@@ -1860,7 +1860,18 @@ const BUILTIN_PACKS = { sanitarios: "packs/sanitarios.json", basico: "packs/basi
    - URLs: solo http/https (fuera javascript:, data:, etc.)
    - dimensiones: solo números acotados (nada llega a cssText sin coerción)
    - fondo: los packs solo pueden fijar preset o file, nunca URL remota (tracking) */
-function normalizePack(p){
+// C7 — PERFIL REMOTO ESTRECHO (exigencia de Codex 2026-07-21). Una fuente que se actualiza sola
+// (URL seguida o archivo seguido) sólo puede traer contenido, nunca capacidades: fuera `search`
+// (podría desviar las búsquedas del usuario al dominio del editor), `img`, `files`, `dictado`,
+// `calc` y demás. Se aplica por AUTOACTUALIZACIÓN, no por transporte: abrir un archivo suelto una
+// vez es una decisión que el usuario ve entera; seguir una fuente traslada esa confianza a todo lo
+// que venga después, que es la propiedad peligrosa.
+const REMOTE_PACK_TYPES = { links: 1, notes: 1, todo: 1, clips: 1, md: 1 };
+// Los nombres de la superficie humano-agente son reservados: si un pack pudiera crear un widget
+// llamado «Cabecera · bandeja», inyectaría texto en lo que los agentes leen por nombre.
+const RESERVED_TITLE = /^\s*cabecera\s*[·:.-]/i;
+function normalizePack(p, opts){
+  const o = opts || {};
   if (!p || p.cabeceraPack !== 1 || !Array.isArray(p.widgets)) return null;
   const num = (v, d, min, max) => { v = Number(v); return Number.isFinite(v) ? Math.min(max, Math.max(min, v)) : d; };
   const txt = (v, max) => String(v ?? "").slice(0, max);
@@ -1871,6 +1882,7 @@ function normalizePack(p){
   const widgets = [];
   for (const w of p.widgets){
     if (!WTYPES[w.type] || w.type === "intro") continue;
+    if (o.remote && !REMOTE_PACK_TYPES[w.type]) continue;   // C7: perfil estrecho para fuentes que se actualizan solas
     const d = w.data || {}, data = {};
     if (w.type === "links"){
       data.groups = (Array.isArray(d.groups) ? d.groups : []).map(g => ({
@@ -1925,7 +1937,8 @@ function normalizePack(p){
       w: num(w.w, WTYPES[w.type].w, 220, 2000), h: num(w.h, WTYPES[w.type].h, 140, 2000),
       data
     };
-    if (w.t) wo.t = txt(w.t, 60);
+    // el título nunca puede suplantar la superficie humano-agente (el pack se queda sin título)
+    if (w.t && !RESERVED_TITLE.test(String(w.t))) wo.t = txt(w.t, 60);
     widgets.push(wo);
   }
   if (!widgets.length) return null;
@@ -1937,8 +1950,10 @@ function normalizePack(p){
 }
 
 async function applyPack(pack, opts = {}){
-  const np = normalizePack(pack);
-  if (!np){ toast("El pack no es válido o no contiene widgets utilizables", true); return false; }
+  const np = normalizePack(pack, { remote: !!opts.remote });
+  if (!np){ toast(opts.remote
+    ? "Ese pack no trae nada que se pueda aceptar de una fuente externa (solo se admiten enlaces, notas, tareas, portapapeles y markdown)."
+    : "El pack no es válido o no contiene widgets utilizables", true); return false; }
   const add = !!opts.add;
   const ask = opts.ask !== false;
   const spName = (state && state.spaces && state.spaces[state.active] && state.spaces[state.active].name) || "este escritorio";
@@ -1970,6 +1985,33 @@ async function applyPack(pack, opts = {}){
   return true;
 }
 
+/* ÚNICA vía de descarga de un pack ajeno (corrección de Codex 2026-07-21: el camino manual
+   «Packs → URL» hacía su propio fetch sin credentials/referrerPolicy, sin comprobar r.ok y sin
+   confirmación previa — el endurecimiento de v0.39.1 solo cubría el enlace ?pack=). Toda descarga
+   remota pasa por aquí: confirma ANTES de conectar (el propio fetch ya revela IP y momento al
+   servidor ajeno), rechaza credenciales incrustadas, no manda cookies ni referer, comprueba el
+   estado y acota el tamaño antes de parsear. Devuelve el JSON o null. */
+const REMOTE_PACK_MAX = 2 * 1024 * 1024;   // 2 MiB: límite defensivo del formato (Codex §9)
+async function fetchRemotePack(url, { confirm = true } = {}){
+  let host = String(url);
+  try{
+    const x = new URL(String(url));
+    if (x.protocol !== "https:" && x.protocol !== "http:"){ toast("Solo se admiten direcciones http(s)", true); return null; }
+    if (x.username || x.password){ toast("Esa dirección lleva credenciales dentro; no se va a usar.", true); return null; }
+    host = x.hostname;
+  }catch(e){ toast("Esa dirección no es válida", true); return null; }
+  if (confirm && !(await dlgConfirm(
+    `Vas a traer un escritorio desde «${host}». Al continuar, tu navegador se conectará a ese servidor y le revelará tu dirección IP. Después podrás ver qué contiene antes de aplicarlo.`,
+    { title: "Pack de otro sitio", okLabel: "Conectar y ver" }))) return null;
+  try{
+    const r = await fetch(String(url), { cache: "no-store", credentials: "omit", referrerPolicy: "no-referrer" });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const text = await r.text();
+    if (text.length > REMOTE_PACK_MAX) throw new Error("el archivo es demasiado grande");
+    return JSON.parse(text);
+  }catch(e){ toast("No se pudo cargar el pack de esa dirección (" + e.message + ")", true); return null; }
+}
+
 async function applyBuiltin(id, opts){
   try{
     const r = await fetch(BUILTIN_PACKS[id], { cache: "no-store" });
@@ -1988,17 +2030,10 @@ async function handlePackParam(){
   // de código con un solo clic sobre un enlace (hallazgo de Codex 2026-07-21).
   const opts = { ask: true };
   if (/^https?:\/\//i.test(ref)){
-    // dos decisiones humanas: la conexión al servidor ajeno es la primera, y ocurre ANTES del fetch
-    // (descargar ya revela IP y momento a ese servidor); aplicar el contenido es la segunda.
-    let host = ref;
-    try{ host = new URL(ref).hostname; }catch(e){}
-    if (!(await dlgConfirm(`Este enlace quiere traer un escritorio desde «${host}». Al continuar, tu navegador se conectará a ese servidor y le revelará tu dirección IP. Después podrás ver qué contiene antes de aplicarlo.`,
-      { title: "Pack de otro sitio", okLabel: "Conectar y ver" }))) return;
-    try{
-      const r = await fetch(ref, { cache: "no-store", credentials: "omit", referrerPolicy: "no-referrer" });
-      if (!r.ok) throw new Error("HTTP " + r.status);
-      await applyPack(await r.json(), opts);
-    }catch(e){ toast("No se pudo cargar el pack de esa URL (¿CORS o JSON inválido?)", true); }
+    // dos decisiones humanas: conectar con el servidor ajeno (dentro de fetchRemotePack, ANTES del
+    // fetch) y aplicar lo que haya llegado. Perfil remoto estrecho (C7).
+    const p = await fetchRemotePack(ref);
+    if (p) await applyPack(p, { ...opts, remote: true });
   } else if (BUILTIN_PACKS[ref]){
     await applyBuiltin(ref, opts);
   } else toast("Pack desconocido: " + ref, true);
@@ -2011,7 +2046,8 @@ async function followPackFile(){
     const [h] = await window.showOpenFilePicker({ types: [{ description: "Pack JSON", accept: { "application/json": [".json"] } }] });
     const f = await h.getFile();
     const pack = JSON.parse(await f.text());
-    if (!(await applyPack(pack))) return;
+    // seguir = trasladar la confianza a TODO lo que venga después → perfil estrecho (C7)
+    if (!(await applyPack(pack, { remote: true }))) return;
     await idbSet("packHandle", h);
     await idbSet("packMtime", f.lastModified);
     toast("Siguiendo el pack: te avisaré cuando cambie");
@@ -2030,7 +2066,7 @@ async function checkFollowedPack(interactive = false){
     if (f.lastModified <= known){ if (interactive) toast("El pack seguido no tiene novedades"); return; }
     const pack = JSON.parse(await f.text());
     toastAction(`El pack compartido "${pack.name || h.name}" tiene novedades.`, "Aplicar", async () => {
-      if (await applyPack(pack, { ask: false })) await idbSet("packMtime", f.lastModified);
+      if (await applyPack(pack, { ask: false, remote: true })) await idbSet("packMtime", f.lastModified);
     });
   }catch(e){ if (interactive) toast("No se pudo comprobar el pack: " + e.message, true); }
 }
@@ -5805,10 +5841,8 @@ function wireUI(){
     const u = $("#pack-url").value.trim(); if (!u) return;
     const opts = packAdd();
     $("#ov-packs").classList.remove("open");
-    try{
-      const r = await fetch(u, { cache: "no-store" });
-      await applyPack(await r.json(), opts);
-    }catch(e){ toast("No se pudo cargar (¿CORS o JSON inválido?)", true); }
+    const p = await fetchRemotePack(u);   // misma vía endurecida que el enlace ?pack= (Codex 2026-07-21)
+    if (p) await applyPack(p, { ...opts, remote: true });
   });
   $("#pack-file").addEventListener("click", async () => {
     if (!window.showOpenFilePicker){ toast("Esta función necesita Edge o Chrome", true); return; }
