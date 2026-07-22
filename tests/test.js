@@ -629,7 +629,7 @@ if (!src.match(/laneRes = planLaneInsert\(others, lane/)) throw new Error('regre
 if (!src.includes('function undoLayout(')) throw new Error('regresión: falta el Deshacer de la transacción de carril');
 if (!src.includes('if (sameRect(rectSnap(wg), it.after))')) throw new Error('regresión: el Deshacer ya no verifica el rect completo antes de restaurar (pisaría una sync remota)');
 if (!src.match(/wg\.x = it\.before\.x; wg\.y = it\.before\.y; wg\.w = it\.before\.w; wg\.h = it\.before\.h/)) throw new Error('regresión: el Deshacer no restaura la geometría completa x/y/w/h');
-if (!src.match(/w\.x = placed\.x; w\.y = placed\.y; w\.w = placed\.w; w\.z = \+\+zTop/)) throw new Error('regresión: la transacción de carril ya no incluye ancho de carril + z-order (riesgo 1 del gate)');
+if (!src.match(/w\.x = placed\.x; w\.y = placed\.y; w\.w = Math\.max\(placed\.w, \(WTYPES\[w\.type\] \|\| \{\}\)\.minW \|\| 0\); w\.z = \+\+zTop/)) throw new Error('regresión: la transacción de carril ya no incluye ancho de carril (clampado al minW del tipo) + z-order (riesgo 1 del gate + P1 estabilización)');
 if (!src.includes('!x.max &&')) throw new Error('regresión: los maximizados ya no se excluyen del reflow de carril');
 if (!html.includes('.lane-band') || !html.includes('reflow-hint')) throw new Error('regresión: falta el CSS de bandas de carril o de la pista de reflow');
 console.log('OK integración de carriles (useLanes, reflow en drag, Deshacer que verifica, transacción con ancho+z-order, maximizados fuera, CSS)');
@@ -1011,6 +1011,45 @@ console.log('OK enlaces arrastrables (guardián de documento + asa presente)');
 }
 console.log('OK columnGuides suelo doble (Auto conservador con 320, N explícito hasta 220 real, recorte donde no cabe)');
 
+// --- P1 (estabilización 2026-07-22, Codex): Ordenar/arrastrar con Mes/Año no rompe el saneo ---
+// Mes minW 260, Año minW 300. A ~1000px con 4 columnas los carriles serían 234px; el render y el
+// SANEO (numOr con t.minW) suben Año a 300 y solaparían el carril vecino. La consecuencia: el plan
+// guardado ≠ el plan que valida el saneo. spaceGuides inyecta el suelo geométrico del CONTENIDO del
+// espacio → columnGuides recorta N para que ningún carril baje del minW del widget más ancho.
+{
+  // el explícito se recorta contra el minW del widget más ancho del espacio (Año=300), no contra 220
+  const gA = columnGuides(1000, { forceN: 4, colHardMin: 300, colMin: 320 });
+  if (gA.n !== 3) throw new Error('Año (minW 300) a 1000px: 4 columnas deben recortarse a 3, dio ' + gA.n);
+  for (const c of gA.cols) if (c.w < 300) throw new Error('carril por debajo del minW de Año: ' + c.w);
+  // invariante sanear(orden)===orden: los anchos que planSpaceRepack asigna (= ancho de carril) ya
+  // cumplen el minW del tipo, así que numOr(w, t.w, t.minW) NO los altera al recargar.
+  const rects = [
+    { id: 'year', x: 20,  y: 24,  w: 520, h: 520 },   // Año  (minW 300)
+    { id: 'cal',  x: 560, y: 24,  w: 310, h: 360 },   // Mes  (minW 260)
+    { id: 'todo', x: 20,  y: 560, w: 300, h: 260 }    // Tareas (minW por defecto 220)
+  ];
+  const minWs = { year: 300, cal: 260, todo: 220 };
+  const plan = planSpaceRepack(rects, gA, { gutter: 14, laneTop: 24 });
+  for (const p of plan.placed)
+    if (p.w < minWs[p.id]) throw new Error('el orden guardaría ' + p.id + ' a ' + p.w + 'px < minW ' + minWs[p.id] + ' → el saneo lo cambiaría (invariante roto)');
+  // Auto no se ve afectado por el suelo cuando el contenido ya cabía en su suelo de gusto (300 < 320)
+  if (columnGuides(1000, { colHardMin: 300, colMin: 320 }).n !== columnGuides(1000).n)
+    throw new Error('Auto alterado por un contenido que ya cabía en su suelo de gusto');
+}
+console.log('OK P1 layout: suelo geométrico por contenido (Mes/Año no bajan de su minW → saneo no-op, sin solape)');
+// Cableado: todo cálculo de rejilla del espacio pasa por spaceGuides con el suelo inyectado.
+if (!src.match(/function spaceColHardMin\(\)\s*\{[\s\S]{0,240}WTYPES\[w\.type\][\s\S]{0,120}t\.minW/))
+  throw new Error('regresión: spaceColHardMin ya no deriva el suelo del minW por tipo del contenido');
+if (!src.match(/function spaceGuides\(opts\)[\s\S]{0,260}colHardMin: hm, colMin: Math\.max\(320, hm\)/))
+  throw new Error('regresión: spaceGuides ya no inyecta el suelo geométrico del espacio');
+for (const call of ['const guides = spaceGuides(force)', 'const guides = spaceGuides(colsOpt())', 'const eff = spaceGuides({ forceN: c })'])
+  if (!src.includes(call)) throw new Error('regresión: un cálculo de rejilla del espacio dejó de pasar por spaceGuides: ' + call);
+const dvCalls = (src.match(/columnGuides\(deskViewW\(\)/g) || []).length;
+if (dvCalls !== 1) throw new Error('columnGuides(deskViewW()) debe existir SOLO dentro de spaceGuides (hay ' + dvCalls + ')');
+if (!src.match(/w\.w = Math\.max\(placed\.w, \(WTYPES\[w\.type\] \|\| \{\}\)\.minW/))
+  throw new Error('regresión: el commit del drop ya no clampa el ancho al minW del tipo');
+console.log('OK P1 layout cableado (spaceGuides único punto de rejilla; drop clampa al minW del tipo)');
+
 // --- linkCaptureText + captura por arrastre en Nota/Tareas (v0.39.0) ---
 eval('globalThis.linkCaptureText = ' + pickFn('linkCaptureText', 'l'));
 if (linkCaptureText({ u: 'https://pubmed.ncbi.nlm.nih.gov/', t: 'PubMed' }) !== 'PubMed https://pubmed.ncbi.nlm.nih.gov/')
@@ -1132,13 +1171,34 @@ console.log('OK importador de packs endurecido (XSS de imagen cerrado en 2 capas
   // los tres consumidores de contenido ajeno piden perfil estrecho
   if (!src.includes('await applyPack(p, { ...opts, remote: true })')) throw new Error('regresión: ?pack= o Packs→URL sin perfil estrecho');
   if (!src.includes('if (!(await applyPack(pack, { remote: true }))) return;')) throw new Error('regresión: seguir un pack sin perfil estrecho');
-  if (!src.includes('applyPack(pack, { ask: false, remote: true })')) throw new Error('regresión: la actualización de un pack seguido sin perfil estrecho');
+  if (!src.includes('applyPack(pack, { ask: false, remote: true, spaceId: boundId })')) throw new Error('regresión: la actualización de un pack seguido sin perfil estrecho');
 }
 console.log('OK C7 perfil remoto estrecho (solo enlaces/notas/tareas/clips/md; buscador ajeno bloqueado; sin suplantar la superficie de agentes; descarga única endurecida)');
+
+// --- P1 (estabilización 2026-07-22, Codex): un pack seguido se aplica a su destino ORIGINAL ---
+// El aviso «tiene novedades» sale, el usuario cambia de pestaña y pulsa «Aplicar»: sin este arreglo
+// aplicaba sobre el espacio activo en ese momento → sustituía el escritorio equivocado, sin nombrarlo.
+eval('globalThis.resolvePackTargetIx = ' + pickFn('resolvePackTargetIx', 'spaces, active, spaceId'));
+{
+  const spaces = [{ id: 'sA' }, { id: 'sB' }, { id: 'sC' }];
+  if (resolvePackTargetIx(spaces, 1, undefined) !== 1) throw new Error('sin spaceId → el espacio activo');
+  if (resolvePackTargetIx(spaces, 1, 'sC') !== 2) throw new Error('con spaceId → su índice, NO el activo (aplicar tras cambiar de pestaña)');
+  if (resolvePackTargetIx(spaces, 0, 'sX') !== -1) throw new Error('spaceId inexistente → -1 (el llamador aborta, no pisa otro escritorio)');
+}
+// cableado: se persiste el destino al seguir, se nombra y se liga el «Aplicar» por spaceId, y
+// applyPack aborta si ese escritorio ya no existe en vez de sustituir el activo.
+if (!src.includes('idbSet("packSpaceId"')) throw new Error('regresión: seguir un pack ya no liga su destino original (spaceId)');
+if (!src.includes('tiene novedades para «${target.name}»')) throw new Error('regresión: el aviso del pack seguido ya no nombra el escritorio destino');
+if (!src.includes('applyPack(pack, { ask: false, remote: true, spaceId: boundId })')) throw new Error('regresión: «Aplicar» del pack seguido ya no se liga por spaceId al destino');
+if (!src.includes('const ti = resolvePackTargetIx(next.spaces, next.active, opts.spaceId)') || !src.match(/if \(ti < 0\)\{ toast\([^)]*ya no existe/))
+  throw new Error('regresión: applyPack ya no resuelve el destino por spaceId ni aborta si desapareció (pisaría el activo)');
+console.log('OK P1 pack seguido: destino por spaceId, nombrado antes de aplicar, aborto si el escritorio ya no existe');
 
 // --- mergeStates: fusión a tres bandas por widget (spec-merge-por-widget, v0.37.0) ---
 eval('globalThis.canonJSON = ' + pickFn('canonJSON', 'v'));
 eval('globalThis.mergeStates = ' + pickFn('mergeStates', 'base, local, remote, prefer'));
+eval('globalThis.conflictKey = ' + pickFn('conflictKey', 'c'));
+eval('globalThis.conflictDecisionCovers = ' + pickFn('conflictDecisionCovers', 'presentedKeys, currentKeys'));
 {
   const mkW = (id, data, over) => Object.assign({ id, type: 'notes', x: 40, y: 40, w: 300, h: 220, z: 1, data: data || { text: '' }, source: 'user' }, over || {});
   const S = (id, name, widgets) => ({ id, name, settings: { wallpaper: { type: 'preset', value: 0 } }, widgets });
@@ -1220,14 +1280,36 @@ eval('globalThis.mergeStates = ' + pickFn('mergeStates', 'base, local, remote, p
   L = B(); L.appSettings = { font: 'humanist' };
   R = B(); R.appSettings = { font: 'classic' };
   if (mergeStates(B(), L, R, 'local').conflicts.filter(c => c.kind === 'config').length !== 1) throw new Error('choque de ⚙ sin conflicto');
+
+  // --- P1 (estabilización 2026-07-22, Codex): la decisión de la barra vale SOLO para lo presentado.
+  // Escenario del incidente: el remoto cambió wa Y wb. Localmente solo se tocó wa → la barra presenta
+  // {wa}. Con la barra abierta el usuario teclea en wb. Al refusionar con lo fresco aparece también
+  // {wb}, que nunca se mostró: «conservar remoto» a ciegas descartaría lo tecleado en wb.
+  const base = B();
+  const rem = B(); rem.spaces[0].widgets[0].data.text = 'R-a'; rem.spaces[0].widgets[1].data.text = 'R-b';
+  let now = B(); now.spaces[0].widgets[0].data.text = 'L-a';            // 1) presentado: solo wa
+  const presented = mergeStates(base, now, rem, 'local').conflicts.map(conflictKey);
+  if (presented.join() !== 'widget:wa') throw new Error('la barra debería presentar solo {wa}: ' + presented.join());
+  now = B(); now.spaces[0].widgets[0].data.text = 'L-a'; now.spaces[0].widgets[1].data.text = 'L-b';   // 2) teclea wb
+  const nowKeys = mergeStates(base, now, rem, 'remote').conflicts.map(conflictKey).sort();
+  if (nowKeys.join() !== 'widget:wa,widget:wb') throw new Error('el nuevo choque en wb debería aparecer: ' + nowKeys.join());
+  if (conflictDecisionCovers(presented, nowKeys)) throw new Error('P1: un choque nuevo (wb) NO puede darse por cubierto por la decisión sobre {wa} → habría pérdida de texto');
+  // benignos: un subconjunto del presentado sí está cubierto; sin choques vigentes, cubierto (fusión limpia)
+  if (!conflictDecisionCovers(['widget:wa', 'widget:wb'], ['widget:wa'])) throw new Error('un subconjunto del presentado sí está cubierto');
+  if (!conflictDecisionCovers(['widget:wa'], [])) throw new Error('sin choques vigentes, la decisión está cubierta');
 }
 console.log('OK mergeStates (disjunta sin barra, choque nombrado, crear/borrar/mover, borrado-vs-edición, espacios aparte, updatedAt fuera, active local, marcas, papelera, ⚙)');
+console.log('OK P1 barra de conflicto: la decisión vale solo para el conjunto presentado (choque nuevo → re-presentar, sin pérdida)');
 // invariantes de integración de la fusión
 if (!src.includes('mergeStates(baseS, localSnap, remote, "local")')) throw new Error('regresión: poll ya no intenta la fusión antes de la barra');
 if (!src.includes('localStorage.setItem("cabecera-premerge"')) throw new Error('regresión: la fusión no guarda copia local previa');
 if (!src.includes('tryRestore("cabecera-premerge"')) throw new Error('regresión: la copia pre-fusión no es restaurable desde ♻️');
 if (!src.includes('resolveMergeConflict("remote")') || !src.includes('resolveMergeConflict("local")')) throw new Error('regresión: los botones de la barra ya no resuelven solo lo que choca');
 if (!src.includes('function renderConflictBar(')) throw new Error('regresión: la barra ya no nombra lo que choca');
+// P1: la decisión se liga al conjunto presentado; un choque nuevo re-presenta en vez de aplicarse a ciegas
+if (!src.includes('function conflictKey(') || !src.includes('function conflictDecisionCovers(')) throw new Error('regresión: faltan los helpers del conjunto de choques presentado');
+if (!src.match(/presented: res\.conflicts\.map\(conflictKey\)/)) throw new Error('regresión: poll ya no fija el conjunto de choques presentado');
+if (!src.match(/if \(!conflictDecisionCovers\(pendingMerge\.presented[\s\S]{0,400}return true;/)) throw new Error('regresión: resolveMergeConflict aplicaría la decisión a choques no presentados (pérdida de texto)');
 console.log('OK integración de la fusión (poll, copia previa restaurable, resolución por unidad)');
 
 console.log('\nTODO EN VERDE');

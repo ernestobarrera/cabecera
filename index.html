@@ -1197,7 +1197,7 @@ function syncUI(mode, txt){
    reaparece) y si Recargar está activo. El descarte ✕ vive solo en memoria de la sesión.
    Demora asumida: la CDN de Pages puede servir la versión vieja hasta ~10 min aun con
    no-store (gobierna la caché del navegador, no la CDN); para pestañas de días, irrelevante. */
-const APP_VERSION = "0.39.2";
+const APP_VERSION = "0.39.3";
 let newVersionDetected = null;   // versión superior detectada; detiene futuras consultas
 let verDismissed = false;        // ✕: solo esta sesión — nunca persistido en disco
 let verCheckInflight = false;    // sin consultas concurrentes
@@ -1534,6 +1534,17 @@ function renderConflictBar(conflicts){
     el.innerHTML = "<b>datos.json</b> cambió en otro equipo mientras editabas aquí.";
   }
 }
+// Clave estable de un choque (unidad tocada en ambos lados): kind+id. La decisión de la barra se
+// aplica SOLO al conjunto de choques PRESENTADO. Si al refusionar con el estado FRESCO aparecen
+// otros —el usuario editó, con la barra abierta, un widget que el remoto también tocó— no se
+// resuelven a ciegas: se re-presentan. Sin esto, «conservar remoto» descartaría en silencio lo
+// recién tecleado en un widget que nunca se mostró como en conflicto. PURAS (tests).
+function conflictKey(c){
+  return (c.kind || "?") + ":" + (c.id || "?");
+}
+function conflictDecisionCovers(presentedKeys, currentKeys){
+  return currentKeys.every(k => presentedKeys.includes(k));
+}
 
 async function readDataFile(){
   let fh;
@@ -1677,8 +1688,9 @@ async function poll(){   // devuelve true si completó una lectura válida (haya
             toast("Combinado con cambios de otro equipo");
             markDirty();
           } else {
-            // choque real (o fusión no disponible): barra, nombrando lo que choca si se sabe
-            pendingMerge = res ? { remote, text, mtime: f.lastModified } : null;
+            // choque real (o fusión no disponible): barra, nombrando lo que choca si se sabe.
+            // `presented` fija el conjunto que ve el usuario: la decisión valdrá solo para él.
+            pendingMerge = res ? { remote, text, mtime: f.lastModified, presented: res.conflicts.map(conflictKey) } : null;
             renderConflictBar(res ? res.conflicts : null);
             conflictPending = true;
             $("#conflict").classList.add("open");
@@ -1949,6 +1961,14 @@ function normalizePack(p, opts){
   return { name: txt(p.name, 80), settings, widgets };
 }
 
+// Índice del espacio DESTINO de un pack: por spaceId si se indica (un pack SEGUIDO se aplica a su
+// destino ORIGINAL, no al espacio activo en el momento de pulsar «Aplicar» — si el usuario cambió de
+// pestaña, no debe pisar otro escritorio); si no, el activo. -1 si el id ya no existe: el llamador
+// aborta en vez de sustituir un escritorio equivocado (hallazgo de Codex 2026-07-22). PURA (tests).
+function resolvePackTargetIx(spaces, active, spaceId){
+  if (!spaceId) return active;
+  return (spaces || []).findIndex(s => s && s.id === spaceId);
+}
 async function applyPack(pack, opts = {}){
   const np = normalizePack(pack, { remote: !!opts.remote });
   if (!np){ toast(opts.remote
@@ -1956,7 +1976,8 @@ async function applyPack(pack, opts = {}){
     : "El pack no es válido o no contiene widgets utilizables", true); return false; }
   const add = !!opts.add;
   const ask = opts.ask !== false;
-  const spName = (state && state.spaces && state.spaces[state.active] && state.spaces[state.active].name) || "este escritorio";
+  const nameIx = resolvePackTargetIx(state && state.spaces, state && state.active, opts.spaceId);
+  const spName = (state && state.spaces && state.spaces[nameIx] && state.spaces[nameIx].name) || "este escritorio";
   if (ask && !(await dlgConfirm(add
     ? `¿Añadir los ${np.widgets.length} widgets del pack "${np.name || "sin nombre"}" a tu escritorio actual?`
     : `¿Aplicar el pack "${np.name || "sin nombre"}"? Sustituye los widgets de «${spName}» (se guarda una copia local automática). Tus demás escritorios, el calendario y la papelera no se tocan.`,
@@ -1974,10 +1995,13 @@ async function applyPack(pack, opts = {}){
     // migrar, BORRABA los demás escritorios, las marcas de calendario, los conceptos propios, la
     // papelera y los ajustes ⚙ — mucho más de lo que anunciaba el diálogo (hallazgo de Codex).
     const next = JSON.parse(JSON.stringify(state));   // v2 plano: los accesores no se serializan
-    const sp = next.spaces[next.active];
+    const ti = resolvePackTargetIx(next.spaces, next.active, opts.spaceId);
+    if (ti < 0){ toast("El escritorio donde seguías este pack ya no existe. Vuelve a seguirlo desde Packs para elegir uno nuevo.", true); return false; }
+    const sp = next.spaces[ti];
     sp.settings = Object.assign({}, sp.settings, np.settings);
     let z = 0;
     sp.widgets = np.widgets.map(w => ({ id: uid(), z: ++z, source: "pack", ...w }));
+    next.active = ti;   // el gesto fue explícito sobre este escritorio: mostrarlo tras aplicar
     setState(next, "pack");
   }
   renderAll(); markDirty();
@@ -2050,6 +2074,9 @@ async function followPackFile(){
     if (!(await applyPack(pack, { remote: true }))) return;
     await idbSet("packHandle", h);
     await idbSet("packMtime", f.lastModified);
+    // liga la suscripción al escritorio ORIGINAL: sus futuras novedades se aplicarán aquí, no donde
+    // el usuario esté al pulsar «Aplicar» (hallazgo de Codex 2026-07-22).
+    await idbSet("packSpaceId", state.spaces[state.active].id);
     toast("Siguiendo el pack: te avisaré cuando cambie");
   }catch(e){ /* cancelado o JSON inválido */ }
 }
@@ -2065,8 +2092,19 @@ async function checkFollowedPack(interactive = false){
     const known = (await idbGet("packMtime")) || 0;
     if (f.lastModified <= known){ if (interactive) toast("El pack seguido no tiene novedades"); return; }
     const pack = JSON.parse(await f.text());
-    toastAction(`El pack compartido "${pack.name || h.name}" tiene novedades.`, "Aplicar", async () => {
-      if (await applyPack(pack, { ask: false, remote: true })) await idbSet("packMtime", f.lastModified);
+    if (!state || !state.spaces || !state.spaces.length) return;
+    // el pack seguido se aplica SIEMPRE a su destino ORIGINAL (por spaceId), nunca al espacio activo
+    // en el momento del clic. Suscripciones anteriores a este arreglo se ligan aquí al escritorio
+    // vigente (migración perezosa); si ese escritorio ya no existe, no se aplica a ciegas.
+    let boundId = await idbGet("packSpaceId").catch(() => null);
+    if (!boundId){ boundId = state.spaces[state.active].id; await idbSet("packSpaceId", boundId); }
+    const target = state.spaces.find(s => s.id === boundId);
+    if (!target){
+      toastAction(`El escritorio donde seguías "${pack.name || h.name}" ya no existe.`, "Abrir Packs", () => $("#ov-packs").classList.add("open"));
+      return;
+    }
+    toastAction(`El pack compartido "${pack.name || h.name}" tiene novedades para «${target.name}».`, "Aplicar", async () => {
+      if (await applyPack(pack, { ask: false, remote: true, spaceId: boundId })) await idbSet("packMtime", f.lastModified);
     });
   }catch(e){ if (interactive) toast("No se pudo comprobar el pack: " + e.message, true); }
 }
@@ -2495,10 +2533,29 @@ function colsOpt(){
   const c = state && state.settings && state.settings.cols;
   return (c === 2 || c === 3 || c === 4) ? { forceN: c } : {};
 }
+// Suelo geométrico de columnas del espacio ACTIVO: ningún carril puede ser más estrecho que el
+// `minW` del widget más ancho que contiene (Mes 260, Año 300…). Si lo fuera, `orderSpace`/el drop
+// guardarían ese ancho de carril pero el render y el SANEO (numOr con t.minW) lo ensancharían al
+// mínimo del tipo, solapando el carril vecino — y rompiendo el invariante sanear(orden)===orden.
+// La geometría manda sobre la preferencia, igual que ya rige sobre COL_MAX (gate N3) y sobre el
+// «gusto» de Auto (0.16a). PURO respecto al viewport (solo lee el contenido del espacio). */
+function spaceColHardMin(){
+  let m = LAYOUT.minW;
+  if (state) for (const w of state.widgets){ const t = WTYPES[w.type] || {}; if (t.minW > m) m = t.minW; }
+  return m;
+}
+// columnGuides del espacio activo con su suelo geométrico inyectado en AMBAS políticas: el explícito
+// se recorta contra colHardMin; Auto contra colMin (que nunca baja de 320, su suelo de gusto). Todos
+// los cálculos de rejilla de un espacio pasan por aquí para que Ordenar, el arrastre, el ambiente y
+// la etiqueta «4→N» coincidan.
+function spaceGuides(opts){
+  const hm = spaceColHardMin();
+  return columnGuides(deskViewW(), { ...(opts || {}), colHardMin: hm, colMin: Math.max(320, hm) });
+}
 function colsLabel(){   // muestra el valor y, si el viewport lo recorta, «4→2 en esta pantalla»
   const c = state && state.settings && state.settings.cols;
   if (c !== 2 && c !== 3 && c !== 4) return "Auto";
-  const eff = columnGuides(deskViewW(), { forceN: c }).n;
+  const eff = spaceGuides({ forceN: c }).n;
   return eff < c ? (c + "→" + eff) : String(c);
 }
 function renderColsControl(){
@@ -2519,7 +2576,7 @@ function renderLaneAmbient(){
   const old = document.getElementById("lane-ambient"); if (old) old.remove();
   const c = state && state.settings && state.settings.cols;
   if (isMobile() || (c !== 2 && c !== 3 && c !== 4)) return;
-  const guides = columnGuides(deskViewW(), colsOpt());
+  const guides = spaceGuides(colsOpt());
   const amb = document.createElement("div"); amb.id = "lane-ambient";
   for (let i = 1; i < guides.cols.length; i++){
     const s = document.createElement("div"); s.className = "lane-sep";
@@ -2634,7 +2691,7 @@ function orderSpace(nextCols){
   const colsBefore = (state.settings && state.settings.cols) || "auto";
   const colsAfter = nextCols === undefined ? colsBefore : nextCols;
   const force = (colsAfter === 2 || colsAfter === 3 || colsAfter === 4) ? { forceN: colsAfter } : {};
-  const guides = columnGuides(deskViewW(), force);
+  const guides = spaceGuides(force);
   // paso 1: carril y ANCHO final de cada widget (los plegados reservan su altura de desplegado)
   const baseRects = sp.widgets.map(w => {
     const t = WTYPES[w.type] || {};
@@ -3045,7 +3102,7 @@ function buildWindow(w){
       const useLanes = !m.altKey && !overTab && !tagFilter;
       clearHints();
       if (useLanes){
-        const guides = columnGuides(deskViewW(), colsOpt());
+        const guides = spaceGuides(colsOpt());
         if (!bands){   // dibuja las bandas una vez, detrás de las ventanas (inertes)
           bands = document.createElement("div"); bands.id = "lane-guides";
           for (const c of guides.cols){ const b = document.createElement("div"); b.className = "lane-band"; b.style.left = c.x + "px"; b.style.width = c.w + "px"; bands.appendChild(b); }
@@ -3103,7 +3160,7 @@ function buildWindow(w){
         // Transacción de carril: ventana (adopta ancho de carril) + miembros del reflow + z-order,
         // todo en un commit; snapshot antes/después con spaceId para un Deshacer que NO pisa una sync remota.
         const sp = state.spaces[state.active];
-        const guides = columnGuides(deskViewW(), colsOpt());
+        const guides = spaceGuides(colsOpt());
         const destLane = curLane, dest = guides.cols[destLane];
         const originLane = alignedLane(startRect, guides);   // §A: solo si el widget venía alineado a un carril
         const others = planViewportLayout(state.widgets.filter(x =>
@@ -3134,7 +3191,9 @@ function buildWindow(w){
         }
         // Transacción única con geometría COMPLETA (x/y/w/h) para todos los afectados + z-order.
         const items = [{ id: w.id, before: rectSnap(w), after: null }];
-        w.x = placed.x; w.y = placed.y; w.w = placed.w; w.z = ++zTop;
+        // el ancho de carril nunca baja del minW del tipo: spaceGuides ya clampa N para que quepa,
+        // este max es la garantía directa en el punto de asignación (invariante sanear===orden).
+        w.x = placed.x; w.y = placed.y; w.w = Math.max(placed.w, (WTYPES[w.type] || {}).minW || 0); w.z = ++zTop;
         items[0].after = rectSnap(w);
         for (const mv of moved){
           const wg = sp.widgets.find(x => x.id === mv.id);
@@ -5960,6 +6019,15 @@ function wireUI(){
       if (!baseS) return false;
       const snap = JSON.parse(JSON.stringify(state));
       const res = mergeStates(baseS, snap, pendingMerge.remote, prefer);
+      // la decisión vale SOLO para los choques ya presentados; si al refusionar con lo tecleado
+      // aparecieron otros, se actualiza la barra y se pide de nuevo (no se aplica a ciegas).
+      const nowKeys = res.conflicts.map(conflictKey);
+      if (!conflictDecisionCovers(pendingMerge.presented || [], nowKeys)){
+        pendingMerge.presented = nowKeys;
+        renderConflictBar(res.conflicts);
+        toast("Mientras decidías cambió algo más que también choca aquí: revísalo y vuelve a elegir", true);
+        return true;   // gestionado: la barra sigue abierta, el estado no se toca
+      }
       try{ localStorage.setItem("cabecera-premerge", JSON.stringify(snap)); }catch(e){}
       setState(res.merged, "conflict-" + prefer);
       lastSavedText = pendingMerge.text;

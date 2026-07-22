@@ -1,12 +1,20 @@
 # Changelog
 
+## [0.39.3] - 2026-07-22 — estabilización: columnas, conflicto y packs seguidos
+
+Tres correcciones de comportamiento encontradas en una revisión externa, cada una con su prueba en la suite. No añaden funciones nuevas: cierran huecos que podían dejar el escritorio en un estado que no habías pedido.
+
+- **Ordenar y arrastrar ya no dejan «Mes» y «Año» medio encima de la columna de al lado.** Estos dos widgets tienen un ancho mínimo por debajo del cual se vuelven ilegibles. Si pedías más columnas de las que caben con ellos, Cabecera guardaba un ancho imposible y, al recargar, el widget se ensanchaba solo hasta su mínimo y pisaba la columna vecina. Ahora el número de columnas se ajusta a lo que de verdad cabe con el widget más ancho del escritorio —el control **▤** lo indica («4→3»)— y ninguna ventana se guarda más estrecha que su mínimo, así que lo que ves es lo que queda tras recargar.
+- **Con la barra de conflicto abierta ya no se pierde lo que escribes.** Si mientras decides «conservar lo del otro equipo / lo tuyo» tocas un widget que también había cambiado en el otro equipo, ese nuevo choque **se te muestra y se te vuelve a preguntar**, en lugar de resolverse con el mismo botón sin que lo hubieras visto. La decisión vale solo para lo que la barra te había presentado.
+- **Un pack que sigues se actualiza siempre en su escritorio, no en el que tengas abierto.** El aviso «tiene novedades» ahora **nombra el escritorio destino** y «Aplicar» actúa sobre ese, aunque hayas cambiado de pestaña mientras tanto. Si ese escritorio ya no existe, te lo dice en vez de sustituir otro por error.
+
 ## [0.39.2] - 2026-07-21 — segunda vuelta de seguridad en packs
 
 Continuación de la 0.39.1, cerrando lo que quedaba de la misma revisión externa. Sigue afectando solo a packs de terceros.
 
 - **Un pack que se actualiza solo ya no puede traer «capacidades», solo contenido.** Al seguir una fuente (por dirección o por archivo compartido) confías no solo en lo que ves hoy, sino en todo lo que llegue mañana. Por eso, desde una fuente seguida solo se aceptan **enlaces, notas, tareas, portapapeles y markdown**. Queda fuera, entre otros, el widget de Buscadores: un pack ajeno podría haber instalado un buscador que enviara **tus búsquedas al servidor de quien lo publicó**. Abrir un pack suelto desde un archivo, que ves entero y una sola vez, no cambia.
 - **Un pack ya no puede hacerse pasar por tus widgets de trabajo con agentes.** Los nombres reservados (los que empiezan por «Cabecera ·») se descartan al importar, para que un pack no pueda colar texto en lo que tus asistentes leen por nombre.
-- **Todas las descargas de packs pasan ya por la misma puerta.** El campo «Packs → dirección» hacía su propia descarga y se había quedado sin las protecciones que sí tenía el enlace `?pack=`. Ahora hay una única vía: pregunta antes de conectar, rechaza direcciones con credenciales dentro, no envía cookies ni procedencia, comprueba la respuesta y limita el tamaño antes de leerla.
+- **Todas las descargas de packs pasan ya por la misma puerta.** El campo «Packs → dirección» hacía su propia descarga y se había quedado sin las protecciones que sí tenía el enlace `?pack=`. Ahora hay una única vía: pregunta antes de conectar, rechaza direcciones con credenciales dentro, no envía cookies ni procedencia, comprueba la respuesta y rechaza descargas desmedidas.
 
 ## [0.39.1] - 2026-07-21 — actualización de seguridad
 
