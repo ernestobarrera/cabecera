@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.39.4] - 2026-07-22 — tercera vuelta de seguridad en packs
+
+Cierra los dos últimos hallazgos de la misma revisión externa. Afecta solo a packs de terceros; es requisito previo para poder compartir escritorios por dirección más adelante.
+
+- **El límite de descarga ahora es real.** El tope de 2 MiB se comprobaba después de haber descargado y guardado en memoria el archivo entero (y contaba caracteres, no bytes). Ahora la descarga **se corta en el acto** al superar el presupuesto, tiene un tiempo máximo de espera, rechaza de entrada respuestas que ya declaran ser demasiado grandes y **no sigue redirecciones**: diste permiso para conectar con un sitio concreto, no con el que ese sitio decida enviarte. El mismo límite se aplica al abrir o seguir un pack por archivo, comprobado antes de leerlo.
+- **Un pack de una fuente externa ya no se recorta en silencio.** Si una nota, tarea o enlace supera los límites del formato, el pack **se rechaza entero y te dice el motivo**, en vez de aplicarse cortado a media frase — en contenido clínico, un texto mutilado puede acabar diciendo lo contrario que el original. Antes de aplicar, también se indica cuántos widgets quedan fuera por el perfil de fuentes externas. Los packs que abres tú desde un archivo local se comportan como siempre.
+
 ## [0.39.3] - 2026-07-22 — estabilización: columnas, conflicto y packs seguidos
 
 Tres correcciones de comportamiento encontradas en una revisión externa, cada una con su prueba en la suite. No añaden funciones nuevas: cierran huecos que podían dejar el escritorio en un estado que no habías pedido.

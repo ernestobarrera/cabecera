@@ -1160,8 +1160,8 @@ console.log('OK importador de packs endurecido (XSS de imagen cerrado en 2 capas
 
   // toda descarga remota pasa por UNA función endurecida
   if (!src.includes('async function fetchRemotePack(')) throw new Error('regresión: no hay vía única de descarga remota');
-  if (!src.match(/fetch\(String\(url\), \{ cache: "no-store", credentials: "omit", referrerPolicy: "no-referrer" \}\)/))
-    throw new Error('regresión: la descarga remota perdió el endurecimiento de red');
+  if (!src.match(/fetch\(String\(url\), \{ cache: "no-store", credentials: "omit", referrerPolicy: "no-referrer", redirect: "manual", signal: ctl\.signal \}\)/))
+    throw new Error('regresión: la descarga remota perdió el endurecimiento de red (cookies/referer/redirect/abort)');
   if (!src.includes('if (x.username || x.password)')) throw new Error('regresión: se aceptan credenciales incrustadas en la URL');
   if (!src.includes('if (text.length > REMOTE_PACK_MAX)')) throw new Error('regresión: la descarga remota no acota el tamaño');
   // ningún otro fetch suelto de packs (el de version.txt y los builtin de mismo origen sí valen)
@@ -1193,6 +1193,44 @@ if (!src.includes('applyPack(pack, { ask: false, remote: true, spaceId: boundId 
 if (!src.includes('const ti = resolvePackTargetIx(next.spaces, next.active, opts.spaceId)') || !src.match(/if \(ti < 0\)\{ toast\([^)]*ya no existe/))
   throw new Error('regresión: applyPack ya no resuelve el destino por spaceId ni aborta si desapareció (pisaría el activo)');
 console.log('OK P1 pack seguido: destino por spaceId, nombrado antes de aplicar, aborto si el escritorio ya no existe');
+
+// --- Tramo 2 (estabilización 2026-07-22, Codex): sin truncado silencioso + presupuestos reales ---
+// Contenido clínico de una fuente externa: si supera los topes del formato, el pack ENTERO se
+// rechaza con motivo — nunca una advertencia mutilada a media frase. Local sigue tolerante.
+{
+  const mk = (type, data, t) => ({ cabeceraPack: 1, name: 'p', widgets: [{ type, data, ...(t ? { t } : {}) }] });
+  let diag = {};
+  if (normalizePack(mk('notes', { text: 'x'.repeat(20001) }), { remote: true, diag }) !== null || !/20\.000/.test(diag.reason || ''))
+    throw new Error('una nota de 20.001 debería rechazar el pack remoto con motivo, no truncarse: ' + JSON.stringify(diag));
+  // frontera exacta: el tope pasa íntegro (mantiene unidos los topes del estricto y del saneo)
+  diag = {};
+  const okNote = normalizePack(mk('notes', { text: 'x'.repeat(20000) }), { remote: true, diag });
+  if (!okNote || okNote.widgets[0].data.text.length !== 20000 || diag.reason) throw new Error('20.000 exactos deben pasar íntegros');
+  if (normalizePack(mk('todo', { items: [{ t: 'x'.repeat(301) }] }), { remote: true, diag: {} }) !== null) throw new Error('tarea de 301 debería rechazar en remoto');
+  if (!normalizePack(mk('todo', { items: [{ t: 'x'.repeat(300) }] }), { remote: true })) throw new Error('tarea de 300 debe pasar');
+  // un enlace no admitido (no vacío) rechaza el pack en remoto (antes se descartaba en silencio)
+  diag = {};
+  if (normalizePack(mk('links', { groups: [{ name: 'g', links: [{ t: 'x', u: 'javascript:alert(1)' }] }] }), { remote: true, diag }) !== null || !/enlace/.test(diag.reason || ''))
+    throw new Error('URL no admitida debería rechazar el pack remoto con motivo: ' + JSON.stringify(diag));
+  // lo que C7 deja fuera por TIPO no es mutilación: se cuenta (diagnóstico) y el pack sigue
+  diag = {};
+  const rem = normalizePack({ cabeceraPack: 1, widgets: [{ type: 'notes', data: { text: 'ok' } }, { type: 'search', data: {} }, { type: 'cal' }] }, { remote: true, diag });
+  if (!rem || rem.widgets.length !== 1 || diag.excluded !== 2) throw new Error('los tipos excluidos por C7 deben contarse: ' + JSON.stringify(diag));
+  // local intacto: el saneo tolerante sigue truncando (el usuario ve lo que abre, una sola vez)
+  const loc = normalizePack(mk('notes', { text: 'x'.repeat(20001) }));
+  if (!loc || loc.widgets[0].data.text.length !== 20000) throw new Error('el saneo local debe seguir siendo tolerante (trunca a 20.000)');
+}
+console.log('OK Tramo 2 normalizePack (remoto: rechazo atómico con motivo y frontera exacta, excluidos contados; local tolerante intacto)');
+// descarga con tope REAL (antes: await r.text() y tope en chars UTF-16 después de bufferizarlo todo)
+if (!src.includes('r.type === "opaqueredirect"')) throw new Error('regresión: una redirección ya no se detecta ni se bloquea con mensaje claro');
+if (!src.match(/setTimeout\(\(\) => \{ timedOut = true; ctl\.abort\(\); \}, REMOTE_PACK_TIMEOUT\)/)) throw new Error('regresión: la descarga remota perdió el timeout con abort');
+if (!src.match(/received \+= value\.byteLength;\s*\n\s*if \(received > REMOTE_PACK_MAX\)\{ ctl\.abort\(\)/)) throw new Error('regresión: el tope ya no se mide en bytes durante la descarga ni aborta la conexión');
+if (!src.includes('r.headers.get("content-length")')) throw new Error('regresión: se perdió el rechazo temprano por Content-Length');
+if (!src.match(/function readPackFile[\s\S]{0,200}f\.size > REMOTE_PACK_MAX/)) throw new Error('regresión: la vía por archivo perdió el presupuesto de bytes (f.size antes de leer)');
+const rpfCalls = (src.match(/await readPackFile\(/g) || []).length;
+if (rpfCalls !== 3) throw new Error('los tres lectores de pack por archivo deben pasar por readPackFile (hay ' + rpfCalls + ')');
+if (!src.includes('"Pack rechazado sin aplicar nada: " + diag.reason')) throw new Error('regresión: el rechazo remoto ya no explica su motivo');
+console.log('OK Tramo 2 descarga (redirección bloqueada, timeout, bytes con abort, Content-Length, mismo presupuesto por archivo, rechazo con motivo)');
 
 // --- mergeStates: fusión a tres bandas por widget (spec-merge-por-widget, v0.37.0) ---
 eval('globalThis.canonJSON = ' + pickFn('canonJSON', 'v'));

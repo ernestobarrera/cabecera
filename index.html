@@ -1197,7 +1197,7 @@ function syncUI(mode, txt){
    reaparece) y si Recargar está activo. El descarte ✕ vive solo en memoria de la sesión.
    Demora asumida: la CDN de Pages puede servir la versión vieja hasta ~10 min aun con
    no-store (gobierna la caché del navegador, no la CDN); para pestañas de días, irrelevante. */
-const APP_VERSION = "0.39.3";
+const APP_VERSION = "0.39.4";
 let newVersionDetected = null;   // versión superior detectada; detiene futuras consultas
 let verDismissed = false;        // ✕: solo esta sesión — nunca persistido en disco
 let verCheckInflight = false;    // sin consultas concurrentes
@@ -1891,6 +1891,42 @@ function normalizePack(p, opts){
     try{ const x = new URL(String(u)); return (x.protocol === "https:" || x.protocol === "http:") ? x.href : null; }
     catch(e){ return null; }
   };
+  // P1 del checkpoint 2026-07-22: el contenido de una fuente EXTERNA no se trunca en silencio.
+  // Si algo supera los topes del formato, el pack ENTERO se rechaza con su motivo (diag.reason):
+  // nunca una advertencia clínica mutilada a media frase. Lo que el perfil estrecho C7 deja fuera
+  // por TIPO no es mutilación sino contrato: se cuenta en diag.excluded para decirlo antes de
+  // aplicar. Los packs locales (el usuario ve lo que abre, una vez) conservan el saneo tolerante.
+  // Los topes duplican los de la normalización de abajo; los tests de frontera los mantienen unidos.
+  const diag = o.diag || {};
+  if (o.remote){
+    const over = (v, max) => String(v ?? "").length > max;
+    const strict = () => {
+      if (over(p.name, 80)) return "el nombre del pack supera los 80 caracteres";
+      let excluded = 0;
+      for (const w of p.widgets){
+        if (!w || !WTYPES[w.type] || w.type === "intro" || !REMOTE_PACK_TYPES[w.type]){ excluded++; continue; }
+        if (over(w.t, 60)) return "el título de un widget supera los 60 caracteres";
+        const d = w.data || {};
+        if (w.type === "notes" && over(d.text, 20000)) return "una nota supera los 20.000 caracteres del formato";
+        if (w.type === "md" && over(d.text, 100000)) return "un markdown supera los 100.000 caracteres del formato";
+        if (w.type === "todo") for (const i of (Array.isArray(d.items) ? d.items : []))
+          if (i && String(i.t ?? "").trim() && over(i.t, 300)) return "una tarea supera los 300 caracteres del formato";
+        if (w.type === "clips") for (const i of (Array.isArray(d.items) ? d.items : []))
+          if (i && String(i.t ?? "").trim() && over(i.t, 5000)) return "un texto de portapapeles supera los 5.000 caracteres del formato";
+        if (w.type === "links") for (const g of (Array.isArray(d.groups) ? d.groups : [])){
+          if (over(g && g.name, 60)) return "un nombre de grupo de enlaces supera los 60 caracteres";
+          for (const l of (Array.isArray(g && g.links) ? g.links : [])){
+            if (over(l && l.t, 120)) return "el título de un enlace supera los 120 caracteres";
+            if (l && String(l.u ?? "").trim() && !safeUrl(l.u)) return "contiene un enlace con una dirección no válida o no admitida";
+          }
+        }
+      }
+      diag.excluded = excluded;
+      return null;
+    };
+    const reason = strict();
+    if (reason){ diag.reason = reason; return null; }
+  }
   const widgets = [];
   for (const w of p.widgets){
     if (!WTYPES[w.type] || w.type === "intro") continue;
@@ -1970,17 +2006,24 @@ function resolvePackTargetIx(spaces, active, spaceId){
   return (spaces || []).findIndex(s => s && s.id === spaceId);
 }
 async function applyPack(pack, opts = {}){
-  const np = normalizePack(pack, { remote: !!opts.remote });
+  const diag = {};
+  const np = normalizePack(pack, { remote: !!opts.remote, diag });
   if (!np){ toast(opts.remote
-    ? "Ese pack no trae nada que se pueda aceptar de una fuente externa (solo se admiten enlaces, notas, tareas, portapapeles y markdown)."
+    ? (diag.reason
+      ? "Pack rechazado sin aplicar nada: " + diag.reason + ". Pídele al autor que lo ajuste al formato."
+      : "Ese pack no trae nada que se pueda aceptar de una fuente externa (solo se admiten enlaces, notas, tareas, portapapeles y markdown).")
     : "El pack no es válido o no contiene widgets utilizables", true); return false; }
   const add = !!opts.add;
   const ask = opts.ask !== false;
+  // diagnóstico honesto ANTES de aplicar: lo que el perfil de fuentes externas deja fuera, se dice
+  const excludedNote = opts.remote && diag.excluded
+    ? ` ${diag.excluded} widget${diag.excluded > 1 ? "s" : ""} de tipos no admitidos desde una fuente externa quedar${diag.excluded > 1 ? "án" : "á"} fuera.`
+    : "";
   const nameIx = resolvePackTargetIx(state && state.spaces, state && state.active, opts.spaceId);
   const spName = (state && state.spaces && state.spaces[nameIx] && state.spaces[nameIx].name) || "este escritorio";
   if (ask && !(await dlgConfirm(add
-    ? `¿Añadir los ${np.widgets.length} widgets del pack "${np.name || "sin nombre"}" a tu escritorio actual?`
-    : `¿Aplicar el pack "${np.name || "sin nombre"}"? Sustituye los widgets de «${spName}» (se guarda una copia local automática). Tus demás escritorios, el calendario y la papelera no se tocan.`,
+    ? `¿Añadir los ${np.widgets.length} widgets del pack "${np.name || "sin nombre"}" a tu escritorio actual?${excludedNote}`
+    : `¿Aplicar el pack "${np.name || "sin nombre"}"? Sustituye los widgets de «${spName}» (se guarda una copia local automática). Tus demás escritorios, el calendario y la papelera no se tocan.${excludedNote}`,
     { title: add ? "Añadir pack" : "Aplicar pack", okLabel: add ? "Añadir" : "Aplicar" }))) return false;
   // La copia previa es la ÚNICA red de este gesto: si falla (cuota de localStorage), se ABORTA.
   // Antes el fallo se tragaba en silencio y la sustitución seguía igual, dejando al usuario sin
@@ -2015,7 +2058,8 @@ async function applyPack(pack, opts = {}){
    remota pasa por aquí: confirma ANTES de conectar (el propio fetch ya revela IP y momento al
    servidor ajeno), rechaza credenciales incrustadas, no manda cookies ni referer, comprueba el
    estado y acota el tamaño antes de parsear. Devuelve el JSON o null. */
-const REMOTE_PACK_MAX = 2 * 1024 * 1024;   // 2 MiB: límite defensivo del formato (Codex §9)
+const REMOTE_PACK_MAX = 2 * 1024 * 1024;   // 2 MiB: límite defensivo del formato (Codex §9), en BYTES reales
+const REMOTE_PACK_TIMEOUT = 20000;         // 20 s: una descarga que no llega en esto, no llega
 async function fetchRemotePack(url, { confirm = true } = {}){
   let host = String(url);
   try{
@@ -2027,13 +2071,47 @@ async function fetchRemotePack(url, { confirm = true } = {}){
   if (confirm && !(await dlgConfirm(
     `Vas a traer un escritorio desde «${host}». Al continuar, tu navegador se conectará a ese servidor y le revelará tu dirección IP. Después podrás ver qué contiene antes de aplicarlo.`,
     { title: "Pack de otro sitio", okLabel: "Conectar y ver" }))) return null;
+  // Tope REAL (P1 del checkpoint 2026-07-22): antes se hacía `await r.text()` y el límite se medía
+  // después — ya se había descargado y materializado todo, y en caracteres UTF-16, no bytes. Ahora:
+  // sin redirecciones (el consentimiento fue para ESTE host: `manual` las detecta sin seguirlas y
+  // sin revelar nada al destino), timeout con AbortController, Content-Length como rechazo temprano
+  // y lectura por chunks que ABORTA la conexión en cuanto se supera el presupuesto de bytes.
+  const ctl = new AbortController();
+  let timedOut = false;
+  const timer = setTimeout(() => { timedOut = true; ctl.abort(); }, REMOTE_PACK_TIMEOUT);
   try{
-    const r = await fetch(String(url), { cache: "no-store", credentials: "omit", referrerPolicy: "no-referrer" });
+    const r = await fetch(String(url), { cache: "no-store", credentials: "omit", referrerPolicy: "no-referrer", redirect: "manual", signal: ctl.signal });
+    if (r.type === "opaqueredirect") throw new Error("la dirección redirige a otro sitio; usa la dirección final");
     if (!r.ok) throw new Error("HTTP " + r.status);
+    if ((+r.headers.get("content-length") || 0) > REMOTE_PACK_MAX) throw new Error("el archivo es demasiado grande");
+    const reader = r.body && r.body.getReader ? r.body.getReader() : null;
+    if (reader){
+      let received = 0; const chunks = [];
+      for (;;){
+        const { done, value } = await reader.read();
+        if (done) break;
+        received += value.byteLength;
+        if (received > REMOTE_PACK_MAX){ ctl.abort(); throw new Error("el archivo es demasiado grande"); }
+        chunks.push(value);
+      }
+      const buf = new Uint8Array(received);
+      let off = 0; for (const c of chunks){ buf.set(c, off); off += c.byteLength; }
+      return JSON.parse(new TextDecoder().decode(buf));
+    }
+    // sin streaming (navegador raro): mismo tope, medido tras leer — mejor que nada
     const text = await r.text();
     if (text.length > REMOTE_PACK_MAX) throw new Error("el archivo es demasiado grande");
     return JSON.parse(text);
-  }catch(e){ toast("No se pudo cargar el pack de esa dirección (" + e.message + ")", true); return null; }
+  }catch(e){
+    toast("No se pudo cargar el pack de esa dirección (" + (timedOut ? "tardó demasiado" : e.message) + ")", true);
+    return null;
+  }finally{ clearTimeout(timer); }
+}
+// El MISMO presupuesto para la vía por archivo (checkpoint: «los mismos presupuestos para URL y
+// archivo»): el tamaño se comprueba en bytes ANTES de leer (File.size), no después.
+async function readPackFile(f){
+  if (f.size > REMOTE_PACK_MAX) throw new Error("el archivo es demasiado grande");
+  return JSON.parse(await f.text());
 }
 
 async function applyBuiltin(id, opts){
@@ -2069,7 +2147,7 @@ async function followPackFile(){
   try{
     const [h] = await window.showOpenFilePicker({ types: [{ description: "Pack JSON", accept: { "application/json": [".json"] } }] });
     const f = await h.getFile();
-    const pack = JSON.parse(await f.text());
+    const pack = await readPackFile(f);   // mismo presupuesto de bytes que la vía por URL
     // seguir = trasladar la confianza a TODO lo que venga después → perfil estrecho (C7)
     if (!(await applyPack(pack, { remote: true }))) return;
     await idbSet("packHandle", h);
@@ -2091,7 +2169,7 @@ async function checkFollowedPack(interactive = false){
     const f = await h.getFile();
     const known = (await idbGet("packMtime")) || 0;
     if (f.lastModified <= known){ if (interactive) toast("El pack seguido no tiene novedades"); return; }
-    const pack = JSON.parse(await f.text());
+    const pack = await readPackFile(f);   // mismo presupuesto de bytes que la vía por URL
     if (!state || !state.spaces || !state.spaces.length) return;
     // el pack seguido se aplica SIEMPRE a su destino ORIGINAL (por spaceId), nunca al espacio activo
     // en el momento del clic. Suscripciones anteriores a este arreglo se ligan aquí al escritorio
@@ -5909,8 +5987,8 @@ function wireUI(){
     $("#ov-packs").classList.remove("open");
     try{
       const [h] = await window.showOpenFilePicker({ types: [{ description: "Pack JSON", accept: { "application/json": [".json"] } }] });
-      await applyPack(JSON.parse(await (await h.getFile()).text()), opts);
-    }catch(e){ /* cancelado */ }
+      await applyPack(await readPackFile(await h.getFile()), opts);
+    }catch(e){ if (/demasiado grande/.test(e.message || "")) toast("Ese pack supera el tamaño admitido (2 MiB)", true); /* si no, cancelado */ }
   });
   $("#pack-follow").addEventListener("click", async () => { $("#ov-packs").classList.remove("open"); await followPackFile(); });
   $("#pack-unfollow").addEventListener("click", async () => {
