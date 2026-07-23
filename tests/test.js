@@ -1443,6 +1443,14 @@ eval('globalThis.conflictDecisionCovers = ' + pickFn('conflictDecisionCovers', '
   if (!conflictDecisionCovers(['widget:wa', 'widget:wb'], ['widget:wa'])) throw new Error('un subconjunto del presentado sí está cubierto');
   if (!conflictDecisionCovers(['widget:wa'], [])) throw new Error('sin choques vigentes, la decisión está cubierta');
 
+  // `merged` es lista blanca: identityVersion (D1) debe sobrevivir a la fusión o el siguiente saneo
+  // trataría el estado como legacy y daría id por POSICIÓN a un elemento nuevo aún sin id (riesgo 1).
+  {
+    const Lv = B(); Lv.identityVersion = 1;
+    const Rv = B(); Rv.identityVersion = 1;
+    if (mergeStates(B(), Lv, Rv, 'local').merged.identityVersion !== 1) throw new Error('la fusión pierde identityVersion (D1 volvería a modo legacy)');
+  }
+
   // --- P2 (2026-07-22): un reorden remoto de pestañas no cambia QUÉ escritorio está activo ---
   // active se conserva por IDENTIDAD de espacio, no por índice: si el otro equipo puso s2 primero,
   // el índice 0 local pasaría a señalar s2 — el usuario vería cambiar su escritorio sin tocarlo.

@@ -1262,7 +1262,7 @@ function syncUI(mode, txt){
    reaparece) y si Recargar está activo. El descarte ✕ vive solo en memoria de la sesión.
    Demora asumida: la CDN de Pages puede servir la versión vieja hasta ~10 min aun con
    no-store (gobierna la caché del navegador, no la CDN); para pestañas de días, irrelevante. */
-const APP_VERSION = "0.40.1";
+const APP_VERSION = "0.40.2";
 let newVersionDetected = null;   // versión superior detectada; detiene futuras consultas
 let verDismissed = false;        // ✕: solo esta sesión — nunca persistido en disco
 let verCheckInflight = false;    // sin consultas concurrentes
@@ -1591,6 +1591,10 @@ function mergeStates(base, local, remote, prefer){
   const appS = pick3(base.appSettings, local.appSettings, remote.appSettings, { kind: "config", id: "appSettings", label: "Ajustes generales (⚙)" });
   if (appS !== undefined) merged.appSettings = clone(appS);
   if (base.migratedCalH300 || local.migratedCalH300 || remote.migratedCalH300) merged.migratedCalH300 = true;
+  // `merged` es lista BLANCA: una clave de raíz no listada aquí se pierde en cada fusión. identityVersion
+  // debe sobrevivir o el siguiente saneo trataría el estado como legacy y daría id POR POSICIÓN a un
+  // elemento recién creado aún sin id — justo la colisión entre equipos del riesgo 1 del gate (D1).
+  if (base.identityVersion || local.identityVersion || remote.identityVersion) merged.identityVersion = 1;
   return { merged, conflicts };
 }
 

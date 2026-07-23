@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.40.2] - 2026-07-24 — corrección de la preparación interna
+
+- **Los identificadores internos ya no se «olvidan» al combinar cambios de dos equipos.** La combinación reconstruye el archivo campo a campo y se dejaba fuera la marca que indica que tus elementos ya tienen identificador. Se recuperaba sola al recargar, pero durante ese hueco un elemento recién creado podía recibir un identificador basado en su posición y chocar con otro creado a la vez en el otro equipo. Sin efecto visible; corregido con prueba propia.
+
 ## [0.40.1] - 2026-07-23 — preparación interna para compartir
 
 - **Groundwork invisible.** Cada tarea, enlace, grupo y elemento de portapapeles de tus escritorios recibe ahora un identificador interno estable, necesario para lo que viene (seguir escritorios compartidos, sincronizar entre equipos sin pisar cambios). Se asigna en memoria y viaja con tu próximo guardado; en dos equipos que abren el mismo archivo se genera igual, para que luego cada elemento se reconozca como el mismo. **No cambia nada de lo que ves ni de cómo se usa Cabecera** — solo prepara el terreno.
