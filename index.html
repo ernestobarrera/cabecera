@@ -262,6 +262,7 @@ body{font-family:var(--font); color:var(--text); background:#10131a}
 .dlg-panel{width:min(440px, 92vw)}
 .dlg-field{display:flex; flex-direction:column; gap:5px; font-size:12px; color:var(--text-dim); margin-top:12px}
 .dlg-inp{padding:9px 12px; border-radius:10px; border:1px solid var(--border-soft); background:rgba(255,255,255,.05); color:var(--text); font-family:var(--font); font-size:14px}
+textarea.dlg-inp{resize:vertical; min-height:46px}
 .dlg-inp:focus{outline:none; border-color:var(--accent)}
 .dlg-actions{justify-content:flex-end}
 
@@ -379,8 +380,12 @@ ul.plain{list-style:none}
 .clip-it .t{flex:1; word-break:break-word; white-space:pre-wrap; font-size:12.8px; max-height:76px; overflow:auto}
 .link-group{margin-bottom:12px}
 .link-group h5{font-size:11px; text-transform:uppercase; letter-spacing:.07em; color:var(--text-dim); margin:2px 2px 7px}
-.link-it{display:flex; align-items:center; gap:9px; padding:6px 7px; border-radius:9px; cursor:pointer}
+.link-it{display:flex; align-items:center; gap:9px; padding:6px 7px; border-radius:9px; cursor:pointer; flex-wrap:wrap}
 .link-it:hover{background:rgba(255,255,255,.06)}
+/* nota por enlace (spec-note): línea dim bajo el enlace, nítida en hover/focus-within (patrón ⓘ 0.8e) */
+.link-note{flex-basis:100%; padding:0 7px 1px 34px; font-size:11.5px; line-height:1.35; color:var(--text-dim); opacity:.75; white-space:normal; cursor:default}
+.link-it:hover .link-note,.link-it:focus-within .link-note{opacity:1; color:var(--text)}
+@media (any-hover:none){ .link-note{opacity:1} }
 .link-tile{width:26px; height:26px; border-radius:7px; display:flex; align-items:center; justify-content:center;
   font-size:12.5px; font-weight:700; color:#fff; flex-shrink:0}
 .link-it .t{flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
@@ -1213,7 +1218,7 @@ function syncUI(mode, txt){
    reaparece) y si Recargar está activo. El descarte ✕ vive solo en memoria de la sesión.
    Demora asumida: la CDN de Pages puede servir la versión vieja hasta ~10 min aun con
    no-store (gobierna la caché del navegador, no la CDN); para pestañas de días, irrelevante. */
-const APP_VERSION = "0.39.5";
+const APP_VERSION = "0.40.0";
 let newVersionDetected = null;   // versión superior detectada; detiene futuras consultas
 let verDismissed = false;        // ✕: solo esta sesión — nunca persistido en disco
 let verCheckInflight = false;    // sin consultas concurrentes
@@ -1285,7 +1290,9 @@ function siteDialog(opts){
     const ov = document.createElement("div");
     ov.className = "overlay open dlg";
     const inputs = (opts.fields || []).map(f =>
-      `<label class="dlg-field"><span>${esc(f.label || "")}</span><input class="dlg-inp" data-k="${esc(f.key)}" value="${esc(f.value == null ? "" : String(f.value))}" placeholder="${esc(f.placeholder || "")}"></label>`).join("");
+      f.multiline
+        ? `<label class="dlg-field"><span>${esc(f.label || "")}</span><textarea class="dlg-inp" data-k="${esc(f.key)}" rows="2" placeholder="${esc(f.placeholder || "")}">${esc(f.value == null ? "" : String(f.value))}</textarea></label>`
+        : `<label class="dlg-field"><span>${esc(f.label || "")}</span><input class="dlg-inp" data-k="${esc(f.key)}" value="${esc(f.value == null ? "" : String(f.value))}" placeholder="${esc(f.placeholder || "")}"></label>`).join("");
     ov.innerHTML = `<div class="modal dlg-panel" role="dialog" aria-modal="true">
       ${opts.title ? `<h2>${esc(opts.title)}</h2>` : ""}
       ${opts.message ? `<p>${esc(opts.message)}</p>` : ""}
@@ -1904,6 +1911,9 @@ const BUILTIN_PACKS = { sanitarios: "packs/sanitarios.json", basico: "packs/basi
 // vez es una decisión que el usuario ve entera; seguir una fuente traslada esa confianza a todo lo
 // que venga después, que es la propiedad peligrosa.
 const REMOTE_PACK_TYPES = { links: 1, notes: 1, todo: 1, clips: 1, md: 1 };
+// `note` por enlace (spec-note-enlaces v1.0): anotación breve opcional. Tope único del formato,
+// compartido por el editor ✎ (rechaza avisando) y normalizePack (local trim; remoto estricto).
+const LINK_NOTE_MAX = 500;
 // Los nombres de la superficie humano-agente son reservados: si un pack pudiera crear un widget
 // llamado «Cabecera · bandeja», inyectaría texto en lo que los agentes leen por nombre.
 const RESERVED_TITLE = /^\s*cabecera\s*[·:.-]/i;
@@ -1942,6 +1952,7 @@ function normalizePack(p, opts){
           if (over(g && g.name, 60)) return "un nombre de grupo de enlaces supera los 60 caracteres";
           for (const l of (Array.isArray(g && g.links) ? g.links : [])){
             if (over(l && l.t, 120)) return "el título de un enlace supera los 120 caracteres";
+            if (over(l && l.note, LINK_NOTE_MAX)) return "la nota de un enlace supera los " + LINK_NOTE_MAX + " caracteres del formato";
             if (l && String(l.u ?? "").trim() && !safeUrl(l.u)) return "contiene un enlace con una dirección no válida o no admitida";
           }
         }
@@ -1962,7 +1973,11 @@ function normalizePack(p, opts){
         name: txt(g.name || "Grupo", 60),
         links: (Array.isArray(g.links) ? g.links : []).map(l => {
           const u = safeUrl(l.u);
-          return u ? { t: txt(l.t || u, 120), u } : null;
+          if (!u) return null;
+          const out = { t: txt(l.t || u, 120), u };
+          const note = txt(l.note, LINK_NOTE_MAX).trim();
+          if (note) out.note = note;
+          return out;
         }).filter(Boolean)
       })).filter(g => g.links.length);
       if (!data.groups.length) continue;
@@ -4290,13 +4305,13 @@ function bodyLinks(w, el){
         let host = ""; try{ host = new URL(l.u).hostname; }catch(e){}
         const d = document.createElement("div");
         d.className = "link-it";
-        d.title = l.u;
+        d.title = l.note ? l.u + "\n" + l.note : l.u;
         d.innerHTML = `<span class="it-drag" draggable="true" title="Arrastrar para reordenar">⋮⋮</span><span class="link-tile" style="background:hsl(${hueOf(host || l.t)},55%,42%)">${esc((l.t || "?")[0].toUpperCase())}</span>
           <span class="t">${esc(l.t)}</span>
           <button class="it-act ed" title="Editar">✎</button>
           <button class="it-act qr" title="Ver QR">🔳</button>
           <button class="it-act cp" title="Copiar URL">⧉</button>
-          <button class="it-del" title="Borrar">✕</button>`;
+          <button class="it-del" title="Borrar">✕</button>${l.note ? `<span class="link-note">${esc(l.note)}</span>` : ""}`;
         d.addEventListener("click", e => { if (!e.target.closest("button") && !e.target.closest(".it-drag")) window.open(l.u, "_blank", "noopener"); });
         d.querySelector(".it-drag").addEventListener("dragstart", e => {
           linkDragSrc = { g, l, repaint: paint };
@@ -4337,14 +4352,20 @@ function bodyLinks(w, el){
         d.querySelector(".ed").addEventListener("click", async () => {
           const r = await dlgPrompt(
             [{ key: "t", label: "Título", value: l.t, placeholder: "Nombre del enlace" },
-             { key: "u", label: "URL", value: l.u, placeholder: "https://…" }],
+             { key: "u", label: "URL", value: l.u, placeholder: "https://…" },
+             { key: "note", label: "Nota (opcional)", value: l.note || "", placeholder: "Por qué está aquí, cómo usarlo… (se ve al pasar el ratón)", multiline: true }],
             { title: "Editar enlace" });
           if (r === null) return;
           let nu = (r.u || "").trim();
           if (nu && !/^[a-z]+:\/\//i.test(nu)) nu = "https://" + nu;
           try{ const x = new URL(nu); if (x.protocol !== "https:" && x.protocol !== "http:") throw 0; }
           catch(e){ toast("URL no válida", true); return; }
+          // la nota es una línea (Enter confirma, como el editor de tareas); el exceso se RECHAZA
+          // avisando — jamás se guarda truncada (spec-note; misma lección que el tope de tareas)
+          const note = (r.note || "").replace(/\s*\n\s*/g, " ").trim();
+          if (note.length > LINK_NOTE_MAX){ toast(`La nota supera los ${LINK_NOTE_MAX} caracteres (tiene ${note.length}). Recórtala: no se guarda cortada.`, true); return; }
           l.t = (r.t || "").trim() || l.t; l.u = nu;
+          if (note) l.note = note; else delete l.note;
           paint(); markDirty();
         });
         d.querySelector(".cp").addEventListener("click", async () => { await navigator.clipboard.writeText(l.u); toast("URL copiada"); });

@@ -45,7 +45,8 @@ globalThis.WP_PRESETS = [1, 2, 3, 4, 5, 6];
 // C7: constantes del perfil remoto, extraídas del propio fuente (si cambian allí, cambian aquí)
 eval('globalThis.' + (src.match(/const REMOTE_PACK_TYPES = \{[^}]*\};/) || [''])[0].replace('const ', ''));
 eval('globalThis.' + (src.match(/const RESERVED_TITLE = [^\n]*;/) || [''])[0].replace('const ', ''));
-if (!globalThis.REMOTE_PACK_TYPES || !globalThis.RESERVED_TITLE) throw new Error('no encontradas las constantes del perfil remoto (C7)');
+eval('globalThis.' + (src.match(/const LINK_NOTE_MAX = [^\n]*;/) || [''])[0].replace('const ', ''));
+if (!globalThis.REMOTE_PACK_TYPES || !globalThis.RESERVED_TITLE || !globalThis.LINK_NOTE_MAX) throw new Error('no encontradas las constantes del perfil remoto (C7) o LINK_NOTE_MAX');
 eval('globalThis.normalizePack = ' + pickFn('normalizePack', 'p, opts'));
 
 const evilPack = normalizePack({ cabeceraPack: 1, name: 'x'.repeat(500), settings: { wallpaper: { type: 'url', value: 'https://tracker.evil/p.png' } }, widgets: [
@@ -1221,6 +1222,33 @@ console.log('OK P1 pack seguido: destino por spaceId, nombrado antes de aplicar,
   if (!loc || loc.widgets[0].data.text.length !== 20000) throw new Error('el saneo local debe seguir siendo tolerante (trunca a 20.000)');
 }
 console.log('OK Tramo 2 normalizePack (remoto: rechazo atómico con motivo y frontera exacta, excluidos contados; local tolerante intacto)');
+
+// --- `note` por enlace (spec-note-enlaces v1.0; alcance definido por Codex en el gate del ADR) ---
+{
+  const mkL = note => ({ cabeceraPack: 1, name: 'p', widgets: [{ type: 'links', data: { groups: [{ name: 'g', links: [
+    { t: 'ok', u: 'https://pubmed.ncbi.nlm.nih.gov/', ...(note === undefined ? {} : { note }) }] }] } }] });
+  // retrocompat: {t,u} sin note → no aparece la clave
+  const sin = normalizePack(mkL(undefined));
+  if ('note' in sin.widgets[0].data.groups[0].links[0]) throw new Error('un enlace sin nota no debe ganar la clave note');
+  // local tolerante: se conserva; el exceso se trunca (como todo lo local)
+  const conL = normalizePack(mkL('para residentes'));
+  if (conL.widgets[0].data.groups[0].links[0].note !== 'para residentes') throw new Error('nota local no conservada');
+  const largaL = normalizePack(mkL('x'.repeat(LINK_NOTE_MAX + 1)));
+  if (largaL.widgets[0].data.groups[0].links[0].note.length !== LINK_NOTE_MAX) throw new Error('nota local no truncada al tope');
+  // remoto estricto: frontera exacta — el tope pasa íntegro; +1 rechaza el pack con motivo
+  let diag = {};
+  const okR = normalizePack(mkL('x'.repeat(LINK_NOTE_MAX)), { remote: true, diag });
+  if (!okR || okR.widgets[0].data.groups[0].links[0].note.length !== LINK_NOTE_MAX || diag.reason) throw new Error('nota remota al tope debe pasar íntegra');
+  diag = {};
+  if (normalizePack(mkL('x'.repeat(LINK_NOTE_MAX + 1)), { remote: true, diag }) !== null || !/nota de un enlace/.test(diag.reason || ''))
+    throw new Error('nota remota sobre el tope debe rechazar el pack con motivo: ' + JSON.stringify(diag));
+}
+// cableado UI: render escapado, editor con rechazo avisado (jamás truncado), diálogo multilínea
+if (!src.includes('${l.note ? `<span class="link-note">${esc(l.note)}</span>` : ""}')) throw new Error('regresión: la nota del enlace no se pinta escapada (o desapareció)');
+if (!src.includes('if (note.length > LINK_NOTE_MAX){ toast(') || !src.includes('no se guarda cortada.`, true); return; }')) throw new Error('regresión: el editor ✎ ya no rechaza avisando el exceso de nota (¿trunca en silencio?)');
+if (!src.includes('<textarea class="dlg-inp"')) throw new Error('regresión: siteDialog perdió el soporte multilínea del campo Nota');
+if (!html.includes('.link-it:hover .link-note,.link-it:focus-within .link-note')) throw new Error('regresión: la nota perdió el nítido en hover/focus (accesibilidad de teclado)');
+console.log('OK note por enlace (retrocompat, local tolerante, remoto estricto con frontera, render escapado, editor que rechaza avisando)');
 // descarga con tope REAL (antes: await r.text() y tope en chars UTF-16 después de bufferizarlo todo)
 if (!src.includes('r.type === "opaqueredirect"')) throw new Error('regresión: una redirección ya no se detecta ni se bloquea con mensaje claro');
 if (!src.match(/setTimeout\(\(\) => \{ timedOut = true; ctl\.abort\(\); \}, REMOTE_PACK_TIMEOUT\)/)) throw new Error('regresión: la descarga remota perdió el timeout con abort');

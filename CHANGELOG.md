@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.40.0] - 2026-07-23 — notas en los enlaces
+
+- **Cada enlace puede llevar ahora una nota breve.** El botón ✎ de un enlace gana el campo «Nota»: «guía 2025, ver tabla 3», «para residentes», «mejor con VPN»… Se muestra atenuada bajo el enlace y nítida al pasar el ratón o al navegar con el teclado (en pantalla táctil, siempre visible); también aparece en el globito del enlace. Tope de 500 caracteres: si te pasas, se avisa y **no se guarda cortada**. Es además el primer paso del plan de compartir: una lista de enlaces *comentada* vale mucho más que una lista pelada.
+- Los packs pueden traer notas en sus enlaces. Desde una fuente externa, una nota pasada de tamaño **rechaza el pack entero con su motivo** — la misma regla de «nada se recorta en silencio» de la 0.39.4.
+
 ## [0.39.5] - 2026-07-22 — estabilización, segunda parte: identidad y gestos
 
 Cierra las últimas correcciones de la misma revisión externa. Sin funciones nuevas: cuatro comportamientos que podían mover o fijar cosas sin que las pidieras.
