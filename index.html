@@ -1015,6 +1015,49 @@ function sanitizeWidgetShape(w){
     tags: tags.length ? tags : undefined
   };
 }
+// D1 (ADR identidad, gate 2026-07-23): identidad estable de cada elemento de colección
+// (tareas, enlaces, grupos, clips). Las marcas ya llevan `cm_` y no se tocan. Bootstrap PEREZOSO
+// (en memoria; viaja con el siguiente guardado humano, «abrir jamás escribe» — mismo patrón que
+// migratedCalH300) y DETERMINISTA: el mismo documento legacy produce los MISMOS ids en dos equipos
+// (derivación por ruta estable + posición, no por contenido). Con `identityVersion:1` ya asignado,
+// no se recalculan (editar/reordenar no cambia identidad); un elemento sin id que aparezca DESPUÉS
+// del bootstrap es una creación local → id aleatorio (evita la colisión por posición entre equipos,
+// riesgo 1 del gate). Sin consumidor todavía (el merge sigue por widget): es cimiento de fase 2.
+function detHash(str){   // hash determinista PURO → base36 (FNV-1a doble; no cripto, solo identidad estable)
+  let h1 = 0x811c9dc5 >>> 0, h2 = 0x01000193 >>> 0;
+  for (let i = 0; i < str.length; i++){
+    const c = str.charCodeAt(i);
+    h1 = Math.imul(h1 ^ c, 0x01000193) >>> 0;
+    h2 = Math.imul(h2 ^ c, 0x85ebca6b) >>> 0;
+  }
+  return (h1 * 4096 + (h2 & 0xfff)).toString(36);
+}
+function bootstrapElementIds(s){
+  const legacy = !s.identityVersion;   // primer cruce: derivación determinista; después: aleatorio
+  const used = new Set();
+  const assign = (obj, prefix, path) => {
+    let id = (typeof obj.id === "string" && /^[A-Za-z0-9._-]{1,64}$/.test(obj.id)) ? obj.id : null;
+    if (!id) id = legacy ? prefix + "_" + detHash(path) : prefix + "_" + uid();
+    while (used.has(id)) id = prefix + "_" + (legacy ? detHash(path + "#" + used.size) : uid());   // colisión: resolución determinista
+    used.add(id); obj.id = id;
+  };
+  for (const sp of (s.spaces || [])){
+    for (const w of (sp.widgets || [])){
+      const base = w.id, d = w.data || {};
+      if (w.type === "todo" && Array.isArray(d.items))
+        d.items.forEach((it, i) => { if (it && typeof it === "object") assign(it, "t", base + "|t|" + i); });
+      else if (w.type === "clips" && Array.isArray(d.items))
+        d.items.forEach((it, i) => { if (it && typeof it === "object") assign(it, "c", base + "|c|" + i); });
+      else if (w.type === "links" && Array.isArray(d.groups))
+        d.groups.forEach((g, gi) => {
+          if (!g || typeof g !== "object") return;
+          assign(g, "g", base + "|g|" + gi);
+          if (Array.isArray(g.links)) g.links.forEach((l, li) => { if (l && typeof l === "object") assign(l, "l", g.id + "|l|" + li); });
+        });
+    }
+  }
+  s.identityVersion = 1;
+}
 function sanitizeState(s){
   if (!s || typeof s !== "object") s = migrate(defaultState());
   if (!Array.isArray(s.spaces) || !s.spaces.length) s.spaces = [blankSpace()];
@@ -1041,6 +1084,7 @@ function sanitizeState(s){
       }
     }
   }
+  bootstrapElementIds(s);   // D1: identidad estable de tareas/enlaces/grupos/clips (tras dedup de widgets)
   // migración única: el alto por defecto de "Mes" subió de 300 a 360 (más aire para el resumen
   // de marcas); a los widgets ya existentes que se quedaron exactos en el valor viejo se les da
   // el nuevo alto una sola vez. No se repite (por eso el flag), así no pisa un resize deliberado
@@ -1218,7 +1262,7 @@ function syncUI(mode, txt){
    reaparece) y si Recargar está activo. El descarte ✕ vive solo en memoria de la sesión.
    Demora asumida: la CDN de Pages puede servir la versión vieja hasta ~10 min aun con
    no-store (gobierna la caché del navegador, no la CDN); para pestañas de días, irrelevante. */
-const APP_VERSION = "0.40.0";
+const APP_VERSION = "0.40.1";
 let newVersionDetected = null;   // versión superior detectada; detiene futuras consultas
 let verDismissed = false;        // ✕: solo esta sesión — nunca persistido en disco
 let verCheckInflight = false;    // sin consultas concurrentes
@@ -1648,6 +1692,7 @@ async function saveNow(){
     if (conflictPending) return;        // el humano decide en la barra de conflicto
   }
   state.updatedAt = Date.now();
+  bootstrapElementIds(state);   // D1: los elementos creados en la sesión reciben id ANTES del guardado
   saving = true;
   try{
     if (backend === "fs"){

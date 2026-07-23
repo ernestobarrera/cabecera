@@ -94,6 +94,8 @@ globalThis.blankSpace = function(){ return { id: 's_' + uid(), name: 'Escritorio
 globalThis.defaultState = function(){ return { version: 1, updatedAt: Date.now(), settings: { wallpaper: { type: 'preset', value: 0 } }, widgets: [] }; };
 eval('globalThis.migrate = ' + pickFn('migrate', 's'));
 eval('globalThis.sanitizeWidgetShape = ' + pickFn('sanitizeWidgetShape', 'w'));
+eval('globalThis.detHash = ' + pickFn('detHash', 'str'));                       // D1: dependencia de sanitizeState
+eval('globalThis.bootstrapElementIds = ' + pickFn('bootstrapElementIds', 's')); // D1: la llama sanitizeState
 eval('globalThis.sanitizeState = ' + pickFn('sanitizeState', 's'));
 eval('globalThis.bindSpace = ' + pickFn('bindSpace', 's'));
 
@@ -155,6 +157,51 @@ const wt = sanitizeWidgetShape({ type: 'notes', tags: ['Clínica', ' clinica ', 
 if (!wt || wt.length !== 3 || wt[0] !== 'clínica' || wt[2].length !== 24) throw new Error('tags: normalización/dedupe/acotado incorrectos');
 if (sanitizeWidgetShape({ type: 'notes' }).tags !== undefined) throw new Error('tags vacío debe ser undefined');
 console.log('OK esquema v2 (migración, accesores no-enumerables, serialización, saneo estructural, source/id/tags estrictos)');
+
+// --- D1: identidad estable de elementos (ADR identidad, gate 2026-07-23) ---
+// (detHash y bootstrapElementIds ya eval'd arriba: son dependencia de sanitizeState)
+{
+  if (detHash('a|t|0') !== detHash('a|t|0')) throw new Error('detHash no determinista');
+  if (detHash('a|t|0') === detHash('a|t|1')) throw new Error('detHash colisiona en entradas triviales distintas');
+  const legacy = () => ({ version: 2, spaces: [
+    { id: 'w-space', widgets: [
+      { id: 'wt', type: 'todo',  data: { items: [{ t: 'a' }, { t: 'b' }] } },
+      { id: 'wc', type: 'clips', data: { items: [{ t: 'c' }] } },
+      { id: 'wl', type: 'links', data: { groups: [{ name: 'g', links: [{ t: 'x', u: 'https://x' }, { t: 'y', u: 'https://y' }] }] } }
+    ] }
+  ] });
+  // CONVERGENCIA byte a byte: dos equipos, mismo documento legacy → mismos ids
+  const A = legacy(); bootstrapElementIds(A);
+  const B = legacy(); bootstrapElementIds(B);
+  if (JSON.stringify(A) !== JSON.stringify(B)) throw new Error('D1: el bootstrap no converge entre equipos');
+  const ids = A.spaces[0].widgets.flatMap(w => (w.data.items || []).map(i => i.id).concat((w.data.groups || []).flatMap(g => [g.id, ...g.links.map(l => l.id)])));
+  if (new Set(ids).size !== ids.length) throw new Error('D1: ids de elemento duplicados');
+  if (!ids.every(Boolean)) throw new Error('D1: algún elemento quedó sin id');
+  if (!A.spaces[0].widgets[0].data.items[0].id.startsWith('t_')) throw new Error('prefijo de tarea');
+  if (!A.spaces[0].widgets[1].data.items[0].id.startsWith('c_')) throw new Error('prefijo de clip');
+  if (!A.spaces[0].widgets[2].data.groups[0].id.startsWith('g_')) throw new Error('prefijo de grupo');
+  if (!A.spaces[0].widgets[2].data.groups[0].links[0].id.startsWith('l_')) throw new Error('prefijo de enlace');
+  if (A.identityVersion !== 1) throw new Error('identityVersion no marcado');
+  // IDEMPOTENCIA: re-bootstrap no cambia nada
+  const snap = JSON.stringify(A);
+  bootstrapElementIds(A);
+  if (JSON.stringify(A) !== snap) throw new Error('D1: el bootstrap no es idempotente');
+  // NUEVO tras el bootstrap → id ALEATORIO (no derivado por posición): dos equipos que crean cada
+  // uno su elemento en la misma posición NO deben compartir id (riesgo 1 del gate)
+  A.spaces[0].widgets[0].data.items.push({ t: 'nuevo-A' }); bootstrapElementIds(A);
+  const nA = A.spaces[0].widgets[0].data.items[2];
+  if (!nA.id || !nA.id.startsWith('t_')) throw new Error('el elemento nuevo no recibió id');
+  const C = legacy(); bootstrapElementIds(C); C.spaces[0].widgets[0].data.items.push({ t: 'nuevo-C' }); bootstrapElementIds(C);
+  if (C.spaces[0].widgets[0].data.items[2].id === nA.id) throw new Error('D1: elementos nuevos no deben compartir id derivado por posición');
+  // un id válido preexistente se conserva
+  const keep = { version: 2, identityVersion: 1, spaces: [{ id: 's', widgets: [{ id: 'w', type: 'todo', data: { items: [{ id: 't_fijo', t: 'z' }] } }] }] };
+  bootstrapElementIds(keep);
+  if (keep.spaces[0].widgets[0].data.items[0].id !== 't_fijo') throw new Error('D1: un id válido preexistente no debe cambiar');
+}
+console.log('OK D1 identidad de elementos (convergente byte a byte, idempotente, nuevos aleatorios, ids válidos conservados)');
+if (!src.includes('bootstrapElementIds(s);')) throw new Error('regresión: el saneo ya no bootstrapea identidades de elemento en la carga');
+if (!src.includes('bootstrapElementIds(state);')) throw new Error('regresión: saveNow ya no asigna id a los elementos nuevos antes de propagarlos');
+console.log('OK D1 cableado (bootstrap en saneo/carga + saveNow antes de propagar)');
 
 // --- panel ⚙: state.appSettings raíz enumerable, whitelist estricta, sin escritura de defaults ---
 // ausencia = canónico: el saneo NUNCA lo crea

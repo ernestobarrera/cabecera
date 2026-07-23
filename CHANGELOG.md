@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.40.1] - 2026-07-23 — preparación interna para compartir
+
+- **Groundwork invisible.** Cada tarea, enlace, grupo y elemento de portapapeles de tus escritorios recibe ahora un identificador interno estable, necesario para lo que viene (seguir escritorios compartidos, sincronizar entre equipos sin pisar cambios). Se asigna en memoria y viaja con tu próximo guardado; en dos equipos que abren el mismo archivo se genera igual, para que luego cada elemento se reconozca como el mismo. **No cambia nada de lo que ves ni de cómo se usa Cabecera** — solo prepara el terreno.
+
 ## [0.40.0] - 2026-07-23 — notas en los enlaces
 
 - **Cada enlace puede llevar ahora una nota breve.** El botón ✎ de un enlace gana el campo «Nota»: «guía 2025, ver tabla 3», «para residentes», «mejor con VPN»… Se muestra atenuada bajo el enlace y nítida al pasar el ratón o al navegar con el teclado (en pantalla táctil, siempre visible); también aparece en el globito del enlace. Tope de 500 caracteres: si te pasas, se avisa y **no se guarda cortada**. Es además el primer paso del plan de compartir: una lista de enlaces *comentada* vale mucho más que una lista pelada.
