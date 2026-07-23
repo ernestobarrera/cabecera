@@ -640,7 +640,7 @@ if (!src.match(/originLane !== null && originLane === destLane/)) throw new Erro
 if (!src.includes('planColumnCompact(oc.members, oc.obstacles, startRect.y, above, copt)')) throw new Error('regresión: el drop cruzando columnas ya no compacta el origen');
 if (!src.includes('flipLayout(items,')) throw new Error('regresión: el drop ya no usa la animación FLIP');
 if (!src.includes('function flipLayout(') || !src.includes('prefers-reduced-motion: reduce')) throw new Error('regresión: FLIP sin respetar reduced-motion');
-if (!src.includes('planResizePush(others, beforeSnap, rectSnap(w)')) throw new Error('regresión: el resize ya no calcula el empuje por colisión real');
+if (!src.includes('planResizePush(others, { x: proj.x, y: proj.y, w: proj.w, h: proj.h }, rectSnap(w)')) throw new Error('regresión: el resize ya no calcula el empuje por colisión real (desde el rect proyectado, P2)');
 if (src.includes('laneA !== null && laneA === laneB')) throw new Error('regresión: vuelve el gate alignedLane al resize (el veredicto 2026-07-18 lo sustituyó por colisión real)');
 if (!src.includes('function colsOpt(') || !src.match(/sp\.settings\.cols !== 2 && sp\.settings\.cols !== 3 && sp\.settings\.cols !== 4/)) throw new Error('regresión: columnas configurables sin saneo estricto');
 if (!src.includes('if (isMobile()){ b.style.display = "none"')) throw new Error('regresión: el control de columnas no se oculta en móvil');
@@ -1232,6 +1232,38 @@ if (rpfCalls !== 3) throw new Error('los tres lectores de pack por archivo deben
 if (!src.includes('"Pack rechazado sin aplicar nada: " + diag.reason')) throw new Error('regresión: el rechazo remoto ya no explica su motivo');
 console.log('OK Tramo 2 descarga (redirección bloqueada, timeout, bytes con abort, Content-Length, mismo presupuesto por archivo, rechazo con motivo)');
 
+// --- P2 (2026-07-22): ids únicos y con charset seguro; gestos transaccionales ---
+// Los ids se interpolan en selectores (`.win[data-id="${id}"]`) y son la clave de la fusión por
+// unidad: un duplicado colapsa dos widgets en uno; una comilla rompe (o desvía) el selector.
+{
+  const st = sanitizeState({ version: 2, active: 0, spaces: [
+    { id: 'dup', name: 'A', widgets: [
+      { type: 'notes', id: 'w1', data: {} },
+      { type: 'notes', id: 'w1', data: {} },
+      { type: 'notes', id: 'mal"o]raro', data: {} }
+    ] },
+    { id: 'dup', name: 'B', widgets: [{ type: 'notes', id: 'ok-2', data: {} }] }
+  ] });
+  const sids = st.spaces.map(sp => sp.id);
+  if (sids[0] !== 'dup' || sids[1] === 'dup') throw new Error('espacio duplicado: el primero conserva id y el segundo se regenera: ' + sids.join());
+  const wids = [...st.spaces[0].widgets.map(x => x.id), ...st.spaces[1].widgets.map(x => x.id)];
+  if (new Set(wids).size !== wids.length) throw new Error('quedan ids de widget duplicados tras el saneo');
+  if (wids[0] !== 'w1' || wids[1] === 'w1') throw new Error('el primero conserva id, el duplicado se regenera');
+  if (/["\]]/.test(wids[2])) throw new Error('id con caracteres peligrosos no regenerado: ' + wids[2]);
+  if (st.spaces[1].widgets[0].id !== 'ok-2') throw new Error('un id válido no debe cambiar');
+}
+if (!src.includes('/^[A-Za-z0-9._-]{1,64}$/.test(w.id.slice(0, 64))') || !src.includes('/^[A-Za-z0-9._-]{1,64}$/.test(sp.id.slice(0, 64))'))
+  throw new Error('regresión: los ids ya no exigen charset seguro en el saneo');
+if (!src.includes('const seenIds = new Set()')) throw new Error('regresión: el saneo ya no deduplica ids');
+// identidad del espacio activo en la sync de fondo y gestos transaccionales
+if (!src.includes('const viewedId = state && state.spaces[state.active]')) throw new Error('regresión: una sync de fondo puede volver a cambiar el escritorio que miras');
+if (!src.match(/const preMax = w\.max \?/)) throw new Error('regresión: el arrastre de una maximizada perdió el snapshot pre-gesto');
+if (!src.match(/if \(preMax && !w\.max\)\{[\s\S]{0,220}w\.max = preMax\.max; w\.w = preMax\.w; w\.h = preMax\.h;/))
+  throw new Error('regresión: cancelar el arrastre de una maximizada ya no restaura el estado, solo el DOM');
+if (!src.match(/planResizePush\(others, \{ x: proj\.x, y: proj\.y, w: proj\.w, h: proj\.h \}, rectSnap\(w\)/))
+  throw new Error('regresión: el empuje del resize vuelve a mezclar geometría proyectada y persistida');
+console.log('OK P2 (ids únicos con charset seguro; active por identidad; maximizada y resize transaccionales)');
+
 // --- mergeStates: fusión a tres bandas por widget (spec-merge-por-widget, v0.37.0) ---
 eval('globalThis.canonJSON = ' + pickFn('canonJSON', 'v'));
 eval('globalThis.mergeStates = ' + pickFn('mergeStates', 'base, local, remote, prefer'));
@@ -1335,6 +1367,19 @@ eval('globalThis.conflictDecisionCovers = ' + pickFn('conflictDecisionCovers', '
   // benignos: un subconjunto del presentado sí está cubierto; sin choques vigentes, cubierto (fusión limpia)
   if (!conflictDecisionCovers(['widget:wa', 'widget:wb'], ['widget:wa'])) throw new Error('un subconjunto del presentado sí está cubierto');
   if (!conflictDecisionCovers(['widget:wa'], [])) throw new Error('sin choques vigentes, la decisión está cubierta');
+
+  // --- P2 (2026-07-22): un reorden remoto de pestañas no cambia QUÉ escritorio está activo ---
+  // active se conserva por IDENTIDAD de espacio, no por índice: si el otro equipo puso s2 primero,
+  // el índice 0 local pasaría a señalar s2 — el usuario vería cambiar su escritorio sin tocarlo.
+  {
+    const two = () => mkState([S('s1', 'Uno', [mkW('wa')]), S('s2', 'Dos', [mkW('wb')])]);
+    const L2 = two();                        // local mira s1 (active=0) y no reordenó
+    const R2 = two(); R2.spaces.reverse();   // el otro equipo puso s2 primero
+    const res2 = mergeStates(two(), L2, R2, 'local');
+    const order = res2.merged.spaces.map(sp => sp.id).join(',');
+    if (order !== 's2,s1') throw new Error('el reorden remoto debería aceptarse en silencio: ' + order);
+    if (res2.merged.spaces[res2.merged.active].id !== 's1') throw new Error('P2: active debe seguir en s1 por identidad, no quedarse en el índice 0');
+  }
 }
 console.log('OK mergeStates (disjunta sin barra, choque nombrado, crear/borrar/mover, borrado-vs-edición, espacios aparte, updatedAt fuera, active local, marcas, papelera, ⚙)');
 console.log('OK P1 barra de conflicto: la decisión vale solo para el conjunto presentado (choque nuevo → re-presentar, sin pérdida)');

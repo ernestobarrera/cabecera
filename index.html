@@ -994,7 +994,10 @@ function sanitizeWidgetShape(w){
     : [];
   return {
     ...w,
-    id: (typeof w.id === "string" && w.id) ? w.id.slice(0, 64) : uid(),
+    // charset seguro (P2): los ids se interpolan en selectores y son la clave de la fusión.
+    // La longitud se CORTA (determinista: dos equipos cortan igual); un charset inválido se
+    // regenera (no hay mapeo determinista posible sin conservar el peligro).
+    id: (typeof w.id === "string" && /^[A-Za-z0-9._-]{1,64}$/.test(w.id.slice(0, 64))) ? w.id.slice(0, 64) : uid(),
     type: w.type,
     x: numOr(w.x, 40, 0, 8000), y: numOr(w.y, 40, 0, 8000),
     w: numOr(w.w, t.w, t.minW || 120, 4000), h: numOr(w.h, t.h, t.minH || 80, 4000),
@@ -1012,7 +1015,7 @@ function sanitizeState(s){
   if (!Array.isArray(s.spaces) || !s.spaces.length) s.spaces = [blankSpace()];
   s.spaces = s.spaces.map(sp => {
     sp = (sp && typeof sp === "object") ? sp : {};
-    sp.id = (typeof sp.id === "string" && sp.id) ? sp.id.slice(0, 64) : "s_" + uid();
+    sp.id = (typeof sp.id === "string" && /^[A-Za-z0-9._-]{1,64}$/.test(sp.id.slice(0, 64))) ? sp.id.slice(0, 64) : "s_" + uid();
     sp.name = (typeof sp.name === "string") ? sp.name.slice(0, 80) : "Escritorio";
     if (!sp.settings || typeof sp.settings !== "object") sp.settings = { wallpaper: { type: "preset", value: 0 } };
     // override de columnas guía: solo 2|3|4; cualquier otra cosa (incl. "auto") → sin override
@@ -1020,6 +1023,19 @@ function sanitizeState(s){
     sp.widgets = (Array.isArray(sp.widgets) ? sp.widgets : []).filter(w => w && WTYPES[w.type]).map(sanitizeWidgetShape);
     return sp;
   });
+  // Unicidad de ids (P2): un duplicado rompe la fusión por unidad y los selectores del render.
+  // El duplicado posterior recibe identidad nueva — mejor que dos unidades indistinguibles.
+  {
+    const seenIds = new Set();
+    for (const sp of s.spaces){
+      if (seenIds.has(sp.id)){ let n; do{ n = "s_" + uid(); }while(seenIds.has(n)); sp.id = n; }
+      seenIds.add(sp.id);
+      for (const w of sp.widgets){
+        if (seenIds.has(w.id)){ let n; do{ n = uid(); }while(seenIds.has(n)); w.id = n; }
+        seenIds.add(w.id);
+      }
+    }
+  }
   // migración única: el alto por defecto de "Mes" subió de 300 a 360 (más aire para el resumen
   // de marcas); a los widgets ya existentes que se quedaron exactos en el valor viejo se les da
   // el nuevo alto una sola vez. No se repite (por eso el flag), así no pisa un resize deliberado
@@ -1197,7 +1213,7 @@ function syncUI(mode, txt){
    reaparece) y si Recargar está activo. El descarte ✕ vive solo en memoria de la sesión.
    Demora asumida: la CDN de Pages puede servir la versión vieja hasta ~10 min aun con
    no-store (gobierna la caché del navegador, no la CDN); para pestañas de días, irrelevante. */
-const APP_VERSION = "0.39.4";
+const APP_VERSION = "0.39.5";
 let newVersionDetected = null;   // versión superior detectada; detiene futuras consultas
 let verDismissed = false;        // ✕: solo esta sesión — nunca persistido en disco
 let verCheckInflight = false;    // sin consultas concurrentes
@@ -1506,10 +1522,15 @@ function mergeStates(base, local, remote, prefer){
     if (!seen.has(c)){ seen.add(c); trash.push(clone(t)); }
   }
 
+  // active: el LOCAL manda (decisión 0.7h), pero por IDENTIDAD de espacio, no por índice — un
+  // reorden remoto de pestañas (que la fusión acepta en silencio) no debe cambiar qué escritorio
+  // tienes delante (P2 del checkpoint 2026-07-22).
+  const activeId = (local.spaces || [])[local.active | 0]?.id;
+  const activeIx = spaces.findIndex(sp => sp.id === activeId);
   const merged = {
     version: 2,
     updatedAt: Math.max(local.updatedAt || 0, remote.updatedAt || 0),
-    active: typeof local.active === "number" ? local.active : 0,   // decisión Codex: conserva el local
+    active: activeIx >= 0 ? activeIx : 0,
     spaces,
     calendarMarks,
     trash: trash.slice(0, 30),
@@ -1658,7 +1679,11 @@ async function poll(){   // devuelve true si completó una lectura válida (haya
         // updatedAt: robusto ante formato y ante ediciones externas que no toquen updatedAt.
         lastMtime = f.lastModified;
       } else if (remote && !dirty){
+        const viewedId = state && state.spaces[state.active] && state.spaces[state.active].id;
         setState(remote, "poll");   // adopta remoto (migra si venía v1)
+        // identidad del espacio activo (P2): una sync de fondo no cambia qué escritorio estás
+        // mirando aunque el otro equipo reordenara las pestañas. Solo memoria: abrir jamás escribe.
+        if (viewedId){ const ix = state.spaces.findIndex(sp => sp.id === viewedId); if (ix >= 0) state.active = ix; }
         lastSavedText = text;
         lastMtime = f.lastModified;
         renderAll();
@@ -3116,6 +3141,11 @@ function buildWindow(w){
     if (ev.target.closest("button") || isMobile()) return;   // móvil: sin arrastre (scroll táctil)
     let proj = planViewportLayout([w], worldViewport())[0];   // origen = rect realmente visible (mundo), no el crudo guardado
     const startRect = { x: proj.x, y: proj.y, w: proj.w, h: proj.h };   // §A: rect de partida para detectar la columna de ORIGEN (si estaba alineado)
+    // P2 (checkpoint 2026-07-22): si el gesto arranca sobre una MAXIMIZADA, el umbral la restaura
+    // mutando estado ANTES del up (w.max + geometría). Snapshot para que pointercancel/blur pueda
+    // deshacer TAMBIÉN el estado, no solo el DOM — sin él, un gesto cancelado dejaba la ventana
+    // des-maximizada en memoria y el siguiente guardado lo persistía.
+    const preMax = w.max ? { max: { x: w.max.x, y: w.max.y, w: w.max.w, h: w.max.h }, w: w.w, h: w.h } : null;
     // N2 hito 1: agarre en coords de MUNDO — así el autoscroll (que cambia scrollTop sin emitir
     // pointermove) puede recalcular la posición con la última posición conocida del puntero.
     const g0 = clientToWorld(ev.clientX, ev.clientY);
@@ -3296,7 +3326,13 @@ function buildWindow(w){
     const cancel = () => {   // pointercancel o pérdida de foco: la transacción nunca llegó a existir
       const wasDragging = dragging;
       cleanup();
-      if (wasDragging){ el.style.left = proj.x + "px"; el.style.top = proj.y + "px"; }
+      if (!wasDragging) return;
+      if (preMax && !w.max){   // el umbral ya había restaurado la maximizada: deshacer también el ESTADO
+        w.max = preMax.max; w.w = preMax.w; w.h = preMax.h;
+        renderAll(); updateScrollLock();
+        return;
+      }
+      el.style.left = proj.x + "px"; el.style.top = proj.y + "px";
     };
     addEventListener("pointermove", onMove); addEventListener("pointerup", up);
     addEventListener("pointercancel", cancel); addEventListener("blur", cancel);
@@ -3336,10 +3372,13 @@ function buildWindow(w){
       // el widget en un carril, en varios o en ninguno); si el borde inferior retrocedió, los de
       // debajo suben a cerrar el hueco. Solo al soltar; nada se mueve durante el gesto.
       const sp = state.spaces[state.active];
-      const others = state.widgets
-        .filter(x => x.id !== w.id && !x.max && !(tagFilter && !(x.tags || []).includes(tagFilter)))
-        .map(x => ({ id: x.id, ...widgetRect(x) }));
-      const plan = planResizePush(others, beforeSnap, rectSnap(w), { gap: LAYOUT.snapGap });
+      // P2 (checkpoint 2026-07-22): el plan de empuje trabaja TODO en espacio proyectado — el draft
+      // nace de `proj` (lo que ves), así que el punto de partida del plan es `proj`, no el rect
+      // persistido (que tras un cambio de monitor puede ser otro), y los vecinos se proyectan igual
+      // que en el arrastre. `beforeSnap` queda solo para restaurar estado (P4) y para Deshacer.
+      const others = planViewportLayout(state.widgets
+        .filter(x => x.id !== w.id && !x.max && !(tagFilter && !(x.tags || []).includes(tagFilter))), worldViewport());
+      const plan = planResizePush(others, { x: proj.x, y: proj.y, w: proj.w, h: proj.h }, rectSnap(w), { gap: LAYOUT.snapGap });
       if (plan.maxBottom > LAYOUT.worldMax){
         w.x = beforeSnap.x; w.y = beforeSnap.y; w.w = beforeSnap.w; w.h = beforeSnap.h;   // rechazo P4: restaurar el rect original, sin transacción parcial
         renderAll(); toast("No cabe: el reacomodo se saldría del área máxima.", true); return;

@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.39.5] - 2026-07-22 — estabilización, segunda parte: identidad y gestos
+
+Cierra las últimas correcciones de la misma revisión externa. Sin funciones nuevas: cuatro comportamientos que podían mover o fijar cosas sin que las pidieras.
+
+- **El escritorio que estás mirando ya no cambia solo.** Si el otro equipo reordenaba las pestañas, la sincronización aceptaba el orden nuevo pero conservaba tu posición *por número* — y esa posición podía ser ahora otro escritorio. La pestaña activa se conserva por **identidad**: sigues mirando el mismo escritorio, esté donde esté en la barra.
+- **Cancelar el arrastre de una ventana maximizada la deja exactamente como estaba.** Antes, si el gesto se interrumpía (por ejemplo, al perder el foco la ventana), quedaba internamente «restaurada» aunque en pantalla siguiera pareciendo maximizada, y un guardado posterior fijaba ese estado a medias.
+- **Redimensionar tras cambiar de monitor hace sitio con las medidas que ves.** El cálculo de empuje mezclaba la geometría guardada (que podía ser la del monitor anterior) con la visible; ahora todo el gesto trabaja sobre lo que hay en pantalla, igual que el arrastre.
+- **Limpieza de identificadores internos.** Los duplicados o con caracteres problemáticos (solo posibles en un archivo de datos editado a mano o corrupto) se regeneran al cargar: un duplicado podía hacer que dos widgets se confundieran entre sí al combinar cambios entre equipos.
+
 ## [0.39.4] - 2026-07-22 — tercera vuelta de seguridad en packs
 
 Cierra los dos últimos hallazgos de la misma revisión externa. Afecta solo a packs de terceros; es requisito previo para poder compartir escritorios por dirección más adelante.
