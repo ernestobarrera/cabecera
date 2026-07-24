@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.40.3] - 2026-07-24 — preparación interna para seguir escritorios
+
+- **Groundwork invisible (segunda pieza).** Cabecera ya sabe guardar la *decisión* de seguir un escritorio compartido de otra persona, y combinarla correctamente entre tus equipos: si dejas de seguir uno en un equipo, no reaparece al sincronizar; si el mismo lo cambias en dos sitios a la vez, se te avisa en vez de decidir por ti. Solo se guarda la referencia (dirección y nombre); el contenido seguido vivirá en cada dispositivo, nunca en tu archivo de datos, y una dirección con credenciales dentro se rechaza antes de guardarla. **Todavía no hay forma de seguir un escritorio desde la interfaz** — eso, y verlo, llegan después. Esto solo prepara el terreno; no cambia nada de lo que ves ni de cómo se usa Cabecera.
+
 ## [0.40.2] - 2026-07-24 — corrección de la preparación interna
 
 - **Los identificadores internos ya no se «olvidan» al combinar cambios de dos equipos.** La combinación reconstruye el archivo campo a campo y se dejaba fuera la marca que indica que tus elementos ya tienen identificador. Se recuperaba sola al recargar, pero durante ese hueco un elemento recién creado podía recibir un identificador basado en su posición y chocar con otro creado a la vez en el otro equipo. Sin efecto visible; corregido con prueba propia.

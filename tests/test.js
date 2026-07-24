@@ -202,6 +202,18 @@ console.log('OK D1 identidad de elementos (convergente byte a byte, idempotente,
 if (!src.includes('bootstrapElementIds(s);')) throw new Error('regresión: el saneo ya no bootstrapea identidades de elemento en la carga');
 if (!src.includes('bootstrapElementIds(state);')) throw new Error('regresión: saveNow ya no asigna id a los elementos nuevos antes de propagarlos');
 console.log('OK D1 cableado (bootstrap en saneo/carga + saveNow antes de propagar)');
+// saneo de subscriptions[] (D5a): no necesita mergeStates, va aquí; la fusión se prueba abajo
+{
+  const base = { version: 2, active: 0, spaces: [blankSpace()] };
+  const mk = over => Object.assign({ subscriptionId: 'sub_1', url: 'https://ejemplo.org/x.json', displayName: 'Fuente' }, over);
+  let st = sanitizeState({ ...base, subscriptions: [mk({ shareId: 'sh_1', lastAcceptedRevision: 'sha256:abc', snapshot: { widgets: [] } })] });
+  if (!st.subscriptions || st.subscriptions.length !== 1) throw new Error('D5a: una suscripción válida debe conservarse');
+  if ('snapshot' in st.subscriptions[0]) throw new Error('D5a: el snapshot NUNCA debe persistir en datos.json (va a IndexedDB)');
+  if (st.subscriptions[0].sourceOrigin !== 'https://ejemplo.org') throw new Error('D5a: sourceOrigin derivado del url incorrecto: ' + st.subscriptions[0].sourceOrigin);
+  if (sanitizeState({ ...base, subscriptions: [mk({ url: 'https://user:pass@ejemplo.org/x.json' })] }).subscriptions) throw new Error('D5a: una URL con credenciales debe descartar la suscripción (riesgo 7)');
+  if (sanitizeState({ ...base, subscriptions: [{ url: 'https://x.org' }, mk({ subscriptionId: 'mal id!' }), mk({ url: 'ftp://x' })] }).subscriptions) throw new Error('D5a: sin id válido / sin url http(s) → fuera');
+}
+console.log('OK D5a saneo de suscripciones (solo metadatos; sin snapshot ni credenciales; id/url estrictos)');
 
 // --- panel ⚙: state.appSettings raíz enumerable, whitelist estricta, sin escritura de defaults ---
 // ausencia = canónico: el saneo NUNCA lo crea
@@ -1466,6 +1478,27 @@ eval('globalThis.conflictDecisionCovers = ' + pickFn('conflictDecisionCovers', '
 }
 console.log('OK mergeStates (disjunta sin barra, choque nombrado, crear/borrar/mover, borrado-vs-edición, espacios aparte, updatedAt fuera, active local, marcas, papelera, ⚙)');
 console.log('OK P1 barra de conflicto: la decisión vale solo para el conjunto presentado (choque nuevo → re-presentar, sin pérdida)');
+
+// --- D5a: fusión a tres bandas de subscriptions[] (contraste 2026-07-24) ---
+{
+  const mk = id => ({ subscriptionId: id, url: 'https://ejemplo.org/' + id + '.json', sourceOrigin: 'https://ejemplo.org', displayName: 'Fuente ' + id });
+  const withSubs = subs => ({ version: 2, updatedAt: 1, active: 0, spaces: [{ id: 's1', name: 'E', settings: { wallpaper: { type: 'preset', value: 0 } }, widgets: [] }], subscriptions: subs });
+  const A = mk('sA'), Bs = mk('sB');
+  // alta en un lado → se conserva
+  let res = mergeStates(withSubs([A]), withSubs([A, Bs]), withSubs([A]), 'local');
+  if ((res.merged.subscriptions || []).length !== 2) throw new Error('D5a: alta de suscripción no conservada');
+  // DEJAR DE SEGUIR (borrado local, intacto remoto) → NO resucita (riesgo 6; una unión simple fallaría)
+  res = mergeStates(withSubs([A, Bs]), withSubs([A]), withSubs([A, Bs]), 'local');
+  const ids = (res.merged.subscriptions || []).map(x => x.subscriptionId);
+  if (ids.includes('sB')) throw new Error('D5a: dejar de seguir NO debe resucitar la suscripción al fusionar');
+  if (!ids.includes('sA')) throw new Error('D5a: la intacta debe permanecer');
+  // borrado en un lado vs edición del mismo en el otro → conflicto nombrado (kind subscription)
+  res = mergeStates(withSubs([A, Bs]), withSubs([A]), withSubs([A, { ...Bs, displayName: 'Renombrada' }]), 'local');
+  if (!res.conflicts.some(c => c.kind === 'subscription' && c.id === 'sB')) throw new Error('D5a: borrado-vs-edición debe dar conflicto nombrado');
+  // whitelist: subscriptions[] sobrevive a la fusión (como identityVersion)
+  if (!mergeStates(withSubs([A]), withSubs([A]), withSubs([A]), 'local').merged.subscriptions) throw new Error('D5a: subscriptions[] no está en la lista blanca de merged');
+}
+console.log('OK D5a fusión de suscripciones (3 bandas; unfollow no resucita; borrado-vs-edición = conflicto; en la whitelist)');
 // invariantes de integración de la fusión
 if (!src.includes('mergeStates(baseS, localSnap, remote, "local")')) throw new Error('regresión: poll ya no intenta la fusión antes de la barra');
 if (!src.includes('localStorage.setItem("cabecera-premerge"')) throw new Error('regresión: la fusión no guarda copia local previa');

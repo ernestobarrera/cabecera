@@ -1121,6 +1121,25 @@ function sanitizeState(s){
     const hours = unit === "hours" ? numOr(m.hours, 0, 0, 24 * 366) : undefined;
     return { id: (typeof m.id === "string" && m.id) ? m.id.slice(0, 64) : "cm_" + uid(), start, end, type, label, unit, ...(hours ? { hours } : {}) };
   }).filter(Boolean).slice(0, 240);
+  // D5a (contraste 2026-07-24): suscripciones a escritorios compartidos — SOLO metadatos (la decisión
+  // de seguir, que viaja entre equipos). El snapshot y el runtime (política, caché, backoff) viven POR
+  // DISPOSITIVO en IndexedDB, jamás aquí. Se rechazan URLs con credenciales antes de persistir (riesgo
+  // 7). La fusión de subscriptions[] es a TRES BANDAS por subscriptionId (mergeStates, con test).
+  const subSafeUrl = u => { try{ const x = new URL(String(u)); return ((x.protocol === "https:" || x.protocol === "http:") && !x.username && !x.password) ? x : null; }catch(e){ return null; } };
+  s.subscriptions = (Array.isArray(s.subscriptions) ? s.subscriptions : []).map(sb => {
+    if (!sb || typeof sb !== "object") return null;
+    const id = String(sb.subscriptionId || "");
+    if (!/^[A-Za-z0-9._-]{1,64}$/.test(id)) return null;   // sin id direccionable no es nada
+    const url = subSafeUrl(sb.url);
+    if (!url) return null;                                   // sin destino utilizable (o con credenciales) → fuera
+    const shareId = /^[A-Za-z0-9._-]{1,64}$/.test(String(sb.shareId || "")) ? sb.shareId : undefined;
+    const origin = subSafeUrl(sb.sourceOrigin) ? new URL(sb.sourceOrigin).origin : url.origin;
+    const displayName = String(sb.displayName || url.hostname).trim().slice(0, 80);
+    const rev = /^sha256:[A-Za-z0-9_+/=-]{1,120}$/.test(String(sb.lastAcceptedRevision || "")) ? sb.lastAcceptedRevision : undefined;
+    return { subscriptionId: id, url: url.href, sourceOrigin: origin, displayName,
+      ...(shareId ? { shareId } : {}), ...(rev ? { lastAcceptedRevision: rev } : {}) };
+  }).filter(Boolean).filter((sb, i, a) => a.findIndex(x => x.subscriptionId === sb.subscriptionId) === i).slice(0, 100);
+  if (!s.subscriptions.length) delete s.subscriptions;
   // preferencias GLOBALES del panel ⚙ (spec panel-configuracion v1.1): whitelist estricta;
   // lo inválido se elimina (defaults en memoria). NUNCA se crea aquí: la ausencia es el estado
   // canónico hasta que el usuario guarda algo («abrir jamás escribe»). Este saneo tampoco
@@ -1262,7 +1281,7 @@ function syncUI(mode, txt){
    reaparece) y si Recargar está activo. El descarte ✕ vive solo en memoria de la sesión.
    Demora asumida: la CDN de Pages puede servir la versión vieja hasta ~10 min aun con
    no-store (gobierna la caché del navegador, no la CDN); para pestañas de días, irrelevante. */
-const APP_VERSION = "0.40.2";
+const APP_VERSION = "0.40.3";
 let newVersionDetected = null;   // versión superior detectada; detiene futuras consultas
 let verDismissed = false;        // ✕: solo esta sesión — nunca persistido en disco
 let verCheckInflight = false;    // sin consultas concurrentes
@@ -1549,12 +1568,12 @@ function mergeStates(base, local, remote, prefer){
   if (!spaces.length) spaces.push({ id: "s_" + Math.random().toString(36).slice(2, 10), name: "Escritorio", settings: { wallpaper: { type: "preset", value: 0 } }, widgets: [] });
 
   // colecciones por id (marcas de calendario, conceptos propios)
-  const mergeById = (key, kind, labelOf) => {
-    const byId = arr => { const m = new Map(); (arr || []).forEach(x => x && x.id && m.set(x.id, x)); return m; };
+  const mergeById = (key, kind, labelOf, idField = "id") => {
+    const byId = arr => { const m = new Map(); (arr || []).forEach(x => x && x[idField] && m.set(x[idField], x)); return m; };
     const bM = byId(base[key]), lM = byId(local[key]), rM = byId(remote[key]);
     const ids = [];
     for (const arr of [local[key], remote[key], base[key]])
-      (arr || []).forEach(x => { if (x && x.id && !ids.includes(x.id)) ids.push(x.id); });
+      (arr || []).forEach(x => { if (x && x[idField] && !ids.includes(x[idField])) ids.push(x[idField]); });
     const out = [];
     for (const id of ids){
       const b = bM.get(id), l = lM.get(id), r = rM.get(id);
@@ -1565,6 +1584,10 @@ function mergeStates(base, local, remote, prefer){
   };
   const calendarMarks = mergeById("calendarMarks", "mark", x => x && x.label);
   const customMarkTypes = mergeById("customMarkTypes", "concepto", x => x && x.label);
+  // D5a: la decisión de seguir un escritorio viaja entre equipos; fusión a TRES BANDAS por
+  // subscriptionId (pick3 vía mergeById). Sin esto, una unión resucitaría lo que dejaste de seguir
+  // (riesgo 6); borrado-vs-edición del mismo id = conflicto nombrado, como los widgets.
+  const subscriptions = mergeById("subscriptions", "subscription", x => x && (x.displayName || x.shareId || x.subscriptionId), "subscriptionId");
 
   // papelera: unión deduplicada y acotada — red de seguridad, nunca conflicto
   const seen = new Set(); const trash = [];
@@ -1595,6 +1618,7 @@ function mergeStates(base, local, remote, prefer){
   // debe sobrevivir o el siguiente saneo trataría el estado como legacy y daría id POR POSICIÓN a un
   // elemento recién creado aún sin id — justo la colisión entre equipos del riesgo 1 del gate (D1).
   if (base.identityVersion || local.identityVersion || remote.identityVersion) merged.identityVersion = 1;
+  if (subscriptions.length) merged.subscriptions = subscriptions;   // D5a: en la lista blanca (o se perdería en cada fusión)
   return { merged, conflicts };
 }
 
