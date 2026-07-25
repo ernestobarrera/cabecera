@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.40.8] - 2026-07-24 — seguir un escritorio compartido por dirección web
+
+- **Nuevo: seguir un escritorio por URL** (Ctrl+K → «Seguir un escritorio por URL», o el botón **＋** del grupo «Seguidos» en la barra de pestañas). Aparece como una pestaña de **solo lectura**: puedes verlo, pero no editarlo. Con **↻ Comprobar** traes su última versión (te pregunta antes de reemplazar tu copia, nunca lo hace solo), y con **📋 Copiar a un espacio mío** te lo llevas a un escritorio propio y editable. Cierra el círculo de «Compartir este escritorio»: uno exporta, otro sigue.
+- **Privacidad por diseño:** la copia de lo seguido vive **solo en este equipo** (no viaja en tu archivo de datos); el primer contacto con el servidor lo inicias siempre tú; se exige `https`, se comprueba que la huella del contenido coincide, y las direcciones de redes locales/privadas se rechazan.
+
 ## [0.40.7] - 2026-07-24 — «Importar copia» ya no borra tus escritorios con un archivo equivocado
 
 - **Corrección importante.** «Importar copia» reemplazaba TODO tu contenido con el archivo que le dieras, sin comprobar qué era: si por error le dabas un **escritorio compartido** (el que produce «Compartir este escritorio»), un **pack**, o cualquier otro JSON, tus escritorios desaparecían. Ahora **valida el archivo antes de tocar nada**: si no es una copia de Cabecera te avisa y **no cambia nada**, y si lo es, guarda una copia previa recuperable en «Restaurar copia» antes de reemplazar. Un escritorio compartido y un pack se reconocen y se rechazan con su explicación.

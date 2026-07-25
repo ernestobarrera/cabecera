@@ -1683,5 +1683,30 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
   if (normalizeShared(dup).ok) throw new Error('A0: originId duplicados → reject');
   console.log('OK A0 exportar (proyección C7, priv/superficie bloquean, originId único, validador del sobre)');
 
+  // --- D5b-B «Copiar a un espacio mío»: espacio propio nuevo, ids regenerados, procedencia, vuelve a vista propia ---
+  eval('globalThis.copySubscriptionToSpace = ' + pickFn('copySubscriptionToSpace', ''));
+  let uidN = 0; globalThis.uid = () => 'gen' + (++uidN);
+  globalThis.blankSpace = () => ({ id: 's_new', name: 'Escritorio', settings: {}, widgets: [] });
+  globalThis.toast = () => {}; globalThis.renderAll = () => {}; globalThis.markDirty = () => {};
+  globalThis.state = { spaces: [{ id: 's0' }], active: 0, subscriptions: [{ subscriptionId: 'sub_1', shareId: 'sh_1', lastAcceptedRevision: 'sha256:abc' }] };
+  globalThis.activeView = { kind: 'subscription', id: 'sub_1' };
+  globalThis.subViewId = 'sub_1';
+  globalThis.subViewSnapshot = { name: 'Fuente', widgets: [
+    { id: 'orig_w', type: 'todo', x: 1, y: 2, w: 200, h: 150, data: { items: [{ id: 'orig_i', t: 'tarea', done: false }] } },
+    { id: 'orig_l', type: 'links', x: 0, y: 0, w: 200, h: 150, data: { groups: [{ name: 'G', links: [{ id: 'orig_link', t: 'x', u: 'https://x.org' }] }] } },
+  ]};
+  copySubscriptionToSpace();
+  if (globalThis.state.spaces.length !== 2) throw new Error('copy: debe añadir un espacio propio');
+  if (globalThis.activeView.kind !== 'space') throw new Error('copy: debe volver a vista propia antes de persistir (guard)');
+  if (globalThis.state.active !== 1) throw new Error('copy: el nuevo espacio debe quedar activo');
+  const cw = globalThis.state.spaces[1].widgets[0];
+  if (cw.id === 'orig_w') throw new Error('copy: el id del widget debe regenerarse');
+  if (cw.source !== 'user') throw new Error('copy: source debe ser user');
+  if (!cw.derivedFrom || cw.derivedFrom.originId !== 'orig_w' || cw.derivedFrom.kind !== 'shared') throw new Error('copy: derivedFrom con originId del remoto');
+  if (cw.data.items[0].id === 'orig_i') throw new Error('copy: ids de elementos internos deben regenerarse');
+  if (globalThis.state.spaces[1].widgets[1].data.groups[0].links[0].id === 'orig_link') throw new Error('copy: ids de enlaces deben regenerarse');
+  ['state', 'activeView', 'subViewId', 'subViewSnapshot', 'uid', 'blankSpace', 'toast', 'renderAll', 'markDirty'].forEach(k => { delete globalThis[k]; });
+  console.log('OK D5b-B copiar (espacio propio nuevo, vuelve a vista propia, ids regenerados, derivedFrom)');
+
   console.log('\nTODO EN VERDE');
 })().catch(e => { console.error(e && e.stack || e); process.exitCode = 1; });

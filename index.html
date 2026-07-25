@@ -611,6 +611,33 @@ ul.plain{list-style:none}
 .tour-btns{display:flex; gap:6px; align-items:center}
 .tour-skip{background:none; border:none; color:var(--text-dim); cursor:pointer; font-size:12.5px; font-family:var(--font)}
 .tour-skip:hover{color:var(--text)}
+/* D5b-B: pestañas «Seguidos» + visor de solo lectura */
+.tb-sep{color:var(--text-dim); font-size:10.5px; text-transform:uppercase; letter-spacing:.07em; padding:0 4px 0 8px; flex-shrink:0; border-left:1px solid var(--border-soft); margin-left:4px}
+.sub-tab{display:flex; align-items:center; gap:5px; background:rgba(120,170,255,.08); border:1px solid var(--border-soft); color:#c7d0de; border-radius:9px; padding:5px 10px; cursor:pointer; font-size:12.5px; font-family:var(--font); white-space:nowrap; flex-shrink:0}
+.sub-tab.active{border-color:var(--accent); color:var(--text); background:rgba(120,170,255,.16)}
+.sub-follow{background:rgba(255,255,255,.045); border:1px solid var(--border-soft); color:var(--text-dim); border-radius:9px; padding:5px 9px; cursor:pointer; font-size:13px; flex-shrink:0}
+.sub-follow:hover{color:var(--text); border-color:var(--accent)}
+.sub-board{position:absolute; inset:0; overflow:auto; padding:14px}
+.sub-banner{display:flex; flex-wrap:wrap; align-items:center; gap:10px; justify-content:space-between; padding:10px 14px; margin-bottom:14px; border-radius:12px; background:rgba(120,170,255,.10); border:1px solid var(--border-soft)}
+.sub-ro{font-size:13px; color:var(--text)}
+.sub-actions{display:flex; gap:8px; flex-wrap:wrap}
+.sub-actions .btn{padding:5px 11px; font-size:12.5px}
+.sub-empty{text-align:center; color:var(--text-dim); padding:40px 16px; font-size:14px}
+.sub-empty .btn{margin-top:12px}
+.sub-grid{display:grid; grid-template-columns:repeat(auto-fill, minmax(260px, 1fr)); gap:14px; align-items:start}
+.sub-card{background:var(--panel); border:1px solid var(--border-soft); border-radius:12px; padding:12px 14px; overflow:hidden}
+.sub-body{font-size:13.5px; color:var(--text); word-break:break-word}
+.sub-g{margin-bottom:8px}
+.sub-gn{font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--text-dim); margin-bottom:4px}
+.sub-l{margin:3px 0}
+.sub-l a{color:var(--accent); text-decoration:none}
+.sub-l a:hover{text-decoration:underline}
+.sub-note{display:block; font-size:12px; color:var(--text-dim)}
+.sub-text{white-space:pre-wrap}
+.sub-todo,.sub-clips{list-style:none; padding:0; margin:0}
+.sub-todo li,.sub-clips li{margin:4px 0; display:flex; gap:6px; align-items:baseline}
+.sub-todo li.done{color:var(--text-dim); text-decoration:line-through}
+.sub-todo .cbx{flex-shrink:0}
 </style>
 </head>
 <body>
@@ -1421,7 +1448,7 @@ function syncUI(mode, txt){
    reaparece) y si Recargar está activo. El descarte ✕ vive solo en memoria de la sesión.
    Demora asumida: la CDN de Pages puede servir la versión vieja hasta ~10 min aun con
    no-store (gobierna la caché del navegador, no la CDN); para pestañas de días, irrelevante. */
-const APP_VERSION = "0.40.7";
+const APP_VERSION = "0.40.8";
 let newVersionDetected = null;   // versión superior detectada; detiene futuras consultas
 let verDismissed = false;        // ✕: solo esta sesión — nunca persistido en disco
 let verCheckInflight = false;    // sin consultas concurrentes
@@ -2566,6 +2593,178 @@ async function exportSharedSpace(){
   toast("Escritorio exportado a un archivo. Compártelo por el medio que quieras.");
 }
 
+/* ---------- D5b rebanada B (UI): seguir un escritorio por URL y verlo en solo lectura ----------
+   Consumidor de A0. Contra las correcciones de Codex: consentimiento por DISPOSITIVO (localStorage,
+   no viaja); pintar la pestaña = cero red; el primer fetch es un gesto humano; recomputar la revisión
+   y compararla (rechaza si no casa); snapshot en IDB (D5b-A) congelado; renderer propio SIN listeners
+   mutadores; actualización = CANDIDATA con confirmación humana, nunca auto-reemplazo; «Copiar a un
+   espacio mío» plano con procedencia. Toda escritura a datos.json desde la vista seguida vuelve antes
+   a un espacio propio (respeta el guard/aserción de markDirty). Sin `onOpen24h` automático en v1. */
+let subViewSnapshot = null, subViewId = null;   // caché de la instantánea que se está mirando (congelada)
+const subConsentKey = id => "cabecera-sub-consent:" + id;
+function hasSubConsent(id){ try { return localStorage.getItem(subConsentKey(id)) === "1"; } catch (e){ return false; } }
+function setSubConsent(id){ try { localStorage.setItem(subConsentKey(id), "1"); } catch (e){} }
+function clearSubConsent(id){ try { localStorage.removeItem(subConsentKey(id)); } catch (e){} }
+
+// Descarga + valida + recomputa la revisión de un sobre. Devuelve {ok, space, revision} | {ok:false}.
+async function fetchAndValidateShared(url, expectShareId){
+  const sobre = await fetchRemoteJson(url);   // lanza con motivo si el transporte falla
+  const ns = normalizeShared(sobre, expectShareId);
+  if (!ns.ok) return { ok: false, reason: ns.reason };
+  const revision = await sha256Canonical(ns.space);
+  if (revision !== sobre.revision) return { ok: false, reason: "la huella no coincide con el contenido (¿alterado?)" };
+  return { ok: true, space: ns.space, revision, shareId: ns.shareId };
+}
+
+// Seguir por URL. Corre desde una vista PROPIA (así markDirty puede persistir la suscripción nueva);
+// el clic humano ES el consentimiento de este dispositivo. Luego abre la vista seguida.
+async function promptFollowUrl(){
+  const res = await dlgPrompt([{ key: "url", label: "Dirección (URL) del escritorio compartido que quieres seguir", placeholder: "https://…" }], { title: "Seguir un escritorio", okLabel: "Continuar" });
+  if (res && res.url && res.url.trim()) followByUrl(res.url.trim());
+}
+async function followByUrl(rawUrl){
+  let host;
+  try { host = new URL(String(rawUrl)).host; } catch (e){ toast("Esa dirección no es válida", true); return; }
+  if (!(await dlgConfirm(`Vas a seguir un escritorio desde «${esc(host)}». Al conectar, tu navegador contactará ese servidor y le revelará tu IP. Verás el contenido en solo lectura.`, { title: "Seguir un escritorio", okLabel: "Conectar y seguir" }))) return;
+  let res;
+  try { res = await fetchAndValidateShared(rawUrl); } catch (e){ toast("No se pudo seguir (" + (e.message || "error") + ")", true); return; }
+  if (!res.ok){ toast("Rechazado: " + res.reason, true); return; }
+  const url = new URL(String(rawUrl));
+  const sub = { subscriptionId: "sub_" + uid(), shareId: res.shareId, url: url.href, sourceOrigin: url.origin,
+    displayName: res.space.name || "Escritorio seguido", lastAcceptedRevision: res.revision };
+  state.subscriptions = Array.isArray(state.subscriptions) ? state.subscriptions : [];
+  state.subscriptions.push(sub);
+  activeView = { kind: "space" };   // asegurar vista propia antes de persistir (aunque se siguiera desde otra vista)
+  markDirty();
+  setSubConsent(sub.subscriptionId);
+  try { await idbRuntimeSet(sub, { subscriptionId: sub.subscriptionId, shareId: sub.shareId, sourceOrigin: sub.sourceOrigin, cachedRevision: res.revision, snapshot: res.space, lastCheckedAt: Date.now(), checkPolicy: "manual" }); }
+  catch (e){ /* la caché falló pero la suscripción existe; se podrá reconectar */ }
+  toast("Ahora sigues «" + (sub.displayName) + "».");
+  openSubscription(sub.subscriptionId);
+}
+
+// Abrir una vista seguida: carga su instantánea de IDB (cero red) y despacha el render.
+async function openSubscription(subId){
+  const sub = (state.subscriptions || []).find(s => s.subscriptionId === subId);
+  if (!sub) return;
+  subViewId = subId; subViewSnapshot = null;
+  if (hasSubConsent(subId)){ const rt = await idbRuntimeGet(sub).catch(() => null); if (rt && rt.snapshot) subViewSnapshot = rt.snapshot; }
+  setActiveView({ kind: "subscription", id: subId });   // valida + renderAll (despacha al visor)
+}
+
+// Comprobar manual: descarga, valida, recomputa; si hay revisión nueva, PREGUNTA antes de sustituir
+// (nunca auto-acepta). Solo escribe en IDB (device-local): no toca datos.json, así no choca el guard.
+async function checkSubscription(subId, firstFetch){
+  const sub = (state.subscriptions || []).find(s => s.subscriptionId === subId);
+  if (!sub) return;
+  setSubConsent(subId);   // comprobar es gesto humano = consentimiento de este dispositivo
+  let res;
+  try { toast("Comprobando…"); res = await fetchAndValidateShared(sub.url, sub.shareId); }
+  catch (e){ toast("No se pudo comprobar (" + (e.message || "error") + ")", true); return; }
+  if (!res.ok){ toast("Rechazado: " + res.reason, true); return; }
+  const cached = await idbRuntimeGet(sub).catch(() => null);
+  if (cached && cached.cachedRevision === res.revision){
+    if (!subViewSnapshot){ subViewSnapshot = cached.snapshot; renderAll(); }
+    toast("Ya tienes la última versión.");
+    return;
+  }
+  if (cached && cached.snapshot && !firstFetch){
+    if (!(await dlgConfirm(`«${esc(res.space.name)}» tiene una versión nueva (${res.space.widgets.length} elementos). ¿Actualizar tu copia?`, { title: "Actualización disponible", okLabel: "Actualizar" }))) return;
+  }
+  try { await idbRuntimeSet(sub, { subscriptionId: sub.subscriptionId, shareId: sub.shareId, sourceOrigin: sub.sourceOrigin, cachedRevision: res.revision, snapshot: res.space, lastCheckedAt: Date.now(), checkPolicy: "manual" }); }
+  catch (e){ toast("No se pudo guardar la copia en este equipo", true); return; }
+  subViewSnapshot = deepFreeze(res.space);
+  renderAll();
+  toast(firstFetch ? "Conectado." : "Actualizado.");
+}
+
+// Copiar el escritorio seguido a un espacio PROPIO nuevo (copia plana con procedencia). Regenera TODOS
+// los ids locales; estampa derivedFrom (que NO autoriza superficies agénticas). Vuelve a una vista propia.
+function copySubscriptionToSpace(){
+  const snap = subViewSnapshot;
+  const sub = (state.subscriptions || []).find(s => s.subscriptionId === subViewId);
+  if (!snap || !sub){ toast("Nada que copiar todavía", true); return; }
+  const src = { kind: "shared", sourceId: sub.shareId, revision: sub.lastAcceptedRevision };
+  const sp = blankSpace();
+  sp.name = (snap.name || "Escritorio") + " (copia)";
+  sp.widgets = snap.widgets.map((w, i) => {
+    const nw = { id: uid(), z: 10 + i, type: w.type, x: w.x, y: w.y, w: w.w, h: w.h, source: "user",
+      derivedFrom: { ...src, originId: w.id }, data: JSON.parse(JSON.stringify(w.data || {})) };
+    // regenerar ids internos de elementos (no reutilizar originId como id local)
+    if (Array.isArray(nw.data.items)) nw.data.items.forEach(it => { it.id = uid(); });
+    if (Array.isArray(nw.data.groups)) nw.data.groups.forEach(g => { if (Array.isArray(g.links)) g.links.forEach(l => { l.id = uid(); }); });
+    return nw;
+  });
+  state.spaces.push(sp);
+  const ix = state.spaces.length - 1;
+  activeView = { kind: "space" };   // volver a vista propia ANTES de mutar/persistir (guard)
+  state.active = ix;
+  markDirty();
+  renderAll();
+  toast("Copiado a «" + sp.name + "». Ya es tuyo y editable.");
+}
+
+// Dejar de seguir. Vuelve a una vista propia, borra metadatos (datos.json), runtime (IDB) y consentimiento.
+async function unfollowSubscription(subId){
+  const sub = (state.subscriptions || []).find(s => s.subscriptionId === subId);
+  if (!sub) return;
+  if (!(await dlgConfirm(`¿Dejar de seguir «${esc(sub.displayName)}»? Se borra la copia guardada en este equipo.`, { title: "Dejar de seguir", okLabel: "Dejar de seguir", danger: true }))) return;
+  activeView = { kind: "space" };   // volver a vista propia ANTES de mutar/persistir
+  state.subscriptions = (state.subscriptions || []).filter(s => s.subscriptionId !== subId);
+  if (!state.subscriptions.length) delete state.subscriptions;
+  markDirty();
+  clearSubConsent(subId);
+  try { await idbRuntimeDel(sub); } catch (e){}
+  if (subViewId === subId){ subViewId = null; subViewSnapshot = null; }
+  renderAll();
+  toast("Has dejado de seguir «" + sub.displayName + "».");
+}
+
+// Tarjeta de solo lectura de un widget del snapshot (formateadores seguros ya testeados; sin listeners).
+function subCard(w){
+  const card = document.createElement("div"); card.className = "sub-card";
+  const d = w.data || {};
+  let body = "";
+  if (w.type === "links"){
+    body = (d.groups || []).map(g => `<div class="sub-g"><div class="sub-gn">${esc(g.name || "")}</div>` +
+      (g.links || []).map(l => `<div class="sub-l"><a href="${esc(l.u)}" target="_blank" rel="noopener noreferrer">${esc(l.t || l.u)}</a>${l.note ? `<span class="sub-note">${esc(l.note)}</span>` : ""}</div>`).join("") + `</div>`).join("");
+  } else if (w.type === "notes"){ body = `<div class="sub-text">${esc(d.text || "")}</div>`; }
+  else if (w.type === "md"){ body = `<div class="sub-md">${mdToHtml(d.text || "")}</div>`; }
+  else if (w.type === "todo"){ body = `<ul class="sub-todo">` + (d.items || []).map(i => `<li class="${i.done ? "done" : ""}"><span class="cbx">${i.done ? "☑" : "☐"}</span> ${linkifyEsc(i.t || "")}</li>`).join("") + `</ul>`; }
+  else if (w.type === "clips"){ body = `<ul class="sub-clips">` + (d.items || []).map(i => `<li>${esc(i.t || "")}</li>`).join("") + `</ul>`; }
+  card.innerHTML = `<div class="sub-body">${body}</div>`;
+  return card;
+}
+
+// Visor de solo lectura (llamado desde renderAll cuando activeView.kind==="subscription").
+function renderSubscriptionView(d){
+  const sub = (state.subscriptions || []).find(s => s.subscriptionId === subViewId);
+  const board = document.createElement("div"); board.className = "sub-board";
+  const banner = document.createElement("div"); banner.className = "sub-banner";
+  const origin = sub ? esc(sub.sourceOrigin) : "";
+  banner.innerHTML = `<span class="sub-ro">👁 Solo lectura — escritorio seguido${origin ? " de <b>" + origin + "</b>" : ""}</span>`;
+  const acts = document.createElement("div"); acts.className = "sub-actions";
+  const mkBtn = (label, cls, fn) => { const b = document.createElement("button"); b.className = "btn " + (cls || ""); b.textContent = label; b.addEventListener("click", fn); return b; };
+  acts.appendChild(mkBtn("↻ Comprobar", "", () => checkSubscription(subViewId)));
+  acts.appendChild(mkBtn("📋 Copiar a un espacio mío", "", () => copySubscriptionToSpace()));
+  acts.appendChild(mkBtn("Dejar de seguir", "", () => unfollowSubscription(subViewId)));
+  banner.appendChild(acts);
+  board.appendChild(banner);
+  if (!subViewSnapshot){
+    const ph = document.createElement("div"); ph.className = "sub-empty";
+    ph.innerHTML = hasSubConsent(subViewId) ? "No hay copia guardada en este equipo." : "Sigues este escritorio, pero aún no lo has descargado en este equipo.";
+    const b = document.createElement("button"); b.className = "btn"; b.textContent = "Conectar y descargar";
+    b.addEventListener("click", () => checkSubscription(subViewId, true));
+    ph.appendChild(document.createElement("br")); ph.appendChild(b);
+    board.appendChild(ph);
+  } else {
+    const grid = document.createElement("div"); grid.className = "sub-grid";
+    for (const w of subViewSnapshot.widgets) grid.appendChild(subCard(w));
+    board.appendChild(grid);
+  }
+  d.appendChild(board);
+}
+
 // El MISMO presupuesto para la vía por archivo (checkpoint: «los mismos presupuestos para URL y
 // archivo»): el tamaño se comprueba en bytes ANTES de leer (File.size), no después.
 async function readPackFile(f){
@@ -2677,6 +2876,13 @@ function renderAll(){
   applyFont();
   const d = $("#desktop");
   d.innerHTML = "";
+  if (activeView && activeView.kind === "subscription"){   // D5b-B: visor de solo lectura de un escritorio seguido
+    renderSubscriptionView(d);
+    renderTabs();
+    renderDock();
+    repaintPill();
+    return;
+  }
   const end = document.createElement("div"); end.id = "desk-end";   // espaciador del lienzo (se repone: innerHTML lo borró)
   d.appendChild(end);
   zTop = 10;
@@ -2703,9 +2909,13 @@ function nextActiveAfterDelete(active, removed, len){   // len = nº de espacios
   return Math.min(active, len - 1);
 }
 function setActive(i){
-  if (i < 0 || i >= state.spaces.length || i === state.active) return;
-  state.active = i;          // los accesores state.widgets/state.settings ya apuntan al nuevo espacio
-  markDirty();
+  if (i < 0 || i >= state.spaces.length) return;
+  const wasSub = activeView && activeView.kind === "subscription";
+  if (i === state.active && !wasSub) return;
+  activeView = { kind: "space" };   // seleccionar un espacio propio SIEMPRE vuelve a la vista propia
+  const changed = i !== state.active;
+  state.active = i;                 // los accesores state.widgets/state.settings ya apuntan al nuevo espacio
+  if (changed) markDirty();
   renderAll();
 }
 function addSpace(){
@@ -3415,10 +3625,17 @@ function renderTabs(){
   const box = $("#tb-spaces");
   if (!box || !state) return;
   const multi = state.spaces.length > 1;
+  const subs = Array.isArray(state.subscriptions) ? state.subscriptions : [];
+  const inSub = activeView && activeView.kind === "subscription";
+  const subsHtml = subs.length ? (`<span class="tb-sep" title="Escritorios seguidos, de solo lectura">Seguidos</span>` +
+    subs.map(s => `<button class="sub-tab${inSub && activeView.id === s.subscriptionId ? " active" : ""}" data-sub="${esc(s.subscriptionId)}" title="Seguido de ${esc(s.sourceOrigin)}">👁 <span class="st-name">${esc(s.displayName || "Seguido")}</span></button>`).join("") +
+    `<button class="sub-follow" title="Seguir un escritorio por URL">＋</button>`) : "";
   box.innerHTML = state.spaces.map((sp, i) => {
     const accent = spaceAccent(sp);
     return `<button class="space-tab${i === state.active ? " active" : ""}${accent ? " has-accent" : ""}" data-i="${i}" title="${esc(sp.name || "Escritorio")}"${accent ? ` style="--sp-accent:${accent}"` : ""}><span class="st-name">${esc(sp.name || "Escritorio")}</span>${i === state.active && multi ? `<span class="st-del" title="Eliminar este espacio">✕</span>` : ""}</button>`;
-  }).join("");
+  }).join("") + subsHtml;
+  box.querySelectorAll(".sub-tab").forEach(t => t.addEventListener("click", () => openSubscription(t.dataset.sub)));
+  const followBtn = box.querySelector(".sub-follow"); if (followBtn) followBtn.addEventListener("click", () => promptFollowUrl());
   box.querySelectorAll(".space-tab").forEach(t => {
     const i = +t.dataset.i;
     t.addEventListener("click", e => { if (e.target.closest(".st-del")){ deleteSpace(i); return; } setActive(i); });
@@ -6227,6 +6444,7 @@ function paletteEntries(){
     () => { closeMenu(); setPrivacy(!privacyOn); }, "privacidad privado ocultar mostrar compartir pantalla presentacion docencia escenica");
   add("📖", "Guía completa", "cómo funciona todo", () => { closeMenu(); window.open("guia.html", "_blank", "noopener"); }, "guia manual ayuda completa como funciona empezar");
   add("📤", "Compartir este escritorio", "exportar a un archivo", () => { closeMenu(); exportSharedSpace(); }, "compartir exportar escritorio archivo publicar seguir enviar compartido");
+  add("👁", "Seguir un escritorio por URL", "verlo en solo lectura", () => { closeMenu(); promptFollowUrl(); }, "seguir escritorio url compartido solo lectura suscribir suscripcion ver");
   for (const [type, t] of Object.entries(WTYPES)) if (type !== "intro")
     add("➕", "Añadir " + t.name, "widget nuevo", () => { addWidget(type); closeMenu(); }, "añadir crear nuevo " + t.name);
   [["⚙","Ajustes generales","act-config"],["❓","Guía","act-ayuda"],["🧩","Packs","act-packs"],["🖼️","Fondo","act-wallpaper"],["📁","Sincronizar equipos","act-folder"],["🧭","Ordenar","act-arrange"],["🗑️","Papelera","act-trash"],["⬇️","Exportar copia","act-export"],["⬆️","Importar copia","act-import"],["♻️","Restaurar copia","act-restore"]]
