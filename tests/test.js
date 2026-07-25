@@ -1511,4 +1511,81 @@ if (!src.match(/presented: res\.conflicts\.map\(conflictKey\)/)) throw new Error
 if (!src.match(/if \(!conflictDecisionCovers\(pendingMerge\.presented[\s\S]{0,400}return true;/)) throw new Error('regresión: resolveMergeConflict aplicaría la decisión a choques no presentados (pérdida de texto)');
 console.log('OK integración de la fusión (poll, copia previa restaurable, resolución por unidad)');
 
+// --- D5b rebanada A: activeView efímera, guard de mutabilidad y runtime IDB estricto (sin red) ---
+(function(){
+  eval('globalThis.viewIsMutable = ' + pickFn('viewIsMutable', 'view'));
+  ['RUNTIME_PREFIX','RUNTIME_MAX_BYTES','RUNTIME_MAX_WIDGETS','SUB_ID_RE','SUB_REV_RE','SUB_ORIGIN_RE'].forEach(c => {
+    eval('globalThis.' + c + ' = ' + src.match(new RegExp('const ' + c + ' = (.*?);'))[1]);
+  });
+  eval('globalThis.boundedShape = ' + pickFn('boundedShape', 'v, depth'));
+  eval('globalThis.normalizeRuntime = ' + pickFn('normalizeRuntime', 'v'));
+  eval('globalThis.runtimeKey = ' + pickFn('runtimeKey', 'sub'));
+  eval('globalThis.deepFreeze = ' + pickFn('deepFreeze', 'o'));
+
+  // viewIsMutable: solo "space" es mutable
+  if (!viewIsMutable({ kind: 'space', id: 's1' })) throw new Error('D5b: space debe ser mutable');
+  if (viewIsMutable({ kind: 'subscription', id: 'sub_1' })) throw new Error('D5b: subscription NO es mutable');
+  if (viewIsMutable(null) || viewIsMutable({})) throw new Error('D5b: vista vacía no es mutable');
+
+  // runtimeKey: clave física estable, SIN cachedRevision (§1), prefijo namespaced sin colisión
+  const sub = { subscriptionId: 'sub_1', shareId: 'sh_1', sourceOrigin: 'https://ejemplo.org' };
+  const key = runtimeKey(sub);
+  if (key !== 'subscription-runtime:sub_1:sh_1:https://ejemplo.org') throw new Error('D5b: runtimeKey inesperada: ' + key);
+  if (/cachedRevision|sha256/.test(key)) throw new Error('D5b: la clave física NO debe depender de la revisión (§1)');
+  for (const ex of ['dirHandle', 'packHandle', 'packMtime', 'packSpaceId', 'root']) if (key.startsWith(ex)) throw new Error('D5b: colisión de clave con ' + ex);
+  if (runtimeKey({ subscriptionId: 'x', shareId: 'y', sourceOrigin: 'http://insegura.org' })) throw new Error('D5b: origen http debe rechazar la clave');
+  if (runtimeKey({ subscriptionId: 'mal id!', shareId: 'y', sourceOrigin: 'https://x.org' })) throw new Error('D5b: subId inválido debe rechazar la clave');
+
+  // normalizeRuntime: válido normaliza; malformado se descarta ENTERO (null), sin reparación silenciosa (§1)
+  const good = { subscriptionId: 'sub_1', shareId: 'sh_1', sourceOrigin: 'https://ejemplo.org',
+    cachedRevision: 'sha256:abc', checkPolicy: 'onOpen24h', lastCheckedAt: 1000,
+    snapshot: { widgets: [{ id: 'w', type: 'todo' }] } };
+  if (!normalizeRuntime(good) || normalizeRuntime(good).cachedRevision !== 'sha256:abc') throw new Error('D5b: runtime válido debe normalizar');
+  if (normalizeRuntime({ ...good, extra: 1 }) !== null) throw new Error('D5b: propiedad inesperada → descartar entero (§1)');
+  if (normalizeRuntime({ ...good, cachedRevision: 'noesunhash' }) !== null) throw new Error('D5b: revisión mal formada → null');
+  if (normalizeRuntime({ ...good, checkPolicy: 'auto' }) !== null) throw new Error('D5b: checkPolicy inválida → null');
+  if (normalizeRuntime({ ...good, snapshot: { widgets: 'x' } }) !== null) throw new Error('D5b: snapshot sin array widgets → null');
+  if (normalizeRuntime({ ...good, sourceOrigin: 'http://x.org' }) !== null) throw new Error('D5b: origen http → null');
+  if (normalizeRuntime({ ...good, lastCheckedAt: -1 }) !== null) throw new Error('D5b: lastCheckedAt negativo → null');
+  if (normalizeRuntime(null) !== null || normalizeRuntime([]) !== null) throw new Error('D5b: no-objeto → null');
+  if (normalizeRuntime({ ...good, snapshot: { widgets: new Array(101).fill({ id: 'w', type: 'todo' }) } }) !== null) throw new Error('D5b: >100 widgets → null');
+  let deep = {}, cur = deep; for (let i = 0; i < 20; i++){ cur.n = {}; cur = cur.n; }
+  if (normalizeRuntime({ ...good, snapshot: { widgets: [], hostil: deep } }) !== null) throw new Error('D5b: anidamiento hostil → null (§3/riesgos)');
+  // la salida proyecta SOLO claves conocidas (nada inesperado viaja a una futura copia)
+  if (Object.keys(normalizeRuntime(good)).some(k => ['subscriptionId','shareId','sourceOrigin','cachedRevision','lastSeenRevision','snapshot','lastCheckedAt','checkPolicy','failureBackoff'].indexOf(k) < 0)) throw new Error('D5b: la salida no debe tener claves fuera del contrato');
+
+  // deepFreeze: congela en profundidad (§2: la raíz sola deja mutables arrays/data/grupos)
+  const fr = deepFreeze({ a: { b: [1] } });
+  if (!Object.isFrozen(fr) || !Object.isFrozen(fr.a) || !Object.isFrozen(fr.a.b)) throw new Error('D5b: deepFreeze debe congelar en profundidad');
+
+  // setActiveView: referencia inexistente vuelve a espacio propio; una suscripción NO toca state.active (§1)
+  eval('globalThis.setActiveView = ' + pickFn('setActiveView', 'view'));
+  globalThis.renderAll = () => {};
+  globalThis.setActive = (i) => { globalThis.state.active = i; };
+  globalThis.state = { active: 1, spaces: [{ id: 's0' }, { id: 's1' }, { id: 's2' }], subscriptions: [{ subscriptionId: 'sub_1' }] };
+  globalThis.activeView = { kind: 'space' };
+  setActiveView({ kind: 'subscription', id: 'nope' });
+  if (globalThis.activeView.kind !== 'space' || globalThis.state.active !== 1) throw new Error('D5b: suscripción inexistente → cae a espacio propio, sin mover state.active');
+  setActiveView({ kind: 'subscription', id: 'sub_1' });
+  if (globalThis.activeView.kind !== 'subscription' || globalThis.state.active !== 1) throw new Error('D5b: suscripción válida no debe tocar state.active');
+  setActiveView({ kind: 'space', id: 's2' });
+  if (globalThis.activeView.kind !== 'space' || globalThis.state.active !== 2) throw new Error('D5b: seleccionar espacio propio debe mover state.active');
+  setActiveView({ kind: 'space', id: 'noexiste' });
+  if (globalThis.state.active !== 2) throw new Error('D5b: espacio inexistente no debe cambiar el activo');
+  ['state', 'activeView', 'setActive', 'renderAll'].forEach(k => { delete globalThis[k]; });
+
+  // leer NUNCA escribe (§1: abrir/recargar no escribe): idbRuntimeGet no contiene idbSet
+  const getBody = src.match(/async function idbRuntimeGet\(sub\)\{[\s\S]*?\n\}/)[0];
+  if (/idbSet/.test(getBody)) throw new Error('D5b: idbRuntimeGet no debe escribir');
+
+  // guard cableado en los choke-points semánticos (§2) y aserción defensiva en markDirty
+  const mdBody = src.match(/function markDirty\(\)\{[\s\S]*?\n\}/)[0];
+  if (!/viewIsMutable\(currentView\(\)\)/.test(mdBody)) throw new Error('D5b: markDirty sin la aserción defensiva de vista mutable');
+  for (const fn of ['applyCapture', 'orderSpace', 'applyPack', 'restoreTrash', 'addSpace', 'deleteSpace', 'foldAll']){
+    const body = src.match(new RegExp('function ' + fn + '\\([^)]*\\)\\{[\\s\\S]*?\\n\\}'))[0];
+    if (!/guardMutation\(\)/.test(body.slice(0, 260))) throw new Error('D5b: falta guardMutation() al inicio de ' + fn);
+  }
+})();
+console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runtime IDB estricto sin red)');
+
 console.log('\nTODO EN VERDE');

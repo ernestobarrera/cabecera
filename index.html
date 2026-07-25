@@ -1221,6 +1221,49 @@ function setState(raw, reason){
   return state;
 }
 
+/* ---------- D5b rebanada A: vista activa (activeView) y guard de mutabilidad ----------
+   activeView es EFÍMERA: NO vive en state, datos.json, exportaciones, fusión ni localStorage.
+   kind:"space" = espacio propio editable (el único mutable). kind:"subscription" = fuente
+   seguida de SOLO LECTURA (su renderer y su fetch llegan en la rebanada B, con gate propio).
+   En A ninguna vista de suscripción es alcanzable todavía: los guards quedan cableados pero
+   INERTES (currentView() siempre devuelve "space"). Contrato: Codex 2026-07-24 (§1, §2). */
+let activeView = { kind: "space" };
+// currentView() deriva el id del espacio de state.active para no tocar los ~30 callsites que ya
+// mueven state.active; solo con una suscripción activa (rebanada B) devuelve la guardada.
+function currentView(){
+  if (activeView && activeView.kind === "subscription") return activeView;
+  const sp = state && state.spaces && state.spaces[state.active];
+  return { kind: "space", id: sp ? sp.id : null };
+}
+function viewIsMutable(view){ return !!view && view.kind === "space"; }
+
+// Punto ÚNICO para cambiar de vista. Valida identidad y cae de forma segura al espacio propio
+// activo si la referencia no existe (fallo seguro). state.active SOLO se mueve al seleccionar un
+// espacio propio: seleccionar una suscripción NO lo toca (no te cambia el escritorio oculto).
+function setActiveView(view){
+  if (view && view.kind === "subscription" &&
+      (state.subscriptions || []).some(s => s && s.subscriptionId === view.id)){
+    activeView = { kind: "subscription", id: view.id };   // no toca state.active
+    renderAll();
+    return;
+  }
+  activeView = { kind: "space" };
+  let ix = -1;
+  if (view && view.kind === "space" && view.id) ix = state.spaces.findIndex(sp => sp && sp.id === view.id);
+  if (ix >= 0 && ix !== state.active) setActive(ix);   // mueve state.active + guarda + renderiza
+  else renderAll();                                     // ya activo, o referencia inexistente: solo repintar
+}
+
+// Guard para comandos mutadores globales: false + aviso si la vista activa es de solo lectura.
+// Va en el choke-point semántico ANTES de la primera mutación (envolver markDirty llega tarde:
+// los comandos mutan state.widgets y llaman a markDirty después — corrección Codex §2). Inerte en A.
+function guardMutation(){
+  if (viewIsMutable(currentView())) return true;
+  const own = state && state.spaces && state.spaces[state.active];
+  toast(`Estás viendo una fuente seguida, de solo lectura. Tu espacio “${(own && own.name) || "propio"}” no se ha modificado.`, true);
+  return false;
+}
+
 /* ---------- IndexedDB mínima (para recordar la carpeta) ---------- */
 function idb(){
   return new Promise((ok, ko) => {
@@ -1239,6 +1282,86 @@ async function idbGet(k){ const db = await idb(); return new Promise((ok, ko) =>
 async function idbDel(k){ const db = await idb(); return new Promise((ok, ko) => {
   const tx = db.transaction("kv", "readwrite"); tx.objectStore("kv").delete(k);
   tx.oncomplete = ok; tx.onerror = () => ko(tx.error); }); }
+
+/* ---------- D5b rebanada A: runtime de suscripción por dispositivo (IndexedDB, SIN red) ----------
+   Los metadatos de la suscripción viven en datos.json (D5a). El runtime —snapshot cacheado,
+   política, revisión, backoff— vive SOLO en este dispositivo, en el store kv existente con clave
+   namespaced. Clave FÍSICA estable SIN cachedRevision (incluirlo haría imposible localizar el
+   snapshot sin conocer antes su revisión — corrección Codex §1): subscription-runtime:<subId>:
+   <shareId>:<sourceOrigin>. cachedRevision vive DENTRO del valor. IndexedDB NO es frontera de
+   confianza: normalizeRuntime valida al LEER y descarta el valor ENTERO si está malformado, sin
+   reparación silenciosa (§1). Snapshot congelado en profundidad al leer (§2). */
+const RUNTIME_PREFIX = "subscription-runtime:";
+const RUNTIME_MAX_BYTES = 2 * 1024 * 1024;   // mismo techo defensivo que el transporte remoto
+const RUNTIME_MAX_WIDGETS = 100;
+const SUB_ID_RE = /^[A-Za-z0-9._-]{1,64}$/;                 // mismo charset seguro que los ids (D1/v0.39.5)
+const SUB_REV_RE = /^sha256:[A-Za-z0-9_+/=-]{1,120}$/;      // misma forma que lastAcceptedRevision (D5a)
+const SUB_ORIGIN_RE = /^https:\/\/[^\/]+$/;                 // solo https, un origen sin ruta
+function runtimeKey(sub){
+  if (!sub || !SUB_ID_RE.test(String(sub.subscriptionId || "")) || !SUB_ID_RE.test(String(sub.shareId || ""))) return null;
+  const origin = String(sub.sourceOrigin || "");
+  if (!SUB_ORIGIN_RE.test(origin) || origin.length > 200) return null;
+  return RUNTIME_PREFIX + sub.subscriptionId + ":" + sub.shareId + ":" + origin;
+}
+// Profundidad/nº de claves acotados: 2 MiB no impiden un JSON computacionalmente hostil (riesgo
+// de disponibilidad, Codex §3/§riesgos). Recorre en anchura acotada sin recursión sin fondo.
+function boundedShape(v, depth){
+  if (depth > 12) return false;
+  if (Array.isArray(v)){ if (v.length > 5000) return false; return v.every(x => boundedShape(x, depth + 1)); }
+  if (v && typeof v === "object"){ const ks = Object.keys(v); if (ks.length > 500) return false; return ks.every(k => boundedShape(v[k], depth + 1)); }
+  return true;
+}
+// Validador ESTRICTO del runtime leído de IDB. Devuelve un objeto proyectado a claves conocidas si
+// TODO es válido, o null (descartar entero) ante cualquier defecto o propiedad inesperada.
+function normalizeRuntime(v){
+  if (!v || typeof v !== "object" || Array.isArray(v)) return null;
+  const allowed = ["subscriptionId","shareId","sourceOrigin","cachedRevision","lastSeenRevision","snapshot","lastCheckedAt","checkPolicy","failureBackoff"];
+  for (const k of Object.keys(v)) if (allowed.indexOf(k) < 0) return null;   // propiedad inesperada → descartar
+  if (!SUB_ID_RE.test(String(v.subscriptionId || "")) || !SUB_ID_RE.test(String(v.shareId || ""))) return null;
+  if (!SUB_ORIGIN_RE.test(String(v.sourceOrigin || "")) || String(v.sourceOrigin).length > 200) return null;
+  if (!SUB_REV_RE.test(String(v.cachedRevision || ""))) return null;
+  if (v.lastSeenRevision != null && !SUB_REV_RE.test(String(v.lastSeenRevision))) return null;
+  if (v.checkPolicy !== "manual" && v.checkPolicy !== "onOpen24h") return null;
+  if (!Number.isFinite(v.lastCheckedAt) || v.lastCheckedAt < 0) return null;
+  const snap = v.snapshot;
+  if (!snap || typeof snap !== "object" || Array.isArray(snap) || !Array.isArray(snap.widgets)) return null;
+  if (snap.widgets.length > RUNTIME_MAX_WIDGETS) return null;
+  if (!boundedShape(snap, 0)) return null;
+  const fb = v.failureBackoff;
+  if (fb != null && (typeof fb !== "object" || Array.isArray(fb) ||
+      (fb.count != null && (!Number.isInteger(fb.count) || fb.count < 0)) ||
+      (fb.until != null && (!Number.isFinite(fb.until) || fb.until < 0)))) return null;
+  let bytes; try { bytes = JSON.stringify(v).length; } catch (e){ return null; }
+  if (bytes > RUNTIME_MAX_BYTES) return null;
+  const out = { subscriptionId: v.subscriptionId, shareId: v.shareId, sourceOrigin: v.sourceOrigin,
+    cachedRevision: v.cachedRevision, snapshot: snap, lastCheckedAt: v.lastCheckedAt, checkPolicy: v.checkPolicy };
+  if (v.lastSeenRevision != null) out.lastSeenRevision = v.lastSeenRevision;
+  if (fb != null) out.failureBackoff = { count: fb.count || 0, until: fb.until || 0 };
+  return out;
+}
+// Congelación PROFUNDA (§2: congelar solo la raíz deja mutables arrays/data/grupos). Detector de
+// regresiones combinado con tests, no barrera de producción (fuera de strict mode no lanza).
+function deepFreeze(o){
+  if (o && typeof o === "object" && !Object.isFrozen(o)){ Object.freeze(o); for (const k of Object.keys(o)) deepFreeze(o[k]); }
+  return o;
+}
+async function idbRuntimeGet(sub){
+  const key = runtimeKey(sub); if (!key) return null;
+  const rt = normalizeRuntime(await idbGet(key).catch(() => null));
+  if (!rt) return null;
+  // binding: el valor debe corresponder a ESTA identidad (subId/shareId/origin actuales). Si cambió
+  // shareId/origen/URL, el runtime es de otra identidad → se ignora y vuelve a manual (fallo seguro).
+  if (rt.subscriptionId !== sub.subscriptionId || rt.shareId !== sub.shareId || rt.sourceOrigin !== sub.sourceOrigin) return null;
+  return deepFreeze(rt);
+}
+async function idbRuntimeSet(sub, value){
+  const key = runtimeKey(sub); if (!key) throw new Error("runtimeKey inválida");
+  const rt = normalizeRuntime(value); if (!rt) throw new Error("runtime malformado");
+  if (rt.subscriptionId !== sub.subscriptionId || rt.shareId !== sub.shareId || rt.sourceOrigin !== sub.sourceOrigin) throw new Error("runtime no corresponde a la suscripción");
+  await idbSet(key, rt);   // una sola escritura del valor entero (snapshot+runtime) = atómica
+  return rt;
+}
+async function idbRuntimeDel(sub){ const key = runtimeKey(sub); if (key) await idbDel(key); }
 
 /* ---------- toasts / sync UI ---------- */
 function toast(msg, err){
@@ -1281,7 +1404,7 @@ function syncUI(mode, txt){
    reaparece) y si Recargar está activo. El descarte ✕ vive solo en memoria de la sesión.
    Demora asumida: la CDN de Pages puede servir la versión vieja hasta ~10 min aun con
    no-store (gobierna la caché del navegador, no la CDN); para pestañas de días, irrelevante. */
-const APP_VERSION = "0.40.3";
+const APP_VERSION = "0.40.4";
 let newVersionDetected = null;   // versión superior detectada; detiene futuras consultas
 let verDismissed = false;        // ✕: solo esta sesión — nunca persistido en disco
 let verCheckInflight = false;    // sin consultas concurrentes
@@ -1412,6 +1535,7 @@ function renderDock(){
   n.textContent = count > 9 ? "9+" : String(count);
 }
 function restoreTrash(id){
+  if (!guardMutation()) return;   // D5b: no restaurar sobre el espacio propio oculto (inerte en A)
   const item = (state.trash || []).find(x => x.id === id);
   if (!item) return;
   const d = item.data || {};
@@ -1688,6 +1812,10 @@ async function writeDataFile(){
 }
 
 function markDirty(){
+  // Aserción defensiva (detector de regresiones, NO frontera de seguridad — Codex §2): si la vista
+  // activa es de solo lectura, un comando mutó el espacio propio oculto sin pasar por su guard.
+  // No se guarda y se avisa por consola. Inerte en A (currentView() siempre es "space").
+  if (!viewIsMutable(currentView())){ try { console.warn("markDirty bloqueado: vista de solo lectura activa (regresión de guard)"); } catch (e){} return; }
   dirty = true;
   renderDock();
   renderTaskChip();
@@ -2119,6 +2247,7 @@ function resolvePackTargetIx(spaces, active, spaceId){
   return (spaces || []).findIndex(s => s && s.id === spaceId);
 }
 async function applyPack(pack, opts = {}){
+  if (!guardMutation()) return;   // D5b: aplicar/actualizar packs solo sobre un espacio propio (inerte en A)
   const diag = {};
   const np = normalizePack(pack, { remote: !!opts.remote, diag });
   if (!np){ toast(opts.remote
@@ -2363,6 +2492,7 @@ function setActive(i){
   renderAll();
 }
 function addSpace(){
+  if (!guardMutation()) return;   // D5b: crear espacios es operación de espacio propio (inerte en A)
   const sp = blankSpace();
   sp.name = "Escritorio " + (state.spaces.length + 1);
   // panel ⚙: columnas por defecto SOLO aquí (el gesto humano de crear espacio) — jamás en
@@ -2404,6 +2534,7 @@ function renameSpace(i, tab){
   });
 }
 async function deleteSpace(i){
+  if (!guardMutation()) return;   // D5b: borrar espacios es operación de espacio propio (inerte en A)
   if (state.spaces.length <= 1){ toast("No puedes eliminar el único espacio", true); return; }
   const sp = state.spaces[i]; if (!sp) return;
   const n = (sp.widgets || []).length;
@@ -2665,6 +2796,7 @@ function anyOverlap(){   // ¿hay solape real (más de unos px) entre las ventan
   return false;
 }
 function foldAll(){   // si hay alguno abierto, pliega todos; si todos plegados, los despliega
+  if (!guardMutation()) return;   // D5b: plegar/ordenar altera state.widgets del espacio (inerte en A)
   const anyOpen = state.widgets.some(w => !w.collapsed);
   state.widgets.forEach(w => w.collapsed = anyOpen);
   if (!anyOpen && anyOverlap()){
@@ -2875,6 +3007,7 @@ function measureContentH(w, width){
   }finally{ host.remove(); }
 }
 function orderSpace(nextCols){
+  if (!guardMutation()) return;   // D5b: Ordenar reescribe la geometría del espacio (inerte en A)
   if (isMobile() || !state) return;
   if (tagFilter){ toast("Quita el filtro de etiqueta para ordenar", true); return; }
   if (state.widgets.some(x => x.max)){ toast("Restaura la ventana maximizada para ordenar", true); return; }
@@ -5792,6 +5925,7 @@ function captureDest(cap){
 // target (opcional, solo tareas): { w, si } — una lista de tareas CON NOMBRE elegida
 // en la paleta. Sin target, el destino es SIEMPRE el espacio activo.
 function applyCapture(cap, target){
+  if (!guardMutation()) return;   // D5b: captura (paleta/bandeja/?add=) escribe en el espacio activo (inerte en A)
   // destino: SIEMPRE el espacio activo; si falta el widget del tipo, se crea aquí
   const ensure = type => {
     let w = state.widgets.find(x => x.type === type);

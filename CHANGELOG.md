@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.40.4] - 2026-07-24 — preparación interna para seguir escritorios (tercera pieza)
+
+- **Groundwork invisible.** Cabecera prepara por dentro la maquinaria para *ver* un escritorio seguido sin poder tocarlo por error: distingue una vista propia (editable) de una vista de solo lectura, y deja listos los cierres de seguridad para que ningún comando modifique en silencio tu escritorio mientras miras el de otra persona. También aprende a guardar en este dispositivo —nunca en tu archivo de datos— la copia local de lo seguido, validándola con severidad al leerla. **Todavía no hay forma de seguir ni de ver un escritorio desde la interfaz** — eso llega después, con su propia revisión. No cambia nada de lo que ves ni de cómo se usa Cabecera.
+
 ## [0.40.3] - 2026-07-24 — preparación interna para seguir escritorios
 
 - **Groundwork invisible (segunda pieza).** Cabecera ya sabe guardar la *decisión* de seguir un escritorio compartido de otra persona, y combinarla correctamente entre tus equipos: si dejas de seguir uno en un equipo, no reaparece al sincronizar; si el mismo lo cambias en dos sitios a la vez, se te avisa en vez de decidir por ti. Solo se guarda la referencia (dirección y nombre); el contenido seguido vivirá en cada dispositivo, nunca en tu archivo de datos, y una dirección con credenciales dentro se rechaza antes de guardarla. **Todavía no hay forma de seguir un escritorio desde la interfaz** — eso, y verlo, llegan después. Esto solo prepara el terreno; no cambia nada de lo que ves ni de cómo se usa Cabecera.
