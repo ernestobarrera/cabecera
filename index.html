@@ -363,7 +363,7 @@ ul.plain{list-style:none}
 .due-editor textarea{min-height:54px; resize:vertical; line-height:1.35}
 .due-editor input:focus,.due-editor textarea:focus,.rename-editor input:focus{border-color:var(--accent); outline:none}
 .due-actions{display:flex; gap:7px; flex-wrap:wrap}
-.todo-foot{margin-top:8px; display:flex; gap:8px; align-items:center; flex-wrap:wrap}
+.todo-bar{margin-bottom:9px; display:flex; gap:8px; align-items:center; flex-wrap:wrap}
 .todo-toggle{flex-shrink:0}
 .todo-search{flex:1; min-width:110px; padding:5px 9px; border-radius:8px; border:1px solid var(--border-soft); background:rgba(255,255,255,.05); color:var(--text); font-family:var(--font); font-size:13px}
 .todo-search:focus{border-color:var(--accent); outline:none}
@@ -1404,7 +1404,7 @@ function syncUI(mode, txt){
    reaparece) y si Recargar está activo. El descarte ✕ vive solo en memoria de la sesión.
    Demora asumida: la CDN de Pages puede servir la versión vieja hasta ~10 min aun con
    no-store (gobierna la caché del navegador, no la CDN); para pestañas de días, irrelevante. */
-const APP_VERSION = "0.40.4";
+const APP_VERSION = "0.40.5";
 let newVersionDetected = null;   // versión superior detectada; detiene futuras consultas
 let verDismissed = false;        // ✕: solo esta sesión — nunca persistido en disco
 let verCheckInflight = false;    // sin consultas concurrentes
@@ -2348,6 +2348,98 @@ async function fetchRemotePack(url, { confirm = true } = {}){
     toast("No se pudo cargar el pack de esa dirección (" + (timedOut ? "tardó demasiado" : e.message) + ")", true);
     return null;
   }finally{ clearTimeout(timer); }
+}
+
+/* ---------- D5b rebanada B (núcleo de seguridad): canonicalización, revisión, SSRF, transporte ----------
+   Capa PURA/frontera que la rebanada B (tabs/renderer/fetch de escritorios seguidos) necesita correcta
+   antes que la UI. Sin efectos: no toca state, IDB ni red por sí sola. Contrato: veredicto Codex del
+   prompt-codex-d5b-renderer-fetch (§3). La UI (seguir por URL, visor, copiar) llega en el siguiente
+   entregable y consume estas piezas. */
+
+// El canon es un CONTRATO cerrado y versionado (Codex §3): claves ordenadas lexicográficamente,
+// undefined omitido en objetos y RECHAZADO en arrays y raíz, números no finitos rechazados, -0→0,
+// Unicode vía JSON. Cambiar el canon exige subir CANON_VERSION (una revisión vieja dejará de casar y
+// forzará re-publicación, en vez de reinterpretarse en silencio). PURA, con vectores dorados en tests.
+const CANON_VERSION = 1;
+function canonical(v){
+  if (v === null) return "null";
+  const t = typeof v;
+  if (t === "string") return JSON.stringify(v);
+  if (t === "boolean") return v ? "true" : "false";
+  if (t === "number"){ if (!Number.isFinite(v)) throw new Error("número no finito en el canon"); return JSON.stringify(v === 0 ? 0 : v); }
+  if (Array.isArray(v)) return "[" + v.map(x => { if (x === undefined) throw new Error("undefined en array (no representable)"); return canonical(x); }).join(",") + "]";
+  if (t === "object"){
+    const keys = Object.keys(v).filter(k => v[k] !== undefined).sort();
+    return "{" + keys.map(k => JSON.stringify(k) + ":" + canonical(v[k])).join(",") + "}";
+  }
+  throw new Error("valor no representable en el canon: " + t);   // undefined, function, symbol, bigint
+}
+async function sha256Hex(str){
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(str));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
+}
+// Revisión = hash content-addressed de la proyección canónica, con la versión del canon dentro del
+// material hasheado (así un canon nuevo NO valida revisiones viejas). La forma casa con SUB_REV_RE.
+async function sha256Canonical(v){
+  return "sha256:" + await sha256Hex(CANON_VERSION + "\n" + canonical(v));
+}
+
+// Bloqueo SSRF (Codex §3): una URL consentida no debe poder golpear loopback, link-local ni redes
+// privadas. CORS impide LEER la respuesta pero no EMITIR la petición; el DNS rebinding no se cierra
+// del todo desde JavaScript cliente (documentado). Bloqueo por forma LITERAL del host (no resuelve DNS).
+function isBlockedHost(hostname){
+  const h = String(hostname || "").toLowerCase().replace(/\.$/, "");
+  if (!h) return true;
+  if (h === "localhost" || h.endsWith(".localhost") || h.endsWith(".local") || h.endsWith(".internal")) return true;
+  if (h.includes(":")){                                   // IPv6
+    const b = h.replace(/^\[|\]$/g, "");
+    if (b === "::1" || b === "::") return true;
+    if (/^fe80:/.test(b) || /^f[cd][0-9a-f][0-9a-f]:/.test(b)) return true;   // link-local / ULA
+    return false;
+  }
+  const m = h.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);   // IPv4
+  if (m){
+    const o = m.slice(1).map(Number);
+    if (o.some(n => n > 255)) return true;
+    if (o[0] === 0 || o[0] === 127 || o[0] === 10) return true;
+    if (o[0] === 169 && o[1] === 254) return true;              // link-local
+    if (o[0] === 172 && o[1] >= 16 && o[1] <= 31) return true;  // privada
+    if (o[0] === 192 && o[1] === 168) return true;              // privada
+    if (o[0] === 100 && o[1] >= 64 && o[1] <= 127) return true; // CGNAT
+    return false;
+  }
+  return false;   // host público con nombre → permitido (el DNS puede reapuntar: límite documentado)
+}
+
+// Transporte remoto GENÉRICO endurecido (Codex §3: fetchRemoteJson solo resuelve transporte y parseo;
+// el consumidor aporta contexto y mensajes). https obligatorio (http desde Pages sería contenido
+// mixto), sin credenciales, sin redirecciones, SSRF bloqueado, tope real por bytes, timeout, y
+// TextDecoder fatal (un byte inválido conserva el snapshot anterior porque lanza). Devuelve el objeto
+// parseado o LANZA con motivo. No hace consentimiento ni confirmación: eso es del llamador.
+async function fetchRemoteJson(url, { max = REMOTE_PACK_MAX, timeout = REMOTE_PACK_TIMEOUT } = {}){
+  const x = new URL(String(url));                                   // lanza si la URL no es válida
+  if (x.protocol !== "https:") throw new Error("solo se admiten direcciones https");
+  if (x.username || x.password) throw new Error("la dirección no puede llevar credenciales");
+  if (isBlockedHost(x.hostname)) throw new Error("esa dirección apunta a una red local o privada");
+  const ctl = new AbortController();
+  let timedOut = false;
+  const timer = setTimeout(() => { timedOut = true; ctl.abort(); }, timeout);
+  try{
+    const r = await fetch(x.href, { cache: "no-store", credentials: "omit", referrerPolicy: "no-referrer", redirect: "manual", signal: ctl.signal });
+    if (r.type === "opaqueredirect") throw new Error("la dirección redirige a otro sitio");
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    if ((+r.headers.get("content-length") || 0) > max) throw new Error("el archivo es demasiado grande");
+    const reader = r.body && r.body.getReader ? r.body.getReader() : null;
+    let text;
+    if (reader){
+      let received = 0; const chunks = [];
+      for (;;){ const { done, value } = await reader.read(); if (done) break; received += value.byteLength; if (received > max){ ctl.abort(); throw new Error("el archivo es demasiado grande"); } chunks.push(value); }
+      const buf = new Uint8Array(received); let off = 0; for (const c of chunks){ buf.set(c, off); off += c.byteLength; }
+      text = new TextDecoder("utf-8", { fatal: true }).decode(buf);
+    } else { text = await r.text(); if (text.length > max) throw new Error("el archivo es demasiado grande"); }
+    return JSON.parse(text);
+  } catch(e){ throw new Error(timedOut ? "tardó demasiado" : (e && e.message) || "error de red"); }
+  finally{ clearTimeout(timer); }
 }
 // El MISMO presupuesto para la vía por archivo (checkpoint: «los mismos presupuestos para URL y
 // archivo»): el tamaño se comprueba en bytes ANTES de leer (File.size), no después.
@@ -4106,8 +4198,8 @@ function bodyTodo(w, el){
   el.innerHTML = (desc ? `<div class="notes-desc" title="${esc(desc)} (clic para editar)">${esc(desc)}</div>` : "")
     + `
     <div class="todo-add"><input type="text" placeholder="Nueva tarea…"><button class="mini">＋</button></div>
-    <ul class="plain todo-list"></ul>
-    <div class="todo-foot"><button class="mini todo-toggle"></button><input type="search" class="todo-search" placeholder="Buscar en hechas…" style="display:none"></div>`;
+    <div class="todo-bar"><button class="mini todo-toggle"></button><input type="search" class="todo-search" placeholder="Buscar en hechas…" style="display:none"></div>
+    <ul class="plain todo-list"></ul>`;
   if (!Array.isArray(w.data.items)) w.data.items = [];
   const dline = el.querySelector(".notes-desc");
   if (dline) dline.addEventListener("click", () => editNoteDesc(w, el.closest(".win")));

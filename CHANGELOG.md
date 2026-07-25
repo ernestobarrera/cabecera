@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.40.5] - 2026-07-24 — botón Hechas más a mano y cimientos de seguridad para seguir escritorios
+
+- **El botón «Hechas / Pendientes» de las listas de tareas ya no se esconde al final.** Estaba bajo la lista y, si tenías muchas tareas, había que bajar para verlo. Ahora vive en una barra fija justo bajo el campo de «Nueva tarea», siempre a la vista.
+- **Groundwork invisible (seguir escritorios).** Cabecera incorpora la maquinaria de seguridad que necesitará para *traer* un escritorio compartido por dirección web sin riesgos: una forma única y determinista de calcular la «huella» de un escritorio (para reconocer si cambió), y una descarga endurecida que solo admite `https`, rechaza redirecciones y credenciales, y **bloquea direcciones de redes locales o privadas**. Todavía no hay forma de seguir ni ver un escritorio desde la interfaz — esto solo asegura los cimientos.
+
 ## [0.40.4] - 2026-07-24 — preparación interna para seguir escritorios (tercera pieza)
 
 - **Groundwork invisible.** Cabecera prepara por dentro la maquinaria para *ver* un escritorio seguido sin poder tocarlo por error: distingue una vista propia (editable) de una vista de solo lectura, y deja listos los cierres de seguridad para que ningún comando modifique en silencio tu escritorio mientras miras el de otra persona. También aprende a guardar en este dispositivo —nunca en tu archivo de datos— la copia local de lo seguido, validándola con severidad al leerla. **Todavía no hay forma de seguir ni de ver un escritorio desde la interfaz** — eso llega después, con su propia revisión. No cambia nada de lo que ves ni de cómo se usa Cabecera.

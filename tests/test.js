@@ -1224,9 +1224,10 @@ console.log('OK importador de packs endurecido (XSS de imagen cerrado en 2 capas
     throw new Error('regresión: la descarga remota perdió el endurecimiento de red (cookies/referer/redirect/abort)');
   if (!src.includes('if (x.username || x.password)')) throw new Error('regresión: se aceptan credenciales incrustadas en la URL');
   if (!src.includes('if (text.length > REMOTE_PACK_MAX)')) throw new Error('regresión: la descarga remota no acota el tamaño');
-  // ningún otro fetch suelto de packs (el de version.txt y los builtin de mismo origen sí valen)
-  const sueltos = (src.match(/fetch\((?!String\(url\)|"version\.txt"|BUILTIN_PACKS)[^)]*\)/g) || [])
-    .filter(s => !s.includes('version.txt') && !s.includes('BUILTIN_PACKS'));
+  // ningún otro fetch suelto de packs (version.txt y builtin de mismo origen valen; x.href = la otra
+  // vía endurecida, fetchRemoteJson de D5b, con las MISMAS protecciones + SSRF, verificada aparte)
+  const sueltos = (src.match(/fetch\((?!String\(url\)|"version\.txt"|BUILTIN_PACKS|x\.href)[^)]*\)/g) || [])
+    .filter(s => !s.includes('version.txt') && !s.includes('BUILTIN_PACKS') && !s.includes('x.href'));
   if (sueltos.length) throw new Error('quedan descargas fuera de la vía única: ' + sueltos.join(' | '));
   // los tres consumidores de contenido ajeno piden perfil estrecho
   if (!src.includes('await applyPack(p, { ...opts, remote: true })')) throw new Error('regresión: ?pack= o Packs→URL sin perfil estrecho');
@@ -1588,4 +1589,40 @@ console.log('OK integración de la fusión (poll, copia previa restaurable, reso
 })();
 console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runtime IDB estricto sin red)');
 
-console.log('\nTODO EN VERDE');
+// --- D5b núcleo de la rebanada B: canonical + vectores dorados, sha256, SSRF, transporte (async por sha256) ---
+(async function(){
+  eval('globalThis.CANON_VERSION = ' + src.match(/const CANON_VERSION = (.*?);/)[1]);
+  eval('globalThis.canonical = ' + pickFn('canonical', 'v'));
+  eval('globalThis.isBlockedHost = ' + pickFn('isBlockedHost', 'hostname'));
+  eval('globalThis.sha256Hex = async ' + pickFn('sha256Hex', 'str'));
+  eval('globalThis.sha256Canonical = async ' + pickFn('sha256Canonical', 'v'));
+
+  // VECTOR DORADO (§3): el mismo space —claves en cualquier orden— da la MISMA cadena canónica y el
+  // MISMO hash en exportación y seguimiento. Si el canon cambia sin subir CANON_VERSION, esto rompe.
+  const GOLDEN_CANON = '{"name":"Demo","widgets":[{"data":{"items":[{"done":false,"t":"hola"}]},"type":"todo","w":200,"x":1},{"data":{"text":"café ☕"},"type":"notes"}]}';
+  const GOLDEN_HASH = 'sha256:08f5a66c8473330ab7d98986864502e76d995297730f64d365be765c69a6b8f8';
+  const a = { widgets: [{ type: "todo", data: { items: [{ t: "hola", done: false }] }, x: 1, w: 200 }, { data: { text: "café ☕" }, type: "notes" }], name: "Demo" };
+  const b = { name: "Demo", widgets: [{ w: 200, x: 1, data: { items: [{ done: false, t: "hola" }] }, type: "todo" }, { type: "notes", data: { text: "café ☕" } }] };
+  if (canonical(a) !== GOLDEN_CANON) throw new Error('B: canonical no casa con el vector dorado: ' + canonical(a));
+  if (canonical(a) !== canonical(b)) throw new Error('B: canonical no es determinista ante reordenación de claves');
+  if (await sha256Canonical(a) !== GOLDEN_HASH) throw new Error('B: sha256Canonical no casa con el vector dorado');
+  if (await sha256Canonical(a) !== await sha256Canonical(b)) throw new Error('B: la revisión debe ser estable');
+  // el canon rechaza lo no representable ANTES de canonicalizar (§3)
+  for (const bad of [Infinity, NaN, -Infinity]){ let t = false; try { canonical({ x: bad }); } catch (e){ t = true; } if (!t) throw new Error('B: número no finito debe rechazarse'); }
+  { let t = false; try { canonical([undefined]); } catch (e){ t = true; } if (!t) throw new Error('B: undefined en array debe rechazarse'); }
+  { let t = false; try { canonical(() => 1); } catch (e){ t = true; } if (!t) throw new Error('B: función debe rechazarse'); }
+  if (canonical({ a: undefined, b: 1 }) !== '{"b":1}') throw new Error('B: undefined en objeto se omite');
+  if (canonical(-0) !== '0') throw new Error('B: -0 debe canonicalizar como 0');
+
+  // SSRF (§3): hosts locales/privados bloqueados; público permitido
+  for (const blk of ['localhost', 'x.localhost', 'a.local', '127.0.0.1', '0.0.0.0', '10.1.2.3', '192.168.1.1', '172.16.5.5', '172.31.0.1', '169.254.1.1', '100.64.0.1', '::1', '[::1]', 'fe80::1', 'fc00::1', '']) if (!isBlockedHost(blk)) throw new Error('B: debería bloquear ' + blk);
+  for (const ok of ['ernestobarrera.github.io', 'raw.githubusercontent.com', '8.8.8.8', '172.32.0.1', '93.184.216.34']) if (isBlockedHost(ok)) throw new Error('B: NO debería bloquear ' + ok);
+
+  // fetchRemoteJson: comprobaciones a nivel de fuente (no hay red en el test); no toca estado ni IDB
+  const fBody = src.match(/async function fetchRemoteJson\(url, \{[\s\S]*?\n\}/)[0];
+  for (const must of ['x.protocol !== "https:"', 'x.username || x.password', 'isBlockedHost(x.hostname)', 'redirect: "manual"', 'credentials: "omit"', 'fatal: true']) if (!fBody.includes(must)) throw new Error('B: fetchRemoteJson perdió la protección: ' + must);
+  if (/idbSet|idbRuntimeSet/.test(fBody)) throw new Error('B: fetchRemoteJson no debe tocar IDB (solo transporte y parseo)');
+  console.log('OK D5b núcleo B (canonical con vector dorado, sha256, SSRF bloqueado, transporte endurecido)');
+
+  console.log('\nTODO EN VERDE');
+})().catch(e => { console.error(e && e.stack || e); process.exitCode = 1; });
