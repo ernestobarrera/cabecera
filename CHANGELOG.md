@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.40.7] - 2026-07-24 — «Importar copia» ya no borra tus escritorios con un archivo equivocado
+
+- **Corrección importante.** «Importar copia» reemplazaba TODO tu contenido con el archivo que le dieras, sin comprobar qué era: si por error le dabas un **escritorio compartido** (el que produce «Compartir este escritorio»), un **pack**, o cualquier otro JSON, tus escritorios desaparecían. Ahora **valida el archivo antes de tocar nada**: si no es una copia de Cabecera te avisa y **no cambia nada**, y si lo es, guarda una copia previa recuperable en «Restaurar copia» antes de reemplazar. Un escritorio compartido y un pack se reconocen y se rechazan con su explicación.
+
 ## [0.40.6] - 2026-07-24 — compartir un escritorio como archivo
 
 - **Nuevo: «Compartir este escritorio».** Desde la paleta (Ctrl+K) puedes **exportar el escritorio activo a un archivo** para pasárselo a quien quieras. Se incluyen enlaces (con sus notas), notas, listas de tareas, portapapeles y markdown; **los widgets privados y las listas de trabajo con agentes no se comparten** (si el escritorio tiene alguno, te avisa para que lo muevas a un espacio personal antes). Antes de exportar ves un resumen de lo que se comparte y un aviso de que una copia difundida no se puede revocar. Es la primera mitad de «escritorios compartidos»: *seguir* uno por dirección web llega después.

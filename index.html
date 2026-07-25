@@ -1228,6 +1228,16 @@ function setState(raw, reason){
   return state;
 }
 
+// ¿Este objeto es una COPIA de Cabecera (un estado importable) y no un sobre compartido, un pack o
+// basura? «Importar copia» REEMPLAZA todo el estado: sin esta guarda, un archivo equivocado (p. ej.
+// el que produce «Compartir escritorio», que no tiene spaces[]) migraba a un estado por defecto y
+// BORRABA todos los escritorios (incidente real 2026-07-24). PURA.
+function looksLikeState(o){
+  if (!o || typeof o !== "object" || Array.isArray(o)) return false;
+  if (o.cabeceraShared || o.cabeceraPack) return false;         // sobre compartido / pack, no una copia
+  return Array.isArray(o.spaces) || Array.isArray(o.widgets);   // v2 (spaces) o v1 migrable (widgets)
+}
+
 /* ---------- D5b rebanada A: vista activa (activeView) y guard de mutabilidad ----------
    activeView es EFÍMERA: NO vive en state, datos.json, exportaciones, fusión ni localStorage.
    kind:"space" = espacio propio editable (el único mutable). kind:"subscription" = fuente
@@ -1411,7 +1421,7 @@ function syncUI(mode, txt){
    reaparece) y si Recargar está activo. El descarte ✕ vive solo en memoria de la sesión.
    Demora asumida: la CDN de Pages puede servir la versión vieja hasta ~10 min aun con
    no-store (gobierna la caché del navegador, no la CDN); para pestañas de días, irrelevante. */
-const APP_VERSION = "0.40.6";
+const APP_VERSION = "0.40.7";
 let newVersionDetected = null;   // versión superior detectada; detiene futuras consultas
 let verDismissed = false;        // ✕: solo esta sesión — nunca persistido en disco
 let verCheckInflight = false;    // sin consultas concurrentes
@@ -6508,6 +6518,7 @@ function wireUI(){
     };
     if (await tryRestore("cabecera-premerge", "¿Restaurar tu escritorio previo a la última combinación con otro equipo?")) return;
     if (await tryRestore("cabecera-backup-antes-pack", "¿Restaurar el escritorio previo al último pack aplicado?")) return;
+    if (await tryRestore("cabecera-backup-antes-import", "¿Restaurar el escritorio previo a la última importación de copia?")) return;
     if (await tryRestore("cabecera-local-prev", "¿Restaurar tu escritorio local previo a conectar la carpeta?")) return;
     toast("No hay copias locales guardadas");
   });
@@ -6517,9 +6528,14 @@ function wireUI(){
     inp.type = "file"; inp.accept = ".json";
     inp.addEventListener("change", async () => {
       try{
-        setState(JSON.parse(await inp.files[0].text()), "import");
+        const parsed = JSON.parse(await inp.files[0].text());
+        if (parsed && parsed.cabeceraShared){ toast("Esto es un escritorio COMPARTIDO, no una copia de seguridad — no se importa así (seguir escritorios llega pronto). No se ha cambiado nada.", true); return; }
+        if (parsed && parsed.cabeceraPack){ toast("Esto es un PACK, no una copia. Aplícalo desde Inicio → «Packs». No se ha cambiado nada.", true); return; }
+        if (!looksLikeState(parsed)){ toast("Ese archivo no es una copia de Cabecera (no contiene tus escritorios). No se ha cambiado nada.", true); return; }
+        try{ localStorage.setItem("cabecera-backup-antes-import", JSON.stringify(state)); }catch(e){}   // recuperable en «Restaurar copia»
+        setState(parsed, "import");
         renderAll(); markDirty(); toast("Copia importada");
-      }catch(e){ toast("JSON inválido", true); }
+      }catch(e){ toast("Archivo no válido: no se ha cambiado nada", true); }
     });
     inp.click();
   });

@@ -1589,6 +1589,23 @@ console.log('OK integración de la fusión (poll, copia previa restaurable, reso
 })();
 console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runtime IDB estricto sin red)');
 
+// --- import seguro: «Importar copia» rechaza lo que no es un estado (incidente de borrado 2026-07-24) ---
+(function(){
+  eval('globalThis.looksLikeState = ' + pickFn('looksLikeState', 'o'));
+  if (!looksLikeState({ version: 2, spaces: [] })) throw new Error('import: un estado v2 debe aceptarse');
+  if (!looksLikeState({ version: 1, widgets: [] })) throw new Error('import: un estado v1 (widgets) debe aceptarse');
+  if (looksLikeState({ cabeceraShared: 1, shareId: 'sh_a', space: {} })) throw new Error('import: un sobre compartido NO es una copia');
+  if (looksLikeState({ cabeceraPack: 1, widgets: [] })) throw new Error('import: un pack NO es una copia');
+  if (looksLikeState({ hola: 1 })) throw new Error('import: un objeto sin escritorios NO es una copia');
+  if (looksLikeState(null) || looksLikeState([]) || looksLikeState('x')) throw new Error('import: no-objeto NO es una copia');
+  // invariante: act-import VALIDA antes de reemplazar el estado (no machaca con archivo equivocado)
+  const at = src.indexOf('#act-import');
+  const body = src.slice(at, at + 1000);
+  if (!/looksLikeState\(parsed\)/.test(body) || !/cabeceraShared/.test(body)) throw new Error('import: act-import no valida el archivo antes de reemplazar el estado');
+  if (body.indexOf('looksLikeState') > body.indexOf('setState(parsed')) throw new Error('import: la validación debe ir ANTES de setState');
+  console.log('OK import seguro (rechaza sobre/pack/basura + backup previo + valida antes de reemplazar)');
+})();
+
 // --- D5b núcleo de la rebanada B: canonical + vectores dorados, sha256, SSRF, transporte (async por sha256) ---
 (async function(){
   eval('globalThis.CANON_VERSION = ' + src.match(/const CANON_VERSION = (.*?);/)[1]);
