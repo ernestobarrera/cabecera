@@ -1068,6 +1068,13 @@ function sanitizeState(s){
     if (!sp.settings || typeof sp.settings !== "object") sp.settings = { wallpaper: { type: "preset", value: 0 } };
     // override de columnas guía: solo 2|3|4; cualquier otra cosa (incl. "auto") → sin override
     if (sp.settings.cols !== 2 && sp.settings.cols !== 3 && sp.settings.cols !== 4) delete sp.settings.cols;
+    // A0: vinculación de publicación (shareId estable + última revisión publicada). Forma estricta
+    // o se descarta; ningún otro campo sobrevive (puede venir de un datos.json editado a mano).
+    if (sp.settings.share){
+      const sh = sp.settings.share;
+      if (!sh || typeof sh !== "object" || !/^[A-Za-z0-9._-]{1,64}$/.test(String(sh.shareId || ""))) delete sp.settings.share;
+      else { const clean = { shareId: sh.shareId.slice(0, 64) }; if (/^sha256:[A-Za-z0-9_+/=-]{1,120}$/.test(String(sh.lastPublishedRevision || ""))) clean.lastPublishedRevision = sh.lastPublishedRevision; sp.settings.share = clean; }
+    }
     sp.widgets = (Array.isArray(sp.widgets) ? sp.widgets : []).filter(w => w && WTYPES[w.type]).map(sanitizeWidgetShape);
     return sp;
   });
@@ -1404,7 +1411,7 @@ function syncUI(mode, txt){
    reaparece) y si Recargar está activo. El descarte ✕ vive solo en memoria de la sesión.
    Demora asumida: la CDN de Pages puede servir la versión vieja hasta ~10 min aun con
    no-store (gobierna la caché del navegador, no la CDN); para pestañas de días, irrelevante. */
-const APP_VERSION = "0.40.5";
+const APP_VERSION = "0.40.6";
 let newVersionDetected = null;   // versión superior detectada; detiene futuras consultas
 let verDismissed = false;        // ✕: solo esta sesión — nunca persistido en disco
 let verCheckInflight = false;    // sin consultas concurrentes
@@ -2441,6 +2448,114 @@ async function fetchRemoteJson(url, { max = REMOTE_PACK_MAX, timeout = REMOTE_PA
   } catch(e){ throw new Error(timedOut ? "tardó demasiado" : (e && e.message) || "error de red"); }
   finally{ clearTimeout(timer); }
 }
+/* ---------- A0: exportar/publicar un escritorio a un archivo (sobre cabeceraShared) ----------
+   Proyección allowlisted determinista + validador propio (Codex §5 del gate D5: «cabeceraShared ≠
+   cabeceraPack», export SOLO a archivo, `priv`→BLOQUEO, superficie `Cabecera ·`→bloqueo, vista
+   previa real). La MISMA proyección/validador la reusa la rebanada B al RECIBIR (por eso `normalizeShared`
+   re-proyecta lo recibido: nada inesperado sobrevive). Sin red. */
+const sClamp = (v, d, min, max) => { v = Number(v); return Number.isFinite(v) ? Math.min(max, Math.max(min, v)) : d; };
+const sSafeUrl = u => { try { const x = new URL(String(u)); return (x.protocol === "http:" || x.protocol === "https:") ? x.href : null; } catch (e){ return null; } };
+
+// Proyecta UN widget C7 a su forma compartible conservando su id como originId (procedencia y
+// «Copiar y editar»). Devuelve el widget o null si no aporta contenido / no tiene originId válido. PURA.
+function projectSharedWidget(w){
+  const id = w && w.id;
+  if (!SUB_ID_RE.test(String(id || ""))) return null;
+  const d = (w && w.data) || {}, data = {};
+  if (w.type === "links"){
+    const groups = (Array.isArray(d.groups) ? d.groups : []).map(g => ({
+      name: String((g && g.name) || "Grupo").slice(0, 60),
+      links: (Array.isArray(g && g.links) ? g.links : []).map(l => {
+        const u = sSafeUrl(l && l.u); if (!u) return null;
+        const o = { t: String((l && l.t) || u).slice(0, 120), u };
+        const note = String((l && l.note) || "").slice(0, LINK_NOTE_MAX).trim(); if (note) o.note = note;
+        if (SUB_ID_RE.test(String((l && l.id) || ""))) o.id = l.id;
+        return o;
+      }).filter(Boolean)
+    })).filter(g => g.links.length);
+    if (!groups.length) return null;
+    data.groups = groups;
+  }
+  else if (w.type === "notes"){ data.text = String(d.text || "").slice(0, 20000); }
+  else if (w.type === "md"){ data.text = String(d.text || "").slice(0, 100000); }
+  else if (w.type === "todo"){ data.items = (Array.isArray(d.items) ? d.items : []).map(i => { const o = { t: String((i && i.t) || "").slice(0, 300), done: !!(i && i.done) }; if (SUB_ID_RE.test(String((i && i.id) || ""))) o.id = i.id; return o; }).filter(i => i.t); }
+  else if (w.type === "clips"){ data.items = (Array.isArray(d.items) ? d.items : []).map(i => { const o = { t: String((i && i.t) || "").slice(0, 5000) }; if (SUB_ID_RE.test(String((i && i.id) || ""))) o.id = i.id; return o; }).filter(i => i.t); }
+  else return null;
+  return { id, type: w.type, x: sClamp(w.x, 40, 0, 4000), y: sClamp(w.y, 40, 0, 4000), w: sClamp(w.w, WTYPES[w.type].w, 220, 2000), h: sClamp(w.h, WTYPES[w.type].h, 140, 2000), data };
+}
+
+// Proyección del ESPACIO entero. Un widget `priv` o una superficie «Cabecera ·» BLOQUEAN el export
+// completo (no se excluyen en silencio, Codex §5): se pide moverlo a un espacio personal. Los tipos
+// fuera de C7 se omiten. Devuelve {ok, space} | {ok:false, reason}. PURA.
+function projectShared(space){
+  if (!space || !Array.isArray(space.widgets)) return { ok: false, reason: "el escritorio no tiene contenido" };
+  const widgets = [];
+  for (const w of space.widgets){
+    if (w && w.priv) return { ok: false, reason: "contiene un widget privado; muévelo a un espacio personal antes de compartir" };
+    if (w && w.t && RESERVED_TITLE.test(String(w.t))) return { ok: false, reason: "contiene un widget de la superficie de agentes («Cabecera · …»), que no se comparte" };
+    if (!w || !REMOTE_PACK_TYPES[w.type]) continue;   // fuera de C7: se omite (no es error)
+    const pw = projectSharedWidget(w);
+    if (pw) widgets.push(pw);
+  }
+  if (!widgets.length) return { ok: false, reason: "no hay nada compartible (enlaces, notas, tareas, portapapeles o markdown)" };
+  return { ok: true, space: { name: String(space.name || "Escritorio").slice(0, 80), widgets } };
+}
+
+// Validador del sobre RECIBIDO (rebanada B) y autochequeo de A0. Re-proyecta el contenido con el
+// MISMO allowlist (nada inesperado sobrevive) y valida el sobre. NO recomputa la revisión (eso es
+// async y se hace en la frontera del fetch); comprueba forma y originId únicos. PURA. Devuelve
+// {ok, shareId, revision, publishedAt, space} | {ok:false, reason}.
+function normalizeShared(sobre, expectShareId){
+  if (!sobre || typeof sobre !== "object" || sobre.cabeceraShared !== 1) return { ok: false, reason: "no es un escritorio compartido de Cabecera" };
+  if (!SUB_ID_RE.test(String(sobre.shareId || ""))) return { ok: false, reason: "identificador de origen inválido" };
+  if (expectShareId && sobre.shareId !== expectShareId) return { ok: false, reason: "el origen no coincide con la suscripción" };
+  if (!SUB_REV_RE.test(String(sobre.revision || ""))) return { ok: false, reason: "revisión con forma inválida" };
+  const pub = Number(sobre.publishedAt);
+  if (!Number.isFinite(pub) || pub < 0 || pub > Date.now() + 86400000) return { ok: false, reason: "fecha de publicación inválida" };
+  const proj = projectShared(sobre.space);
+  if (!proj.ok) return { ok: false, reason: "contenido no admisible: " + proj.reason };
+  const seen = new Set();
+  for (const w of proj.space.widgets){
+    if (seen.has(w.id)) return { ok: false, reason: "identificadores de elemento duplicados" };
+    seen.add(w.id);
+  }
+  return { ok: true, shareId: sobre.shareId, revision: sobre.revision, publishedAt: pub, space: proj.space };
+}
+
+// Construye el sobre firmado (async por la revisión). Reusable por A0 y, en B, para autocomprobar.
+async function buildSharedEnvelope(space, shareId){
+  const proj = projectShared(space);
+  if (!proj.ok) return proj;
+  return { ok: true, sobre: { cabeceraShared: 1, shareId, publishedAt: Date.now(), space: proj.space, revision: await sha256Canonical(proj.space) } };
+}
+
+// A0 (UI): exporta el espacio ACTIVO a un archivo compartible, con vista previa real y sin red.
+async function exportSharedSpace(){
+  if (!guardMutation()) return;
+  const space = state.spaces[state.active];
+  const proj = projectShared(space);
+  if (!proj.ok){ await dlgConfirm(`No se puede compartir «${(space && space.name) || "este escritorio"}»: ${proj.reason}.`, { title: "Compartir escritorio", okLabel: "Entendido", cancelLabel: " " }); return; }
+  const counts = {}; for (const w of proj.space.widgets) counts[w.type] = (counts[w.type] || 0) + 1;
+  const labelOf = { links: "enlaces", notes: "notas", todo: "listas de tareas", clips: "portapapeles", md: "markdown" };
+  const resumen = Object.entries(counts).map(([t, n]) => `${n} ${labelOf[t]}`).join(", ");
+  const ok = await dlgConfirm(
+    `Vas a exportar «${proj.space.name}» a un archivo para compartirlo: ${resumen}. Los widgets de otros tipos y los privados no se incluyen. ⚠️ Una copia que difundas NO se puede revocar: no compartas nada sensible.`,
+    { title: "Compartir escritorio", okLabel: "Exportar archivo" });
+  if (!ok) return;
+  // shareId estable por espacio (rotable a mano); reusar el existente para que ACTUALIZAR funcione
+  let shareId = space.settings.share && space.settings.share.shareId;
+  if (!SUB_ID_RE.test(String(shareId || ""))) shareId = "sh_" + uid();
+  const built = await buildSharedEnvelope(space, shareId);
+  if (!built.ok){ toast("No se pudo preparar: " + built.reason, true); return; }
+  space.settings.share = { shareId, lastPublishedRevision: built.sobre.revision };
+  markDirty();
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(built.sobre, null, 2)], { type: "application/json" }));
+  a.download = (proj.space.name || "escritorio").replace(/[^\w.-]+/g, "-").slice(0, 40) + ".cabecera-compartir.json";
+  a.click(); URL.revokeObjectURL(a.href);
+  toast("Escritorio exportado a un archivo. Compártelo por el medio que quieras.");
+}
+
 // El MISMO presupuesto para la vía por archivo (checkpoint: «los mismos presupuestos para URL y
 // archivo»): el tamaño se comprueba en bytes ANTES de leer (File.size), no después.
 async function readPackFile(f){
@@ -6101,6 +6216,7 @@ function paletteEntries(){
   add("👁", privacyOn ? "Privacidad: mostrar widgets privados" : "Privacidad: ocultar widgets privados", "pantalla compartida",
     () => { closeMenu(); setPrivacy(!privacyOn); }, "privacidad privado ocultar mostrar compartir pantalla presentacion docencia escenica");
   add("📖", "Guía completa", "cómo funciona todo", () => { closeMenu(); window.open("guia.html", "_blank", "noopener"); }, "guia manual ayuda completa como funciona empezar");
+  add("📤", "Compartir este escritorio", "exportar a un archivo", () => { closeMenu(); exportSharedSpace(); }, "compartir exportar escritorio archivo publicar seguir enviar compartido");
   for (const [type, t] of Object.entries(WTYPES)) if (type !== "intro")
     add("➕", "Añadir " + t.name, "widget nuevo", () => { addWidget(type); closeMenu(); }, "añadir crear nuevo " + t.name);
   [["⚙","Ajustes generales","act-config"],["❓","Guía","act-ayuda"],["🧩","Packs","act-packs"],["🖼️","Fondo","act-wallpaper"],["📁","Sincronizar equipos","act-folder"],["🧭","Ordenar","act-arrange"],["🗑️","Papelera","act-trash"],["⬇️","Exportar copia","act-export"],["⬆️","Importar copia","act-import"],["♻️","Restaurar copia","act-restore"]]

@@ -1624,5 +1624,47 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
   if (/idbSet|idbRuntimeSet/.test(fBody)) throw new Error('B: fetchRemoteJson no debe tocar IDB (solo transporte y parseo)');
   console.log('OK D5b núcleo B (canonical con vector dorado, sha256, SSRF bloqueado, transporte endurecido)');
 
+  // --- A0: proyección compartible + validador del sobre (bloqueos priv/superficie; originId; envelope) ---
+  ['LINK_NOTE_MAX', 'RESERVED_TITLE', 'REMOTE_PACK_TYPES', 'sClamp', 'sSafeUrl'].forEach(c => {
+    const line = src.split('\n').find(l => l.trim().startsWith('const ' + c + ' ='));
+    eval(line.trim().replace('const ' + c, 'globalThis.' + c));
+  });
+  globalThis.WTYPES = { links: { w: 300, h: 200 }, notes: { w: 250, h: 200 }, md: { w: 300, h: 250 }, todo: { w: 250, h: 250 }, clips: { w: 250, h: 200 } };
+  eval('globalThis.projectSharedWidget = ' + pickFn('projectSharedWidget', 'w'));
+  eval('globalThis.projectShared = ' + pickFn('projectShared', 'space'));
+  eval('globalThis.normalizeShared = ' + pickFn('normalizeShared', 'sobre, expectShareId'));
+
+  const okSpace = { name: 'Demo', widgets: [
+    { id: 'w_notas', type: 'notes', data: { text: 'hola' } },
+    { id: 'w_links', type: 'links', data: { groups: [{ name: 'G', links: [{ id: 'l_1', t: 'Pub', u: 'https://pubmed.gov', note: 'ref' }] }] } },
+    { id: 'w_reloj', type: 'clock', data: {} },   // fuera de C7: se omite, NO bloquea
+  ]};
+  let pr = projectShared(okSpace);
+  if (!pr.ok) throw new Error('A0: espacio válido debería proyectar: ' + pr.reason);
+  if (pr.space.widgets.length !== 2) throw new Error('A0: el reloj (fuera de C7) debe omitirse, no bloquear');
+  if (pr.space.widgets[0].id !== 'w_notas') throw new Error('A0: el originId debe conservarse');
+  if (pr.space.widgets[1].data.groups[0].links[0].u.indexOf('pubmed.gov') < 0) throw new Error('A0: enlace perdido');
+  // priv → BLOQUEO (no exclusión silenciosa)
+  if (projectShared({ name: 'x', widgets: [{ id: 'w_p', type: 'notes', priv: true, data: { text: 'secreto' } }] }).ok) throw new Error('A0: un widget priv debe BLOQUEAR el export');
+  // superficie «Cabecera ·» → bloqueo
+  if (projectShared({ name: 'x', widgets: [{ id: 'w_s', type: 'todo', t: 'Cabecera · bandeja', data: { items: [] } }] }).ok) throw new Error('A0: una superficie de agentes debe BLOQUEAR el export');
+  // sin originId válido → el widget se cae; si no queda nada, ok:false
+  if (projectShared({ name: 'x', widgets: [{ id: 'mal id!', type: 'notes', data: { text: 'h' } }] }).ok) throw new Error('A0: sin originId válido no hay nada compartible');
+  if (projectShared({ name: 'x', widgets: [] }).ok) throw new Error('A0: espacio vacío → ok:false');
+
+  // normalizeShared: sobre válido y rechazos
+  const goodRev = 'sha256:' + 'a'.repeat(64);
+  const sobre = { cabeceraShared: 1, shareId: 'sh_abc', publishedAt: 1000, revision: goodRev, space: okSpace };
+  const ns = normalizeShared(sobre);
+  if (!ns.ok || ns.shareId !== 'sh_abc' || ns.space.widgets.length !== 2) throw new Error('A0: sobre válido debe normalizar');
+  if (normalizeShared({ ...sobre, cabeceraShared: 2 }).ok) throw new Error('A0: cabeceraShared!=1 → reject');
+  if (normalizeShared({ ...sobre, shareId: 'mal id!' }).ok) throw new Error('A0: shareId inválido → reject');
+  if (normalizeShared(sobre, 'sh_otro').ok) throw new Error('A0: shareId que no casa con la suscripción → reject');
+  if (normalizeShared({ ...sobre, revision: 'noesunhash' }).ok) throw new Error('A0: revisión mal formada → reject');
+  if (normalizeShared({ ...sobre, publishedAt: Date.now() + 999999999 }).ok) throw new Error('A0: publishedAt futuro → reject');
+  const dup = { ...sobre, space: { name: 'd', widgets: [{ id: 'w_x', type: 'notes', data: { text: 'a' } }, { id: 'w_x', type: 'notes', data: { text: 'b' } }] } };
+  if (normalizeShared(dup).ok) throw new Error('A0: originId duplicados → reject');
+  console.log('OK A0 exportar (proyección C7, priv/superficie bloquean, originId único, validador del sobre)');
+
   console.log('\nTODO EN VERDE');
 })().catch(e => { console.error(e && e.stack || e); process.exitCode = 1; });

@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.40.6] - 2026-07-24 — compartir un escritorio como archivo
+
+- **Nuevo: «Compartir este escritorio».** Desde la paleta (Ctrl+K) puedes **exportar el escritorio activo a un archivo** para pasárselo a quien quieras. Se incluyen enlaces (con sus notas), notas, listas de tareas, portapapeles y markdown; **los widgets privados y las listas de trabajo con agentes no se comparten** (si el escritorio tiene alguno, te avisa para que lo muevas a un espacio personal antes). Antes de exportar ves un resumen de lo que se comparte y un aviso de que una copia difundida no se puede revocar. Es la primera mitad de «escritorios compartidos»: *seguir* uno por dirección web llega después.
+- Cada escritorio compartido recibe un identificador estable, para que en el futuro una actualización se reconozca como el mismo origen.
+
 ## [0.40.5] - 2026-07-24 — botón Hechas más a mano y cimientos de seguridad para seguir escritorios
 
 - **El botón «Hechas / Pendientes» de las listas de tareas ya no se esconde al final.** Estaba bajo la lista y, si tenías muchas tareas, había que bajar para verlo. Ahora vive en una barra fija justo bajo el campo de «Nueva tarea», siempre a la vista.
