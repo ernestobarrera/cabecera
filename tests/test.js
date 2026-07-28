@@ -530,6 +530,75 @@ const prTie = planSpaceRepack([
 if (prTie.placed.find(p => p.id === 'q').y !== 24) throw new Error('planSpaceRepack: a igual y debe ir primero el de menor x');
 console.log('OK planSpaceRepack (apilado por carril, x/ancho adoptados, huérfanos al más cercano, orden estable)');
 
+// --- A2 (2026-07-28): un widget NUEVO nace en un carril, con el ancho del carril ---
+eval('globalThis.planLaneSpot = ' + pickFn('planLaneSpot', 'rects, guides, opts'));
+{
+  const o = { gutter: 14, laneTop: 24 };
+  // escritorio vacío: primer carril, arriba, ancho de carril (era el fallo: nacía a 300 px sueltos)
+  const vacio = planLaneSpot([], gN3, o);
+  if (vacio.x !== gN3.cols[0].x || vacio.w !== gN3.cols[0].w || vacio.y !== 24)
+    throw new Error('planLaneSpot: en un escritorio vacío debe ir al primer carril con su ancho, no al ancho del tipo');
+  // con el carril 0 ocupado, el nuevo va al carril libre (el que termina más arriba)
+  const uno = planLaneSpot([{ id: 'a', x: gN3.cols[0].x, y: 24, w: gN3.cols[0].w, h: 200 }], gN3, o);
+  if (uno.x !== gN3.cols[1].x) throw new Error('planLaneSpot: debe elegir el carril cuyo contenido acaba más arriba');
+  // todos ocupados: se apila bajo el más corto, con gutter
+  const rects = gN3.cols.map((c, i) => ({ id: 'w' + i, x: c.x, y: 24, w: c.w, h: 300 - i * 50 }));
+  const apila = planLaneSpot(rects, gN3, o);
+  const corto = rects[rects.length - 1];
+  if (apila.x !== gN3.cols[rects.length - 1].x || apila.y !== 24 + corto.h + 14)
+    throw new Error('planLaneSpot: debe apilar bajo el carril más corto respetando el gutter');
+  // un widget colocado libre (sin solape con ningún carril) también reserva su carril más cercano
+  const libre = planLaneSpot([{ id: 'f', x: 5000, y: 24, w: 100, h: 400 }], gN3, o);
+  if (libre.y !== 24) throw new Error('planLaneSpot: un huérfano no debe bloquear TODOS los carriles');
+  // empate → el más a la izquierda (determinista)
+  if (planLaneSpot([], gN3, o).x !== gN3.cols[0].x) throw new Error('planLaneSpot: el empate debe resolverse a la izquierda');
+}
+// cableado: nextWidgetSpot usa los carriles salvo en móvil, y conserva el escaneo libre de respaldo
+{
+  const body = src.match(/function nextWidgetSpot\(ww, hh\)\{[\s\S]*?\n\}/)[0];
+  if (!/planLaneSpot\(/.test(body)) throw new Error('A2: nextWidgetSpot no usa los carriles');
+  if (!/isMobile\(\)/.test(body)) throw new Error('A2: el móvil (apilado, sin carriles) debe seguir por el escaneo libre');
+  if (!/findSpotPlan\(/.test(body)) throw new Error('A2: falta el respaldo por escaneo libre');
+}
+console.log('OK A2 widget nuevo encajado en carril (vacío, carril libre, apilado, huérfanos, respaldo móvil)');
+
+// --- A1 (2026-07-28): veredicto de reflow al cambiar de pantalla (#73 #74 #85 #86) ---
+eval('globalThis.viewportReflowVerdict = ' + pickFn('viewportReflowVerdict', 'rects, viewW, laneW, opts'));
+{
+  const o = { pad: 12, tol: 8 };
+  if (viewportReflowVerdict([], 1400, 400, o) !== null) throw new Error('A1: sin widgets no hay veredicto');
+  // se sale por la derecha (monitor más estrecho): rescate de visibilidad, no hay scroll horizontal
+  if (viewportReflowVerdict([{ x: 900, y: 0, w: 600, h: 100 }], 1400, 400, o) !== 'overflow')
+    throw new Error('A1: un widget que rebasa el borde visible debe dar overflow');
+  // justo en el borde (dentro de la tolerancia): no se toca nada
+  if (viewportReflowVerdict([{ x: 0, y: 0, w: 1390, h: 100 }], 1400, 400, o) !== null)
+    throw new Error('A1: el borde exacto (±tolerancia) no debe disparar reflow');
+  // cabe holgado pero sin un carril entero libre: tampoco se molesta al usuario
+  if (viewportReflowVerdict([{ x: 0, y: 0, w: 1100, h: 100 }], 1400, 400, o) !== null)
+    throw new Error('A1: sobrar menos de un carril no debe ofrecer reajuste');
+  // sobra un carril entero (monitor más ancho): se OFRECE, nunca se hace solo
+  if (viewportReflowVerdict([{ x: 0, y: 0, w: 900, h: 100 }], 1400, 400, o) !== 'roomy')
+    throw new Error('A1: sobrar un carril entero debe ofrecer reajuste');
+  // CONVERGENCIA (la razón de la asimetría): tras reordenar a la pantalla estrecha, abrir en la
+  // ancha no vuelve a dar overflow → no hay ida y vuelta que bifurque datos.json en OneDrive
+  const estrecho = [{ x: 12, y: 0, w: 600, h: 100 }, { x: 626, y: 0, w: 600, h: 100 }];
+  if (viewportReflowVerdict(estrecho, 1280, 600, o) !== null) throw new Error('A1: el resultado del reflow no debería seguir en overflow');
+  if (viewportReflowVerdict(estrecho, 1920, 620, o) === 'overflow') throw new Error('A1: al ensanchar JAMÁS debe dar overflow (bucle de escrituras)');
+}
+// cableado: el reflow automático solo ocurre en `resize`; al CARGAR únicamente se ofrece
+{
+  const auto = src.match(/function reflowForViewport\(\)\{[\s\S]*?\n\}/)[0];
+  if (!/viewIsMutable\(currentView\(\)\)/.test(auto)) throw new Error('A1: no debe tocar una vista seguida de solo lectura');
+  if (!/drop-ghost/.test(auto)) throw new Error('A1: no debe reordenar en mitad de un arrastre');
+  if (!/tagFilter/.test(auto)) throw new Error('A1: con filtro de etiqueta no se reordena');
+  const load = src.match(/function offerViewportReflowOnLoad\(\)\{[\s\S]*?\n\}/)[0];
+  if (/orderSpace\(undefined/.test(load) || !/toastAction/.test(load))
+    throw new Error('A1: al cargar NO se reordena solo (sería la escritura fantasma que bifurca OneDrive): se ofrece');
+  if (!/setTimeout\(\s*\(\)\s*=>\s*toastAction|setTimeout\(\(\) => toastAction/.test(load) && !/toastAction/.test(load))
+    throw new Error('A1: el aviso de carga debe ser un toast con acción');
+}
+console.log('OK A1 reflow por cambio de pantalla (overflow rescata, ensanchar solo ofrece, converge sin bucle de escrituras)');
+
 // --- N3: ancho completo sin COL_MAX cuando el nº de columnas es explícito; Auto lo conserva ---
 const gFull = columnGuides(3840, { forceN: 3 });
 if (gFull.cols[0].x !== 12) throw new Error('columnGuides explícito: el primer carril debe empezar en pad');
@@ -1042,6 +1111,19 @@ console.log('OK parseLinkDrop (marcador, multilínea, esquemas seguros, títulos
 if (!src.includes('document.addEventListener("drop", e => { e.preventDefault(); })')) throw new Error('regresión: falta el guardián anti-navegación de drops fuera de destino');
 if (!src.match(/link-it[\s\S]{0,400}it-drag" draggable="true"/)) throw new Error('regresión: los enlaces perdieron el asa de arrastre ⋮⋮');
 console.log('OK enlaces arrastrables (guardián de documento + asa presente)');
+
+// --- C (2026-07-28): el asa de las TAREAS debe verse sin pasar el ratón y anclarse arriba ---
+// Parte de fallo de Ernesto: «no puedo arrastrar tareas». El asa existía, pero a opacity:0 era
+// invisible, y con align-items:center en una tarea larga quedaba a media altura, fuera de alcance.
+{
+  const rule = html.match(/\.todo-it > \.it-drag\{([^}]*)\}/);
+  if (!rule) throw new Error('regresión: falta la regla que hace visible el asa de arrastre de las tareas');
+  const m = rule[1].match(/opacity:\s*([\d.]+)/);
+  if (!m || parseFloat(m[1]) < 0.3) throw new Error('regresión: el asa de las tareas vuelve a ser (casi) invisible en reposo');
+  if (!/align-self:\s*flex-start/.test(rule[1])) throw new Error('regresión: el asa debe anclarse arriba (en una tarea larga se va a media altura)');
+  if (!src.match(/it-drag" draggable="\$\{view === "pend"\}/)) throw new Error('regresión: el asa de tareas perdió su condición de arrastre');
+}
+console.log('OK asa de arrastre de tareas (visible en reposo, anclada arriba, solo en Pendientes)');
 
 // --- columnGuides: suelo de gusto vs suelo geométrico (v0.39.0) ---
 // Parte de fallo real de Ernesto: «pongo 4 columnas y pasan a 2» en su pantalla (~1000 px).
@@ -1598,12 +1680,47 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
   if (looksLikeState({ cabeceraPack: 1, widgets: [] })) throw new Error('import: un pack NO es una copia');
   if (looksLikeState({ hola: 1 })) throw new Error('import: un objeto sin escritorios NO es una copia');
   if (looksLikeState(null) || looksLikeState([]) || looksLikeState('x')) throw new Error('import: no-objeto NO es una copia');
+  // clasificador único de formatos (2026-07-28): «Importar copia» y «Abrir escritorio compartido»
+  // comparten diagnóstico, así que ninguno de los dos puede volver a confundir un formato con otro
+  eval('globalThis.classifyCabeceraFile = ' + pickFn('classifyCabeceraFile', 'parsed'));
+  if (classifyCabeceraFile({ cabeceraShared: 1 }) !== 'compartido') throw new Error('clasificador: sobre compartido mal identificado');
+  if (classifyCabeceraFile({ cabeceraPack: 1 }) !== 'pack') throw new Error('clasificador: pack mal identificado');
+  if (classifyCabeceraFile({ version: 2, spaces: [] }) !== 'copia') throw new Error('clasificador: copia mal identificada');
+  if (classifyCabeceraFile({ hola: 1 }) !== 'basura') throw new Error('clasificador: objeto ajeno debería ser basura');
+  if (classifyCabeceraFile(null) !== 'basura' || classifyCabeceraFile('x') !== 'basura') throw new Error('clasificador: no-objeto debería ser basura');
+  // un sobre compartido NUNCA debe caer en la rama de copia (fue el borrado del 2026-07-24)
+  if (classifyCabeceraFile({ cabeceraShared: 1, spaces: [{ widgets: [] }] }) !== 'compartido') throw new Error('clasificador: el sobre gana a cualquier parecido con una copia');
+  const cls = src.match(/function classifyCabeceraFile\([\s\S]*?\n\}/)[0];
+  if (!/cabeceraShared/.test(cls) || !/cabeceraPack/.test(cls) || !/looksLikeState/.test(cls)) throw new Error('clasificador: no mira los tres formatos');
   // invariante: act-import VALIDA antes de reemplazar el estado (no machaca con archivo equivocado)
   const at = src.indexOf('#act-import');
-  const body = src.slice(at, at + 1000);
-  if (!/looksLikeState\(parsed\)/.test(body) || !/cabeceraShared/.test(body)) throw new Error('import: act-import no valida el archivo antes de reemplazar el estado');
-  if (body.indexOf('looksLikeState') > body.indexOf('setState(parsed')) throw new Error('import: la validación debe ir ANTES de setState');
+  const body = src.slice(at, at + 1200);
+  if (!/classifyCabeceraFile\(parsed\)/.test(body)) throw new Error('import: act-import no clasifica el archivo antes de reemplazar el estado');
+  if (body.indexOf('classifyCabeceraFile') > body.indexOf('setState(parsed')) throw new Error('import: la validación debe ir ANTES de setState');
   console.log('OK import seguro (rechaza sobre/pack/basura + backup previo + valida antes de reemplazar)');
+})();
+
+// --- Abrir un escritorio compartido desde ARCHIVO (2026-07-28): mismas garantías que por URL ---
+(function(){
+  const body = src.match(/async function importSharedFile\(\)\{[\s\S]*?\n\}/)[0];
+  if (!/guardMutation\(\)/.test(body.slice(0, 200))) throw new Error('abrir compartido: falta guardMutation() al inicio');
+  if (!/normalizeShared\(parsed\)/.test(body)) throw new Error('abrir compartido: no re-proyecta el contenido con el allowlist C7');
+  if (!/sha256Canonical\(ns\.space\)/.test(body) || !/revision !== parsed\.revision/.test(body))
+    throw new Error('abrir compartido: no recomputa ni compara la huella (por URL sí lo hace)');
+  if (body.indexOf('createSpaceFromShared') < body.indexOf('revision !== parsed.revision'))
+    throw new Error('abrir compartido: crea el espacio ANTES de comprobar la huella');
+  if (!/dlgConfirm/.test(body)) throw new Error('abrir compartido: crea un escritorio sin confirmación humana');
+  if (/setState\(/.test(body)) throw new Error('abrir compartido: JAMÁS debe reemplazar el estado (solo añade un espacio)');
+  if (/fetch|subscriptions\.push/.test(body)) throw new Error('abrir compartido: es local — ni red ni suscripción');
+  // el creador de espacios es común con «Copiar a un espacio mío»: misma regeneración de ids y procedencia
+  const mk = src.match(/function createSpaceFromShared\([\s\S]*?\n\}/)[0];
+  if (!/derivedFrom/.test(mk) || !/it\.id = uid\(\)/.test(mk) || !/l\.id = uid\(\)/.test(mk))
+    throw new Error('createSpaceFromShared: procedencia o regeneración de ids perdida');
+  if (mk.indexOf('activeView = { kind: "space" }') > mk.indexOf('markDirty()'))
+    throw new Error('createSpaceFromShared: debe volver a vista propia ANTES de persistir');
+  const cp = src.match(/function copySubscriptionToSpace\([\s\S]*?\n\}/)[0];
+  if (!/createSpaceFromShared/.test(cp)) throw new Error('copiar desde vista seguida debe reusar createSpaceFromShared');
+  console.log('OK abrir escritorio compartido desde archivo (huella comprobada, confirmación, espacio nuevo, sin red ni reemplazo)');
 })();
 
 // --- D5b núcleo de la rebanada B: canonical + vectores dorados, sha256, SSRF, transporte (async por sha256) ---
@@ -1684,6 +1801,7 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
   console.log('OK A0 exportar (proyección C7, priv/superficie bloquean, originId único, validador del sobre)');
 
   // --- D5b-B «Copiar a un espacio mío»: espacio propio nuevo, ids regenerados, procedencia, vuelve a vista propia ---
+  eval('globalThis.createSpaceFromShared = ' + pickFn('createSpaceFromShared', 'snap, src, nameSuffix'));
   eval('globalThis.copySubscriptionToSpace = ' + pickFn('copySubscriptionToSpace', ''));
   let uidN = 0; globalThis.uid = () => 'gen' + (++uidN);
   globalThis.blankSpace = () => ({ id: 's_new', name: 'Escritorio', settings: {}, widgets: [] });

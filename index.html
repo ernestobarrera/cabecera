@@ -308,6 +308,13 @@ ul.plain{list-style:none}
 .it-edit,.it-up,.it-down,.it-drag,.it-color{border:none; background:none; color:var(--text-dim); cursor:pointer; font-size:12px; padding:2px 4px; border-radius:6px; opacity:0; flex-shrink:0; display:inline-flex; align-items:center; justify-content:center}
 .todo-it.has-task-color .it-color .cdot{background:var(--task-color); border-color:rgba(0,0,0,.3)}
 .todo-it:hover .it-del,.todo-it:hover .it-edit,.todo-it:hover .it-up,.todo-it:hover .it-down,.todo-it:hover .it-drag,.todo-it:hover .it-color,.clip-it:hover .it-del,.link-it:hover .it-del,.link-it:hover .it-act,.link-it:hover .it-drag{opacity:1}
+/* El asa de arrastre de una TAREA está siempre a la vista (parte de fallo de Ernesto 2026-07-28:
+   «no puedo arrastrar tareas»). A opacity:0 era arrastrable pero invisible, y con align-items:center
+   una tarea larga la dejaba centrada a media altura, lejos del sitio donde se busca. Ahora se ancla
+   arriba, se agranda el blanco y, en la vista de Hechas (donde no se reordena), se ve inerte. */
+.todo-it > .it-drag{opacity:.45; align-self:flex-start; margin-top:1px; font-size:14px; padding:3px 5px; cursor:grab}
+.todo-it > .it-drag:active{cursor:grabbing}
+.todo-it > .it-drag[draggable="false"]{opacity:.12; cursor:default}
 .color-pop{position:absolute; right:8px; top:30px; z-index:30; display:flex; gap:7px; align-items:center; padding:7px;
   border:1px solid var(--border); border-radius:11px; background:rgba(20,24,32,.96); box-shadow:var(--shadow)}
 .color-dot{width:18px; height:18px; border-radius:50%; border:1px solid var(--border); cursor:pointer; padding:0; background:transparent}
@@ -705,6 +712,7 @@ ul.plain{list-style:none}
     <button class="act" id="act-trash">🗑️ Papelera</button>
     <button class="act" id="act-export">⬇️ Exportar copia</button>
     <button class="act" id="act-import">⬆️ Importar copia</button>
+    <button class="act" id="act-open-shared">📥 Abrir escritorio compartido</button>
     <button class="act" id="act-restore">♻️ Restaurar copia</button>
   </div>
 </div>
@@ -1448,7 +1456,7 @@ function syncUI(mode, txt){
    reaparece) y si Recargar está activo. El descarte ✕ vive solo en memoria de la sesión.
    Demora asumida: la CDN de Pages puede servir la versión vieja hasta ~10 min aun con
    no-store (gobierna la caché del navegador, no la CDN); para pestañas de días, irrelevante. */
-const APP_VERSION = "0.40.8";
+const APP_VERSION = "0.41.0";
 let newVersionDetected = null;   // versión superior detectada; detiene futuras consultas
 let verDismissed = false;        // ✕: solo esta sesión — nunca persistido en disco
 let verCheckInflight = false;    // sin consultas concurrentes
@@ -2047,6 +2055,7 @@ async function boot(){
     }
     await handlePackParam();
     await checkFollowedPack();
+    offerViewportReflowOnLoad();
     maybeTour(wantTour);
     return;
   }
@@ -2067,6 +2076,7 @@ async function boot(){
   if (isFirstRun) saveNow();
   await handlePackParam();
   await checkFollowedPack();
+  offerViewportReflowOnLoad();
   maybeTour(wantTour);
 }
 
@@ -2680,13 +2690,13 @@ async function checkSubscription(subId, firstFetch){
 
 // Copiar el escritorio seguido a un espacio PROPIO nuevo (copia plana con procedencia). Regenera TODOS
 // los ids locales; estampa derivedFrom (que NO autoriza superficies agénticas). Vuelve a una vista propia.
-function copySubscriptionToSpace(){
-  const snap = subViewSnapshot;
-  const sub = (state.subscriptions || []).find(s => s.subscriptionId === subViewId);
-  if (!snap || !sub){ toast("Nada que copiar todavía", true); return; }
-  const src = { kind: "shared", sourceId: sub.shareId, revision: sub.lastAcceptedRevision };
+// Crea un espacio PROPIO a partir de un contenido compartido ya validado. Extraído para que la
+// copia desde una vista seguida y la apertura desde archivo (2026-07-28) sigan exactamente el
+// mismo contrato: ids locales regenerados, procedencia estampada y vuelta a una vista propia
+// antes de persistir. `src` = {kind, sourceId, revision}. Devuelve el espacio creado.
+function createSpaceFromShared(snap, src, nameSuffix){
   const sp = blankSpace();
-  sp.name = (snap.name || "Escritorio") + " (copia)";
+  sp.name = (snap.name || "Escritorio") + (nameSuffix === undefined ? " (copia)" : nameSuffix);
   sp.widgets = snap.widgets.map((w, i) => {
     const nw = { id: uid(), z: 10 + i, type: w.type, x: w.x, y: w.y, w: w.w, h: w.h, source: "user",
       derivedFrom: { ...src, originId: w.id }, data: JSON.parse(JSON.stringify(w.data || {})) };
@@ -2701,7 +2711,62 @@ function copySubscriptionToSpace(){
   state.active = ix;
   markDirty();
   renderAll();
+  return sp;
+}
+
+function copySubscriptionToSpace(){
+  const snap = subViewSnapshot;
+  const sub = (state.subscriptions || []).find(s => s.subscriptionId === subViewId);
+  if (!snap || !sub){ toast("Nada que copiar todavía", true); return; }
+  const sp = createSpaceFromShared(snap, { kind: "shared", sourceId: sub.shareId, revision: sub.lastAcceptedRevision });
   toast("Copiado a «" + sp.name + "». Ya es tuyo y editable.");
+}
+
+/* ---------- Abrir un escritorio compartido desde ARCHIVO (2026-07-28) ----------
+   Parte de fallo de Ernesto: «he exportado un escritorio y luego no me deja importarlo». Hasta
+   ahora un sobre `cabeceraShared` SOLO se podía consumir siguiéndolo por URL, así que exportar un
+   escritorio y volver a abrirlo exigía subirlo antes a un servidor https — y dárselo a «Importar
+   copia» o a «Packs» solo devolvía un rechazo. Esto cierra el círculo sin red: el archivo se
+   valida con el MISMO allowlist y la MISMA huella que la vía de red, y nace un escritorio nuevo.
+   No crea suscripción (no hay origen que comprobar) y no reemplaza nada tuyo. */
+
+// Qué es este JSON. PURA, y compartida por «Importar copia» y por aquí: así los dos caminos dan
+// el mismo diagnóstico y ninguno vuelve a confundir un formato con otro.
+function classifyCabeceraFile(parsed){
+  if (!parsed || typeof parsed !== "object") return "basura";
+  if (parsed.cabeceraShared) return "compartido";
+  if (parsed.cabeceraPack) return "pack";
+  if (looksLikeState(parsed)) return "copia";
+  return "basura";
+}
+
+async function importSharedFile(){
+  if (!guardMutation()) return;
+  const inp = document.createElement("input");
+  inp.type = "file"; inp.accept = ".json";
+  inp.addEventListener("change", async () => {
+    let parsed;
+    try { parsed = JSON.parse(await inp.files[0].text()); }
+    catch (e){ toast("Archivo no válido: no se ha cambiado nada", true); return; }
+    const kind = classifyCabeceraFile(parsed);
+    if (kind === "pack"){ toast("Esto es un PACK, no un escritorio compartido. Aplícalo desde Inicio → «Packs». No se ha cambiado nada.", true); return; }
+    if (kind === "copia"){ toast("Esto es una COPIA de todos tus escritorios. Ábrela con «Importar copia». No se ha cambiado nada.", true); return; }
+    if (kind !== "compartido"){ toast("Ese archivo no es un escritorio compartido de Cabecera. No se ha cambiado nada.", true); return; }
+    const ns = normalizeShared(parsed);
+    if (!ns.ok){ toast("Rechazado: " + ns.reason + ". No se ha cambiado nada.", true); return; }
+    let revision;
+    try { revision = await sha256Canonical(ns.space); }
+    catch (e){ toast("No se pudo comprobar la huella del archivo. No se ha cambiado nada.", true); return; }
+    if (revision !== parsed.revision){ toast("La huella no coincide con el contenido (¿alterado?). No se ha cambiado nada.", true); return; }
+    const counts = {}; for (const w of ns.space.widgets) counts[w.type] = (counts[w.type] || 0) + 1;
+    const labelOf = { links: "enlaces", notes: "notas", todo: "listas de tareas", clips: "portapapeles", md: "markdown" };
+    const resumen = Object.entries(counts).map(([t, n]) => `${n} ${labelOf[t] || t}`).join(", ");
+    if (!(await dlgConfirm(`«${esc(ns.space.name)}» trae ${resumen}. Se creará un escritorio NUEVO con ese contenido, ya tuyo y editable. Ninguno de tus escritorios se toca.`,
+      { title: "Abrir escritorio compartido", okLabel: "Crear escritorio" }))) return;
+    const sp = createSpaceFromShared(ns.space, { kind: "shared", sourceId: ns.shareId, revision }, "");
+    toast("Abierto en «" + sp.name + "». Ya es tuyo y editable.");
+  });
+  inp.click();
 }
 
 // Dejar de seguir. Vuelve a una vista propia, borra metadatos (datos.json), runtime (IDB) y consentimiento.
@@ -3405,8 +3470,12 @@ function undoLayout(snap){
    2/3/4 = guías explícitas a ancho completo), ajusta el alto de los tipos ENUMERABLES a su
    contenido (acotado) y anima el viaje. Elegir política en ▤ la aplica inmediatamente: cambio de
    `cols` y geometría son UNA transacción con un solo guardado — si falla P4 no cambia ninguna de
-   las dos. SOLO gesto humano: jamás al cargar, sincronizar, redimensionar, cambiar de monitor,
-   aplicar packs, restaurar o sanear. Snapshot todo-o-nada en `lastRepack` (memoria de sesión). */
+   las dos. Gesto humano salvo UNA excepción acotada (A1, 2026-07-28): si al cambiar el ancho del
+   viewport algún widget queda FUERA del área visible, `reflowForViewport` llama aquí con
+   {reason:"viewport"} — sin scroll horizontal ese contenido es inalcanzable, así que reordenar es
+   rescate, no cosmética. Sigue sin ocurrir al cargar, sincronizar, aplicar packs, restaurar ni
+   sanear, y tampoco al ENSANCHAR (ahí solo se ofrece: ver viewportReflowVerdict para por qué la
+   asimetría evita el bucle de escrituras). Snapshot todo-o-nada en `lastRepack` (memoria de sesión). */
 let lastRepack = null;
 // Tipos cuyo alto se ajusta al contenido en «Ordenar» (P6 del gate: solo enumerables — en el
 // resto, el espacio en blanco es funcional o preferencia del usuario y no se toca).
@@ -3433,7 +3502,8 @@ function measureContentH(w, width){
     return host.offsetHeight;
   }finally{ host.remove(); }
 }
-function orderSpace(nextCols){
+function orderSpace(nextCols, opts){
+  const o = opts || {};   // {reason} — solo cambia el texto del aviso; la transacción es idéntica
   if (!guardMutation()) return;   // D5b: Ordenar reescribe la geometría del espacio (inerte en A)
   if (isMobile() || !state) return;
   if (tagFilter){ toast("Quita el filtro de etiqueta para ordenar", true); return; }
@@ -3482,7 +3552,10 @@ function orderSpace(nextCols){
   const apply = () => { renderAll(); markDirty(); };
   if (items.length > 20) apply(); else flipLayout(items, apply);   // umbral anti-jank (gate)
   lastRepack = { spaceId: sp.id, ids: sp.widgets.map(x => x.id).sort().join(","), items, colsBefore, colsAfter };
-  toastAction("Escritorio ordenado en " + guides.n + " columnas.", "Deshacer", undoRepack);
+  toastAction(o.reason === "viewport"
+    ? "Pantalla distinta: reordenado en " + guides.n + " columnas para que quepa todo."
+    : "Escritorio ordenado en " + guides.n + " columnas.", "Deshacer", undoRepack);
+  return true;
 }
 /* Deshacer del reordenado: TODO O NADA (gate N3). Solo restaura si el espacio activo es el del
    snapshot, el conjunto de widgets es EXACTAMENTE el mismo y todos siguen en su rect «después»;
@@ -3512,6 +3585,42 @@ function undoRepack(){
   renderAll(); markDirty();
   toast("Orden deshecho");
 }
+/* Adaptador impuro del veredicto anterior. Se llama SOLO desde el evento `resize` y SOLO cuando el
+   ancho cambia de verdad (cambiar de monitor, girar la pantalla, redimensionar la ventana): mover el
+   ratón, hacer scroll, cargar o sincronizar no lo disparan nunca. Se abstiene mientras hay un gesto
+   humano en curso (arrastre/redimensionado), con filtro de etiqueta, con una ventana maximizada
+   (esas ya las sigue el propio listener) o en una vista seguida de solo lectura. */
+let lastViewW = 0, viewportReflowTimer = null;
+function reflowForViewport(){
+  if (isMobile() || !state || tagFilter) return;
+  if (document.querySelector(".drop-ghost")) return;   // hay un arrastre de ventana en curso
+  if (!viewIsMutable(currentView())) return;          // vista seguida: no se toca nada (ni aviso)
+  if (state.widgets.some(x => x.max)) return;
+  const guides = spaceGuides(colsOpt());
+  const laneW = guides.cols.length ? guides.cols[0].w : 0;
+  const verdict = viewportReflowVerdict(state.widgets.map(widgetRect), deskViewW(), laneW,
+    { pad: LAYOUT.viewportPad });
+  if (verdict === "overflow") orderSpace(undefined, { reason: "viewport" });
+  else if (verdict === "roomy") toastAction("Esta pantalla es más ancha: hay sitio para repartir mejor los widgets.", "Reajustar", () => orderSpace());
+}
+/* Al ABRIR en otra pantalla (el caso de «cierro en el portátil y abro en el monitor grande», donde
+   no llega ningún evento `resize`) el desajuste se detecta igual, pero aquí NO se reordena solo: se
+   ofrece. La diferencia no es capricho — reordenar al cargar es exactamente la escritura fantasma
+   que prohíbe la spec: dos equipos abriendo el mismo datos.json escribirían cada uno al arrancar y
+   bifurcarían el archivo en OneDrive. Con un clic tuyo, el guardado tiene autor. */
+function offerViewportReflowOnLoad(){
+  lastViewW = deskViewW();
+  if (isMobile() || !state || tagFilter || !viewIsMutable(currentView())) return;
+  if (state.widgets.some(x => x.max)) return;
+  const guides = spaceGuides(colsOpt());
+  const laneW = guides.cols.length ? guides.cols[0].w : 0;
+  const verdict = viewportReflowVerdict(state.widgets.map(widgetRect), deskViewW(), laneW, { pad: LAYOUT.viewportPad });
+  if (!verdict) return;
+  setTimeout(() => toastAction(verdict === "overflow"
+    ? "Algunos widgets se salen de esta pantalla."
+    : "Esta pantalla es más ancha de lo que ocupa tu escritorio.", "Reajustar", () => orderSpace()), 900);
+}
+
 /* Geometría robusta frente a cambios de monitor/resolución (puras → testeables) */
 function maxRect(vw, vh, scrollTop = 0){   // rect "maximizado" para el viewport visible (en coords de mundo: +scrollTop)
   const pad = 12, bar = 46;
@@ -4339,9 +4448,56 @@ function planSpaceRepack(rects, guides, opts){
   });
   return { placed, maxBottom };
 }
+/* planLaneSpot: hueco para un widget NUEVO respetando los carriles del espacio (parte de fallo de
+   Ernesto 2026-07-28: «al crear un widget en un escritorio vacío no lo ha ajustado a las columnas y
+   lo ha hecho más estrecho»). Hasta ahora el widget nacía con el ancho fijo de su tipo (300 px) y se
+   colocaba por escaneo libre, así que en cualquier escritorio con columnas nacía descuadrado y había
+   que Ordenar a mano. Ahora nace ya en un carril, con el ancho del carril — el mismo contrato que
+   aplica «Ordenar» a todos los demás. Elige el carril cuyo contenido termina más arriba (empate → el
+   más a la izquierda) y apila debajo. Mismo criterio de pertenencia que planSpaceRepack. PURO. */
+function planLaneSpot(rects, guides, opts){
+  const o = opts || {};
+  const gutter = o.gutter ?? 14, laneTop = o.laneTop ?? 24;
+  const bottoms = guides.cols.map(() => laneTop);
+  for (const r of rects){
+    let own = ownerLane(r, guides);
+    if (own == null){   // sin solape con ningún carril (zona libre N1): al de centro más cercano
+      let bd = Infinity; const rc = (+r.x || 0) + (+r.w || 0) / 2;
+      guides.cols.forEach((c, j) => { const d = Math.abs(rc - (c.x + c.w / 2)); if (d < bd){ bd = d; own = j; } });
+    }
+    if (own == null) continue;
+    bottoms[own] = Math.max(bottoms[own], (+r.y || 0) + (+r.h || 0) + gutter);
+  }
+  let best = 0;
+  for (let i = 1; i < bottoms.length; i++) if (bottoms[i] < bottoms[best]) best = i;
+  return { x: guides.cols[best].x, y: bottoms[best], w: guides.cols[best].w };
+}
+/* viewportReflowVerdict: ¿qué hacer cuando cambia el ANCHO del viewport (otro monitor, otra
+   resolución, ventana redimensionada)? Reabre de forma ACOTADA la poda «jamás reflow automático»
+   (Codex 2026-07-18), a la que Ernesto puso cuatro partes de fallo seguidas (#73 #74 #85 #86).
+     - "overflow": algún widget se sale por la derecha del área visible. No hay scroll horizontal,
+       así que ese contenido queda INALCANZABLE → se reordena solo. Es rescate de visibilidad.
+     - "roomy": cabe de sobra (sobra al menos un carril entero). NO se toca nada: solo se ofrece.
+     - null: ni una cosa ni la otra.
+   La asimetría es deliberada, no pereza (spec-escrituras-fantasma): reordenar al ENCOGER converge —
+   lo que cabe en la pantalla estrecha cabe también en la ancha, así que no se vuelve a disparar—,
+   mientras que reordenar también al ENSANCHAR haría ida y vuelta entre dos monitores distintos y
+   bifurcaría datos.json en OneDrive, que es justo el fallo que aquella poda evitaba. PURA. */
+function viewportReflowVerdict(rects, viewW, laneW, opts){
+  const o = opts || {};
+  const pad = o.pad ?? 12, tol = o.tol ?? 8;
+  if (!rects || !rects.length) return null;
+  let right = 0;
+  for (const r of rects) right = Math.max(right, (+r.x || 0) + (+r.w || 0));
+  const limit = viewW - pad;
+  if (right > limit + tol) return "overflow";
+  if (laneW > 0 && limit - right >= laneW + tol) return "roomy";
+  return null;
+}
 /* Planificador PURO del hueco para un widget nuevo (N0, Codex H3): mismo escaneo y fallback
    que siempre (arriba-izquierda, pasos de `step`). rects = ocupación actual (alturas visuales).
-   Autocontenida para tests: referencia solo overlapsRect. */
+   Autocontenida para tests: referencia solo overlapsRect. Sigue siendo el camino del MÓVIL
+   (apilado, sin carriles) y el respaldo si el carril elegido se saldría del lienzo. */
 function findSpotPlan(rects, ww, hh, vw, vh, opts){
   const o = opts || {};
   const gap = o.gap ?? 14, step = o.step ?? 28, margin = o.margin ?? 24, bar = o.bar ?? 46;
@@ -4359,9 +4515,15 @@ function findSpotPlan(rects, ww, hh, vw, vh, opts){
   return { x: margin, y: visibleMaxY, w };
 }
 function nextWidgetSpot(ww, hh){   // adaptador impuro (N0)
-  return findSpotPlan(state.widgets.map(widgetRect), ww, hh, innerWidth, innerHeight,
+  const rects = state.widgets.map(widgetRect);
+  const libre = () => findSpotPlan(rects, ww, hh, innerWidth, innerHeight,
     { gap: LAYOUT.snapGap, step: LAYOUT.step, margin: LAYOUT.packingMargin, bar: LAYOUT.bar,
       minW: LAYOUT.minW, minH: LAYOUT.minH });
+  if (isMobile()) return libre();   // apilado: los carriles no existen
+  const spot = planLaneSpot(rects, spaceGuides(colsOpt()), { gutter: LAYOUT.snapGap, laneTop: LAYOUT.packingMargin });
+  // si el carril elegido ya llega al fondo del lienzo, el escaneo libre encuentra hueco antes
+  if (spot.y + Math.max(+hh || 0, LAYOUT.minH) + LAYOUT.packingMargin > LAYOUT.worldMax) return libre();
+  return spot;
 }
 
 function addWidget(type){
@@ -4694,7 +4856,7 @@ function bodyTodo(w, el){
       li.className = "todo-it" + (it.done ? " done" : "") + (taskColor ? " has-task-color" : "");
       if (taskColor) li.style.setProperty("--task-color", taskColor);
       const dm = dueMeta(it);
-      li.innerHTML = `<span class="it-drag" draggable="${view === "pend"}" title="Arrastrar">⋮⋮</span><input type="checkbox" ${it.done ? "checked" : ""}><span class="t">${linkifyEsc(it.t)}</span>`
+      li.innerHTML = `<span class="it-drag" draggable="${view === "pend"}" title="${view === "pend" ? "Arrastrar para reordenar (o usa ↑ ↓)" : "En «Hechas» no se reordena"}">⋮⋮</span><input type="checkbox" ${it.done ? "checked" : ""}><span class="t">${linkifyEsc(it.t)}</span>`
         + (it.note ? `<span class="task-note-mark" title="${esc(it.note)}">i</span>` : "")
         + (dm ? `<span class="due ${dm.cls}">${dm.label}</span>` : "")
         + `<span class="it-actions"><button class="it-color" title="Color"><span class="cdot"></span></button><button class="it-edit" title="Editar">✎</button><button class="it-up" title="Subir">↑</button><button class="it-down" title="Bajar">↓</button><button class="it-due" title="Fecha, nota y aviso">📅</button><button class="it-del" title="Borrar">✕</button></span>`;
@@ -6445,9 +6607,10 @@ function paletteEntries(){
   add("📖", "Guía completa", "cómo funciona todo", () => { closeMenu(); window.open("guia.html", "_blank", "noopener"); }, "guia manual ayuda completa como funciona empezar");
   add("📤", "Compartir este escritorio", "exportar a un archivo", () => { closeMenu(); exportSharedSpace(); }, "compartir exportar escritorio archivo publicar seguir enviar compartido");
   add("👁", "Seguir un escritorio por URL", "verlo en solo lectura", () => { closeMenu(); promptFollowUrl(); }, "seguir escritorio url compartido solo lectura suscribir suscripcion ver");
+  add("📥", "Abrir un escritorio compartido", "desde un archivo", () => { closeMenu(); importSharedFile(); }, "abrir importar escritorio compartido archivo json recibir exportado restaurar espacio");
   for (const [type, t] of Object.entries(WTYPES)) if (type !== "intro")
     add("➕", "Añadir " + t.name, "widget nuevo", () => { addWidget(type); closeMenu(); }, "añadir crear nuevo " + t.name);
-  [["⚙","Ajustes generales","act-config"],["❓","Guía","act-ayuda"],["🧩","Packs","act-packs"],["🖼️","Fondo","act-wallpaper"],["📁","Sincronizar equipos","act-folder"],["🧭","Ordenar","act-arrange"],["🗑️","Papelera","act-trash"],["⬇️","Exportar copia","act-export"],["⬆️","Importar copia","act-import"],["♻️","Restaurar copia","act-restore"]]
+  [["⚙","Ajustes generales","act-config"],["❓","Guía","act-ayuda"],["🧩","Packs","act-packs"],["🖼️","Fondo","act-wallpaper"],["📁","Sincronizar equipos","act-folder"],["🧭","Ordenar","act-arrange"],["🗑️","Papelera","act-trash"],["⬇️","Exportar copia","act-export"],["⬆️","Importar copia","act-import"],["📥","Abrir escritorio compartido","act-open-shared"],["♻️","Restaurar copia","act-restore"]]
     .forEach(([ic, label, id]) => add(ic, label, "acción", () => { closeMenu(); const b = $("#" + id); if (b) b.click(); }, label + " configuración"));
   return E;
 }
@@ -6574,7 +6737,16 @@ function wireUI(){
       if (el){ el.style.left = m.x + "px"; el.style.top = m.y + "px"; el.style.width = m.w + "px"; el.style.height = m.h + "px"; }
     });
     updateDeskHeight();   // el cambio de tamaño altera el alto lógico del lienzo
-    renderLaneAmbient();  // los separadores N3 se recolocan al nuevo ancho (solo visual: los widgets NO se recolocan — A1)
+    renderLaneAmbient();  // los separadores N3 se recolocan al nuevo ancho
+    // A1 (2026-07-28): el ancho —y solo el ancho— dispara el veredicto de reflow. Con retardo,
+    // porque arrastrar el borde de la ventana emite decenas de `resize` y no queremos reordenar
+    // en cada píxel: se decide cuando el gesto para.
+    const vw = deskViewW();
+    if (vw !== lastViewW){
+      lastViewW = vw;
+      clearTimeout(viewportReflowTimer);
+      viewportReflowTimer = setTimeout(reflowForViewport, 350);
+    }
   });
   // aviso de tareas: cada clic salta a la siguiente tarea vencida o de hoy
   $("#tb-tasks").addEventListener("click", () => {
@@ -6747,9 +6919,10 @@ function wireUI(){
     inp.addEventListener("change", async () => {
       try{
         const parsed = JSON.parse(await inp.files[0].text());
-        if (parsed && parsed.cabeceraShared){ toast("Esto es un escritorio COMPARTIDO, no una copia de seguridad — no se importa así (seguir escritorios llega pronto). No se ha cambiado nada.", true); return; }
-        if (parsed && parsed.cabeceraPack){ toast("Esto es un PACK, no una copia. Aplícalo desde Inicio → «Packs». No se ha cambiado nada.", true); return; }
-        if (!looksLikeState(parsed)){ toast("Ese archivo no es una copia de Cabecera (no contiene tus escritorios). No se ha cambiado nada.", true); return; }
+        const kind = classifyCabeceraFile(parsed);
+        if (kind === "compartido"){ toast("Esto es un escritorio COMPARTIDO, no una copia de todos tus escritorios. Ábrelo con «Abrir escritorio compartido». No se ha cambiado nada.", true); return; }
+        if (kind === "pack"){ toast("Esto es un PACK, no una copia. Aplícalo desde Inicio → «Packs». No se ha cambiado nada.", true); return; }
+        if (kind !== "copia"){ toast("Ese archivo no es una copia de Cabecera (no contiene tus escritorios). No se ha cambiado nada.", true); return; }
         try{ localStorage.setItem("cabecera-backup-antes-import", JSON.stringify(state)); }catch(e){}   // recuperable en «Restaurar copia»
         setState(parsed, "import");
         renderAll(); markDirty(); toast("Copia importada");
@@ -6757,6 +6930,7 @@ function wireUI(){
     });
     inp.click();
   });
+  $("#act-open-shared").addEventListener("click", () => { closeMenu(); importSharedFile(); });
 
   // sincronización / reconectar
   $("#tb-sync").addEventListener("click", async () => {

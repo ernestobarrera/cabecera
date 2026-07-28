@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.41.0] - 2026-07-28 — el escritorio se adapta a la pantalla, y un escritorio compartido se abre desde el archivo
+
+- **Cambiar de monitor ya no deja widgets fuera de la pantalla.** Si al cambiar de pantalla o de resolución algún widget queda **fuera del área visible** —donde no podías alcanzarlo, porque el escritorio no se desplaza en horizontal—, Cabecera lo reordena en columnas y te ofrece **Deshacer**. Si la pantalla nueva es más ancha no toca nada: te ofrece un botón **Reajustar**. Y al **abrir** en otra pantalla nunca reordena sola, también te lo ofrece. Fuera de esto sigue sin recolocar al cargar, sincronizar, aplicar un pack o restaurar una copia.
+- **Un widget nuevo nace ya encajado en su columna**, con el ancho de esa columna y en el carril con menos contenido. Antes nacía con un ancho fijo, quedaba más estrecho que el resto y había que ordenar a mano.
+- **Nuevo: «Abrir escritorio compartido».** Un escritorio exportado con «Compartir este escritorio» solo se podía abrir **siguiéndolo por una dirección web**, así que exportar el tuyo y volver a abrirlo obligaba a subirlo antes a un servidor. Ahora se abre **desde el archivo**, sin red: menú Inicio → «Abrir escritorio compartido» (o Ctrl+K). Se comprueba la huella del archivo, se te dice qué trae y se crea un **escritorio nuevo**, tuyo y editable; ninguno de los tuyos se toca. Dar un pack o una copia por error se rechaza con su explicación.
+- **El asa de arrastre de las tareas ya se ve.** Estaba a la vista solo al pasar el ratón y, en una tarea larga, quedaba a media altura: en la práctica no se podía arrastrar. Ahora es visible siempre, se ancla arriba y en la vista «Hechas» se muestra inerte (ahí no se reordena).
+
 ## [0.40.8] - 2026-07-24 — seguir un escritorio compartido por dirección web
 
 - **Nuevo: seguir un escritorio por URL** (Ctrl+K → «Seguir un escritorio por URL», o el botón **＋** del grupo «Seguidos» en la barra de pestañas). Aparece como una pestaña de **solo lectura**: puedes verlo, pero no editarlo. Con **↻ Comprobar** traes su última versión (te pregunta antes de reemplazar tu copia, nunca lo hace solo), y con **📋 Copiar a un espacio mío** te lo llevas a un escritorio propio y editable. Cierra el círculo de «Compartir este escritorio»: uno exporta, otro sigue.
