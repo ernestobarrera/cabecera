@@ -1125,6 +1125,34 @@ console.log('OK enlaces arrastrables (guardián de documento + asa presente)');
 }
 console.log('OK asa de arrastre de tareas (visible en reposo, anclada arriba, solo en Pendientes)');
 
+// --- E (2026-07-28): una tarea que es en realidad un texto largo se ofrece mudar a una nota ---
+eval('globalThis.TASK_LONG = ' + src.match(/const TASK_LONG = (\d+);/)[1]);
+eval('globalThis.taskStub = ' + pickFn('taskStub', 'text, max'));
+if (TASK_LONG < 200 || TASK_LONG > 600) throw new Error('E: umbral de tarea larga fuera de rango razonable');
+if (!/^Primera línea → texto completo en la nota$/.test(taskStub('Primera línea\nsegunda\ntercera')))
+  throw new Error('E: el titular debe ser la primera línea con contenido');
+if (taskStub('   \n\n  De verdad la primera  \nx').indexOf('De verdad la primera') !== 0)
+  throw new Error('E: las líneas en blanco iniciales no cuentan');
+{
+  const largo = taskStub('x'.repeat(500));
+  if (largo.length > 80 + ' → texto completo en la nota'.length) throw new Error('E: el titular no se acota');
+  if (!largo.includes('…')) throw new Error('E: al recortar debe quedar la elipsis');
+}
+if (taskStub('') !== ' → texto completo en la nota') throw new Error('E: texto vacío no debe romper');
+{
+  const body = src.match(/function offerTaskToNote\([\s\S]*?\n\}/)[0];
+  if (!/toastAction/.test(body)) throw new Error('E: debe OFRECERSE, nunca convertir solo (el texto es del usuario)');
+  if (!/guardMutation\(\)/.test(body)) throw new Error('E: falta el guard de vista mutable dentro de la acción');
+  if (!/indexOf\(it\) < 0/.test(body)) throw new Error('E: debe abortar si la tarea se borró mientras el aviso estaba en pantalla');
+  if (!/w\.data\.items/.test(body) || !/state\.widgets\.push/.test(body)) throw new Error('E: debe crear la nota en el espacio activo');
+  // cableado en las DOS puertas de entrada de texto: alta y edición
+  const add = src.match(/const add = \(\) => \{[\s\S]*?\n  \};/)[0];
+  if (!/offerTaskToNote/.test(add)) throw new Error('E: el alta de tarea no ofrece la conversión');
+  const commit = src.match(/const commit = \(\) => \{\n      const v = input\.value[\s\S]*?\n    \};/)[0];
+  if (!/offerTaskToNote/.test(commit)) throw new Error('E: la edición de tarea no ofrece la conversión');
+}
+console.log('OK tarea larga → nota (se ofrece, no se impone; titular acotado; cableado en alta y edición)');
+
 // --- columnGuides: suelo de gusto vs suelo geométrico (v0.39.0) ---
 // Parte de fallo real de Ernesto: «pongo 4 columnas y pasan a 2» en su pantalla (~1000 px).
 // Auto sigue exigiendo 320 px por columna; una elección EXPLÍCITA solo se recorta contra los

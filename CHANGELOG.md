@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.42.0] - 2026-07-28 — una tarea que es un texto largo se muda a una nota
+
+- **Una tarea que en realidad es un texto largo se ofrece convertir en nota.** Si escribes o pegas más de 300 caracteres en una tarea, aparece un aviso con **«Convertir en nota»**: el texto completo se muda a una nota nueva y la tarea conserva el titular. Se ofrece, nunca se hace solo.
+
 ## [0.41.0] - 2026-07-28 — el escritorio se adapta a la pantalla, y un escritorio compartido se abre desde el archivo
 
 - **Cambiar de monitor ya no deja widgets fuera de la pantalla.** Si al cambiar de pantalla o de resolución algún widget queda **fuera del área visible** —donde no podías alcanzarlo, porque el escritorio no se desplaza en horizontal—, Cabecera lo reordena en columnas y te ofrece **Deshacer**. Si la pantalla nueva es más ancha no toca nada: te ofrece un botón **Reajustar**. Y al **abrir** en otra pantalla nunca reordena sola, también te lo ofrece. Fuera de esto sigue sin recolocar al cargar, sincronizar, aplicar un pack o restaurar una copia.

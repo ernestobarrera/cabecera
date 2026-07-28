@@ -1456,7 +1456,7 @@ function syncUI(mode, txt){
    reaparece) y si Recargar está activo. El descarte ✕ vive solo en memoria de la sesión.
    Demora asumida: la CDN de Pages puede servir la versión vieja hasta ~10 min aun con
    no-store (gobierna la caché del navegador, no la CDN); para pestañas de días, irrelevante. */
-const APP_VERSION = "0.41.0";
+const APP_VERSION = "0.42.0";
 let newVersionDetected = null;   // versión superior detectada; detiene futuras consultas
 let verDismissed = false;        // ✕: solo esta sesión — nunca persistido en disco
 let verCheckInflight = false;    // sin consultas concurrentes
@@ -4696,6 +4696,36 @@ function linkifyEsc(t){
     return `<a href="${url}" target="_blank" rel="noopener">${url}</a>${tail}`;
   });
 }
+/* Tarea larga → nota (2026-07-28). Nace de un problema real de la superficie de trabajo con
+   agentes: una conversación entera pegada como «tarea» convierte la lista en algo inmanejable
+   —no se arrastra, no se lee, y el texto acaba viviendo SOLO en datos.json—. La convención es que
+   la lista guarda líneas y las notas guardan texto; esto la empuja en el momento de escribir, en
+   vez de esperar al triaje siguiente. Se OFRECE, nunca se hace solo: el texto es del usuario. */
+const TASK_LONG = 300;
+// Título breve que queda en la tarea cuando su texto se muda a una nota. PURA.
+function taskStub(text, max){
+  const m = max || 80;
+  const first = (String(text || "").split("\n").find(l => l.trim()) || "").trim();
+  const corto = first.length > m ? first.slice(0, m - 1).trimEnd() + "…" : first;
+  return corto + " → texto completo en la nota";
+}
+function offerTaskToNote(w, it, repaint){
+  const full = String((it && it.t) || "");
+  if (full.length <= TASK_LONG) return;
+  toastAction(`Eso son ${full.length} caracteres: una tarea es una línea.`, "Convertir en nota", () => {
+    if (!guardMutation()) return;
+    if (w.data.items.indexOf(it) < 0) return;   // la tarea pudo borrarse mientras el aviso estaba en pantalla
+    const spot = nextWidgetSpot(WTYPES.notes.w, WTYPES.notes.h);
+    const nota = { id: uid(), type: "notes", t: "Texto de una tarea", x: spot.x, y: spot.y,
+      w: spot.w, h: WTYPES.notes.h, z: ++zTop, source: "user", data: { text: full } };
+    state.widgets.push(nota);
+    $("#desktop").appendChild(buildWindow(nota));
+    it.t = taskStub(full);
+    repaint(); markDirty(); flashWidget(nota);
+    toast("Movido a una nota. La tarea conserva el titular.");
+  });
+}
+
 function bodyTodo(w, el){
   const desc = String(w.data.desc || "").trim();
   el.classList.toggle("has-desc", !!desc);
@@ -4714,8 +4744,10 @@ function bodyTodo(w, el){
 
   const add = () => {
     const t = inp.value.trim(); if (!t) return;
-    w.data.items.push({ t, done: false }); inp.value = "";
+    const it = { t, done: false };
+    w.data.items.push(it); inp.value = "";
     view = "pend"; paint(); markDirty();
+    offerTaskToNote(w, it, paint);   // pegar aquí una conversación entera tiene arreglo de un clic
   };
   el.querySelector(".todo-add .mini").addEventListener("click", add);
   inp.addEventListener("keydown", e => { if (e.key === "Enter") add(); });
@@ -4790,6 +4822,7 @@ function bodyTodo(w, el){
       if (!v){ it.t = old; paint(); return; }
       it.t = v;
       paint(); markDirty();
+      if (v !== old) offerTaskToNote(w, it, paint);
     };
     const cancel = () => { it.t = old; paint(); };
     input.addEventListener("input", grow);
