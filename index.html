@@ -371,6 +371,10 @@ ul.plain{list-style:none}
 .due-editor input:focus,.due-editor textarea:focus,.rename-editor input:focus{border-color:var(--accent); outline:none}
 .due-actions{display:flex; gap:7px; flex-wrap:wrap}
 .todo-bar{margin-bottom:9px; display:flex; gap:8px; align-items:center; flex-wrap:wrap}
+.todo-pager{display:flex; gap:6px; align-items:center; margin-left:auto}
+.todo-pager .pg{font-size:11.5px; color:var(--text-dim); min-width:34px; text-align:center}
+.todo-pager .pg.dim{opacity:.72}
+.todo-pager .mini{padding:1px 8px; line-height:1.4}
 .todo-toggle{flex-shrink:0}
 .todo-search{flex:1; min-width:110px; padding:5px 9px; border-radius:8px; border:1px solid var(--border-soft); background:rgba(255,255,255,.05); color:var(--text); font-family:var(--font); font-size:13px}
 .todo-search:focus{border-color:var(--accent); outline:none}
@@ -1456,7 +1460,7 @@ function syncUI(mode, txt){
    reaparece) y si Recargar está activo. El descarte ✕ vive solo en memoria de la sesión.
    Demora asumida: la CDN de Pages puede servir la versión vieja hasta ~10 min aun con
    no-store (gobierna la caché del navegador, no la CDN); para pestañas de días, irrelevante. */
-const APP_VERSION = "0.43.1";
+const APP_VERSION = "0.44.0";
 let newVersionDetected = null;   // versión superior detectada; detiene futuras consultas
 let verDismissed = false;        // ✕: solo esta sesión — nunca persistido en disco
 let verCheckInflight = false;    // sin consultas concurrentes
@@ -4890,7 +4894,9 @@ function bodyTodo(w, el){
   if (dline) dline.addEventListener("click", () => editNoteDesc(w, el.closest(".win")));
   const inp = el.querySelector(".todo-add input"), ul = el.querySelector(".todo-list");
   const toggle = el.querySelector(".todo-toggle"), search = el.querySelector(".todo-search");
+  const bar = el.querySelector(".todo-bar");
   let view = "pend";   // "pend" (pendientes) | "done" (histórico de hechas)
+  let page = 0;        // 0.44.0: página visible cuando las tareas no caben ni creciendo el widget
   let dragItem = null;
 
   const add = () => {
@@ -5022,22 +5028,35 @@ function bodyTodo(w, el){
   };
 
   function paint(){
-    ul.innerHTML = "";
     const doneN = w.data.items.filter(i => i.done).length;
     toggle.textContent = view === "pend" ? `🗂️ Hechas (${doneN})` : "‹ Pendientes";
     search.style.display = view === "done" ? "" : "none";
 
-    let list;
+    let list, vacio;
     if (view === "pend"){
       list = w.data.items.filter(i => !i.done);
-      if (!list.length) ul.innerHTML = `<div class="empty">Sin tareas pendientes.</div>`;
+      vacio = `<div class="empty">Sin tareas pendientes.</div>`;
     } else {
       const q = search.value.trim().toLowerCase();
       list = w.data.items.filter(i => i.done && (!q || i.t.toLowerCase().includes(q)))
         .sort((a, b) => (b.doneAt || 0) - (a.doneAt || 0));
-      if (!list.length) ul.innerHTML = `<div class="empty">${q ? "Nada coincide." : "Aún no has completado tareas."}</div>`;
+      vacio = `<div class="empty">${q ? "Nada coincide." : "Aún no has completado tareas."}</div>`;
     }
+    if (!list.length){ ul.innerHTML = vacio; page = 0; renderPager(1, 0); return; }
 
+    // 0.44.0 (#88): primero se pinta la lista entera y se deja que el widget CREZCA hasta que
+    // quepa (tope autoMaxH, y solo si su carril tiene sitio). Después se mide cuántas caben de
+    // verdad: si sobran, se pagina. Nunca se recorta el texto de una tarea — se pagina por
+    // tareas enteras, que es lo que él pidió («siempre sin cortar el texto de una tarea»).
+    pintar(list);
+    const per = growAndCount(list.length);
+    const pages = per ? Math.ceil(list.length / per) : 1;
+    page = Math.max(0, Math.min(page, pages - 1));
+    if (pages > 1) pintar(list.slice(page * per, page * per + per));
+    renderPager(pages, list.length);
+  }
+  function pintar(list){
+    ul.innerHTML = "";
     list.forEach(it => {
       const li = document.createElement("li");
       const taskColor = TASK_COLORS[it.color] || "";
@@ -5098,7 +5117,62 @@ function bodyTodo(w, el){
       ul.appendChild(li);
     });
   }
+  /* Crece hasta que la lista quepa y devuelve cuántas tareas caben (0 = caben todas). Mide sobre
+     el DOM real ya pintado —nada de estimar por altura media: una tarea de tres líneas ocupa el
+     triple— y solo crece, nunca encoge solo (encoger es «Ordenar», gesto suyo). */
+  function growAndCount(total){
+    if (isMobile() || w.max || w.collapsed || !el.isConnected) return 0;
+    if (view === "pend") growWidgetToContent(w, el);   // el histórico de «Hechas» no agranda la ventana
+    const lis = [...ul.children].filter(n => n.tagName === "LI");
+    if (!lis.length) return 0;
+    const limite = el.getBoundingClientRect().bottom;
+    let caben = 0;
+    for (const li of lis){ if (li.getBoundingClientRect().bottom <= limite + 1) caben++; else break; }
+    caben = Math.max(1, caben);   // una tarea larguísima ocupa su página entera antes que cortarse
+    return caben >= total ? 0 : caben;
+  }
+  function renderPager(pages, total){
+    const old = el.querySelector(".todo-pager");
+    if (pages <= 1){ if (old) old.remove(); return; }
+    const nav = old || document.createElement("div");
+    nav.className = "todo-pager";
+    nav.innerHTML = `<button class="mini prev" title="Tareas anteriores"${page === 0 ? " disabled" : ""}>‹</button>`
+      + `<span class="pg">${page + 1} / ${pages}</span>`
+      + `<button class="mini next" title="Tareas siguientes"${page >= pages - 1 ? " disabled" : ""}>›</button>`
+      + `<span class="pg dim">${total} pendientes</span>`;
+    if (!old) bar.appendChild(nav);
+    nav.querySelector(".prev").addEventListener("click", () => { page--; paint(); });
+    nav.querySelector(".next").addEventListener("click", () => { page++; paint(); });
+  }
   paint();
+}
+/* 0.44.0: un widget crece hasta que su contenido quepa, con el mismo motor que el redimensionado
+   manual (empuje de los de abajo por colisión real), así que crecer NUNCA solapa a un vecino. Si
+   el crecimiento no cabe en el lienzo, se abstiene y quien lo llama pagina. Escribe geometría —
+   pero como consecuencia de un gesto humano (añadir o marcar una tarea), no al abrir. */
+function growWidgetToContent(w, bodyEl){
+  if (isMobile() || !state || w.max || w.collapsed) return false;
+  const falta = bodyEl.scrollHeight - bodyEl.clientHeight;
+  if (falta <= 2) return false;
+  const proj = projectWidgets([w])[0];
+  const target = Math.min(LAYOUT.autoMaxH, proj.h + falta);
+  if (target <= proj.h + 2) return false;
+  const antes = { x: proj.x, y: proj.y, w: proj.w, h: proj.h };
+  const despues = { ...antes, h: target };
+  const others = projectWidgets(state.widgets.filter(x =>
+    x.id !== w.id && !x.max && !(tagFilter && !(x.tags || []).includes(tagFilter))));
+  const plan = planResizePush(others, antes, despues, { gap: LAYOUT.snapGap });
+  if (plan.maxBottom > LAYOUT.worldMax) return false;   // no cabe: se queda como está y se pagina
+  const sp = state.spaces[state.active];
+  w.h = w.h + (target - proj.h);   // el alto guardado es el suyo; solo se le suma lo que ha crecido
+  for (const mv of plan.moved){
+    const wg = sp.widgets.find(x => x.id === mv.id);
+    if (!wg) continue;
+    wg.y = mv.y;
+  }
+  repaintProjection();   // sin renderAll: un repintado completo se llevaría el foco del campo «Nueva tarea…»
+  markDirty(); updateDeskHeight();
+  return true;
 }
 
 /* --- Portapapeles --- */

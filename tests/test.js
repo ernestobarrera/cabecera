@@ -1278,6 +1278,26 @@ console.log('OK tarea larga → nota (se ofrece, no se impone; titular acotado; 
 }
 console.log('OK 0.43.1 deshacer de tarea reescrita (Ctrl+Z fuera de campos, botón en el aviso, no pisa cambios posteriores ni sync remota)');
 
+// --- 0.44.0: el widget de tareas crece hasta que quepa y, pasado el techo, pagina (#88) ---
+{
+  const grow = src.match(/function growWidgetToContent\(w, bodyEl\)\{[\s\S]*?\n\}/)[0];
+  if (!/LAYOUT\.autoMaxH/.test(grow)) throw new Error('#88: crecer sin techo convertiría un widget en una columna infinita');
+  if (!/planResizePush\(/.test(grow)) throw new Error('#88: crecer debe hacer sitio a los de abajo con el motor ya probado, no solapar');
+  if (!/plan\.maxBottom > LAYOUT\.worldMax/.test(grow)) throw new Error('#88: si el crecimiento no cabe en el lienzo hay que abstenerse (P4)');
+  if (!/repaintProjection\(\)/.test(grow) || /renderAll\(\)/.test(grow))
+    throw new Error('#88: no puede repintarse entero al añadir una tarea — se llevaría el foco del campo «Nueva tarea…»');
+  if (!/if \(target <= proj\.h \+ 2\) return false/.test(grow)) throw new Error('#88: sin margen de parada, cada repintado volvería a crecer');
+  const count = src.match(/function growAndCount\(total\)\{[\s\S]*?\n  \}/)[0];
+  if (!/el\.isConnected/.test(count)) throw new Error('#88: la medición del cuerpo oculto (measureContentH) no debe agrandar nada');
+  if (!/view === "pend"/.test(count)) throw new Error('#88: mirar el histórico de «Hechas» no debe agrandar la ventana');
+  if (!/Math\.max\(1, caben\)/.test(count)) throw new Error('#88: una tarea larguísima ocupa su página entera — jamás se corta su texto');
+  const pager = src.match(/function renderPager\(pages, total\)\{[\s\S]*?\n  \}/)[0];
+  if (!/pages <= 1/.test(pager)) throw new Error('#88: sin desbordamiento no debe aparecer navegación');
+  if (!/page \+ 1/.test(pager) || !/pendientes/.test(pager)) throw new Error('#88: la navegación debe decir en qué página estás y cuántas tareas hay');
+  if (!html.includes('.todo-pager')) throw new Error('#88: falta el CSS de la navegación por páginas');
+}
+console.log('OK 0.44.0 tareas: crece hasta el techo empujando a los de abajo, luego pagina sin cortar texto');
+
 // --- columnGuides: suelo de gusto vs suelo geométrico (v0.39.0) ---
 // Parte de fallo real de Ernesto: «pongo 4 columnas y pasan a 2» en su pantalla (~1000 px).
 // Auto sigue exigiendo 320 px por columna; una elección EXPLÍCITA solo se recorta contra los

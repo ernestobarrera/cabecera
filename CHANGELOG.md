@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.44.0] - 2026-07-29 — la lista de tareas se agranda sola y luego pasa de página
+
+- **Añadir tareas ya no obliga a agrandar la ventana a mano.** La lista crece sola a medida que añades, hasta un tope razonable, y las ventanas de debajo hacen sitio (si no cabe, se queda como está en vez de solaparse).
+- **Pasado ese tope, aparecen unas flechas ‹ 1/4 › para pasar de página**, con el total de pendientes al lado. **Nunca se corta el texto de una tarea**: se pasa de página por tareas enteras, y una tarea muy larga ocupa su página entera antes que quedarse a medias.
+- Mirar el histórico de «Hechas» no agranda la ventana: solo pasa de página.
+
 ## [0.43.1] - 2026-07-29 — deshacer una tarea reescrita, y saber a qué nota fue un texto largo
 
 - **Reescribir una tarea ya tiene vuelta atrás.** Al confirmar un cambio de texto aparece **Deshacer**, y **Ctrl+Z** (fuera de un campo de escritura) devuelve el texto anterior. Antes, una vez confirmada la edición, lo escrito antes se perdía. No se deshace si la tarea cambió después o si el cambio vino de otro equipo.
