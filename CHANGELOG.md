@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.45.0] - 2026-07-29 — un solo sitio para saber cuál de los tres archivos necesitas
+
+- **Nuevo: «📦 Guardar, compartir o reutilizar…»** (menú Inicio y Ctrl+K). Cabecera maneja tres archivos que por fuera son iguales —todos `.json`— y hacen cosas muy distintas: la **copia de seguridad**, el **escritorio compartido** y el **pack**. Ahora eliges por lo que quieres hacer, y cada uno dice también **para qué NO sirve**, que es donde nacía la confusión.
+- **La cautela sanitaria va delante del gesto, no después del error:** un archivo que sale de tu ordenador no se puede revocar; comparte solo recursos públicos y marca como privados (👁) los widgets que no deben salir. La copia de seguridad sí lleva todo, y se guarda donde guardarías datos clínicos.
+- Si el escritorio que tienes delante **no puede compartirse** (tiene widgets privados o listas de trabajo con agentes), se te dice ahí mismo y el botón queda desactivado, en vez de dejarte llegar al rechazo.
+- Los comandos sueltos de siempre (Exportar copia, Importar copia, Abrir escritorio compartido, Packs) siguen igual: el panel nuevo lleva a ellos, no los sustituye.
+
 ## [0.44.0] - 2026-07-29 — la lista de tareas se agranda sola y luego pasa de página
 
 - **Añadir tareas ya no obliga a agrandar la ventana a mano.** La lista crece sola a medida que añades, hasta un tope razonable, y las ventanas de debajo hacen sitio (si no cabe, se queda como está en vez de solaparse).

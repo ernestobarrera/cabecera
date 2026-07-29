@@ -251,6 +251,14 @@ body{font-family:var(--font); color:var(--text); background:#10131a}
 .modal h2{font-size:19px; margin-bottom:6px}
 .modal p{font-size:13.5px; color:var(--text-dim); line-height:1.55; margin-bottom:10px}
 .modal .row{display:flex; gap:10px; flex-wrap:wrap; margin-top:14px}
+.res-guide{display:flex; flex-direction:column; gap:10px}
+.res-card{border:1px solid var(--border-soft); border-radius:11px; padding:11px 13px; background:rgba(255,255,255,.03)}
+.res-card h3{font-size:14.5px; margin-bottom:5px}
+.res-card .para{font-size:13px; color:var(--text-dim); line-height:1.5; margin-bottom:5px}
+.res-card .nope{font-size:12.5px; color:var(--text-dim); opacity:.8; line-height:1.45; margin:0}
+.res-card .nope::before{content:"No es para eso: "; opacity:.75}
+.res-card .row{margin-top:9px}
+.res-card .btn:disabled{opacity:.42; cursor:default}
 .btn{padding:9px 16px; border-radius:10px; border:1px solid var(--border-soft); cursor:pointer; font-size:13.5px;
   font-family:var(--font); background:rgba(255,255,255,.06); color:var(--text); text-decoration:none; display:inline-block}
 .btn:hover{background:rgba(255,255,255,.12)}
@@ -714,6 +722,7 @@ ul.plain{list-style:none}
     <button class="act" id="act-folder">📁 Sincronizar equipos</button>
     <button class="act" id="act-arrange">🧭 Ordenar</button>
     <button class="act" id="act-trash">🗑️ Papelera</button>
+    <button class="act" id="act-archivos">📦 Guardar, compartir o reutilizar…</button>
     <button class="act" id="act-export">⬇️ Exportar copia</button>
     <button class="act" id="act-import">⬆️ Importar copia</button>
     <button class="act" id="act-open-shared">📥 Abrir escritorio compartido</button>
@@ -754,6 +763,44 @@ ul.plain{list-style:none}
       <button class="btn" id="pack-close">Cerrar</button>
     </div>
     <div class="hint">«Seguir» un pack: elige un pack.json de una carpeta compartida (OneDrive/Teams sincronizada). Cuando quien lo mantiene lo actualice, la cabecera te avisará para aplicar las novedades. Ideal para el escritorio de un equipo o de un centro.</div>
+  </div>
+</div>
+
+<!-- qué archivo necesito: los tres formatos, diferenciados antes de equivocarse -->
+<div class="overlay" id="ov-archivos">
+  <div class="modal">
+    <h2>📦 Guardar, compartir o reutilizar</h2>
+    <p>Cabecera maneja <b>tres archivos distintos</b> y se parecen mucho por fuera: los tres son <code>.json</code>. Aquí eliges por lo que quieres hacer, no por el formato.</p>
+    <div class="res-guide">
+      <div class="res-card">
+        <h3>🛟 Una copia de seguridad</h3>
+        <p class="para">Para <b>no perder nada</b>: guarda <b>todos</b> tus escritorios, con todo dentro. Es tuya, no se le pasa a nadie.</p>
+        <p class="nope">No sirve para enseñarle un escritorio a otra persona: le sustituiría los suyos.</p>
+        <div class="row">
+          <button class="btn" data-go="export">⬇️ Guardar copia</button>
+          <button class="btn" data-go="import">⬆️ Restaurar desde archivo</button>
+        </div>
+      </div>
+      <div class="res-card" data-res="share">
+        <h3>🤝 Un escritorio para compartir</h3>
+        <p class="para">Para <b>pasarle a alguien</b> el escritorio que tienes delante: se lleva enlaces, notas, tareas, portapapeles y markdown. Al abrirlo, esa persona recibe un escritorio <b>nuevo</b>, suyo y editable, sin tocar los que ya tenía.</p>
+        <p class="nope">No es una copia de seguridad: solo va un escritorio y sin los widgets privados.</p>
+        <div class="row">
+          <button class="btn" data-go="share">📤 Compartir este escritorio</button>
+          <button class="btn" data-go="open-shared">📥 Abrir uno que me han pasado</button>
+        </div>
+      </div>
+      <div class="res-card">
+        <h3>🧩 Un pack</h3>
+        <p class="para">Una <b>plantilla</b> para empezar: enlaces y widgets ya montados, pensados para reutilizarse muchas veces (el escritorio de un servicio, el de una rotación, el de un curso).</p>
+        <p class="nope">No guarda tu contenido: al aplicarlo sustituye el escritorio actual, salvo que marques «añadir».</p>
+        <div class="row">
+          <button class="btn" data-go="packs">🧩 Ver packs</button>
+        </div>
+      </div>
+    </div>
+    <div class="hint"><b>En entorno sanitario, antes de compartir:</b> un archivo que sale de tu ordenador <b>no se puede revocar</b>. Comparte solo recursos públicos (guías, calculadoras, buscadores) y deja fuera cualquier dato de paciente, número de historia, agenda o URL interna con credenciales. Si un escritorio mezcla ambas cosas, marca como <b>privados</b> (👁) los widgets que no deben salir o muévelos a un escritorio personal: los privados nunca se exportan. La copia de seguridad, en cambio, sí lleva todo — guárdala donde guardarías datos clínicos.</div>
+    <div class="row"><button class="btn" id="archivos-close">Cerrar</button></div>
   </div>
 </div>
 
@@ -1460,7 +1507,7 @@ function syncUI(mode, txt){
    reaparece) y si Recargar está activo. El descarte ✕ vive solo en memoria de la sesión.
    Demora asumida: la CDN de Pages puede servir la versión vieja hasta ~10 min aun con
    no-store (gobierna la caché del navegador, no la CDN); para pestañas de días, irrelevante. */
-const APP_VERSION = "0.44.0";
+const APP_VERSION = "0.45.0";
 let newVersionDetected = null;   // versión superior detectada; detiene futuras consultas
 let verDismissed = false;        // ✕: solo esta sesión — nunca persistido en disco
 let verCheckInflight = false;    // sin consultas concurrentes
@@ -2578,6 +2625,26 @@ async function buildSharedEnvelope(space, shareId){
   const proj = projectShared(space);
   if (!proj.ok) return proj;
   return { ok: true, sobre: { cabeceraShared: 1, shareId, publishedAt: Date.now(), space: proj.space, revision: await sha256Canonical(proj.space) } };
+}
+
+/* #94 (0.45.0): «se genera confusión entre los recursos… un asistente podría ayudar a crear estos
+   recursos de forma diferencial, dando pistas… especialmente sanitario». No es un asistente
+   conversacional: es la pregunta bien hecha —qué quieres HACER, no qué formato quieres— con lo que
+   cada archivo sí y no hace, y la cautela clínica ANTES del gesto en vez de después del error.
+   Nombra el escritorio activo y desactiva «compartir» si ese en concreto no puede salir (privados
+   o superficie de agentes dentro), en vez de dejarte llegar al rechazo. */
+function openResourceGuide(){
+  const sp = state && state.spaces[state.active];
+  const card = document.querySelector('#ov-archivos .res-card[data-res="share"]');
+  const p = card && card.querySelector(".para"), btn = card && card.querySelector('[data-go="share"]');
+  if (p && btn && sp){
+    const proj = projectShared(sp);
+    p.innerHTML = proj.ok
+      ? `Para <b>pasarle a alguien</b> «${esc(sp.name)}», el escritorio que tienes delante: se lleva enlaces, notas, tareas, portapapeles y markdown. Al abrirlo, esa persona recibe un escritorio <b>nuevo</b>, suyo y editable, sin tocar los que ya tenía.`
+      : `«${esc(sp.name)}» <b>no se puede compartir tal cual</b>: ${esc(proj.reason)}. Cambia a otro escritorio, o marca como privados (👁) los widgets que no deben salir.`;
+    btn.disabled = !proj.ok;
+  }
+  $("#ov-archivos").classList.add("open");
 }
 
 // A0 (UI): exporta el espacio ACTIVO a un archivo compartible, con vista previa real y sin red.
@@ -6868,11 +6935,12 @@ function paletteEntries(){
     () => { closeMenu(); setPrivacy(!privacyOn); }, "privacidad privado ocultar mostrar compartir pantalla presentacion docencia escenica");
   add("📖", "Guía completa", "cómo funciona todo", () => { closeMenu(); window.open("guia.html", "_blank", "noopener"); }, "guia manual ayuda completa como funciona empezar");
   add("📤", "Compartir este escritorio", "exportar a un archivo", () => { closeMenu(); exportSharedSpace(); }, "compartir exportar escritorio archivo publicar seguir enviar compartido");
+  add("📦", "Guardar, compartir o reutilizar…", "cuál de los tres archivos necesito", () => { closeMenu(); openResourceGuide(); }, "copia seguridad backup compartir pack plantilla exportar importar restaurar archivo json cual de los tres necesito diferencia entre formatos me equivoco");
   add("👁", "Seguir un escritorio por URL", "verlo en solo lectura", () => { closeMenu(); promptFollowUrl(); }, "seguir escritorio url compartido solo lectura suscribir suscripcion ver");
   add("📥", "Abrir un escritorio compartido", "desde un archivo", () => { closeMenu(); importSharedFile(); }, "abrir importar escritorio compartido archivo json recibir exportado restaurar espacio");
   for (const [type, t] of Object.entries(WTYPES)) if (type !== "intro")
     add("➕", "Añadir " + t.name, "widget nuevo", () => { addWidget(type); closeMenu(); }, "añadir crear nuevo " + t.name);
-  [["⚙","Ajustes generales","act-config"],["❓","Guía","act-ayuda"],["🧩","Packs","act-packs"],["🖼️","Fondo","act-wallpaper"],["📁","Sincronizar equipos","act-folder"],["🧭","Ordenar","act-arrange"],["🗑️","Papelera","act-trash"],["⬇️","Exportar copia","act-export"],["⬆️","Importar copia","act-import"],["📥","Abrir escritorio compartido","act-open-shared"],["♻️","Restaurar copia","act-restore"]]
+  [["⚙","Ajustes generales","act-config"],["❓","Guía","act-ayuda"],["🧩","Packs","act-packs"],["🖼️","Fondo","act-wallpaper"],["📁","Sincronizar equipos","act-folder"],["🧭","Ordenar","act-arrange"],["🗑️","Papelera","act-trash"],["📦","Guardar, compartir o reutilizar","act-archivos"],["⬇️","Exportar copia","act-export"],["⬆️","Importar copia","act-import"],["📥","Abrir escritorio compartido","act-open-shared"],["♻️","Restaurar copia","act-restore"]]
     .forEach(([ic, label, id]) => add(ic, label, "acción", () => { closeMenu(); const b = $("#" + id); if (b) b.click(); }, label + " configuración"));
   return E;
 }
@@ -7200,6 +7268,19 @@ function wireUI(){
     inp.click();
   });
   $("#act-open-shared").addEventListener("click", () => { closeMenu(); importSharedFile(); });
+  // 0.45.0 (#94): punto único que DIFERENCIA los tres archivos antes de que te equivoques de uno.
+  // No sustituye a los comandos sueltos —quien ya sabe cuál quiere va directo—: es la puerta para
+  // cuando la duda es «¿cuál de los tres necesito?». Cada opción reenvía al comando ya existente,
+  // así no hay una segunda implementación de exportar/importar que pueda divergir de la primera.
+  $("#act-archivos").addEventListener("click", () => { closeMenu(); openResourceGuide(); });
+  $("#archivos-close").addEventListener("click", () => $("#ov-archivos").classList.remove("open"));
+  $$("#ov-archivos [data-go]").forEach(b => b.addEventListener("click", () => {
+    $("#ov-archivos").classList.remove("open");
+    const go = b.dataset.go;
+    if (go === "share") exportSharedSpace();
+    else if (go === "open-shared") importSharedFile();
+    else $("#act-" + (go === "packs" ? "packs" : go)).click();
+  }));
 
   // sincronización / reconectar
   $("#tb-sync").addEventListener("click", async () => {

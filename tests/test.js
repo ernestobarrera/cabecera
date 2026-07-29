@@ -1298,6 +1298,30 @@ console.log('OK 0.43.1 deshacer de tarea reescrita (Ctrl+Z fuera de campos, bot�
 }
 console.log('OK 0.44.0 tareas: crece hasta el techo empujando a los de abajo, luego pagina sin cortar texto');
 
+// --- 0.45.0: punto único que diferencia copia / escritorio compartido / pack (#94) ---
+{
+  const modal = html.match(/<div class="overlay" id="ov-archivos">[\s\S]*?\n<\/div>/)[0];
+  for (const clave of ['copia de seguridad', 'escritorio para compartir', 'Un pack'])
+    if (!new RegExp(clave, 'i').test(modal)) throw new Error('#94: el punto único debe nombrar los tres archivos — falta «' + clave + '»');
+  if ((modal.match(/class="nope"/g) || []).length !== 3)
+    throw new Error('#94: cada archivo debe decir también para qué NO sirve (ahí nace la confusión)');
+  if (!/no se puede revocar/.test(modal) || !/dato de paciente/.test(modal))
+    throw new Error('#94: falta la cautela sanitaria ANTES del gesto (él la pidió explícitamente)');
+  const guide = src.match(/function openResourceGuide\(\)\{[\s\S]*?\n\}/)[0];
+  if (!/projectShared\(sp\)/.test(guide)) throw new Error('#94: debe avisar antes si ESTE escritorio no puede salir, no dejarte llegar al rechazo');
+  if (!/btn\.disabled = !proj\.ok/.test(guide)) throw new Error('#94: si no puede compartirse, el botón no debe estar activo');
+  // no puede haber una segunda implementación de exportar/importar que diverja de la primera
+  const wiring = src.match(/\$\$\("#ov-archivos \[data-go\]"\)[\s\S]*?\n  \}\)\);/)[0];
+  if (/URL\.createObjectURL|showOpenFilePicker|setState\(/.test(wiring))
+    throw new Error('#94: el punto único debe REENVIAR a los comandos existentes, no reimplementarlos');
+  if (!/exportSharedSpace\(\)/.test(wiring) || !/importSharedFile\(\)/.test(wiring) || !/\$\("#act-"/.test(wiring))
+    throw new Error('#94: falta el reenvío a alguno de los comandos');
+  if (!html.includes('id="act-archivos"')) throw new Error('#94: falta la entrada en el menú Inicio');
+  if (!/Guardar, compartir o reutilizar…", "cuál de los tres archivos necesito/.test(src))
+    throw new Error('#94: falta el comando en la paleta (Ctrl+K), que es donde él busca');
+}
+console.log('OK 0.45.0 punto único de archivos (los tres diferenciados con su «no es para eso», cautela sanitaria delante, reenvío sin duplicar)');
+
 // --- columnGuides: suelo de gusto vs suelo geométrico (v0.39.0) ---
 // Parte de fallo real de Ernesto: «pongo 4 columnas y pasan a 2» en su pantalla (~1000 px).
 // Auto sigue exigiendo 320 px por columna; una elección EXPLÍCITA solo se recorta contra los
