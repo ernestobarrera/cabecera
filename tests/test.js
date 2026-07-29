@@ -599,6 +599,88 @@ eval('globalThis.viewportReflowVerdict = ' + pickFn('viewportReflowVerdict', 're
 }
 console.log('OK A1 reflow por cambio de pantalla (overflow rescata, ensanchar solo ofrece, converge sin bucle de escrituras)');
 
+// --- 0.43.0: carriles DERIVADOS del viewport (rejilla guardada deducida del contenido) ---
+eval('globalThis.medianOf = ' + pickFn('medianOf', 'nums'));
+eval('globalThis.storedLaneGrid = ' + pickFn('storedLaneGrid', 'rects, n, opts'));
+eval('globalThis.laneStoreRect = ' + pickFn('laneStoreRect', 'grid, laneIdx'));
+{
+  if (medianOf([]) !== 0) throw new Error('medianOf: lista vacía → 0');
+  if (medianOf([5]) !== 5 || medianOf([1, 9]) !== 5 || medianOf([9, 1, 5]) !== 5)
+    throw new Error('medianOf: mediana incorrecta');
+  const o = { gutter: 14, tol: 24 };
+  // CASO REAL medido en el datos.json de Ernesto (pestaña «Cabecera», 3 columnas, monitor ~1375):
+  // nueve widgets a x=12/467/922 con ancho 441 (uno a 434, dentro de tolerancia)
+  const real = [12, 467, 922, 922, 922, 922, 467, 467, 922].map((x, i) => ({ x, y: 0, w: i === 3 ? 434 : 441, h: 200 }));
+  const g = storedLaneGrid(real, 3, o);
+  if (!g) throw new Error('rejilla: el escritorio real de columnas debe ser deducible');
+  if (g.x0 !== 12 || g.laneW !== 441 || g.pitch !== 455) throw new Error('rejilla: origen/ancho/paso mal deducidos (' + JSON.stringify(g) + ')');
+  if (g.lanes.join(',') !== '0,1,2,2,2,2,1,1,2') throw new Error('rejilla: carriles mal asignados (' + g.lanes.join(',') + ')');
+  // la ventana de 434 px (7 px de desviación) sigue DENTRO de la rejilla: la tolerancia existe para eso
+  if (g.lanes[3] !== 2) throw new Error('rejilla: una desviación menor que la tolerancia no debe expulsar de la rejilla');
+  // un carril vacío en medio no rompe la deducción (caso real de «Pendiente IA»: carriles 0, 2 y 3)
+  const hueco = [{ x: 12, y: 0, w: 327, h: 100 }, { x: 695, y: 0, w: 327, h: 100 }, { x: 1036, y: 0, w: 327, h: 100 }];
+  const gh = storedLaneGrid(hueco, 4, o);
+  if (!gh || gh.lanes.join(',') !== '0,2,3') throw new Error('rejilla: un carril vacío en medio debe conservar los índices');
+  // un solo widget también define rejilla (su propio ancho es el del carril)
+  const g1 = storedLaneGrid([{ x: 12, y: 0, w: 441, h: 100 }], 3, o);
+  if (!g1 || g1.lanes[0] !== 0 || g1.laneW !== 441) throw new Error('rejilla: un solo widget debe bastar para el carril 0');
+  // una ventana redimensionada a mano queda FUERA de la rejilla (sigue siendo libre), sin tumbarla
+  const conLibre = real.concat([{ x: 300, y: 700, w: 780, h: 200 }]);
+  const gl = storedLaneGrid(conLibre, 3, o);
+  if (!gl || gl.lanes[gl.lanes.length - 1] !== null) throw new Error('rejilla: una ventana de ancho propio no debe entrar en la rejilla');
+  if (gl.matched !== 9) throw new Error('rejilla: las demás deben seguir encajadas');
+  // sin MAYORÍA encajada no se deduce nada: un escritorio libre se queda como está
+  const libre = [{ x: 10, y: 0, w: 300, h: 100 }, { x: 400, y: 0, w: 520, h: 100 }, { x: 90, y: 300, w: 700, h: 100 }];
+  if (storedLaneGrid(libre, 3, o) !== null) throw new Error('rejilla: sin mayoría encajada no debe deducirse rejilla');
+  if (storedLaneGrid([], 3, o) !== null) throw new Error('rejilla: sin widgets no hay rejilla');
+  if (storedLaneGrid(real, 1, o) !== null) throw new Error('rejilla: hace falta más de un carril');
+  // la tolerancia NUNCA puede llegar a medio carril (si no, un widget sería ambiguo entre dos)
+  const estrecho = [{ x: 0, y: 0, w: 30, h: 10 }, { x: 44, y: 0, w: 30, h: 10 }];
+  const ge = storedLaneGrid(estrecho, 2, { gutter: 14, tol: 400 });
+  if (!ge || ge.lanes.join(',') !== '0,1') throw new Error('rejilla: la tolerancia debe acotarse a menos de medio paso');
+  // INVERSA: al soltar se guarda en unidades de la rejilla, no en píxeles del monitor de turno
+  const st = laneStoreRect(g, 2);
+  if (!st || st.x !== 922 || st.w !== 441) throw new Error('inversa: debe devolver la posición GUARDADA del carril');
+  if (laneStoreRect(g, null) !== null || laneStoreRect(null, 1) !== null || laneStoreRect(g, -1) !== null)
+    throw new Error('inversa: sin rejilla o sin carril no debe inventar posición');
+  // IDA Y VUELTA: proyectar a otra pantalla y volver no mueve nada de sitio (no hay deriva)
+  const anchos = [{ x: 12, w: 558 }, { x: 584, w: 558 }, { x: 1156, w: 558 }];   // los mismos 3 carriles a ~1728 px
+  for (let k = 0; k < 3; k++){
+    const vuelta = laneStoreRect(g, k);
+    if (vuelta.x !== [12, 467, 922][k] || vuelta.w !== 441)
+      throw new Error('ida y vuelta: proyectar y volver a guardar debe devolver la posición original del carril ' + k);
+    if (anchos[k].w <= vuelta.w) throw new Error('el caso de prueba debe representar una pantalla más ancha');
+  }
+}
+// cableado: la geometría VISIBLE tiene una vía única y la proyección no escribe nunca
+{
+  const proj = src.match(/function projectWidgets\(list\)\{[\s\S]*?\n\}/)[0];
+  if (!/laneProjection\(\)/.test(proj) || !/planViewportLayout\(/.test(proj))
+    throw new Error('0.43.0: projectWidgets debe componer carriles + encuadre al viewport');
+  const lp = src.match(/function laneProjection\(\)\{[\s\S]*?\n\}/)[0];
+  if (!/c !== 2 && c !== 3 && c !== 4/.test(lp)) throw new Error('0.43.0: los carriles derivados solo actúan con nº de columnas EXPLÍCITO');
+  if (!/isMobile\(\)/.test(lp)) throw new Error('0.43.0: en móvil (apilado) no hay carriles que derivar');
+  for (const fn of ['laneProjection', 'projectWidgets', 'repaintProjection']){
+    const body = src.match(new RegExp('function ' + fn + '\\([^)]*\\)\\{[\\s\\S]*?\\n\\}'))[0];
+    if (/markDirty\(|saveNow\(/.test(body))
+      throw new Error('0.43.0: ' + fn + ' NO puede escribir — la geometría de carril es derivada, y escribirla al abrir bifurcaría datos.json entre dos equipos');
+  }
+  // ningún camino de geometría visible puede saltarse la vía única: `planViewportLayout(` solo
+  // puede aparecer dos veces — su definición y la ÚNICA llamada, que vive dentro de projectWidgets
+  const usos = (src.match(/planViewportLayout\(/g) || []).length;
+  if (usos !== 2) throw new Error('0.43.0: planViewportLayout debe consumirse SOLO desde projectWidgets (apariciones: ' + usos + ')');
+  if (!/planViewportLayout\(/.test(proj)) throw new Error('0.43.0: la llamada única debe estar dentro de projectWidgets');
+  for (const [fn, arg] of [['buildWindow', 'w'], ['nextWidgetSpot', 'ww, hh'], ['reflowForViewport', ''], ['offerViewportReflowOnLoad', '']]){
+    const body = src.match(new RegExp('function ' + fn + '\\(' + arg + '\\)\\{[\\s\\S]*?\\n\\}'))[0];
+    if (!/projectWidgets\(/.test(body)) throw new Error('0.43.0: ' + fn + ' debe razonar sobre la geometría proyectada, no sobre la guardada');
+  }
+  // el commit del drop y la creación guardan en unidades de la rejilla
+  if (!/laneStoreRect\(/.test(src.match(/function nextWidgetSpot\(ww, hh\)\{[\s\S]*?\n\}/)[0]))
+    throw new Error('0.43.0: un widget nuevo debe guardarse en unidades de la rejilla del escritorio');
+  if (!/repaintProjection\(\)/.test(src)) throw new Error('0.43.0: falta el repintado al cambiar el ancho');
+}
+console.log('OK 0.43.0 carriles derivados (rejilla deducida del contenido, ida y vuelta sin deriva, proyección sin escrituras)');
+
 // --- N3: ancho completo sin COL_MAX cuando el nº de columnas es explícito; Auto lo conserva ---
 const gFull = columnGuides(3840, { forceN: 3 });
 if (gFull.cols[0].x !== 12) throw new Error('columnGuides explícito: el primer carril debe empezar en pad');
@@ -758,7 +840,13 @@ if (!src.match(/laneRes = planLaneInsert\(others, lane/)) throw new Error('regre
 if (!src.includes('function undoLayout(')) throw new Error('regresión: falta el Deshacer de la transacción de carril');
 if (!src.includes('if (sameRect(rectSnap(wg), it.after))')) throw new Error('regresión: el Deshacer ya no verifica el rect completo antes de restaurar (pisaría una sync remota)');
 if (!src.match(/wg\.x = it\.before\.x; wg\.y = it\.before\.y; wg\.w = it\.before\.w; wg\.h = it\.before\.h/)) throw new Error('regresión: el Deshacer no restaura la geometría completa x/y/w/h');
-if (!src.match(/w\.x = placed\.x; w\.y = placed\.y; w\.w = Math\.max\(placed\.w, \(WTYPES\[w\.type\] \|\| \{\}\)\.minW \|\| 0\); w\.z = \+\+zTop/)) throw new Error('regresión: la transacción de carril ya no incluye ancho de carril (clampado al minW del tipo) + z-order (riesgo 1 del gate + P1 estabilización)');
+// (0.43.0: el commit pasó de una línea a cinco, porque la x/anchura se persisten en unidades de la
+// rejilla GUARDADA y no en píxeles de este monitor. La intención vigilada es la misma de siempre:
+// la transacción de carril fija posición + ancho clampado al minW del tipo + z-order, de una vez.)
+if (!src.match(/w\.x = store \? store\.x : placed\.x;/)) throw new Error('regresión: la transacción de carril ya no fija la x del carril');
+if (!src.match(/w\.w = Math\.max\(store \? store\.w : placed\.w, \(WTYPES\[w\.type\] \|\| \{\}\)\.minW \|\| 0\);/)) throw new Error('regresión: la transacción de carril ya no adopta el ancho de carril clampado al minW del tipo (P1 estabilización)');
+if (!src.match(/w\.y = placed\.y;[\s\S]{0,220}?w\.z = \+\+zTop;/)) throw new Error('regresión: la transacción de carril ya no incluye y + z-order en el mismo commit (riesgo 1 del gate)');
+if (!src.match(/const store = laneStoreRect\(\(laneProjection\(\) \|\| \{\}\)\.grid, destLane\)/)) throw new Error('regresión: el drop ya no persiste en unidades de la rejilla guardada (la ventana quedaría anclada al ancho del monitor donde se arrastró)');
 if (!src.includes('!x.max &&')) throw new Error('regresión: los maximizados ya no se excluyen del reflow de carril');
 if (!html.includes('.lane-band') || !html.includes('reflow-hint')) throw new Error('regresión: falta el CSS de bandas de carril o de la pista de reflow');
 console.log('OK integración de carriles (useLanes, reflow en drag, Deshacer que verifica, transacción con ancho+z-order, maximizados fuera, CSS)');
@@ -1004,7 +1092,9 @@ if (!html.includes('.drop-ghost{position:absolute; pointer-events:none')) throw 
 if (!src.includes('addEventListener("pointercancel", cancel); addEventListener("blur", cancel)')) throw new Error('regresión: falta la limpieza en cancelación/pérdida de foco');
 if (!html.includes('prefers-reduced-motion: no-preference')) throw new Error('regresión: el asentamiento ignora reduced-motion');
 // el imán solo apunta a destinos visibles (filtro de etiqueta — Codex H6)
-if (!src.match(/dragRects = planViewportLayout\(state\.widgets\.filter\(x =>\s*x\.id !== w\.id && !\(tagFilter/)) throw new Error('regresión: el imán vuelve a encajar contra ventanas ocultas');
+// (0.43.0: la vía pasó de planViewportLayout a projectWidgets — misma intención: el imán encaja
+// contra lo que se VE, excluyendo las ocultas por el filtro de etiqueta)
+if (!src.match(/dragRects = projectWidgets\(state\.widgets\.filter\(x =>\s*x\.id !== w\.id && !\(tagFilter/)) throw new Error('regresión: el imán vuelve a encajar contra ventanas ocultas');
 // el saneo NO cambia con N0 (Codex H5): el suelo 140 es solo visual/planificación
 if (!src.includes('h: w.collapsed ? LAYOUT.collapsedH : Math.max(+w.h || t.h || 180, LAYOUT.minH)')) throw new Error('regresión: widgetRect perdió el suelo visual');
 console.log('OK invariantes layout guiado (LAYOUT, transacción de drag, sombra inerte, limpieza, destinos visibles, saneo intacto)');
@@ -1216,7 +1306,9 @@ for (const call of ['const guides = spaceGuides(force)', 'const guides = spaceGu
   if (!src.includes(call)) throw new Error('regresión: un cálculo de rejilla del espacio dejó de pasar por spaceGuides: ' + call);
 const dvCalls = (src.match(/columnGuides\(deskViewW\(\)/g) || []).length;
 if (dvCalls !== 1) throw new Error('columnGuides(deskViewW()) debe existir SOLO dentro de spaceGuides (hay ' + dvCalls + ')');
-if (!src.match(/w\.w = Math\.max\(placed\.w, \(WTYPES\[w\.type\] \|\| \{\}\)\.minW/))
+// (0.43.0: el ancho del commit puede venir de la rejilla guardada o de lo visible, pero el clamp
+// al minW del tipo sigue siendo la garantía del invariante «sanear(orden) === orden»)
+if (!src.match(/w\.w = Math\.max\(store \? store\.w : placed\.w, \(WTYPES\[w\.type\] \|\| \{\}\)\.minW/))
   throw new Error('regresión: el commit del drop ya no clampa el ancho al minW del tipo');
 console.log('OK P1 layout cableado (spaceGuides único punto de rejilla; drop clampa al minW del tipo)');
 

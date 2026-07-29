@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.43.0] - 2026-07-29 — las columnas se adaptan solas a cada pantalla, en los dos sentidos
+
+- **Un escritorio de columnas encaja ahora en cualquier pantalla, sin pedirte nada.** Cambiar de monitor, abrir el portátil o estrechar la ventana del navegador reajusta las columnas **al instante y en los dos sentidos** —también al volver a una pantalla más ancha, que era donde se quedaba corto—. Desaparece el botón «Reajustar»: ya no hay nada que reajustar.
+- **Por qué antes no encajaba.** Cada escritorio guardaba los **píxeles** del monitor en el que se ordenó por última vez, mientras las columnas se recalculaban con el ancho de la ventana; bastaba abrirlo en otra pantalla para que dejara de cuadrar. Ahora lo que se guarda es **en qué columna** está cada ventana, y el ancho se deriva de la pantalla que estés usando. No hace falta convertir nada: los escritorios existentes funcionan tal cual.
+- **Abrir Cabecera sigue sin modificar tu archivo de datos.** El reajuste es solo dibujo, así que no escribe nada: por eso puede ser automático sin riesgo de que dos equipos con el mismo archivo se pisen al abrirlo.
+- **La colocación libre sigue siendo tuya.** Una ventana colocada con **Alt** fuera de las columnas, redimensionada a mano o maximizada se queda exactamente donde la dejaste.
+- **Un widget nuevo nace con el mismo ancho que sus vecinos**, también cuando lo creas en un monitor distinto de aquel en el que ordenaste el escritorio (antes adoptaba el ancho de la pantalla del momento y era el único descuadrado en la otra).
+
 ## [0.42.0] - 2026-07-28 — una tarea que es un texto largo se muda a una nota
 
 - **Una tarea que en realidad es un texto largo se ofrece convertir en nota.** Si escribes o pegas más de 300 caracteres en una tarea, aparece un aviso con **«Convertir en nota»**: el texto completo se muda a una nota nueva y la tarea conserva el titular. Se ofrece, nunca se hace solo.

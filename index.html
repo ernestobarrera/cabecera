@@ -1456,7 +1456,7 @@ function syncUI(mode, txt){
    reaparece) y si Recargar está activo. El descarte ✕ vive solo en memoria de la sesión.
    Demora asumida: la CDN de Pages puede servir la versión vieja hasta ~10 min aun con
    no-store (gobierna la caché del navegador, no la CDN); para pestañas de días, irrelevante. */
-const APP_VERSION = "0.42.0";
+const APP_VERSION = "0.43.0";
 let newVersionDetected = null;   // versión superior detectada; detiene futuras consultas
 let verDismissed = false;        // ✕: solo esta sesión — nunca persistido en disco
 let verCheckInflight = false;    // sin consultas concurrentes
@@ -3219,7 +3219,8 @@ const LAYOUT = {
   dragClampBottom: 110, // clamp inferior del arrastre
   worldMax: 12000,     // N2: tope absoluto del borde inferior del lienzo (coherente con saneo y≤8000/h≤4000)
   edgeBand: 48,        // N2: banda de autoscroll al arrastrar cerca del borde
-  autoMaxH: 640        // «Ordenar»: techo del alto-al-contenido (más allá, scroll interno del widget)
+  autoMaxH: 640,       // «Ordenar»: techo del alto-al-contenido (más allá, scroll interno del widget)
+  laneTol: 24          // 0.43.0: holgura al deducir la rejilla guardada (siempre < medio carril)
 };
 /* ---------- N2 hito 1: lienzo con scroll vertical (contrato cliente↔mundo) ----------
    Las coordenadas persistidas w.x/w.y son de MUNDO (dentro del lienzo desplazable). El
@@ -3598,7 +3599,11 @@ function reflowForViewport(){
   if (state.widgets.some(x => x.max)) return;
   const guides = spaceGuides(colsOpt());
   const laneW = guides.cols.length ? guides.cols[0].w : 0;
-  const verdict = viewportReflowVerdict(state.widgets.map(widgetRect), deskViewW(), laneW,
+  // 0.43.0: el veredicto se juzga sobre lo PROYECTADO, no sobre lo guardado. En un escritorio de
+  // columnas la proyección ya encaja todo en los carriles de esta pantalla, así que aquí no queda
+  // nada que rescatar ni que ofrecer — que es exactamente lo que pedía él («que no me pida
+  // reajustar, sino que lo haga»). Esta vía queda para los escritorios libres y los de Auto.
+  const verdict = viewportReflowVerdict(projectWidgets(state.widgets), deskViewW(), laneW,
     { pad: LAYOUT.viewportPad });
   if (verdict === "overflow") orderSpace(undefined, { reason: "viewport" });
   else if (verdict === "roomy") toastAction("Esta pantalla es más ancha: hay sitio para repartir mejor los widgets.", "Reajustar", () => orderSpace());
@@ -3614,7 +3619,7 @@ function offerViewportReflowOnLoad(){
   if (state.widgets.some(x => x.max)) return;
   const guides = spaceGuides(colsOpt());
   const laneW = guides.cols.length ? guides.cols[0].w : 0;
-  const verdict = viewportReflowVerdict(state.widgets.map(widgetRect), deskViewW(), laneW, { pad: LAYOUT.viewportPad });
+  const verdict = viewportReflowVerdict(projectWidgets(state.widgets), deskViewW(), laneW, { pad: LAYOUT.viewportPad });
   if (!verdict) return;
   setTimeout(() => toastAction(verdict === "overflow"
     ? "Algunos widgets se salen de esta pantalla."
@@ -3680,6 +3685,54 @@ function planViewportLayout(widgets, viewport){
     const effSpec = w.collapsed ? { ...spec, minH: 0 } : spec;
     const rect = fitRectToViewport({ x: w.x, y: w.y, w: w.w, h: storedH }, effSpec, viewport);
     return { id: w.id, x: rect.x, y: rect.y, w: rect.w, h: w.collapsed ? 42 : rect.h };
+  });
+}
+/* Adaptador impuro de los carriles derivados (0.43.0). Solo actúa en escritorios con nº de
+   columnas EXPLÍCITO — el control ▤ es la declaración de intención «esto es de columnas»—; en
+   Auto y en móvil devuelve null y todo sigue como antes. NO muta estado ni marca sucio: la
+   geometría de carril es DERIVADA, no guardada. */
+function laneProjection(){
+  if (isMobile() || !state) return null;
+  const c = state.settings && state.settings.cols;
+  if (c !== 2 && c !== 3 && c !== 4) return null;
+  const ws = state.widgets;
+  if (!ws.length) return null;
+  const guides = spaceGuides(colsOpt());
+  const grid = storedLaneGrid(ws.map(widgetRect), guides.cols.length,
+    { gutter: guides.gutter, tol: LAYOUT.laneTol });
+  if (!grid) return null;
+  const map = Object.create(null);
+  ws.forEach((w, i) => {
+    const k = grid.lanes[i];
+    if (k != null) map[w.id] = { x: guides.cols[k].x, w: guides.cols[k].w, lane: k };
+  });
+  return { map, grid, guides };
+}
+/* VÍA ÚNICA de la geometría VISIBLE: carriles de esta pantalla + encuadre en el viewport.
+   Pintado, arrastre y redimensionado tienen que ver exactamente lo mismo (trampa de v0.39.5:
+   mezclar lo persistido con lo visible empuja contra coordenadas fantasma). */
+function projectWidgets(list){
+  const p = laneProjection();
+  const src = !p ? list : list.map(w => {
+    const q = p.map[w.id];
+    return q ? { ...w, x: q.x, w: q.w } : w;
+  });
+  return planViewportLayout(src, worldViewport());
+}
+/* La geometría de carril es derivada, así que al cambiar el ancho hay que REPINTARLA. Se toca el
+   DOM directamente en vez de llamar a renderAll: un repintado completo destruiría un editor inline
+   abierto, el foco y el scroll interno de los widgets. No toca estado ni marca sucio — por eso
+   puede correr en cada `resize` sin retardo y el reajuste se ve fluido mientras estiras la ventana. */
+function repaintProjection(){
+  if (isMobile() || !state) return;
+  const proj = projectWidgets(state.widgets);
+  state.widgets.forEach((w, i) => {
+    if (w.max) return;   // las maximizadas las sigue el propio listener de resize
+    const el = document.querySelector(`.win[data-id="${w.id}"]`);
+    if (!el || !proj[i]) return;
+    const p = proj[i];
+    el.style.left = p.x + "px"; el.style.top = p.y + "px";
+    el.style.width = p.w + "px"; el.style.height = p.h + "px";
   });
 }
 function toggleMaximize(w){   // ⛶ ocupa el viewport visible; ❐ restaura el tamaño y posición previos
@@ -3801,7 +3854,7 @@ function buildWindow(w){
   // Fase 2 (acta 2026-07-09) + N2 hito 1: proyección no destructiva sobre el LIENZO (ancho visible
   // + alto lógico), no el viewport — un widget bajo el pliegue se pinta en su sitio y se alcanza con
   // scroll. Lo persistido (w.x/y/w/h) no se toca aquí, solo al arrastrar/redimensionar/imantar.
-  const paint = isMobile() ? widgetRect(w) : planViewportLayout([w], worldViewport())[0];
+  const paint = isMobile() ? widgetRect(w) : projectWidgets([w])[0];
   const el = document.createElement("div");
   el.className = "win";
   el.dataset.id = w.id;
@@ -3903,7 +3956,7 @@ function buildWindow(w){
   const title = el.querySelector(".win-title");
   title.addEventListener("pointerdown", ev => {
     if (ev.target.closest("button") || isMobile()) return;   // móvil: sin arrastre (scroll táctil)
-    let proj = planViewportLayout([w], worldViewport())[0];   // origen = rect realmente visible (mundo), no el crudo guardado
+    let proj = projectWidgets([w])[0];   // origen = rect realmente visible (mundo), no el crudo guardado
     const startRect = { x: proj.x, y: proj.y, w: proj.w, h: proj.h };   // §A: rect de partida para detectar la columna de ORIGEN (si estaba alineado)
     // P2 (checkpoint 2026-07-22): si el gesto arranca sobre una MAXIMIZADA, el umbral la restaura
     // mutando estado ANTES del up (w.max + geometría). Snapshot para que pointercancel/blur pueda
@@ -3949,8 +4002,8 @@ function buildWindow(w){
           updateScrollLock();   // ya no hay ninguna maximizada: el scroll vuelve
         }
         // imán contra lo realmente visible (mundo), sin las ventanas ocultas por el filtro de etiqueta (Codex H6)
-        dragRects = planViewportLayout(state.widgets.filter(x =>
-          x.id !== w.id && !(tagFilter && !(x.tags || []).includes(tagFilter))), worldViewport());
+        dragRects = projectWidgets(state.widgets.filter(x =>
+          x.id !== w.id && !(tagFilter && !(x.tags || []).includes(tagFilter))));
         el.style.pointerEvents = "none";   // para que elementFromPoint vea la barra bajo el cursor
         ghost = document.createElement("div");
         ghost.className = "drop-ghost";
@@ -3986,9 +4039,9 @@ function buildWindow(w){
         [...bands.children].forEach((b, i) => b.classList.toggle("active", i === curLane));
         if (curLane != null){
           const lane = guides.cols[curLane];
-          const others = planViewportLayout(state.widgets.filter(x =>
-            x.id !== w.id && !x.max && !(tagFilter && !(x.tags || []).includes(tagFilter))), worldViewport());
-          laneRes = planLaneInsert(others, lane, world.y, { h: proj.h }, { gutter: LAYOUT.snapGap, pad: LAYOUT.viewportPad, guides, laneIdx: curLane });
+          const others = projectWidgets(state.widgets.filter(x =>
+            x.id !== w.id && !x.max && !(tagFilter && !(x.tags || []).includes(tagFilter))));
+          laneRes = planLaneInsert(others, lane, world.y, { h: proj.h },{ gutter: LAYOUT.snapGap, pad: LAYOUT.viewportPad, guides, laneIdx: curLane });
           ghost.style.display = ""; ghost.classList.remove("over");
           ghost.style.left = (laneRes.placed.x - 3) + "px"; ghost.style.top = (laneRes.placed.y - 3) + "px";
           ghost.style.width = (laneRes.placed.w + 6) + "px"; ghost.style.height = (proj.h + 6) + "px";
@@ -4035,8 +4088,8 @@ function buildWindow(w){
         const guides = spaceGuides(colsOpt());
         const destLane = curLane, dest = guides.cols[destLane];
         const originLane = alignedLane(startRect, guides);   // §A: solo si el widget venía alineado a un carril
-        const others = planViewportLayout(state.widgets.filter(x =>
-          x.id !== w.id && !x.max && !(tagFilter && !(x.tags || []).includes(tagFilter))), worldViewport());
+        const others = projectWidgets(state.widgets.filter(x =>
+          x.id !== w.id && !x.max && !(tagFilter && !(x.tags || []).includes(tagFilter))));
         const copt = { gutter: LAYOUT.snapGap, pad: LAYOUT.viewportPad, laneTop: LAYOUT.viewportPad };
         // Plan: mismo carril → reempaquetado ÚNICO (Codex); distinto → insertar en destino + compactar origen.
         let placed, moved;
@@ -4063,9 +4116,16 @@ function buildWindow(w){
         }
         // Transacción única con geometría COMPLETA (x/y/w/h) para todos los afectados + z-order.
         const items = [{ id: w.id, before: rectSnap(w), after: null }];
+        // 0.43.0: el escritorio guarda su REJILLA, no los píxeles de este monitor. Si la rejilla
+        // guardada es deducible, la ventana se persiste en SUS unidades (la proyección se encarga
+        // de pintarla en el carril de esta pantalla); si no lo es, se guarda lo visible, como antes.
         // el ancho de carril nunca baja del minW del tipo: spaceGuides ya clampa N para que quepa,
         // este max es la garantía directa en el punto de asignación (invariante sanear===orden).
-        w.x = placed.x; w.y = placed.y; w.w = Math.max(placed.w, (WTYPES[w.type] || {}).minW || 0); w.z = ++zTop;
+        const store = laneStoreRect((laneProjection() || {}).grid, destLane);
+        w.x = store ? store.x : placed.x;
+        w.y = placed.y;
+        w.w = Math.max(store ? store.w : placed.w, (WTYPES[w.type] || {}).minW || 0);
+        w.z = ++zTop;
         items[0].after = rectSnap(w);
         for (const mv of moved){
           const wg = sp.widgets.find(x => x.id === mv.id);
@@ -4110,7 +4170,7 @@ function buildWindow(w){
     if (isMobile() || w.max) return;
     const dir = ev.currentTarget.dataset.rz;
     ev.preventDefault(); ev.stopPropagation();
-    const proj = planViewportLayout([w], worldViewport())[0];   // origen visible sobre el lienzo, no el crudo
+    const proj = projectWidgets([w])[0];   // origen visible sobre el lienzo, no el crudo
     const beforeSnap = rectSnap(w);   // §B: estado previo al gesto (para reflow, rechazo P4 y Deshacer)
     const t = WTYPES[w.type];
     const sx = ev.clientX, sy = ev.clientY;
@@ -4140,8 +4200,8 @@ function buildWindow(w){
       // nace de `proj` (lo que ves), así que el punto de partida del plan es `proj`, no el rect
       // persistido (que tras un cambio de monitor puede ser otro), y los vecinos se proyectan igual
       // que en el arrastre. `beforeSnap` queda solo para restaurar estado (P4) y para Deshacer.
-      const others = planViewportLayout(state.widgets
-        .filter(x => x.id !== w.id && !x.max && !(tagFilter && !(x.tags || []).includes(tagFilter))), worldViewport());
+      const others = projectWidgets(state.widgets
+        .filter(x => x.id !== w.id && !x.max && !(tagFilter && !(x.tags || []).includes(tagFilter))));
       const plan = planResizePush(others, { x: proj.x, y: proj.y, w: proj.w, h: proj.h }, rectSnap(w), { gap: LAYOUT.snapGap });
       if (plan.maxBottom > LAYOUT.worldMax){
         w.x = beforeSnap.x; w.y = beforeSnap.y; w.w = beforeSnap.w; w.h = beforeSnap.h;   // rechazo P4: restaurar el rect original, sin transacción parcial
@@ -4235,6 +4295,60 @@ function columnGuides(vw, opts){
   const cols = [];
   for (let i = 0; i < n; i++) cols.push({ x: Math.round(x0 + i * (w + gutter)), w: Math.round(w) });
   return { cols, gutter, n };
+}
+/* ---------- Carriles DERIVADOS del viewport (0.43.0) ----------
+   Parte de fallo repetida de Ernesto (#89 #91 #92 #93, y su pregunta de arquitectura #97): al
+   cambiar de monitor el escritorio no se reajusta «en los dos sentidos». La causa no estaba en el
+   motor de pintado sino en el MODELO: `w.x`/`w.w` guardan PÍXELES del monitor donde se ordenó por
+   última vez, mientras los carriles se recalculan en vivo con la ventana. Medido en su archivo:
+   seis escritorios congelados a tres anchos distintos (~1855, ~1431 y ~1375 px) — no hay pantalla
+   en la que encajen todos.
+   Enfoque (el de Netvibes, que nunca guardó anchos sino columna y orden): en un escritorio de
+   columnas, carril y ancho pasan a ser dato DERIVADO al pintar. Como no se escribe nada, decae el
+   motivo por el que 0.41.0 solo ofrecía «Reajustar» al ensanchar: el bucle de escrituras entre dos
+   equipos que bifurcaba datos.json en OneDrive (spec-escrituras-fantasma). Proyectar no escribe.
+   La rejilla guardada se DEDUCE del propio contenido, sin campo nuevo en datos.json ni migración.
+   Lo que no encaja en ella —una ventana colocada libre con Alt, una redimensionada a mano, una
+   maximizada— se queda tal cual: la zona libre N1 sigue viva. */
+function medianOf(nums){
+  const a = nums.map(n => +n || 0).sort((x, y) => x - y);
+  if (!a.length) return 0;
+  const m = a.length >> 1;
+  return a.length % 2 ? a[m] : (a[m - 1] + a[m]) / 2;
+}
+/* storedLaneGrid: deduce con qué rejilla se guardó este escritorio. El ancho de carril es la
+   MEDIANA de los anchos (en un escritorio de columnas todos coinciden, y una ventana suelta no
+   arrastra la mediana), el paso es ancho+gutter y el origen la x mínima. Cada rect recibe su
+   índice de carril, o null si no encaja dentro de `tol`. Devuelve null si no hay MAYORÍA
+   encajada: sin mayoría no hay rejilla que deducir y no se toca nada. PURA. */
+function storedLaneGrid(rects, n, opts){
+  const o = opts || {};
+  const gutter = o.gutter == null ? 14 : o.gutter;
+  if (!Array.isArray(rects) || !rects.length || !(n >= 2)) return null;
+  const laneW = medianOf(rects.map(r => +r.w || 0));
+  const pitch = laneW + gutter;
+  if (!(laneW >= 1) || !(pitch > 2)) return null;
+  const tol = Math.min(o.tol == null ? 24 : o.tol, Math.floor(pitch / 2) - 1);   // jamás ambiguo entre dos carriles
+  let x0 = Infinity;
+  for (const r of rects) x0 = Math.min(x0, +r.x || 0);
+  const lanes = rects.map(r => {
+    const rw = +r.w || 0, rx = +r.x || 0;
+    if (Math.abs(rw - laneW) > tol) return null;   // ancho propio: redimensionada a mano o maximizada
+    const k = Math.round((rx - x0) / pitch);
+    if (k < 0 || k > n - 1) return null;
+    return Math.abs(rx - (x0 + k * pitch)) > tol ? null : k;
+  });
+  const matched = lanes.reduce((acc, k) => acc + (k == null ? 0 : 1), 0);
+  if (matched * 2 < rects.length) return null;
+  return { x0, laneW, pitch, lanes, matched };
+}
+/* Inversa de la proyección: posición GUARDADA de un carril según la rejilla deducida. Al soltar
+   o al crear se persiste en unidades de la rejilla del ESCRITORIO, no en píxeles del monitor de
+   turno; si no, esa ventana quedaría anclada al ancho de la pantalla en la que se tocó y sería la
+   única descuadrada en la siguiente. PURA. */
+function laneStoreRect(grid, laneIdx){
+  if (!grid || laneIdx == null || laneIdx < 0) return null;
+  return { x: Math.round(grid.x0 + laneIdx * grid.pitch), w: Math.round(grid.laneW) };
 }
 /* planLaneInsert: inserta un widget en un carril y calcula el reflow local hacia abajo (P3).
    rects = otros widgets (mundo, con id/x/y/w/h). lane = {x,w}. pointerY = y de mundo del puntero.
@@ -4515,15 +4629,20 @@ function findSpotPlan(rects, ww, hh, vw, vh, opts){
   return { x: margin, y: visibleMaxY, w };
 }
 function nextWidgetSpot(ww, hh){   // adaptador impuro (N0)
-  const rects = state.widgets.map(widgetRect);
+  const rects = isMobile() ? state.widgets.map(widgetRect) : projectWidgets(state.widgets);
   const libre = () => findSpotPlan(rects, ww, hh, innerWidth, innerHeight,
     { gap: LAYOUT.snapGap, step: LAYOUT.step, margin: LAYOUT.packingMargin, bar: LAYOUT.bar,
       minW: LAYOUT.minW, minH: LAYOUT.minH });
   if (isMobile()) return libre();   // apilado: los carriles no existen
-  const spot = planLaneSpot(rects, spaceGuides(colsOpt()), { gutter: LAYOUT.snapGap, laneTop: LAYOUT.packingMargin });
+  const guides = spaceGuides(colsOpt());
+  const spot = planLaneSpot(rects, guides, { gutter: LAYOUT.snapGap, laneTop: LAYOUT.packingMargin });
   // si el carril elegido ya llega al fondo del lienzo, el escaneo libre encuentra hueco antes
   if (spot.y + Math.max(+hh || 0, LAYOUT.minH) + LAYOUT.packingMargin > LAYOUT.worldMax) return libre();
-  return spot;
+  // 0.43.0: nace en unidades de la rejilla GUARDADA. Sin esto seguía saliendo descuadrado pese al
+  // arreglo de 0.41.0: nacía con el ancho del carril de ESTE monitor, entre vecinos guardados con
+  // el de otro (su parte de fallo «sigue sin ocurrir lo que esta tarea se supone ha solucionado»).
+  const store = laneStoreRect((laneProjection() || {}).grid, guides.cols.findIndex(c => c.x === spot.x));
+  return store ? { x: store.x, y: spot.y, w: store.w } : spot;
 }
 
 function addWidget(type){
@@ -6771,6 +6890,7 @@ function wireUI(){
     });
     updateDeskHeight();   // el cambio de tamaño altera el alto lógico del lienzo
     renderLaneAmbient();  // los separadores N3 se recolocan al nuevo ancho
+    repaintProjection();  // 0.43.0: y los widgets de columnas siguen a sus carriles, al instante
     // A1 (2026-07-28): el ancho —y solo el ancho— dispara el veredicto de reflow. Con retardo,
     // porque arrastrar el borde de la ventana emite decenas de `resize` y no queremos reordenar
     // en cada píxel: se decide cuando el gesto para.
