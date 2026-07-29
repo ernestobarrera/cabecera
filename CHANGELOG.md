@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.43.1] - 2026-07-29 — deshacer una tarea reescrita, y saber a qué nota fue un texto largo
+
+- **Reescribir una tarea ya tiene vuelta atrás.** Al confirmar un cambio de texto aparece **Deshacer**, y **Ctrl+Z** (fuera de un campo de escritura) devuelve el texto anterior. Antes, una vez confirmada la edición, lo escrito antes se perdía. No se deshace si la tarea cambió después o si el cambio vino de otro equipo.
+- **Un texto largo convertido en nota deja rastro de dónde fue.** La nota nueva se llama como el titular de la tarea, y la tarea guarda en su **ⓘ** a qué nota se movió el texto y en qué fecha. El texto de la tarea deja de arrastrar el «→ texto completo en la nota»: la lista vuelve a leerse como una lista, y la procedencia se conserva sin ocupar la línea.
+
 ## [0.43.0] - 2026-07-29 — las columnas se adaptan solas a cada pantalla, en los dos sentidos
 
 - **Un escritorio de columnas encaja ahora en cualquier pantalla, sin pedirte nada.** Cambiar de monitor, abrir el portátil o estrechar la ventana del navegador reajusta las columnas **al instante y en los dos sentidos** —también al volver a una pantalla más ancha, que era donde se quedaba corto—. Desaparece el botón «Reajustar»: ya no hay nada que reajustar.

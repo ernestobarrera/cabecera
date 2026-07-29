@@ -1219,16 +1219,27 @@ console.log('OK asa de arrastre de tareas (visible en reposo, anclada arriba, so
 eval('globalThis.TASK_LONG = ' + src.match(/const TASK_LONG = (\d+);/)[1]);
 eval('globalThis.taskStub = ' + pickFn('taskStub', 'text, max'));
 if (TASK_LONG < 200 || TASK_LONG > 600) throw new Error('E: umbral de tarea larga fuera de rango razonable');
-if (!/^Primera línea → texto completo en la nota$/.test(taskStub('Primera línea\nsegunda\ntercera')))
+// (0.43.1: el titular ya no arrastra el sufijo «→ texto completo en la nota». El rastro vive en la
+// NOTA de la tarea, que nombra la nota destino y la fecha: la lista se lee como lista y la
+// procedencia se conserva — misma intención, mejor sitio. Vigilado igualmente que el titular sea
+// la primera línea con contenido y que se acote con elipsis.)
+if (taskStub('Primera línea\nsegunda\ntercera') !== 'Primera línea')
   throw new Error('E: el titular debe ser la primera línea con contenido');
-if (taskStub('   \n\n  De verdad la primera  \nx').indexOf('De verdad la primera') !== 0)
+if (taskStub('   \n\n  De verdad la primera  \nx') !== 'De verdad la primera')
   throw new Error('E: las líneas en blanco iniciales no cuentan');
 {
   const largo = taskStub('x'.repeat(500));
-  if (largo.length > 80 + ' → texto completo en la nota'.length) throw new Error('E: el titular no se acota');
+  if (largo.length > 80) throw new Error('E: el titular no se acota');
   if (!largo.includes('…')) throw new Error('E: al recortar debe quedar la elipsis');
+  if (taskStub('x'.repeat(500), 40).length > 40) throw new Error('E: el tope corto (título de la nota) no se respeta');
 }
-if (taskStub('') !== ' → texto completo en la nota') throw new Error('E: texto vacío no debe romper');
+if (taskStub('') !== '') throw new Error('E: texto vacío no debe romper');
+eval('globalThis.taskNotePointer = ' + pickFn('taskNotePointer', 'titulo, hoy'));
+{
+  const p = taskNotePointer('Mi titular', new Date(2026, 6, 29));
+  if (!p.includes('«Mi titular»')) throw new Error('E: el rastro debe NOMBRAR la nota destino (#95: «no sé a qué se refiere»)');
+  if (!/29 de julio de 2026/.test(p)) throw new Error('E: el rastro debe fechar la conversión');
+}
 {
   const body = src.match(/function offerTaskToNote\([\s\S]*?\n\}/)[0];
   if (!/toastAction/.test(body)) throw new Error('E: debe OFRECERSE, nunca convertir solo (el texto es del usuario)');
@@ -1240,8 +1251,32 @@ if (taskStub('') !== ' → texto completo en la nota') throw new Error('E: texto
   if (!/offerTaskToNote/.test(add)) throw new Error('E: el alta de tarea no ofrece la conversión');
   const commit = src.match(/const commit = \(\) => \{\n      const v = input\.value[\s\S]*?\n    \};/)[0];
   if (!/offerTaskToNote/.test(commit)) throw new Error('E: la edición de tarea no ofrece la conversión');
+  if (!/it\.note = /.test(body) || !/taskNotePointer\(/.test(body))
+    throw new Error('E: la conversión debe dejar rastro en la nota de la tarea, no solo mudar el texto');
+  if (/→ texto completo en la nota/.test(src)) throw new Error('E: el sufijo pegado al texto de la tarea debía retirarse (la lista guarda líneas)');
 }
-console.log('OK tarea larga → nota (se ofrece, no se impone; titular acotado; cableado en alta y edición)');
+console.log('OK tarea larga → nota (se ofrece, no se impone; titular acotado; rastro fechado en la ⓘ; cableado en alta y edición)');
+
+// --- 0.43.1: deshacer de contenido tras confirmar la reescritura de una tarea (#90) ---
+{
+  const undo = src.match(/function undoLastTextEdit\(\)\{[\s\S]*?\n\}/)[0];
+  if (!/state\.widgets\.includes\(e\.w\)/.test(undo) || !/items\.includes\(e\.it\)/.test(undo))
+    throw new Error('#90: el deshacer debe comprobar que la tarea sigue viva (una sync remota reemplaza los objetos del estado)');
+  if (!/e\.it\.t !== e\.after/.test(undo))
+    throw new Error('#90: el deshacer no puede pisar un cambio POSTERIOR al que se va a deshacer (criterio de undoLayout)');
+  if (!/markDirty\(\)/.test(undo)) throw new Error('#90: restaurar el texto debe guardarse');
+  const commit = src.match(/const commit = \(\) => \{\n      const v = input\.value[\s\S]*?\n    \};/)[0];
+  if (!/rememberTextEdit\(w, it, old, v\)/.test(commit)) throw new Error('#90: la edición no registra el texto anterior');
+  if (!/toastAction\("Tarea reescrita\.", "Deshacer", undoLastTextEdit\)/.test(commit))
+    throw new Error('#90: falta el botón Deshacer del aviso');
+  if (!/if \(v === old\) return;/.test(commit)) throw new Error('#90: confirmar sin cambiar nada no debe registrar nada');
+  // Ctrl+Z global: solo FUERA de un campo de texto (dentro manda el deshacer nativo del navegador)
+  const key = src.match(/document\.addEventListener\("keydown", e => \{[\s\S]*?\n  \}\);/)[0];
+  if (!/e\.key === "z" \|\| e\.key === "Z"/.test(key)) throw new Error('#90: falta el atajo Ctrl+Z');
+  if (!/input,textarea,\[contenteditable\]/.test(key)) throw new Error('#90: Ctrl+Z dentro de un campo debe seguir siendo el del navegador');
+  if (!/undoLastTextEdit\(\)/.test(key)) throw new Error('#90: Ctrl+Z no está cableado al deshacer de contenido');
+}
+console.log('OK 0.43.1 deshacer de tarea reescrita (Ctrl+Z fuera de campos, botón en el aviso, no pisa cambios posteriores ni sync remota)');
 
 // --- columnGuides: suelo de gusto vs suelo geométrico (v0.39.0) ---
 // Parte de fallo real de Ernesto: «pongo 4 columnas y pasan a 2» en su pantalla (~1000 px).

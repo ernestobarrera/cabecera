@@ -1456,7 +1456,7 @@ function syncUI(mode, txt){
    reaparece) y si Recargar está activo. El descarte ✕ vive solo en memoria de la sesión.
    Demora asumida: la CDN de Pages puede servir la versión vieja hasta ~10 min aun con
    no-store (gobierna la caché del navegador, no la CDN); para pestañas de días, irrelevante. */
-const APP_VERSION = "0.43.0";
+const APP_VERSION = "0.43.1";
 let newVersionDetected = null;   // versión superior detectada; detiene futuras consultas
 let verDismissed = false;        // ✕: solo esta sesión — nunca persistido en disco
 let verCheckInflight = false;    // sin consultas concurrentes
@@ -4822,11 +4822,41 @@ function linkifyEsc(t){
    vez de esperar al triaje siguiente. Se OFRECE, nunca se hace solo: el texto es del usuario. */
 const TASK_LONG = 300;
 // Título breve que queda en la tarea cuando su texto se muda a una nota. PURA.
+/* Deshacer de CONTENIDO: una sola ranura con lo último reescrito a mano. Parte de fallo #90 de
+   Ernesto: «cuando reescribo una tarea y luego quiero deshacer lo escrito, no se puede, es como
+   que se ha perdido. Control z no funciona». Mientras escribes, el deshacer nativo del navegador
+   ya funciona dentro del editor; lo que faltaba era DESPUÉS de confirmar, que es cuando el texto
+   anterior desaparecía sin vuelta atrás.
+   Guarda REFERENCIAS, no ids: una sincronización remota reemplaza los objetos del estado entero,
+   así que la comprobación de pertenencia rechaza sola un deshacer que pisaría lo que llegó de otro
+   equipo — mismo criterio que undoLayout, sin depender de que el elemento ya tenga id (uno recién
+   creado no lo tiene hasta el primer guardado). */
+let lastTextEdit = null;
+function rememberTextEdit(w, it, before, after){ lastTextEdit = { w, it, before, after }; }
+function undoLastTextEdit(){
+  const e = lastTextEdit;
+  if (!e) return false;
+  lastTextEdit = null;
+  const vivo = state && state.widgets.includes(e.w) && Array.isArray(e.w.data && e.w.data.items) && e.w.data.items.includes(e.it);
+  if (!vivo){ toast("Esa tarea ya no está: no se puede deshacer", true); return true; }
+  if (e.it.t !== e.after){ toast("La tarea cambió después: no se puede deshacer", true); return true; }
+  e.it.t = e.before;
+  refreshWidget(e.w); markDirty();
+  toast("Texto de la tarea restaurado");
+  return true;
+}
 function taskStub(text, max){
   const m = max || 80;
   const first = (String(text || "").split("\n").find(l => l.trim()) || "").trim();
-  const corto = first.length > m ? first.slice(0, m - 1).trimEnd() + "…" : first;
-  return corto + " → texto completo en la nota";
+  return first.length > m ? first.slice(0, m - 1).trimEnd() + "…" : first;
+}
+/* 0.43.1: el rastro de la conversión ya NO va pegado al texto de la tarea (la lista debe seguir
+   leyéndose como una lista — su propia convención de textos largos), sino en la nota de la tarea:
+   la ⓘ dice a qué nota fue y cuándo. Parte de fallo #95, «esto no sé a qué se refiere»: un titular
+   suelto sin procedencia es exactamente lo que después no se puede reconocer. */
+function taskNotePointer(titulo, hoy){
+  const d = (hoy || new Date()).toLocaleDateString("es-ES", { day: "numeric", month: "long", year: "numeric" });
+  return "El texto completo se movió a la nota «" + titulo + "» el " + d + ".";
 }
 function offerTaskToNote(w, it, repaint){
   const full = String((it && it.t) || "");
@@ -4835,13 +4865,15 @@ function offerTaskToNote(w, it, repaint){
     if (!guardMutation()) return;
     if (w.data.items.indexOf(it) < 0) return;   // la tarea pudo borrarse mientras el aviso estaba en pantalla
     const spot = nextWidgetSpot(WTYPES.notes.w, WTYPES.notes.h);
-    const nota = { id: uid(), type: "notes", t: "Texto de una tarea", x: spot.x, y: spot.y,
+    const titulo = taskStub(full, 40) || "Texto de una tarea";   // la nota se llama como el titular: así se encuentra
+    const nota = { id: uid(), type: "notes", t: titulo, x: spot.x, y: spot.y,
       w: spot.w, h: WTYPES.notes.h, z: ++zTop, source: "user", data: { text: full } };
     state.widgets.push(nota);
     $("#desktop").appendChild(buildWindow(nota));
     it.t = taskStub(full);
+    it.note = ((it.note ? it.note.trim() + "\n" : "") + taskNotePointer(titulo)).slice(0, 1000);
     repaint(); markDirty(); flashWidget(nota);
-    toast("Movido a una nota. La tarea conserva el titular.");
+    toast("Movido a la nota «" + titulo + "». La tarea conserva el titular y su ⓘ dice dónde está.");
   });
 }
 
@@ -4941,7 +4973,11 @@ function bodyTodo(w, el){
       if (!v){ it.t = old; paint(); return; }
       it.t = v;
       paint(); markDirty();
-      if (v !== old) offerTaskToNote(w, it, paint);
+      if (v === old) return;
+      // el texto anterior deja de perderse al confirmar: Ctrl+Z o el botón del aviso lo devuelven
+      rememberTextEdit(w, it, old, v);
+      if (v.length > TASK_LONG) offerTaskToNote(w, it, paint);   // un solo aviso: convertir en nota manda
+      else toastAction("Tarea reescrita.", "Deshacer", undoLastTextEdit);
     };
     const cancel = () => { it.t = old; paint(); };
     input.addEventListener("input", grow);
@@ -6932,6 +6968,12 @@ function wireUI(){
   document.addEventListener("keydown", e => {
     if ((e.key === "k" || e.key === "K") && (e.ctrlKey || e.metaKey)){ e.preventDefault(); openMenu("palette"); }
     if (e.key === "/" && !e.target.closest("input,textarea")){ e.preventDefault(); openMenu("palette"); }
+    // Ctrl+Z fuera de un campo de texto = deshacer la última reescritura de tarea (#90). Dentro de
+    // un campo NO se toca: ahí manda el deshacer nativo del navegador, que es el que se espera.
+    if ((e.key === "z" || e.key === "Z") && (e.ctrlKey || e.metaKey) && !e.shiftKey
+        && !e.target.closest("input,textarea,[contenteditable]") && !$$(".overlay.open").length){
+      if (undoLastTextEdit()) e.preventDefault();
+    }
     if (e.key === "Escape"){
       // cierra lo más superficial: modal abierto (salvo reconectar, que espera decisión) > tour > menú
       const ov = $$(".overlay.open").filter(x => x.id !== "ov-reconnect").pop();
