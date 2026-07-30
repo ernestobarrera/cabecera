@@ -1507,7 +1507,7 @@ function syncUI(mode, txt){
    reaparece) y si Recargar está activo. El descarte ✕ vive solo en memoria de la sesión.
    Demora asumida: la CDN de Pages puede servir la versión vieja hasta ~10 min aun con
    no-store (gobierna la caché del navegador, no la CDN); para pestañas de días, irrelevante. */
-const APP_VERSION = "0.45.0";
+const APP_VERSION = "0.45.1";
 let newVersionDetected = null;   // versión superior detectada; detiene futuras consultas
 let verDismissed = false;        // ✕: solo esta sesión — nunca persistido en disco
 let verCheckInflight = false;    // sin consultas concurrentes
@@ -4898,21 +4898,32 @@ const TASK_LONG = 300;
    que se ha perdido. Control z no funciona». Mientras escribes, el deshacer nativo del navegador
    ya funciona dentro del editor; lo que faltaba era DESPUÉS de confirmar, que es cuando el texto
    anterior desaparecía sin vuelta atrás.
-   Guarda REFERENCIAS, no ids: una sincronización remota reemplaza los objetos del estado entero,
-   así que la comprobación de pertenencia rechaza sola un deshacer que pisaría lo que llegó de otro
-   equipo — mismo criterio que undoLayout, sin depender de que el elemento ya tenga id (uno recién
-   creado no lo tiene hasta el primer guardado). */
+   0.45.1 — CORRECCIÓN sobre 0.43.1, con su parte de fallo «esto no funciona» (×4, 30/07). La v1
+   guardaba REFERENCIAS a los objetos, y en su instalación real eso lo rompía a los pocos segundos:
+   `poll()` adopta el archivo compartido cada 4 s y `setState` reconstruye TODO el árbol de estado,
+   así que la comprobación de pertenencia fallaba y el deshacer contestaba «esa tarea ya no está»
+   aunque nadie la hubiera tocado. Reproducido con sus datos reales. Ahora se guarda por **id**
+   (los elementos ya lo tienen desde D1; si el suyo aún no se ha propagado, se adelanta aquí el
+   mismo id aleatorio que pondría el guardado), que sobrevive a `setState`, a la fusión y al
+   guardado. La protección de verdad —no pisar un cambio POSTERIOR— la da comparar el texto con el
+   que dejó la edición, y esa sigue intacta: es más precisa que la de referencias, que rechazaba
+   incluso cuando el contenido no había cambiado. */
 let lastTextEdit = null;
-function rememberTextEdit(w, it, before, after){ lastTextEdit = { w, it, before, after }; }
+function rememberTextEdit(w, it, before, after){
+  if (!it.id) it.id = uid();   // D1 se lo pondría en el próximo guardado; adelantarlo es el mismo id
+  lastTextEdit = { widgetId: w.id, itemId: it.id, before, after };
+}
 function undoLastTextEdit(){
   const e = lastTextEdit;
   if (!e) return false;
   lastTextEdit = null;
-  const vivo = state && state.widgets.includes(e.w) && Array.isArray(e.w.data && e.w.data.items) && e.w.data.items.includes(e.it);
-  if (!vivo){ toast("Esa tarea ya no está: no se puede deshacer", true); return true; }
-  if (e.it.t !== e.after){ toast("La tarea cambió después: no se puede deshacer", true); return true; }
-  e.it.t = e.before;
-  refreshWidget(e.w); markDirty();
+  const wg = state && state.widgets.find(x => x.id === e.widgetId);
+  const items = wg && wg.data && Array.isArray(wg.data.items) ? wg.data.items : null;
+  const it = items && items.find(x => x.id === e.itemId);
+  if (!it){ toast("Esa tarea ya no está: no se puede deshacer", true); return true; }
+  if (it.t !== e.after){ toast("La tarea cambió después: no se puede deshacer", true); return true; }
+  it.t = e.before;
+  refreshWidget(wg); markDirty();
   toast("Texto de la tarea restaurado");
   return true;
 }
@@ -5222,7 +5233,14 @@ function growWidgetToContent(w, bodyEl){
   const falta = bodyEl.scrollHeight - bodyEl.clientHeight;
   if (falta <= 2) return false;
   const proj = projectWidgets([w])[0];
-  const target = Math.min(LAYOUT.autoMaxH, proj.h + falta);
+  // 0.45.1 — su parte de fallo «esto no lo veo funcionar». El techo era `autoMaxH` (640), que es el
+  // de «Ordenar»: sirve para decidir cuánto ESTIRAR un widget al ordenar el escritorio, pero como
+  // tope de crecimiento es inútil en sus escritorios reales, donde las ventanas ya miden 530–600 px
+  // — crecía 40 px, invisible. Aquí el techo es lo que da la pantalla: el widget puede llegar a
+  // ocupar el alto visible del lienzo. Sigue habiendo dos frenos duros: el empuje no puede pasarse
+  // del lienzo (P4) y, alcanzado el techo, se pagina en vez de seguir creciendo.
+  const techo = Math.max(LAYOUT.autoMaxH, deskViewH() - LAYOUT.viewportPad * 2);
+  const target = Math.min(techo, proj.h + falta);
   if (target <= proj.h + 2) return false;
   const antes = { x: proj.x, y: proj.y, w: proj.w, h: proj.h };
   const despues = { ...antes, h: target };
@@ -7110,11 +7128,15 @@ function wireUI(){
   document.addEventListener("keydown", e => {
     if ((e.key === "k" || e.key === "K") && (e.ctrlKey || e.metaKey)){ e.preventDefault(); openMenu("palette"); }
     if (e.key === "/" && !e.target.closest("input,textarea")){ e.preventDefault(); openMenu("palette"); }
-    // Ctrl+Z fuera de un campo de texto = deshacer la última reescritura de tarea (#90). Dentro de
-    // un campo NO se toca: ahí manda el deshacer nativo del navegador, que es el que se espera.
-    if ((e.key === "z" || e.key === "Z") && (e.ctrlKey || e.metaKey) && !e.shiftKey
-        && !e.target.closest("input,textarea,[contenteditable]") && !$$(".overlay.open").length){
-      if (undoLastTextEdit()) e.preventDefault();
+    // Ctrl+Z = deshacer la última reescritura de tarea (#90). Dentro de un campo CON texto no se
+    // toca: ahí manda el deshacer nativo del navegador, que es el que se espera. Pero en un campo
+    // VACÍO el nativo no tiene nada que deshacer y tragarse la pulsación era el segundo motivo de
+    // su «esto no funciona» (0.45.1): tras editar una tarea el foco suele quedar en «Nueva tarea…»,
+    // que está vacío, y Ctrl+Z no hacía absolutamente nada.
+    if ((e.key === "z" || e.key === "Z") && (e.ctrlKey || e.metaKey) && !e.shiftKey && !$$(".overlay.open").length){
+      const campo = e.target.closest("input,textarea,[contenteditable]");
+      const escribiendo = campo && (campo.isContentEditable ? campo.textContent.trim() : String(campo.value || "")).length > 0;
+      if (!escribiendo && undoLastTextEdit()) e.preventDefault();
     }
     if (e.key === "Escape"){
       // cierra lo más superficial: modal abierto (salvo reconectar, que espera decisión) > tour > menú

@@ -1259,11 +1259,23 @@ console.log('OK tarea larga → nota (se ofrece, no se impone; titular acotado; 
 
 // --- 0.43.1: deshacer de contenido tras confirmar la reescritura de una tarea (#90) ---
 {
+  // (0.45.1: este invariante fijaba el mecanismo EQUIVOCADO. Exigía identidad por REFERENCIA, y esa
+  // era justamente la causa del «esto no funciona» de Ernesto: `poll()` adopta el archivo cada 4 s y
+  // `setState` reconstruye el árbol entero, así que las referencias morían solas. Se pasa a
+  // identidad por id —sobrevive a setState, a la fusión y al guardado— y la intención vigilada sigue
+  // siendo la misma: no resucitar una tarea borrada y no pisar un cambio posterior.)
   const undo = src.match(/function undoLastTextEdit\(\)\{[\s\S]*?\n\}/)[0];
-  if (!/state\.widgets\.includes\(e\.w\)/.test(undo) || !/items\.includes\(e\.it\)/.test(undo))
-    throw new Error('#90: el deshacer debe comprobar que la tarea sigue viva (una sync remota reemplaza los objetos del estado)');
-  if (!/e\.it\.t !== e\.after/.test(undo))
+  if (/includes\(e\.w\)|includes\(e\.it\)/.test(undo))
+    throw new Error('#90: identidad por referencia otra vez — muere con el primer setState de poll (fallo reproducido el 30/07)');
+  if (!/x\.id === e\.widgetId/.test(undo) || !/x\.id === e\.itemId/.test(undo))
+    throw new Error('#90: el deshacer debe localizar la tarea por id, no por referencia');
+  if (!/if \(!it\)/.test(undo))
+    throw new Error('#90: si la tarea ya no existe, el deshacer no puede resucitarla');
+  if (!/it\.t !== e\.after/.test(undo))
     throw new Error('#90: el deshacer no puede pisar un cambio POSTERIOR al que se va a deshacer (criterio de undoLayout)');
+  const rem = src.match(/function rememberTextEdit\(w, it, before, after\)\{[\s\S]*?\n\}/)[0];
+  if (!/if \(!it\.id\) it\.id = uid\(\)/.test(rem))
+    throw new Error('#90: una tarea creada en la sesión aún no tiene id (D1 se lo pone al guardar): hay que adelantarlo o el deshacer no la encuentra');
   if (!/markDirty\(\)/.test(undo)) throw new Error('#90: restaurar el texto debe guardarse');
   const commit = src.match(/const commit = \(\) => \{\n      const v = input\.value[\s\S]*?\n    \};/)[0];
   if (!/rememberTextEdit\(w, it, old, v\)/.test(commit)) throw new Error('#90: la edición no registra el texto anterior');
@@ -1273,7 +1285,10 @@ console.log('OK tarea larga → nota (se ofrece, no se impone; titular acotado; 
   // Ctrl+Z global: solo FUERA de un campo de texto (dentro manda el deshacer nativo del navegador)
   const key = src.match(/document\.addEventListener\("keydown", e => \{[\s\S]*?\n  \}\);/)[0];
   if (!/e\.key === "z" \|\| e\.key === "Z"/.test(key)) throw new Error('#90: falta el atajo Ctrl+Z');
-  if (!/input,textarea,\[contenteditable\]/.test(key)) throw new Error('#90: Ctrl+Z dentro de un campo debe seguir siendo el del navegador');
+  if (!/input,textarea,\[contenteditable\]/.test(key)) throw new Error('#90: Ctrl+Z dentro de un campo CON texto debe seguir siendo el del navegador');
+  // 0.45.1: un campo VACÍO no tiene nada que deshacer nativamente; tragarse ahí la pulsación era el
+  // segundo motivo del «esto no funciona» (tras editar, el foco queda en «Nueva tarea…», vacío).
+  if (!/escribiendo/.test(key)) throw new Error('#90: en un campo vacío Ctrl+Z debe llegar al deshacer de la app');
   if (!/undoLastTextEdit\(\)/.test(key)) throw new Error('#90: Ctrl+Z no está cableado al deshacer de contenido');
 }
 console.log('OK 0.43.1 deshacer de tarea reescrita (Ctrl+Z fuera de campos, botón en el aviso, no pisa cambios posteriores ni sync remota)');
@@ -1287,6 +1302,12 @@ console.log('OK 0.43.1 deshacer de tarea reescrita (Ctrl+Z fuera de campos, bot�
   if (!/repaintProjection\(\)/.test(grow) || /renderAll\(\)/.test(grow))
     throw new Error('#88: no puede repintarse entero al añadir una tarea — se llevaría el foco del campo «Nueva tarea…»');
   if (!/if \(target <= proj\.h \+ 2\) return false/.test(grow)) throw new Error('#88: sin margen de parada, cada repintado volvería a crecer');
+  // 0.45.1: el techo NO puede ser el de «Ordenar» (autoMaxH=640). Sus ventanas reales miden 530–600,
+  // así que crecían 40 px: invisible, y de ahí su «esto no lo veo funcionar». El techo es la pantalla.
+  if (!/deskViewH\(\)/.test(grow))
+    throw new Error('#88: el techo de crecimiento debe salir del alto visible, no de la constante de «Ordenar» (fallo reproducido el 30/07)');
+  if (/Math\.min\(LAYOUT\.autoMaxH, proj\.h \+ falta\)/.test(grow))
+    throw new Error('#88: techo fijo de 640 otra vez — invisible en escritorios con ventanas grandes');
   const count = src.match(/function growAndCount\(total\)\{[\s\S]*?\n  \}/)[0];
   if (!/el\.isConnected/.test(count)) throw new Error('#88: la medición del cuerpo oculto (measureContentH) no debe agrandar nada');
   if (!/view === "pend"/.test(count)) throw new Error('#88: mirar el histórico de «Hechas» no debe agrandar la ventana');

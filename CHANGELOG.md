@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.45.1] - 2026-07-30 — corrige el deshacer de tareas y el crecimiento de la lista, que no funcionaban en uso real
+
+Dos cosas prometidas en 0.43.1 y 0.44.0 no funcionaban fuera del banco de pruebas. Corregidas y verificadas contra un escritorio real.
+
+- **El Deshacer de una tarea reescrita fallaba a los pocos segundos.** Si tienes Cabecera sincronizada entre equipos, cada vez que se relee el archivo compartido se reconstruye el estado por dentro, y el deshacer perdía el rastro de la tarea: contestaba «esa tarea ya no está» aunque nadie la hubiera tocado. Ahora identifica la tarea por su identificador, que sobrevive a la sincronización. La protección de siempre no cambia: si la tarea cambió después, no se pisa.
+- **Ctrl+Z no hacía nada si el cursor estaba en el campo «Nueva tarea…»**, que es justo donde suele quedarse tras editar. En un campo vacío no hay nada que deshacer, así que ahora la pulsación llega al deshacer de Cabecera. Dentro de un campo con texto sigue mandando el del navegador.
+- **La lista de tareas apenas crecía en ventanas ya grandes.** El tope era una medida pensada para «Ordenar» (640 px), de modo que una ventana de 600 px crecía 40 px: invisible. Ahora el tope es el alto de la pantalla, y la ventana crece de verdad antes de empezar a pasar de página.
+
 ## [0.45.0] - 2026-07-29 — un solo sitio para saber cuál de los tres archivos necesitas
 
 - **Nuevo: «📦 Guardar, compartir o reutilizar…»** (menú Inicio y Ctrl+K). Cabecera maneja tres archivos que por fuera son iguales —todos `.json`— y hacen cosas muy distintas: la **copia de seguridad**, el **escritorio compartido** y el **pack**. Ahora eliges por lo que quieres hacer, y cada uno dice también **para qué NO sirve**, que es donde nacía la confusión.
