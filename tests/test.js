@@ -1259,11 +1259,12 @@ console.log('OK tarea larga → nota (se ofrece, no se impone; titular acotado; 
 
 // --- 0.43.1: deshacer de contenido tras confirmar la reescritura de una tarea (#90) ---
 {
-  // (0.45.1: este invariante fijaba el mecanismo EQUIVOCADO. Exigía identidad por REFERENCIA, y esa
-  // era justamente la causa del «esto no funciona» de Ernesto: `poll()` adopta el archivo cada 4 s y
-  // `setState` reconstruye el árbol entero, así que las referencias morían solas. Se pasa a
-  // identidad por id —sobrevive a setState, a la fusión y al guardado— y la intención vigilada sigue
-  // siendo la misma: no resucitar una tarea borrada y no pisar un cambio posterior.)
+  // (0.45.1: este invariante fijaba el mecanismo EQUIVOCADO. Exigía identidad por REFERENCIA, que
+  // muere sola: `poll()` adopta el archivo compartido cada 4 s y `setState` reconstruye el árbol
+  // entero, así que el deshacer contestaba «esa tarea ya no está» sin que nadie la tocara.
+  // Reproducido sobre el código publicado en `scratchpad/diag-undo.js` (casos C y D). Se pasa a
+  // identidad por id —sobrevive a setState, a la fusión y al guardado— y la intención vigilada
+  // sigue siendo la misma: no resucitar una tarea borrada y no pisar un cambio posterior.)
   const undo = src.match(/function undoLastTextEdit\(\)\{[\s\S]*?\n\}/)[0];
   if (/includes\(e\.w\)|includes\(e\.it\)/.test(undo))
     throw new Error('#90: identidad por referencia otra vez — muere con el primer setState de poll (fallo reproducido el 30/07)');
@@ -1286,8 +1287,8 @@ console.log('OK tarea larga → nota (se ofrece, no se impone; titular acotado; 
   const key = src.match(/document\.addEventListener\("keydown", e => \{[\s\S]*?\n  \}\);/)[0];
   if (!/e\.key === "z" \|\| e\.key === "Z"/.test(key)) throw new Error('#90: falta el atajo Ctrl+Z');
   if (!/input,textarea,\[contenteditable\]/.test(key)) throw new Error('#90: Ctrl+Z dentro de un campo CON texto debe seguir siendo el del navegador');
-  // 0.45.1: un campo VACÍO no tiene nada que deshacer nativamente; tragarse ahí la pulsación era el
-  // segundo motivo del «esto no funciona» (tras editar, el foco queda en «Nueva tarea…», vacío).
+  // 0.45.1: un campo VACÍO no tiene nada que deshacer nativamente; tragarse ahí la pulsación dejaba
+  // el atajo muerto en el camino natural (tras editar, el foco queda en «Nueva tarea…», vacío).
   if (!/escribiendo/.test(key)) throw new Error('#90: en un campo vacío Ctrl+Z debe llegar al deshacer de la app');
   if (!/undoLastTextEdit\(\)/.test(key)) throw new Error('#90: Ctrl+Z no está cableado al deshacer de contenido');
 }
@@ -1303,9 +1304,9 @@ console.log('OK 0.43.1 deshacer de tarea reescrita (Ctrl+Z fuera de campos, bot�
     throw new Error('#88: no puede repintarse entero al añadir una tarea — se llevaría el foco del campo «Nueva tarea…»');
   if (!/if \(target <= proj\.h \+ 2\) return false/.test(grow)) throw new Error('#88: sin margen de parada, cada repintado volvería a crecer');
   // 0.45.1: el techo NO puede ser el de «Ordenar» (autoMaxH=640). Sus ventanas reales miden 530–600,
-  // así que crecían 40 px: invisible, y de ahí su «esto no lo veo funcionar». El techo es la pantalla.
+  // así que crecían 40 px: invisible. Medido contra su datos.json en `scratchpad/diag-crecer.js`.
   if (!/deskViewH\(\)/.test(grow))
-    throw new Error('#88: el techo de crecimiento debe salir del alto visible, no de la constante de «Ordenar» (fallo reproducido el 30/07)');
+    throw new Error('#88: el techo de crecimiento debe salir del alto visible, no de la constante de «Ordenar» (medido el 30/07 con sus ventanas reales)');
   if (/Math\.min\(LAYOUT\.autoMaxH, proj\.h \+ falta\)/.test(grow))
     throw new Error('#88: techo fijo de 640 otra vez — invisible en escritorios con ventanas grandes');
   const count = src.match(/function growAndCount\(total\)\{[\s\S]*?\n  \}/)[0];
