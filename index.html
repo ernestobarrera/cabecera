@@ -345,11 +345,25 @@ ul.plain{list-style:none}
 .todo-it .it-due{border:none; background:none; color:var(--text-dim); cursor:pointer; font-size:12px; padding:2px 4px; border-radius:6px; opacity:0; flex-shrink:0}
 .todo-it:hover .it-due{opacity:.8}
 .todo-it .it-due:hover{opacity:1; color:var(--text)}
-/* acciones bajo el texto (solo al pasar el ratón): el texto ocupa todo el ancho del widget */
-.todo-it .it-actions{display:none; flex-basis:100%; align-items:center; gap:2px; margin-left:25px}
-.todo-it:hover .it-actions,.todo-it:focus-within .it-actions{display:flex}
+/* Acciones de la tarea (0.46.0 — corrección del gate de Codex sobre el salto reportado).
+   Antes esta banda era `flex-basis:100%` y pasaba de `display:none` a `display:flex` con :hover y
+   con :focus-within: aparecía como una SEGUNDA FILA y la tarea crecía ~30 px, empujando a todas las
+   de abajo. Ese, y no el tamaño de la caja del texto, era el grueso del «salto que mueve todas»:
+   ocurría al pasar el ratón, antes incluso de pulsar ✎. Ahora la banda **flota sobre el final de su
+   propia fila** (`position:absolute`), así que aparecer y desaparecer NO cambia el alto de nada.
+   Invariante: si vuelve al flujo, vuelve el salto — hay test que lo fija.
+   Mientras se edita se oculta del todo (clase `editing`, puesta por `editItem`): esos botones no
+   sirven de nada con el textarea abierto y su aparición por foco era la otra mitad del salto.
+   En pantallas táctiles no hay hover, así que allí sigue en el flujo, debajo, como hasta ahora. */
+.todo-it .it-actions{display:none; position:absolute; right:4px; bottom:2px; z-index:2; align-items:center; gap:2px;
+  padding:1px 3px; border-radius:8px; background:rgba(24,28,37,.94); box-shadow:0 0 0 1px var(--border-soft)}
+.todo-it:hover .it-actions{display:flex}
+.todo-it.editing .it-actions{display:none}
 .todo-it .it-actions button{opacity:1}
-@media (any-hover:none){ .todo-it .it-actions{display:flex} }
+@media (any-hover:none){
+  .todo-it .it-actions{display:flex; position:static; flex-basis:100%; margin-left:25px; background:none; box-shadow:none; padding:0}
+  .todo-it.editing .it-actions{display:none}
+}
 .todo-it .t a{color:var(--accent); text-decoration:underline; text-underline-offset:2px; word-break:break-all}
 /* cabecera opcional de una nota o lista de tareas: línea dim arriba, nítida al pasar el ratón */
 .notes-desc{flex-shrink:0; font-size:11px; color:var(--text-dim); opacity:.6; padding:2px 2px 5px; margin-bottom:5px; border-bottom:1px dashed var(--border-soft); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; cursor:text}
@@ -4788,6 +4802,10 @@ function setDictTarget(id){
    Cuerpos de widgets
    ============================================================ */
 function renderBody(w, el){
+  // Un cuerpo se repinta muchas veces sobre el MISMO elemento (refreshWidget reutiliza .win-body).
+  // Los observadores que instale un cuerpo se retiran aquí, o se acumulan en cada repintado y
+  // siguen corriendo para siempre (hallazgo del gate de Codex sobre el ResizeObserver de `md`).
+  if (el.__ro){ el.__ro.disconnect(); el.__ro = null; }
   ({ links: bodyLinks, notes: bodyNotes, todo: bodyTodo,
      clips: bodyClips, qr: bodyQr, clock: bodyClock, intro: bodyIntro,
      md: bodyMd, img: bodyImg, timer: bodyTimer, cal: bodyCal, year: bodyYear, search: bodySearch,
@@ -5079,6 +5097,7 @@ function bodyTodo(w, el){
     input.value = old;
     const grow = () => { input.style.height = "auto"; input.style.height = input.scrollHeight + "px"; };
     span.replaceWith(input);
+    li.classList.add("editing");   // retira la banda de acciones mientras se escribe (ver CSS .it-actions)
     grow();
     /* Salir de la edición sin repintar la lista entera: si el texto no cambió, repintar mueve
        todas las filas y puede repaginar por nada. Solo se repinta cuando hay cambio real. */
@@ -5090,6 +5109,7 @@ function bodyTodo(w, el){
       s.innerHTML = linkifyEsc(it.t);
       s.addEventListener("dblclick", () => editItem(it, li));
       input.replaceWith(s);
+      li.classList.remove("editing");
     };
     const commit = () => {
       if (cerrado) return;
@@ -5098,6 +5118,7 @@ function bodyTodo(w, el){
       if (v === old){ restore(); return; }
       it.t = v;
       cerrado = true;
+      li.classList.remove("editing");
       paint(); markDirty();
       // el texto anterior deja de perderse al confirmar: Ctrl+Z o el botón del aviso lo devuelven
       rememberTextEdit(w, it, old, v);
@@ -5693,11 +5714,21 @@ function mdToHtml(src){
   const out = [];
   let inCode = false, inList = null;
   const closeList = () => { if (inList){ out.push(`</${inList}>`); inList = null; } };
-  const inline = s => s
-    .replace(/`([^`]+)`/g, "<code>$1</code>")
-    .replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>")
-    .replace(/\*([^*]+)\*/g, "<i>$1</i>")
-    .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+  /* 0.46.0 — escapes con barra invertida. Sin esto no hay forma de que un texto que NO pidió
+     formato viaje como Markdown sin convertirse en formato: era el agujero que encontró Codex
+     (una celda copiada que dice «[x](https://…)» acababa siendo un enlace activo). El carácter
+     escapado se aparta en un testigo antes de aplicar las reglas y vuelve al final, así que
+     ninguna regla puede verlo. `mdEscape` produce exactamente estos escapes. */
+  const inline = s => {
+    const lit = [];
+    return s
+      .replace(/\\([\\`*_[\]()|#>~-])/g, (m, c) => "\u0001" + (lit.push(c) - 1) + "\u0001")
+      .replace(/`([^`]+)`/g, "<code>$1</code>")
+      .replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>")
+      .replace(/\*([^*]+)\*/g, "<i>$1</i>")
+      .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
+      .replace(/\u0001(\d+)\u0001/g, (m, i) => esc(lit[+i]));
+  };
   for (let i = 0; i < lines.length; i++){
     const l = lines[i];
     if (l.startsWith("```")){ closeList(); inCode = !inCode; out.push(inCode ? "<pre>" : "</pre>"); continue; }
@@ -5743,49 +5774,81 @@ function mdToHtml(src){
    Detección deliberadamente ESTRICTA: se exige el mismo número de columnas en todas las filas. Ante
    la duda, el contenido se queda como texto y decide el usuario en el diálogo. Nada se importa sin
    un clic suyo. */
-const IMPORT_MAX_ROWS = 500, IMPORT_MAX_COLS = 40;
+/* Presupuestos. Se aplican ANTES y DURANTE el análisis, no al final: analizar 5 MB de portapapeles
+   entero para luego quedarse con 500 filas bloquea la interfaz igual (corrección del gate de Codex).
+   `IMPORT_MAX_MD` es el mismo tope que `data.text` tiene en normalizePack y en la proyección de
+   compartir: generar más produciría un documento que se recortaría solo al salir. */
+const IMPORT_MAX_ROWS = 500, IMPORT_MAX_COLS = 40, IMPORT_MAX_CELL = 600, IMPORT_MAX_CHARS = 300000, IMPORT_MAX_MD = 100000;
 /* CSV/TSV al estilo RFC 4180: comillas dobles, comillas dobladas dentro del campo y separadores o
-   saltos de línea DENTRO de una celda entrecomillada. PURA. */
+   saltos de línea DENTRO de una celda entrecomillada. Para de leer al llegar al tope de filas. PURA. */
 function parseDelimited(text, sep){
-  const s = String(text == null ? "" : text).replace(/\r\n?/g, "\n");
+  const s = String(text == null ? "" : text).slice(0, IMPORT_MAX_CHARS).replace(/\r\n?/g, "\n");
   const rows = [];
   let row = [], cur = "", q = false;
   for (let i = 0; i < s.length; i++){
     const c = s[i];
     if (q){
       if (c === '"'){ if (s[i + 1] === '"'){ cur += '"'; i++; } else q = false; }
-      else cur += c;
+      else if (cur.length < IMPORT_MAX_CELL) cur += c;
       continue;
     }
     if (c === '"' && cur === ""){ q = true; continue; }
-    if (c === sep){ row.push(cur); cur = ""; continue; }
-    if (c === "\n"){ row.push(cur); rows.push(row); row = []; cur = ""; continue; }
-    cur += c;
+    if (c === sep){ if (row.length < IMPORT_MAX_COLS) row.push(cur); cur = ""; continue; }
+    if (c === "\n"){
+      if (row.length < IMPORT_MAX_COLS) row.push(cur);
+      rows.push(row); row = []; cur = "";
+      if (rows.length > IMPORT_MAX_ROWS) return rows.map(r => r.map(c => c.replace(/\s*\n\s*/g, " ").trim()));
+      continue;
+    }
+    if (cur.length < IMPORT_MAX_CELL) cur += c;
   }
-  row.push(cur); rows.push(row);
+  if (row.length < IMPORT_MAX_COLS) row.push(cur);
+  rows.push(row);
   while (rows.length && rows[rows.length - 1].every(c => !c.trim())) rows.pop();
   return rows.map(r => r.map(c => c.replace(/\s*\n\s*/g, " ").trim()));
 }
-/* Una celda no puede romper la tabla: la barra vertical se escapa (y `mdSplitRow` la deshace) y el
-   salto de línea se colapsa. Nunca se altera el SIGNIFICADO del dato, solo su transporte. PURA. */
+/* Neutraliza la SINTAXIS Markdown de un texto que no la pidió. Corrección vinculante del gate: el
+   `textContent` de una celda no es contenido literal si después se guarda como Markdown — una celda
+   que dice «[Banca](https://evil.example)», sin ningún enlace en el HTML de origen, acababa siendo
+   un enlace activo hacia donde quisiera la página copiada. Solo un <a href> explícito puede producir
+   un enlace. Los escapes los deshace `inline()` al renderizar, así que el dato se ve tal cual y el
+   viaje de ida y vuelta no lo altera. PURA. */
+function mdEscape(v){
+  return String(v == null ? "" : v)
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, "")   // controles: ni se ven, ni deben viajar, ni pueden imitar al testigo de `inline()`
+    .replace(/\s*\n\s*/g, " ")
+    .replace(/[\\`*[\]|]/g, c => "\\" + c)
+    .trim()
+    .slice(0, IMPORT_MAX_CELL);
+}
+/* Una celda es texto crudo (se neutraliza) o un fragmento que hemos construido nosotros — hoy solo
+   un enlace extraído de un <a href> validado —, que llega como { md } y pasa tal cual. PURA. */
 function mdCell(v){
-  return String(v == null ? "" : v).replace(/\s*\n\s*/g, " ").replace(/\|/g, "\\|").trim();
+  if (v && typeof v === "object" && typeof v.md === "string") return v.md;
+  return mdEscape(v);
 }
 function rowsToMdTable(rows){
-  const clean = (Array.isArray(rows) ? rows : []).filter(r => Array.isArray(r) && r.some(c => String(c == null ? "" : c).trim() !== ""));
+  const clean = (Array.isArray(rows) ? rows : []).filter(r => Array.isArray(r) && r.some(c => String(mdCell(c)).trim() !== ""));
   if (clean.length < 2) return null;
   const cols = Math.min(IMPORT_MAX_COLS, Math.max(...clean.map(r => r.length)));
   if (cols < 2) return null;
   const line = r => "| " + Array.from({ length: cols }, (_, i) => mdCell(r[i]) || " ").join(" | ") + " |";
   const out = [line(clean[0]), "|" + " --- |".repeat(cols)];
-  for (const r of clean.slice(1, IMPORT_MAX_ROWS + 1)) out.push(line(r));
-  return out.join("\n");
+  let largo = out[0].length + out[1].length + 2;
+  for (const r of clean.slice(1, IMPORT_MAX_ROWS + 1)){
+    const l = line(r);
+    if (largo + l.length + 1 > IMPORT_MAX_MD) break;   // se corta por fila entera, nunca a media celda
+    out.push(l); largo += l.length + 1;
+  }
+  return out.length > 2 ? out.join("\n") : null;
 }
 /* JSON = lista de objetos planos homogéneos → tabla. Las claves peligrosas se ignoran y los valores
    se leen con `hasOwnProperty`: ni se escribe ni se hereda del prototipo. PURA. */
 function jsonRows(text){
+  const s = String(text == null ? "" : text);
+  if (s.length > IMPORT_MAX_CHARS) return null;   // no se analiza lo que ya sabemos que no cabe
   let v;
-  try{ v = JSON.parse(String(text)); }catch(e){ return null; }
+  try{ v = JSON.parse(s); }catch(e){ return null; }
   if (!Array.isArray(v) || !v.length || v.length > IMPORT_MAX_ROWS) return null;
   const keys = [];
   for (const o of v){
@@ -5805,6 +5868,8 @@ function jsonRows(text){
 function detectPaste(text){
   const s = String(text == null ? "" : text);
   if (!s.trim()) return { kind: "vacio" };
+  // presupuesto de ENTRADA: lo que no cabe ni se analiza (ni JSON.parse ni recorrido de celdas)
+  if (s.length > IMPORT_MAX_CHARS) return { kind: "grande", chars: s.length };
   const lines = s.replace(/\r\n?/g, "\n").split("\n");
   for (let i = 0; i + 1 < lines.length; i++){
     if (!lines[i].includes("|")) continue;
@@ -5827,20 +5892,61 @@ function pasteToMd(text, det){
   if (d.kind === "tsv" || d.kind === "csv") return rowsToMdTable(parseDelimited(text, d.sep).filter(r => r.some(c => c !== "")));
   return null;
 }
-/* Única función de esta tanda que toca el DOM. Del HTML del portapapeles se leen SOLO textos y
-   hrefs validados: nada de ese HTML llega al estado ni a la pantalla (ver la nota de arriba). */
+/* Una URL puede llevar paréntesis legítimos y el enlace Markdown termina en el primero: se
+   codifican, que es equivalente para HTTP y no rompe la sintaxis. PURA. */
+function mdSafeUrl(u){
+  const s = sSafeUrl(u);
+  return s ? s.replace(/[()]/g, c => (c === "(" ? "%28" : "%29")) : null;
+}
+/* Ensambla una celda a partir de sus trozos ya extraídos: `{t}` es texto literal y `{t,u}` un
+   enlace explícito del origen. Aquí vive TODA la decisión de qué puede convertirse en Markdown
+   activo, y por eso es pura y testeable sin DOM: `htmlTableRows` solo recorre nodos y delega.
+   Un enlace con URL no permitida degrada a texto literal, no desaparece. PURA. */
+function mdCellFromParts(parts){
+  const frags = [];
+  for (const p of (Array.isArray(parts) ? parts : [])){
+    const u = p && p.u ? mdSafeUrl(p.u) : null;
+    if (u){ frags.push("[" + (mdEscape(p.t) || mdEscape(u)) + "](" + u + ")"); continue; }
+    const t = mdEscape(p && p.t);
+    if (t) frags.push(t);
+  }
+  let md = "";
+  for (const f of frags){   // se corta por fragmento entero: nunca a medias de un enlace
+    if (md.length + f.length + 1 > IMPORT_MAX_CELL * 2) break;
+    md += (md ? " " : "") + f;
+  }
+  return { md: md.replace(/\s+/g, " ").trim() };
+}
+/* Única función de esta tanda que toca el DOM. Correcciones vinculantes del gate de Codex:
+   - `table.rows`/`row.cells` en vez de `querySelectorAll`: una tabla ANIDADA dentro de una celda
+     ya no inventa filas y columnas de más; su contenido queda como texto de la celda que la
+     contiene, que es lo correcto.
+   - `script`, `style` y lo oculto se retiran antes de leer: su `textContent` no es contenido.
+   - la celda se recorre POR NODOS: cada <a href> seguro produce su propio enlace y el resto del
+     texto se neutraliza. Antes, el primer enlace volvía clicable toda la celda y los demás se
+     perdían. Solo un <a href> explícito puede generar un enlace.
+   Ese HTML no llega al estado ni a la pantalla: de él salen datos, y el Markdown lo construimos
+   nosotros. */
 function htmlTableRows(html){
-  const table = new DOMParser().parseFromString(String(html), "text/html").querySelector("table");
+  const s = String(html == null ? "" : html);
+  if (!s || s.length > IMPORT_MAX_CHARS) return null;
+  const doc = new DOMParser().parseFromString(s, "text/html");
+  doc.querySelectorAll("script,style,template,noscript,[hidden],[style*='display:none'],[style*='display: none']").forEach(n => n.remove());
+  const table = doc.querySelector("table");
   if (!table) return null;
+  const celda = td => mdCellFromParts([...td.childNodes].map(n => {
+    const a = n.nodeType === 1 && n.matches("a[href]") ? n : null;
+    return a ? { t: a.textContent || "", u: a.getAttribute("href") } : { t: n.textContent || "" };
+  }));
   const rows = [];
-  for (const tr of table.querySelectorAll("tr")){
-    const cells = [...tr.querySelectorAll("th,td")].map(td => {
-      const txt = (td.textContent || "").replace(/\s+/g, " ").trim();
-      const a = td.querySelector("a[href]");
-      const u = a ? sSafeUrl(a.getAttribute("href")) : null;
-      return u ? `[${txt || u}](${u})` : txt;
-    });
+  for (const tr of table.rows){
+    const cells = [];
+    for (const td of tr.cells){
+      if (cells.length >= IMPORT_MAX_COLS) break;
+      cells.push(celda(td));
+    }
     if (cells.length) rows.push(cells);
+    if (rows.length > IMPORT_MAX_ROWS) break;
   }
   return rows.length ? rows : null;
 }
@@ -5849,18 +5955,38 @@ const PASTE_LABEL = { "tabla-md": "tabla Markdown", json: "JSON (lista de objeto
    salvo el caso que la spec excluye expresamente: texto o Markdown claros, que se añaden y ya. */
 async function mdOfferImport(w, plain, html){
   const hRows = html ? htmlTableRows(html) : null;
-  const md = hRows ? rowsToMdTable(hRows) : pasteToMd(plain, detectPaste(plain));
   const det = detectPaste(plain);
+  const md = hRows ? rowsToMdTable(hRows) : pasteToMd(plain, det);
   const bruto = String(plain || "");
+  /* El diálogo tiene un `await` en medio, y en su instalación `poll()` adopta el archivo compartido
+     cada 4 s: `setState` reconstruye el árbol entero y este `w` se queda huérfano. Escribir sobre él
+     no llegaría al estado, o pisaría una base distinta de la que se le enseñó. Es exactamente la
+     lección de 0.45.1 con el deshacer. Al aplicar se resuelve otra vez POR ID y se compara la base. */
+  const wid = w.id, base = String(w.data.text || "");
+  const resolver = () => {
+    if (!state || !Array.isArray(state.spaces)) return null;
+    for (const sp of state.spaces){
+      const f = (sp.widgets || []).find(x => x.id === wid);
+      if (f) return f;
+    }
+    return null;
+  };
   const aplicar = (texto, modo) => {
-    const prev = w.data.text || "";
-    w.data.text = modo === "add" && prev.trim() ? prev.replace(/\s+$/, "") + "\n\n" + texto : texto;
-    w.data.view = "view";
-    refreshWidget(w); markDirty();
+    if (!guardMutation()) return;
+    const wg = resolver();
+    if (!wg){ toast("Ese documento ya no está: no se ha pegado nada", true); return; }
+    const prev = String(wg.data.text || "");
+    if (prev !== base){ toast("El documento cambió mientras elegías (otra pestaña u otro equipo): no se ha pegado nada", true); return; }
+    const next = modo === "add" && prev.trim() ? prev.replace(/\s+$/, "") + "\n\n" + texto : texto;
+    if (next.length > IMPORT_MAX_MD){ toast(`No cabe: el documento quedaría en ${Math.round(next.length / 1000)} KB y el máximo es ${IMPORT_MAX_MD / 1000} KB.`, true); return; }
+    wg.data.text = next;
+    wg.data.view = "view";
+    refreshWidget(wg); markDirty();
     toast(modo === "add" ? "Añadido al final del documento" : "Documento reemplazado");
   };
   if (!md){
     if (!bruto.trim()){ toast("El portapapeles no tiene texto", true); return; }
+    if (det.kind === "grande"){ toast(`Eso son ${Math.round(bruto.length / 1000)} KB: demasiado para un documento (máximo ${IMPORT_MAX_CHARS / 1000} KB).`, true); return; }
     aplicar(bruto, "add");
     return;
   }
@@ -5925,8 +6051,10 @@ function bodyMd(w, el){
   };
   narrow();
   if (window.ResizeObserver){
+    // uno por cuerpo: `renderBody` desconecta el anterior antes de repintar (ver allí)
     const ro = new ResizeObserver(() => { if (!el.isConnected){ ro.disconnect(); return; } narrow(); });
     ro.observe(el);
+    el.__ro = ro;
   }
 }
 

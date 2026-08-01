@@ -78,7 +78,11 @@ console.log('OK tablas GFM (alineación, celdas vacías, barras escapadas, filas
 eval('globalThis.' + (src.match(/const IMPORT_MAX_ROWS = [^\n]*;/) || [''])[0].replace('const ', ''));
 if (!globalThis.IMPORT_MAX_ROWS || !globalThis.IMPORT_MAX_COLS) throw new Error('no encontrados los límites de importación');
 eval('globalThis.parseDelimited = ' + pickFn('parseDelimited', 'text, sep'));
+eval('globalThis.mdEscape = ' + pickFn('mdEscape', 'v'));
 eval('globalThis.mdCell = ' + pickFn('mdCell', 'v'));
+eval('globalThis.sSafeUrl = ' + (src.match(/const sSafeUrl = [^\n]*;/) || [''])[0].replace('const sSafeUrl = ', '').replace(/;$/, ''));
+eval('globalThis.mdSafeUrl = ' + pickFn('mdSafeUrl', 'u'));
+eval('globalThis.mdCellFromParts = ' + pickFn('mdCellFromParts', 'parts'));
 eval('globalThis.rowsToMdTable = ' + pickFn('rowsToMdTable', 'rows'));
 eval('globalThis.jsonRows = ' + pickFn('jsonRows', 'text'));
 eval('globalThis.detectPaste = ' + pickFn('detectPaste', 'text'));
@@ -126,7 +130,73 @@ if (pasteToMd(muchas, detectPaste(muchas)).split('\n').length !== IMPORT_MAX_ROW
 // El HTML del portapapeles NUNCA se inserta: solo se leen textos y hrefs validados.
 const htmlFn = pickFn('htmlTableRows', 'html');
 if (/innerHTML|insertAdjacentHTML|outerHTML/.test(htmlFn)) throw new Error('htmlTableRows no debe insertar HTML en ningún caso');
-if (!/textContent/.test(htmlFn) || !/sSafeUrl/.test(htmlFn)) throw new Error('htmlTableRows debe leer solo textContent y href validado');
+if (!/textContent/.test(htmlFn) || !/mdCellFromParts/.test(htmlFn)) throw new Error('htmlTableRows debe leer solo textContent y delegar el ensamblado');
+// filas y celdas por las APIs de tabla (table.rows/tr.cells): una tabla ANIDADA no debe inventar
+// filas ni columnas. Con querySelectorAll('tr') sí lo hacía — hallazgo reproducido por Codex.
+if (/querySelectorAll\(["'](tr|th,td)["']\)/.test(htmlFn)) throw new Error('htmlTableRows: querySelectorAll cuenta las filas de una tabla anidada');
+if (!/table\.rows/.test(htmlFn) || !/tr\.cells/.test(htmlFn)) throw new Error('htmlTableRows debe recorrer table.rows / tr.cells');
+if (!/script,style,template,noscript/.test(htmlFn)) throw new Error('htmlTableRows debe retirar script/style antes de leer textContent');
+
+// --- El texto extraído NO puede traer semántica Markdown (corrección vinculante 2 del gate) ---
+// Reproducción literal de Codex: una celda de texto plano «[Banca](https://evil.example)», sin
+// ningún <a> en el origen, terminaba siendo un enlace activo hacia donde quisiera la página copiada.
+const trampa = mdCellFromParts([{ t: '[Banca](https://evil.example)' }]);
+if (/<a /.test(mdToHtml(rowsToMdTable([['a', 'b'], [trampa, 'z']])))) throw new Error('texto literal con sintaxis de enlace se activa: solo un <a href> puede crear un enlace');
+if (!mdToHtml(rowsToMdTable([['a', 'b'], [trampa, 'z']])).includes('[Banca]')) throw new Error('el texto literal debe VERSE tal cual, no desaparecer');
+// lo mismo con negrita, código y barras
+for (const [crudo, prohibido] of [['**mando**', '<b>'], ['`código`', '<code>'], ['a | b', null]]){
+  const html = mdToHtml(rowsToMdTable([['x', 'y'], [mdCellFromParts([{ t: crudo }]), 'z']]));
+  if (prohibido && html.includes(prohibido)) throw new Error('sintaxis Markdown activa desde texto literal: ' + crudo);
+  if (nTd(html) !== 2) throw new Error('el texto literal rompe la tabla: ' + crudo);
+}
+// un <a href> explícito SÍ crea enlace, y cada uno el suyo (antes el primero se comía la celda)
+const dos = mdCellFromParts([{ t: 'Ver ' }, { t: 'PubMed', u: 'https://pubmed.gov' }, { t: ' y ' }, { t: 'Civio', u: 'https://civio.es' }]);
+const dosHtml = mdToHtml(rowsToMdTable([['a', 'b'], [dos, 'z']]));
+if ((dosHtml.match(/<a /g) || []).length !== 2) throw new Error('deben sobrevivir los DOS enlaces de la celda, no solo el primero');
+if (!dosHtml.includes('>PubMed<') || !dosHtml.includes('>Civio<')) throw new Error('cada enlace debe llevar su propio texto');
+// URL con paréntesis: el enlace Markdown terminaría en el primero
+const par = mdCellFromParts([{ t: 'wiki', u: 'https://es.wikipedia.org/wiki/Éxito_(desambiguación)' }]);
+if (/\(\)/.test(par.md) || par.md.includes(')(')) throw new Error('URL con paréntesis mal transportada');
+if (!mdToHtml(rowsToMdTable([['a', 'b'], [par, 'z']])).includes('%29')) throw new Error('los paréntesis de la URL deben ir codificados');
+// protocolo no permitido: degrada a texto, no a enlace, y no se pierde
+const malo = mdCellFromParts([{ t: 'pulsa aquí', u: 'javascript:alert(1)' }]);
+if (mdToHtml(rowsToMdTable([['a', 'b'], [malo, 'z']])).includes('<a ')) throw new Error('un href no permitido no puede crear enlace');
+if (!malo.md.includes('pulsa aquí')) throw new Error('un href no permitido no debe hacer desaparecer el texto');
+// escapes: lo que mdEscape produce, inline() lo deshace — ida y vuelta sin alterar el dato
+if (mdEscape('a*b[c]|d`e') !== 'a\\*b\\[c\\]\\|d\\`e') throw new Error('mdEscape: juego de metacaracteres');
+if (!mdToHtml('| x |\n|---|\n| ' + mdEscape('a*b[c]') + ' |').includes('a*b[c]')) throw new Error('el escape debe deshacerse al renderizar');
+// caracteres de control fuera (podrían imitar el testigo interno de inline())
+if (mdEscape('a\u0001b\u0000c') !== 'abc') throw new Error('mdEscape: caracteres de control (podrían imitar el testigo de inline())');
+
+// --- Presupuestos ANTES y DURANTE el análisis (corrección vinculante 3) ---
+const enorme = 'a\tb\n' + 'x\ty\n'.repeat(200000);
+if (enorme.length <= IMPORT_MAX_CHARS) throw new Error('el caso de prueba debe superar el tope de entrada');
+if (detectPaste(enorme).kind !== 'grande') throw new Error('una entrada enorme no debe analizarse siquiera');
+if (jsonRows('[' + '{"a":1,"b":2},'.repeat(30000).slice(0, -1) + ']') !== null) throw new Error('JSON enorme no debe parsearse');
+// parseDelimited deja de leer al llegar al tope, no recorre el resto
+if (parseDelimited('a\tb\n' + 'x\ty\n'.repeat(2000), '\t').length > IMPORT_MAX_ROWS + 2) throw new Error('parseDelimited debe parar en el tope de filas');
+// celda desmesurada acotada
+if (parseDelimited('a\tb\nx'.padEnd(5000, 'x') + '\ty', '\t')[1][0].length > IMPORT_MAX_CELL) throw new Error('celda sin tope');
+// y el markdown generado nunca supera el tope de data.text
+const anchas = [Array.from({ length: 12 }, (_, i) => 'c' + i)].concat(Array.from({ length: 400 }, () => Array.from({ length: 12 }, () => 'x'.repeat(400))));
+const capado = rowsToMdTable(anchas);
+if (capado.length > IMPORT_MAX_MD) throw new Error('el markdown generado supera IMPORT_MAX_MD');
+if (!/\n\| /.test(capado)) throw new Error('el recorte debe dejar filas enteras, no media tabla');
+
+// --- El diálogo no puede escribir sobre un widget obsoleto (corrección vinculante 4) ---
+const offer = src.match(/async function mdOfferImport\(w, plain, html\)\{[\s\S]*?\n\}/)[0];
+if (!/const wid = w\.id, base = String\(w\.data\.text \|\| ""\)/.test(offer)) throw new Error('mdOfferImport debe fijar id y base ANTES del await del diálogo');
+if (!/const wg = resolver\(\);/.test(offer)) throw new Error('al aplicar hay que re-resolver el widget por id');
+// la base comparada tiene que leerse del widget RE-RESUELTO: comparar `base` consigo misma es
+// una comprobación vacua que deja pasar exactamente el fallo que se quería cerrar
+if (!/const prev = String\(wg\.data\.text \|\| ""\);/.test(offer)) throw new Error('la base debe releerse del widget re-resuelto, no de la copia capturada');
+if (!/prev !== base/.test(offer)) throw new Error('hay que comparar la base actual con la que se enseñó en el diálogo');
+if (!/guardMutation\(\)/.test(offer)) throw new Error('aplicar debe re-comprobar el guard de vista mutable');
+if (/\bw\.data\.text = /.test(offer)) throw new Error('no se escribe sobre el widget capturado, sino sobre el re-resuelto');
+
+// --- Un solo ResizeObserver por cuerpo (corrección vinculante 6) ---
+const rb = src.match(/function renderBody\(w, el\)\{[\s\S]*?\n\}/)[0];
+if (!/el\.__ro/.test(rb) || !/disconnect\(\)/.test(rb)) throw new Error('renderBody debe desconectar el observador del cuerpo anterior');
 // El umbral de la vista de tarjetas depende del número de columnas, no solo del ancho: con sus
 // ventanas de ~441 px, una tabla de 6 columnas tiene que caer a fichas.
 const narrowFn = src.match(/const narrow = \(\) => \{[\s\S]*?\n  \};/)[0];
@@ -154,8 +224,19 @@ if (prop(tRule, 'padding') !== prop(eRule, 'padding')) throw new Error('editar t
 if (prop(tRule, 'line-height') !== prop(eRule, 'line-height')) throw new Error('editar tarea: interlineado distinto entre leer y editar');
 if (parseInt(prop(tRule, 'border')) !== parseInt(prop(eRule, 'border'))) throw new Error('editar tarea: grosor de borde distinto entre leer y editar');
 if (prop(eRule, 'font-size') !== 'inherit') throw new Error('editar tarea: el editor debe heredar el tamaño de letra de la lista');
-// y salir sin cambios no debe repintar la lista entera
+// La causa PRINCIPAL del salto (la que encontró Codex midiendo en navegador: la fila pasaba de
+// 38,5 a 69 px). La banda de acciones era `flex-basis:100%` y aparecía con :hover y :focus-within,
+// es decir, como una segunda fila: mover el ratón por la lista ya empujaba a todas las de abajo.
+// Debe quedar FUERA DEL FLUJO, o el salto vuelve entero.
 const editFn = src.match(/const editItem = \(it, li\) => \{[\s\S]*?\n  \};/)[0];
+const aRule = cssOf('.todo-it .it-actions');
+if (!/position:absolute/.test(aRule)) throw new Error('las acciones de la tarea deben flotar: en el flujo vuelven a empujar la lista');
+if (/flex-basis:100%/.test(aRule)) throw new Error('las acciones de la tarea no pueden ocupar una segunda fila');
+if (/:focus-within \.it-actions/.test(html)) throw new Error('el foco no debe desplegar la banda: era la otra mitad del salto al pulsar ✎');
+if (!/\.todo-it\.editing \.it-actions\{display:none\}/.test(html)) throw new Error('mientras se edita, la banda de acciones debe desaparecer');
+if (!/li\.classList\.add\("editing"\)/.test(editFn) || !/li\.classList\.remove\("editing"\)/.test(editFn))
+  throw new Error('editItem debe marcar y desmarcar la fila en edición');
+// y salir sin cambios no debe repintar la lista entera
 if (!/if \(v === old\)\{ restore\(\); return; \}/.test(editFn)) throw new Error('editar tarea: sin cambio real no debe repintar la lista');
 if (!/const cancel = \(\) => \{ it\.t = old; restore\(\); \};/.test(editFn)) throw new Error('editar tarea: Escape no debe repintar la lista');
 console.log('OK editar tarea (misma caja al leer y al editar, sin repintado innecesario)');
