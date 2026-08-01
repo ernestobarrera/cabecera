@@ -39,6 +39,128 @@ for (const tag of ['<h3>', '<ul>', '<li>', '<ol>', '<b>', '<i>', '<code>', '<blo
 if (!mdToHtml('```\nabierto').endsWith('</pre>')) throw new Error('fence sin cierre no se cierra');
 console.log('OK mdToHtml (XSS bloqueado, formato correcto)');
 
+// --- 0.46.0: tablas GFM en el widget Documento -----------------------------------------------
+// (bloque propio: los nombres cortos de aquí no deben chocar con los del resto de la suite)
+{
+eval('globalThis.mdSplitRow = ' + pickFn('mdSplitRow', 'line'));
+eval('globalThis.mdTableAligns = ' + pickFn('mdTableAligns', 'sepLine, n'));
+eval('globalThis.mdTableHtml = ' + pickFn('mdTableHtml', 'head, aligns, rows, inline'));
+
+const nTd = h => (h.match(/<td /g) || []).length;
+// tabla válida
+const t1 = mdToHtml('| Medio | Enlace |\n|---|---|\n| Civio | [Abrir](https://civio.es) |');
+if (!t1.includes('<table class="md-table">')) throw new Error('tabla: no se renderiza');
+if ((t1.match(/<th[ >]/g) || []).length !== 2) throw new Error('tabla: cabecera con 2 columnas');
+if (!t1.includes('href="https://civio.es"')) throw new Error('tabla: enlace dentro de celda');
+if (!t1.includes('data-th="Medio"')) throw new Error('tabla: falta data-th (vista de tarjetas)');
+// alineación
+const t2 = mdToHtml('| a | b | c |\n|:---|:---:|---:|\n| 1 | 2 | 3 |');
+if (!t2.includes('text-align:left') || !t2.includes('text-align:center') || !t2.includes('text-align:right')) throw new Error('tabla: alineación');
+// celdas vacías y barras escapadas
+if (mdSplitRow('| a |  | c |').length !== 3) throw new Error('tabla: celda vacía perdida');
+const esc1 = mdSplitRow('| a \\| b | c |');
+if (esc1.length !== 2 || esc1[0] !== 'a | b') throw new Error('tabla: barra escapada debe ser contenido, no separador');
+// fila incompleta: se rellena hasta la cabecera; fila larga: se recorta
+const t3 = mdToHtml('| a | b | c |\n|---|---|---|\n| 1 |\n| 1 | 2 | 3 | 4 |');
+if (nTd(t3) !== 6) throw new Error('tabla incompleta: cada fila debe tener tantas celdas como la cabecera');
+// detección NO permisiva: barras sueltas sin separador no son tabla
+if (mdToHtml('a | b | c\nd | e | f').includes('<table')) throw new Error('tabla: detección demasiado permisiva');
+if (mdTableAligns('|---|xx|', 2) !== null) throw new Error('tabla: separador inválido aceptado');
+if (mdTableAligns('|---|', 2) !== null) throw new Error('tabla: separador con otro número de columnas aceptado');
+// un --- suelto sigue siendo <hr>
+if (!mdToHtml('texto\n---\notro').includes('<hr>')) throw new Error('tabla: se ha roto el separador horizontal');
+// XSS dentro de una celda
+const tx = mdToHtml('| a | b |\n|---|---|\n| <img src=x onerror=alert(1)> | [x](javascript:alert(1)) |');
+if (tx.includes('<img') || tx.includes('href="javascript:')) throw new Error('XSS: celda de tabla sin escapar');
+console.log('OK tablas GFM (alineación, celdas vacías, barras escapadas, filas incompletas, XSS)');
+
+// --- 0.46.0: importar contenido estructurado -------------------------------------------------
+eval('globalThis.' + (src.match(/const IMPORT_MAX_ROWS = [^\n]*;/) || [''])[0].replace('const ', ''));
+if (!globalThis.IMPORT_MAX_ROWS || !globalThis.IMPORT_MAX_COLS) throw new Error('no encontrados los límites de importación');
+eval('globalThis.parseDelimited = ' + pickFn('parseDelimited', 'text, sep'));
+eval('globalThis.mdCell = ' + pickFn('mdCell', 'v'));
+eval('globalThis.rowsToMdTable = ' + pickFn('rowsToMdTable', 'rows'));
+eval('globalThis.jsonRows = ' + pickFn('jsonRows', 'text'));
+eval('globalThis.detectPaste = ' + pickFn('detectPaste', 'text'));
+eval('globalThis.pasteToMd = ' + pickFn('pasteToMd', 'text, det'));
+
+// CSV: comillas, comillas dobladas, separador y salto DENTRO de la celda
+const c1 = parseDelimited('a,b\n"uno, dos","dice ""hola"""\n"multi\nlinea",z', ',');
+if (c1[1][0] !== 'uno, dos') throw new Error('CSV: coma dentro de comillas parte la fila');
+if (c1[1][1] !== 'dice "hola"') throw new Error('CSV: comillas dobladas');
+if (c1[2][0] !== 'multi linea') throw new Error('CSV: salto dentro de comillas');
+if (parseDelimited('a;b\n1;2', ';')[1][1] !== '2') throw new Error('CSV: punto y coma');
+// TSV (Excel / Google Sheets)
+const tsv = 'Medio\tCategoría\nCivio\tDatos\nNewtral\tVerificación';
+if (detectPaste(tsv).kind !== 'tsv') throw new Error('detección: TSV');
+const tsvMd = pasteToMd(tsv, detectPaste(tsv));
+if (!/^\| Medio \| Categoría \|/.test(tsvMd)) throw new Error('TSV → tabla markdown');
+if (nTd(mdToHtml(tsvMd)) !== 4) throw new Error('TSV → 2 filas × 2 columnas al renderizar');
+// una celda con barra vertical no puede romper la tabla resultante
+const rot = rowsToMdTable([['a', 'b'], ['x | y', 'z']]);
+if (nTd(mdToHtml(rot)) !== 2) throw new Error('celda con | rompe la tabla');
+if (mdSplitRow(rot.split('\n')[2])[0] !== 'x | y') throw new Error('celda con | no sobrevive al viaje de ida y vuelta');
+if (mdCell('uno\ndos') !== 'uno dos') throw new Error('mdCell: el salto de línea debe colapsarse');
+if (rowsToMdTable([['solo', 'cabecera']]) !== null) throw new Error('una sola fila no es tabla');
+if (rowsToMdTable([['a'], ['b']]) !== null) throw new Error('una sola columna no es tabla');
+// JSON: lista de objetos homogéneos, sin contaminación de prototipos
+const jr = jsonRows('[{"n":"a","v":1},{"n":"b","v":2}]');
+if (!jr || jr[0].join() !== 'n,v' || jr[2][1] !== '2') throw new Error('JSON: lista de objetos');
+const jp = jsonRows('[{"__proto__":{"pwn":1},"a":1,"b":2}]');
+if (jp && jp[0].includes('__proto__')) throw new Error('JSON: __proto__ no debe llegar a la tabla');
+if ({}.pwn !== undefined) throw new Error('JSON: contaminación de prototipos');
+if (jsonRows('[1,2,3]') !== null || jsonRows('{"a":1}') !== null || jsonRows('no es json') !== null) throw new Error('JSON: entradas no tabulares deben rechazarse');
+if (jsonRows('[{"a":{"x":1},"b":2}]')[1][0] !== '{"x":1}') throw new Error('JSON: valor anidado debe serializarse, no perderse');
+// detección: cada formato en su sitio, y ante la duda texto
+if (detectPaste('| a | b |\n|---|---|\n| 1 | 2 |').kind !== 'tabla-md') throw new Error('detección: tabla markdown ya formada no se toca');
+if (detectPaste('a,b\n1,2').kind !== 'csv') throw new Error('detección: CSV');
+if (detectPaste('[{"a":1,"b":2}]').kind !== 'json') throw new Error('detección: JSON');
+if (detectPaste('# Título\n- uno').kind !== 'markdown') throw new Error('detección: markdown');
+if (detectPaste('una frase suelta').kind !== 'texto') throw new Error('detección: texto');
+if (detectPaste('   ').kind !== 'vacio') throw new Error('detección: vacío');
+if (detectPaste('linea uno\nlinea dos').kind !== 'texto') throw new Error('detección: prosa sin separadores no es tabla');
+if (pasteToMd('una frase suelta', detectPaste('una frase suelta')) !== null) throw new Error('texto plano no debe convertirse');
+// tope de filas: se recorta, no se cuelga
+const muchas = ['a\tb'].concat(Array.from({ length: 800 }, (_, i) => i + '\t' + i)).join('\n');
+if (pasteToMd(muchas, detectPaste(muchas)).split('\n').length !== IMPORT_MAX_ROWS + 2) throw new Error('tope de filas de importación');
+// El HTML del portapapeles NUNCA se inserta: solo se leen textos y hrefs validados.
+const htmlFn = pickFn('htmlTableRows', 'html');
+if (/innerHTML|insertAdjacentHTML|outerHTML/.test(htmlFn)) throw new Error('htmlTableRows no debe insertar HTML en ningún caso');
+if (!/textContent/.test(htmlFn) || !/sSafeUrl/.test(htmlFn)) throw new Error('htmlTableRows debe leer solo textContent y href validado');
+// El umbral de la vista de tarjetas depende del número de columnas, no solo del ancho: con sus
+// ventanas de ~441 px, una tabla de 6 columnas tiene que caer a fichas.
+const narrowFn = src.match(/const narrow = \(\) => \{[\s\S]*?\n  \};/)[0];
+if (!/thead tr/.test(narrowFn) || !/Math\.min\(cols, 5\) \* 110/.test(narrowFn))
+  throw new Error('vista de tarjetas: el umbral debe contar columnas, no solo píxeles');
+{
+  const cae = (ancho, cols) => ancho < Math.max(380, Math.min(cols, 5) * 110);
+  if (!cae(441, 6)) throw new Error('441 px con 6 columnas debe pasar a fichas');
+  if (cae(441, 3)) throw new Error('441 px con 3 columnas debe seguir siendo tabla');
+  if (!cae(300, 0)) throw new Error('una ventana muy estrecha sin tabla también es estrecha');
+}
+console.log('OK importar (CSV/TSV/JSON, barras, prototipos, topes, HTML sin insertar, packs, umbral de fichas)');
+
+// --- 0.46.0: editar una tarea no debe mover las de abajo -------------------------------------
+// El salto que reportó era de CAJA: el span iba pelado y el textarea traía padding, borde y otra
+// tipografía. Este test fija que ambos midan lo mismo; si tocas una regla y no la otra, salta.
+const cssOf = sel => {
+  const m = html.match(new RegExp(sel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\{([^}]*)\\}'));
+  if (!m) throw new Error('no encontrada la regla CSS ' + sel);
+  return m[1];
+};
+const tRule = cssOf('.todo-it .t'), eRule = cssOf('.task-edit');
+const prop = (r, p) => ((r.match(new RegExp(p + ':([^;}]+)')) || [])[1] || '').trim();
+if (prop(tRule, 'padding') !== prop(eRule, 'padding')) throw new Error('editar tarea: padding distinto entre leer y editar → la fila salta');
+if (prop(tRule, 'line-height') !== prop(eRule, 'line-height')) throw new Error('editar tarea: interlineado distinto entre leer y editar');
+if (parseInt(prop(tRule, 'border')) !== parseInt(prop(eRule, 'border'))) throw new Error('editar tarea: grosor de borde distinto entre leer y editar');
+if (prop(eRule, 'font-size') !== 'inherit') throw new Error('editar tarea: el editor debe heredar el tamaño de letra de la lista');
+// y salir sin cambios no debe repintar la lista entera
+const editFn = src.match(/const editItem = \(it, li\) => \{[\s\S]*?\n  \};/)[0];
+if (!/if \(v === old\)\{ restore\(\); return; \}/.test(editFn)) throw new Error('editar tarea: sin cambio real no debe repintar la lista');
+if (!/const cancel = \(\) => \{ it\.t = old; restore\(\); \};/.test(editFn)) throw new Error('editar tarea: Escape no debe repintar la lista');
+console.log('OK editar tarea (misma caja al leer y al editar, sin repintado innecesario)');
+}
+
 // --- normalizePack: pack malicioso ---
 globalThis.WTYPES = { links:{w:300,h:340}, notes:{w:300,h:220}, todo:{w:300,h:260}, clips:{w:320,h:300}, qr:{w:260,h:330}, clock:{w:240,h:170}, md:{w:340,h:320}, img:{w:340,h:280}, timer:{w:290,h:210}, cal:{w:310,h:360}, year:{w:520,h:520}, leave:{w:390,h:430}, search:{w:300,h:330}, calc:{w:260,h:340}, files:{w:380,h:360}, dictado:{w:330,h:300}, intro:{w:350,h:280} };
 globalThis.WP_PRESETS = [1, 2, 3, 4, 5, 6];
@@ -77,7 +199,15 @@ if (evilPack.widgets.find(w => w.type === 'timer').data.min !== 180) throw new E
 if (evilPack.widgets.find(w => w.type === 'md').t !== 'Guia') throw new Error('titulo de ventana perdido');
 if (evilPack.widgets.find(w => w.type === 'clock').data.analog !== true) throw new Error('clock.analog sin coercion');
 if (normalizePack(null) !== null || normalizePack({ cabeceraPack: 2, widgets: [] }) !== null) throw new Error('no rechaza formato invalido');
-console.log('OK normalizePack (pack malicioso saneado, packs invalidos rechazados)');
+// 0.46.0: una tabla dentro de un pack debe sobrevivir al saneo. Hoy sobrevive sola porque el
+// canónico sigue siendo texto Markdown y no hay campo nuevo; el test existe para que, si alguien
+// decidiera guardar la tabla como estructura, esto caiga y obligue a pensárselo.
+{
+  const conTabla = normalizePack({ cabeceraPack: 1, name: 'p', widgets: [{ type: 'md', data: { text: '| a | b |\n|---|---|\n| 1 | 2 |' } }] });
+  const wmd = conTabla && conTabla.widgets.find(w => w.type === 'md');
+  if (!wmd || (mdToHtml(wmd.data.text).match(/<td /g) || []).length !== 2) throw new Error('pack: una tabla markdown no sobrevive a normalizePack');
+}
+console.log('OK normalizePack (pack malicioso saneado, packs invalidos rechazados, tabla markdown intacta)');
 
 // --- packs incluidos: deben pasar el saneado sin perder nada ---
 for (const p of ['sanitarios', 'basico']){
@@ -1249,7 +1379,9 @@ eval('globalThis.taskNotePointer = ' + pickFn('taskNotePointer', 'titulo, hoy'))
   // cableado en las DOS puertas de entrada de texto: alta y edición
   const add = src.match(/const add = \(\) => \{[\s\S]*?\n  \};/)[0];
   if (!/offerTaskToNote/.test(add)) throw new Error('E: el alta de tarea no ofrece la conversión');
-  const commit = src.match(/const commit = \(\) => \{\n      const v = input\.value[\s\S]*?\n    \};/)[0];
+  // 0.46.0: el ancla cambió porque `commit` abre ahora con el guard `cerrado` (salir de la edición
+  // sin cambio real ya no repinta la lista entera). La INTENCIÓN vigilada es la misma; no relajar.
+  const commit = src.match(/const commit = \(\) => \{\n      if \(cerrado\) return;[\s\S]*?\n    \};/)[0];
   if (!/offerTaskToNote/.test(commit)) throw new Error('E: la edición de tarea no ofrece la conversión');
   if (!/it\.note = /.test(body) || !/taskNotePointer\(/.test(body))
     throw new Error('E: la conversión debe dejar rastro en la nota de la tarea, no solo mudar el texto');
@@ -1278,11 +1410,15 @@ console.log('OK tarea larga → nota (se ofrece, no se impone; titular acotado; 
   if (!/if \(!it\.id\) it\.id = uid\(\)/.test(rem))
     throw new Error('#90: una tarea creada en la sesión aún no tiene id (D1 se lo pone al guardar): hay que adelantarlo o el deshacer no la encuentra');
   if (!/markDirty\(\)/.test(undo)) throw new Error('#90: restaurar el texto debe guardarse');
-  const commit = src.match(/const commit = \(\) => \{\n      const v = input\.value[\s\S]*?\n    \};/)[0];
+  // 0.46.0: el ancla cambió porque `commit` abre ahora con el guard `cerrado` (salir de la edición
+  // sin cambio real ya no repinta la lista entera). La INTENCIÓN vigilada es la misma; no relajar.
+  const commit = src.match(/const commit = \(\) => \{\n      if \(cerrado\) return;[\s\S]*?\n    \};/)[0];
   if (!/rememberTextEdit\(w, it, old, v\)/.test(commit)) throw new Error('#90: la edición no registra el texto anterior');
   if (!/toastAction\("Tarea reescrita\.", "Deshacer", undoLastTextEdit\)/.test(commit))
     throw new Error('#90: falta el botón Deshacer del aviso');
-  if (!/if \(v === old\) return;/.test(commit)) throw new Error('#90: confirmar sin cambiar nada no debe registrar nada');
+  // 0.46.0: el string cambió (ahora además restaura el texto en su sitio sin repintar); la
+  // propiedad vigilada sigue siendo que confirmar sin cambio real sale antes de registrar nada.
+  if (!/if \(v === old\)\{ restore\(\); return; \}/.test(commit)) throw new Error('#90: confirmar sin cambiar nada no debe registrar nada');
   // Ctrl+Z global: solo FUERA de un campo de texto (dentro manda el deshacer nativo del navegador)
   const key = src.match(/document\.addEventListener\("keydown", e => \{[\s\S]*?\n  \}\);/)[0];
   if (!/e\.key === "z" \|\| e\.key === "Z"/.test(key)) throw new Error('#90: falta el atajo Ctrl+Z');

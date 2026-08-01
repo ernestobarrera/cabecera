@@ -272,7 +272,9 @@ body{font-family:var(--font); color:var(--text); background:#10131a}
 .dlg-inp{padding:9px 12px; border-radius:10px; border:1px solid var(--border-soft); background:rgba(255,255,255,.05); color:var(--text); font-family:var(--font); font-size:14px}
 textarea.dlg-inp{resize:vertical; min-height:46px}
 .dlg-inp:focus{outline:none; border-color:var(--accent)}
-.dlg-actions{justify-content:flex-end}
+.dlg-actions{justify-content:flex-end; flex-wrap:wrap}
+.dlg-pre{margin-top:12px; padding:9px 11px; border-radius:10px; background:rgba(0,0,0,.3); border:1px solid var(--border-soft);
+  color:var(--text-dim); font-family:Consolas,monospace; font-size:11.5px; line-height:1.5; max-height:180px; overflow:auto; white-space:pre}
 
 /* fondos */
 .wp-grid{display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-top:8px}
@@ -310,7 +312,12 @@ ul.plain{list-style:none}
 .todo-it:hover{background:rgba(255,255,255,.04)}
 .todo-it.has-task-color{box-shadow:inset 3px 0 0 var(--task-color); padding-left:8px}
 .todo-it input[type=checkbox]{width:16px; height:16px; accent-color:var(--accent); cursor:pointer; flex-shrink:0}
-.todo-it .t{flex:1; word-break:break-word}
+/* 0.46.0 — el hueco del texto MIDE LO MISMO leyendo que editando (mismo padding, mismo borde,
+   misma tipografía y mismo interlineado). Antes el `span` iba pelado y el `textarea` traía
+   padding 5/8, borde y 13px: al entrar en edición la fila engordaba ~14 px y empujaba a todas
+   las de abajo — su parte de fallo «se nota un salto que mueve todas». Si tocas una de estas dos
+   reglas, toca la otra: hay test que compara ambas. */
+.todo-it .t{flex:1; word-break:break-word; padding:2px 3px; border:1px solid transparent; border-radius:6px; line-height:1.4}
 .todo-it.done .t{text-decoration:line-through; color:var(--text-dim)}
 .it-del{border:none; background:none; color:var(--text-dim); cursor:pointer; font-size:13px; padding:2px 6px; border-radius:6px; opacity:0; flex-shrink:0}
 .it-edit,.it-up,.it-down,.it-drag,.it-color{border:none; background:none; color:var(--text-dim); cursor:pointer; font-size:12px; padding:2px 4px; border-radius:6px; opacity:0; flex-shrink:0; display:inline-flex; align-items:center; justify-content:center}
@@ -386,8 +393,8 @@ ul.plain{list-style:none}
 .todo-toggle{flex-shrink:0}
 .todo-search{flex:1; min-width:110px; padding:5px 9px; border-radius:8px; border:1px solid var(--border-soft); background:rgba(255,255,255,.05); color:var(--text); font-family:var(--font); font-size:13px}
 .todo-search:focus{border-color:var(--accent); outline:none}
-.task-edit{flex:1; min-width:80px; padding:5px 8px; border-radius:8px; border:1px solid var(--accent);
-  background:rgba(0,0,0,.24); color:var(--text); font-family:var(--font); font-size:13px;
+.task-edit{flex:1; min-width:80px; padding:2px 3px; border-radius:6px; border:1px solid var(--accent);
+  background:rgba(0,0,0,.24); color:var(--text); font-family:var(--font); font-size:inherit;
   resize:none; overflow:hidden; line-height:1.4; max-height:50vh; outline:none}
 .it-del:hover{color:var(--danger); background:rgba(243,108,108,.12)}
 .it-edit:hover,.it-up:hover,.it-down:hover,.it-drag:hover{color:var(--text); background:rgba(255,255,255,.1)}
@@ -433,6 +440,23 @@ ul.plain{list-style:none}
 .md-view blockquote{border-left:3px solid var(--accent); padding-left:10px; color:var(--text-dim); margin:6px 0}
 .md-view a{color:var(--accent)}
 .md-view hr{border:none; border-top:1px solid var(--border-soft); margin:10px 0}
+/* tablas: la tabla scrollea DENTRO de su caja — nunca ensancha la ventana ni empuja a las vecinas */
+.md-table-wrap{overflow:auto; max-height:min(70vh,560px); margin:8px 0; border:1px solid var(--border-soft); border-radius:8px}
+.md-table{border-collapse:collapse; font-size:12.5px; width:100%}
+.md-table th,.md-table td{padding:5px 9px; border-bottom:1px solid var(--border-soft); vertical-align:top; text-align:left}
+.md-table th{position:sticky; top:0; z-index:1; background:rgba(24,28,37,.97); font-weight:600; white-space:nowrap}
+.md-table td{min-width:78px}
+.md-table tbody tr:last-child td{border-bottom:none}
+.md-table tbody tr:hover{background:rgba(255,255,255,.04)}
+.md-table a{color:var(--accent)}
+/* ventana estrecha (o móvil): cada fila pasa a ser una tarjeta con la columna como etiqueta */
+.md-narrow .md-table-wrap{overflow:visible; max-height:none; border:none; border-radius:0}
+.md-narrow .md-table,.md-narrow .md-table tbody,.md-narrow .md-table tr,.md-narrow .md-table td{display:block; width:100%}
+.md-narrow .md-table thead{display:none}
+.md-narrow .md-table tr{border:1px solid var(--border-soft); border-radius:8px; margin:7px 0; padding:3px 0}
+.md-narrow .md-table td{border:none; display:flex; gap:9px; padding:3px 9px; min-width:0; text-align:left}
+.md-narrow .md-table td::before{content:attr(data-th); flex:0 0 82px; color:var(--text-dim); font-size:11px; padding-top:1px}
+.md-narrow .md-table td:empty{display:none}
 /* imagen */
 .dropzone{height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px;
   border:2px dashed var(--border); border-radius:10px; color:var(--text-dim); font-size:12.5px; text-align:center; padding:10px; outline:none}
@@ -1507,7 +1531,7 @@ function syncUI(mode, txt){
    reaparece) y si Recargar está activo. El descarte ✕ vive solo en memoria de la sesión.
    Demora asumida: la CDN de Pages puede servir la versión vieja hasta ~10 min aun con
    no-store (gobierna la caché del navegador, no la CDN); para pestañas de días, irrelevante. */
-const APP_VERSION = "0.45.1";
+const APP_VERSION = "0.46.0";
 let newVersionDetected = null;   // versión superior detectada; detiene futuras consultas
 let verDismissed = false;        // ✕: solo esta sesión — nunca persistido en disco
 let verCheckInflight = false;    // sin consultas concurrentes
@@ -1585,6 +1609,7 @@ function siteDialog(opts){
     ov.innerHTML = `<div class="modal dlg-panel" role="dialog" aria-modal="true">
       ${opts.title ? `<h2>${esc(opts.title)}</h2>` : ""}
       ${opts.message ? `<p>${esc(opts.message)}</p>` : ""}
+      ${opts.preview ? `<pre class="dlg-pre">${esc(opts.preview)}</pre>` : ""}
       ${inputs}
       <div class="row dlg-actions"></div></div>`;
     const done = val => { document.removeEventListener("keydown", onKey, true); ov.remove(); if (prev && prev.focus) try{ prev.focus(); }catch(e){} resolve(val); };
@@ -5055,18 +5080,31 @@ function bodyTodo(w, el){
     const grow = () => { input.style.height = "auto"; input.style.height = input.scrollHeight + "px"; };
     span.replaceWith(input);
     grow();
+    /* Salir de la edición sin repintar la lista entera: si el texto no cambió, repintar mueve
+       todas las filas y puede repaginar por nada. Solo se repinta cuando hay cambio real. */
+    let cerrado = false;
+    const restore = () => {
+      if (cerrado) return; cerrado = true;
+      const s = document.createElement("span");
+      s.className = "t";
+      s.innerHTML = linkifyEsc(it.t);
+      s.addEventListener("dblclick", () => editItem(it, li));
+      input.replaceWith(s);
+    };
     const commit = () => {
+      if (cerrado) return;
       const v = input.value.replace(/\s+$/, "").trim();
-      if (!v){ it.t = old; paint(); return; }
+      if (!v){ it.t = old; restore(); return; }
+      if (v === old){ restore(); return; }
       it.t = v;
+      cerrado = true;
       paint(); markDirty();
-      if (v === old) return;
       // el texto anterior deja de perderse al confirmar: Ctrl+Z o el botón del aviso lo devuelven
       rememberTextEdit(w, it, old, v);
       if (v.length > TASK_LONG) offerTaskToNote(w, it, paint);   // un solo aviso: convertir en nota manda
       else toastAction("Tarea reescrita.", "Deshacer", undoLastTextEdit);
     };
-    const cancel = () => { it.t = old; paint(); };
+    const cancel = () => { it.t = old; restore(); };
     input.addEventListener("input", grow);
     input.addEventListener("keydown", e => {
       if (e.key === "Enter" && !e.shiftKey){ e.preventDefault(); commit(); }   // Enter confirma; Mayús+Enter no aplica (la tarea es una línea lógica)
@@ -5611,6 +5649,45 @@ function bodyClock(w, el){
 }
 
 /* --- Markdown (renderizador propio: se escapa TODO antes de aplicar formato) --- */
+/* Tablas GFM (0.46.0). Nacen de una necesidad real: pegar en un widget la respuesta tabulada de
+   un agente o una hoja de cálculo y poder LEERLA. Tres reglas de diseño:
+   1) el canónico sigue siendo el texto Markdown — no hay esquema nuevo ni migración;
+   2) la detección NO es permisiva: se exige que el separador tenga exactamente tantas celdas como
+      la cabecera, así un texto con barras verticales sueltas se queda como texto;
+   3) `data-th` lleva el nombre de la columna a cada celda para que la vista estrecha (tarjetas)
+      sea puro CSS, sin JS que mida ni reescriba el DOM.
+   Todo esto corre DESPUÉS de `esc(src)`: lo que llega aquí ya está escapado. */
+function mdSplitRow(line){
+  const t = String(line).trim();
+  const cells = [];
+  let cur = "";
+  for (let i = 0; i < t.length; i++){
+    if (t[i] === "\\" && t[i + 1] === "|"){ cur += "|"; i++; continue; }   // barra escapada = contenido
+    if (t[i] === "|"){ cells.push(cur); cur = ""; continue; }
+    cur += t[i];
+  }
+  cells.push(cur);
+  if (cells.length > 1 && t.startsWith("|") && cells[0].trim() === "") cells.shift();
+  if (cells.length > 1 && /(^|[^\\])\|$/.test(t) && cells[cells.length - 1].trim() === "") cells.pop();
+  return cells.map(c => c.trim());
+}
+function mdTableAligns(sepLine, n){
+  const cells = mdSplitRow(sepLine);
+  if (cells.length !== n) return null;
+  const out = [];
+  for (const c of cells){
+    if (!/^:?-+:?$/.test(c)) return null;
+    out.push(c.startsWith(":") && c.endsWith(":") ? "center" : c.endsWith(":") ? "right" : c.startsWith(":") ? "left" : "");
+  }
+  return out;
+}
+function mdTableHtml(head, aligns, rows, inline){
+  const al = i => (aligns[i] ? ` style="text-align:${aligns[i]}"` : "");
+  const th = head.map((c, i) => `<th${al(i)}>${inline(c)}</th>`).join("");
+  const body = rows.map(r => "<tr>" + head.map((_, i) =>
+    `<td data-th="${head[i]}"${al(i)}>${inline(r[i] == null ? "" : r[i])}</td>`).join("") + "</tr>").join("");
+  return `<div class="md-table-wrap"><table class="md-table"><thead><tr>${th}</tr></thead><tbody>${body}</tbody></table></div>`;
+}
 function mdToHtml(src){
   const lines = esc(src).split(/\r?\n/);
   const out = [];
@@ -5621,10 +5698,25 @@ function mdToHtml(src){
     .replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>")
     .replace(/\*([^*]+)\*/g, "<i>$1</i>")
     .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
-  for (const l of lines){
+  for (let i = 0; i < lines.length; i++){
+    const l = lines[i];
     if (l.startsWith("```")){ closeList(); inCode = !inCode; out.push(inCode ? "<pre>" : "</pre>"); continue; }
     if (inCode){ out.push(l); continue; }
     let m;
+    if (l.includes("|") && i + 1 < lines.length){
+      const head = mdSplitRow(l);
+      const aligns = head.length > 1 ? mdTableAligns(lines[i + 1], head.length) : null;
+      if (aligns){
+        closeList();
+        const rows = [];
+        let j = i + 2;
+        // una fila incompleta no rompe la tabla: se rellena; una fila de más se recorta a la cabecera
+        while (j < lines.length && lines[j].trim() !== "" && lines[j].includes("|") && !lines[j].startsWith("```")){ rows.push(mdSplitRow(lines[j])); j++; }
+        out.push(mdTableHtml(head, aligns, rows, inline));
+        i = j - 1;
+        continue;
+      }
+    }
     if ((m = l.match(/^(#{1,4})\s+(.*)/))){ closeList(); const n = m[1].length + 2; out.push(`<h${n}>${inline(m[2])}</h${n}>`); continue; }
     if ((m = l.match(/^\s*[-*]\s+(.*)/))){ if (inList !== "ul"){ closeList(); out.push("<ul>"); inList = "ul"; } out.push(`<li>${inline(m[1])}</li>`); continue; }
     if ((m = l.match(/^\s*\d+[.)]\s+(.*)/))){ if (inList !== "ol"){ closeList(); out.push("<ol>"); inList = "ol"; } out.push(`<li>${inline(m[1])}</li>`); continue; }
@@ -5638,13 +5730,163 @@ function mdToHtml(src){
   if (inCode) out.push("</pre>");
   return out.join("\n");
 }
+/* ---------- Importar contenido estructurado al widget Documento (0.46.0) -------------------
+   Qué resuelve: pegar la respuesta de un agente, un trozo de Excel/Sheets o una tabla de una web
+   y que se conserve la ESTRUCTURA, no solo el texto.
+
+   Decisión de seguridad, y es la importante. La spec original pedía una lista blanca de etiquetas
+   y atributos para procesar `text/html`. No se ha hecho así: del HTML del portapapeles solo se leen
+   TEXTOS (`textContent`) y `href` validados, y con esos datos se CONSTRUYE Markdown. Ese HTML no se
+   guarda, no se inserta y no se renderiza nunca. La superficie de XSS no se valla — desaparece —, y
+   además el canónico sigue siendo Markdown, que es portable, editable y legible por un agente.
+
+   Detección deliberadamente ESTRICTA: se exige el mismo número de columnas en todas las filas. Ante
+   la duda, el contenido se queda como texto y decide el usuario en el diálogo. Nada se importa sin
+   un clic suyo. */
+const IMPORT_MAX_ROWS = 500, IMPORT_MAX_COLS = 40;
+/* CSV/TSV al estilo RFC 4180: comillas dobles, comillas dobladas dentro del campo y separadores o
+   saltos de línea DENTRO de una celda entrecomillada. PURA. */
+function parseDelimited(text, sep){
+  const s = String(text == null ? "" : text).replace(/\r\n?/g, "\n");
+  const rows = [];
+  let row = [], cur = "", q = false;
+  for (let i = 0; i < s.length; i++){
+    const c = s[i];
+    if (q){
+      if (c === '"'){ if (s[i + 1] === '"'){ cur += '"'; i++; } else q = false; }
+      else cur += c;
+      continue;
+    }
+    if (c === '"' && cur === ""){ q = true; continue; }
+    if (c === sep){ row.push(cur); cur = ""; continue; }
+    if (c === "\n"){ row.push(cur); rows.push(row); row = []; cur = ""; continue; }
+    cur += c;
+  }
+  row.push(cur); rows.push(row);
+  while (rows.length && rows[rows.length - 1].every(c => !c.trim())) rows.pop();
+  return rows.map(r => r.map(c => c.replace(/\s*\n\s*/g, " ").trim()));
+}
+/* Una celda no puede romper la tabla: la barra vertical se escapa (y `mdSplitRow` la deshace) y el
+   salto de línea se colapsa. Nunca se altera el SIGNIFICADO del dato, solo su transporte. PURA. */
+function mdCell(v){
+  return String(v == null ? "" : v).replace(/\s*\n\s*/g, " ").replace(/\|/g, "\\|").trim();
+}
+function rowsToMdTable(rows){
+  const clean = (Array.isArray(rows) ? rows : []).filter(r => Array.isArray(r) && r.some(c => String(c == null ? "" : c).trim() !== ""));
+  if (clean.length < 2) return null;
+  const cols = Math.min(IMPORT_MAX_COLS, Math.max(...clean.map(r => r.length)));
+  if (cols < 2) return null;
+  const line = r => "| " + Array.from({ length: cols }, (_, i) => mdCell(r[i]) || " ").join(" | ") + " |";
+  const out = [line(clean[0]), "|" + " --- |".repeat(cols)];
+  for (const r of clean.slice(1, IMPORT_MAX_ROWS + 1)) out.push(line(r));
+  return out.join("\n");
+}
+/* JSON = lista de objetos planos homogéneos → tabla. Las claves peligrosas se ignoran y los valores
+   se leen con `hasOwnProperty`: ni se escribe ni se hereda del prototipo. PURA. */
+function jsonRows(text){
+  let v;
+  try{ v = JSON.parse(String(text)); }catch(e){ return null; }
+  if (!Array.isArray(v) || !v.length || v.length > IMPORT_MAX_ROWS) return null;
+  const keys = [];
+  for (const o of v){
+    if (!o || typeof o !== "object" || Array.isArray(o)) return null;
+    for (const k of Object.keys(o)){
+      if (k === "__proto__" || k === "constructor" || k === "prototype") continue;
+      if (!keys.includes(k)) keys.push(k);
+    }
+  }
+  if (keys.length < 2 || keys.length > IMPORT_MAX_COLS) return null;
+  const flat = x => (x == null ? "" : (typeof x === "object" ? JSON.stringify(x) : String(x)));
+  return [keys].concat(v.map(o => keys.map(k => flat(Object.prototype.hasOwnProperty.call(o, k) ? o[k] : ""))));
+}
+/* Devuelve { kind, rows?, cols? }. `kind` ∈ tabla-md | json | tsv | csv | markdown | texto | vacio.
+   El orden importa: una tabla que YA es Markdown no se toca, y el tabulador se prueba antes que la
+   coma (una prosa con comas no debe convertirse en tabla). PURA. */
+function detectPaste(text){
+  const s = String(text == null ? "" : text);
+  if (!s.trim()) return { kind: "vacio" };
+  const lines = s.replace(/\r\n?/g, "\n").split("\n");
+  for (let i = 0; i + 1 < lines.length; i++){
+    if (!lines[i].includes("|")) continue;
+    const h = mdSplitRow(lines[i]);
+    if (h.length > 1 && mdTableAligns(lines[i + 1], h.length)) return { kind: "tabla-md", cols: h.length };
+  }
+  const j = jsonRows(s);
+  if (j) return { kind: "json", rows: j.length - 1, cols: j[0].length };
+  for (const [kind, sep] of [["tsv", "\t"], ["csv", ","], ["csv", ";"]]){
+    const body = parseDelimited(s, sep).filter(r => r.some(c => c !== ""));
+    if (body.length >= 2 && body[0].length >= 2 && body.every(r => r.length === body[0].length))
+      return { kind, sep, rows: body.length - 1, cols: body[0].length };
+  }
+  return { kind: /(^|\n)#{1,4}\s|(^|\n)\s*[-*]\s|\*\*|(^|\n)>\s/.test(s) ? "markdown" : "texto" };
+}
+/* Texto pegado → Markdown, según lo detectado. Devuelve null si no hay nada que convertir. PURA. */
+function pasteToMd(text, det){
+  const d = det || detectPaste(text);
+  if (d.kind === "json") return rowsToMdTable(jsonRows(text));
+  if (d.kind === "tsv" || d.kind === "csv") return rowsToMdTable(parseDelimited(text, d.sep).filter(r => r.some(c => c !== "")));
+  return null;
+}
+/* Única función de esta tanda que toca el DOM. Del HTML del portapapeles se leen SOLO textos y
+   hrefs validados: nada de ese HTML llega al estado ni a la pantalla (ver la nota de arriba). */
+function htmlTableRows(html){
+  const table = new DOMParser().parseFromString(String(html), "text/html").querySelector("table");
+  if (!table) return null;
+  const rows = [];
+  for (const tr of table.querySelectorAll("tr")){
+    const cells = [...tr.querySelectorAll("th,td")].map(td => {
+      const txt = (td.textContent || "").replace(/\s+/g, " ").trim();
+      const a = td.querySelector("a[href]");
+      const u = a ? sSafeUrl(a.getAttribute("href")) : null;
+      return u ? `[${txt || u}](${u})` : txt;
+    });
+    if (cells.length) rows.push(cells);
+  }
+  return rows.length ? rows : null;
+}
+const PASTE_LABEL = { "tabla-md": "tabla Markdown", json: "JSON (lista de objetos)", tsv: "texto tabulado (Excel/Sheets)", csv: "CSV", markdown: "Markdown", texto: "texto" };
+/* Vista previa + elección humana. Ni el pegado más inequívoco escribe sin que él elija destino,
+   salvo el caso que la spec excluye expresamente: texto o Markdown claros, que se añaden y ya. */
+async function mdOfferImport(w, plain, html){
+  const hRows = html ? htmlTableRows(html) : null;
+  const md = hRows ? rowsToMdTable(hRows) : pasteToMd(plain, detectPaste(plain));
+  const det = detectPaste(plain);
+  const bruto = String(plain || "");
+  const aplicar = (texto, modo) => {
+    const prev = w.data.text || "";
+    w.data.text = modo === "add" && prev.trim() ? prev.replace(/\s+$/, "") + "\n\n" + texto : texto;
+    w.data.view = "view";
+    refreshWidget(w); markDirty();
+    toast(modo === "add" ? "Añadido al final del documento" : "Documento reemplazado");
+  };
+  if (!md){
+    if (!bruto.trim()){ toast("El portapapeles no tiene texto", true); return; }
+    aplicar(bruto, "add");
+    return;
+  }
+  const filas = md.split("\n").length - 2, cols = mdSplitRow(md.split("\n")[0]).length;
+  const origen = hRows ? "tabla HTML (web o respuesta de un agente)" : (PASTE_LABEL[det.kind] || det.kind);
+  const aviso = filas >= IMPORT_MAX_ROWS ? `\n\nSolo se importan las primeras ${IMPORT_MAX_ROWS} filas.` : "";
+  const r = await siteDialog({
+    title: "Pegar en el documento",
+    message: `Detectado: ${origen} · ${filas} filas × ${cols} columnas. Se convierte en una tabla Markdown.${aviso}`,
+    preview: md.split("\n").slice(0, 8).join("\n") + (md.split("\n").length > 8 ? "\n…" : ""),
+    actions: [
+      { label: "Cancelar", value: "no", cancel: true },
+      { label: "Pegar como texto", value: "raw" },
+      { label: "Añadir al final", value: "add" },
+      { label: "Reemplazar", value: "set", primary: true }]
+  });
+  if (r === "set" || r === "add") aplicar(md, r);
+  else if (r === "raw") aplicar(bruto, "add");
+}
 function bodyMd(w, el){
   const view = w.data.view !== "edit";
   el.innerHTML = `
-    <div class="md-bar"><button class="mini tg">${view ? "✏️ Editar" : "👁️ Vista"}</button><button class="mini cp" title="Copiar el Markdown">⧉</button></div>
-    ${view ? `<div class="md-view"></div>` : `<textarea class="notes md-src" placeholder="Escribe Markdown… (#, **, -, [texto](url), \`\`\`)"></textarea>`}`;
+    <div class="md-bar"><button class="mini tg">${view ? "✏️ Editar" : "👁️ Vista"}</button><button class="mini pg" title="Pegar del portapapeles (tabla, Excel, CSV, JSON…)">📋 Pegar</button><button class="mini cp" title="Copiar el Markdown">⧉</button></div>
+    ${view ? `<div class="md-view" tabindex="0"></div>` : `<textarea class="notes md-src" placeholder="Escribe Markdown… (#, **, -, [texto](url), tablas con |, \`\`\`)"></textarea>`}`;
   if (view){
-    el.querySelector(".md-view").innerHTML = mdToHtml(w.data.text || "*Vacío. Pulsa Editar.*");
+    el.querySelector(".md-view").innerHTML = mdToHtml(w.data.text || "*Vacío. Pulsa Editar o pega una tabla.*");
   } else {
     const ta = el.querySelector(".md-src");
     ta.value = w.data.text || "";
@@ -5652,6 +5894,40 @@ function bodyMd(w, el){
   }
   el.querySelector(".tg").addEventListener("click", () => { w.data.view = view ? "edit" : "view"; refreshWidget(w); markDirty(); });
   el.querySelector(".cp").addEventListener("click", async () => { await navigator.clipboard.writeText(w.data.text || ""); toast("Markdown copiado"); });
+  el.querySelector(".pg").addEventListener("click", async () => {
+    if (!guardMutation()) return;
+    try{
+      let plain = "", html = "";
+      try{
+        for (const it of await navigator.clipboard.read()){
+          if (!html && it.types.includes("text/html")) html = await (await it.getType("text/html")).text();
+          if (!plain && it.types.includes("text/plain")) plain = await (await it.getType("text/plain")).text();
+        }
+      }catch(e){ plain = await navigator.clipboard.readText(); }
+      await mdOfferImport(w, plain, html);
+    }catch(e){ toast("El navegador no permitió leer el portapapeles", true); }
+  });
+  // Ctrl+V con el documento enfocado (en modo edición manda el pegado normal del navegador)
+  el.addEventListener("paste", e => {
+    if (!view || e.target.closest("textarea,input")) return;
+    const dt = e.clipboardData; if (!dt) return;
+    e.preventDefault();
+    if (!guardMutation()) return;
+    mdOfferImport(w, dt.getData("text/plain"), dt.getData("text/html"));
+  });
+  /* La vista de tarjetas es CSS; aquí solo se marca CUÁNDO toca. El umbral no puede ser un ancho
+     fijo: sus ventanas miden ~441 px y una tabla de 6 columnas ahí no se lee ni con scroll (cada
+     columna quedaría en el mínimo). Se exige ~110 px por columna, contando como mucho 5 — a partir
+     de ahí manda el desplazamiento horizontal. Medido contra la geometría real de su datos.json. */
+  const narrow = () => {
+    const cols = Math.max(0, ...[...el.querySelectorAll(".md-table thead tr")].map(r => r.children.length));
+    el.classList.toggle("md-narrow", el.clientWidth < Math.max(380, Math.min(cols, 5) * 110));
+  };
+  narrow();
+  if (window.ResizeObserver){
+    const ro = new ResizeObserver(() => { if (!el.isConnected){ ro.disconnect(); return; } narrow(); });
+    ro.observe(el);
+  }
 }
 
 /* --- Imagen (pegar, arrastrar; se reescala y guarda en datos.json) --- */

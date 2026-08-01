@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.46.0] - 2026-08-01 — el widget Markdown entiende tablas, y pegar deja de perder la estructura
+
+- **Las tablas se ven como tablas.** Escríbelas con barras verticales (`| Fuente | Rigor |` y debajo `|---|---|`) y el widget Markdown las presenta con cabecera fija, alineación por columna (`:---`, `:---:`, `---:`) y desplazamiento horizontal **dentro de su caja**: una tabla ancha nunca ensancha el escritorio ni mueve a las ventanas vecinas.
+- **En ventana estrecha o en el móvil, cada fila pasa a ser una ficha** con el nombre de la columna delante de cada dato, para que una tabla de seis columnas siga leyéndose sin desplazar.
+- **Nuevo botón 📋 Pegar** (y `Ctrl+V` con el documento enfocado). Reconoce lo que traes en el portapapeles —una tabla copiada de una web o de la respuesta de un agente, un trozo de **Excel o Google Sheets**, un CSV con comillas y comas dentro de las celdas, o un JSON con una lista de fichas— y lo convierte en una tabla Markdown.
+- **Siempre te enseña antes en qué se va a convertir**, con el formato detectado y cuántas filas y columnas salen, y tú eliges: reemplazar el documento, añadir al final o pegarlo tal cual como texto. Nada se importa sin ese clic, y ante la duda el contenido se queda como texto.
+- **Del HTML copiado solo se leen los textos y los enlaces** (y solo `http`/`https`): ese HTML no se guarda, no se muestra y no se ejecuta nunca. Lo que se guarda sigue siendo Markdown, que es texto legible y editable.
+- **Editar una tarea ya no da un salto que mueve todas las de abajo.** El hueco del texto mide exactamente lo mismo leyendo que escribiendo. Y salir de la edición sin haber cambiado nada deja de repintar la lista entera.
+
 ## [0.45.1] - 2026-07-30 — corrige el deshacer de tareas y el crecimiento de la lista, que no funcionaban en uso real
 
 Dos cosas prometidas en 0.43.1 y 0.44.0 no funcionaban fuera del banco de pruebas. Corregidas y verificadas contra un escritorio real.
