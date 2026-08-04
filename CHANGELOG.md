@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.46.1] - 2026-08-04 — vaciar una columna ya no desplaza el escritorio
+
+- **Si te llevas a otro escritorio la última ventana de la primera columna, las demás se quedan donde estaban.** Antes el escritorio se corría una columna a la izquierda —parecía que de tres columnas pasaba a dos— aunque tú no hubieras movido nada más. Ocurría porque la rejilla se deducía a partir de la ventana situada más a la izquierda, así que al quedarse vacía la primera columna se tomaba la segunda por primera. Ahora la rejilla parte del origen que le corresponde al escritorio, y solo recurre a deducirlo cuando ese origen no explica lo que hay guardado.
+- **Y ese desplazamiento ya no se queda escrito.** Al soltar una ventana en la columna vacía, la posición que se guardaba era la de la columna de al lado, de modo que el descuadre viajaba al otro ordenador. Corregido de raíz: es el mismo cálculo el que se ha arreglado.
+
 ## [0.46.0] - 2026-08-01 — el widget Markdown entiende tablas, y pegar deja de perder la estructura
 
 - **Las tablas se ven como tablas.** Escríbelas con barras verticales (`| Fuente | Rigor |` y debajo `|---|---|`) y el widget Markdown las presenta con cabecera fija, alineación por columna (`:---`, `:---:`, `---:`) y desplazamiento horizontal **dentro de su caja**: una tabla ancha nunca ensancha el escritorio ni mueve a las ventanas vecinas.

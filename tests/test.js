@@ -835,6 +835,24 @@ eval('globalThis.laneStoreRect = ' + pickFn('laneStoreRect', 'grid, laneIdx'));
   // un solo widget también define rejilla (su propio ancho es el del carril)
   const g1 = storedLaneGrid([{ x: 12, y: 0, w: 441, h: 100 }], 3, o);
   if (!g1 || g1.lanes[0] !== 0 || g1.laneW !== 441) throw new Error('rejilla: un solo widget debe bastar para el carril 0');
+  // 0.46.1 (parte de fallo 04/08): vaciar el PRIMER carril —te llevas su última ventana a otro
+  // escritorio— no puede desplazar a las demás. Con el origen canónico conservan los carriles 1 y 2.
+  const oc = { gutter: 14, tol: 24, originX: 12 };
+  const sinPrimero = [{ x: 467, y: 0, w: 441, h: 200 }, { x: 922, y: 0, w: 441, h: 200 }];
+  const gs = storedLaneGrid(sinPrimero, 3, oc);
+  if (!gs || gs.lanes.join(',') !== '1,2') throw new Error('rejilla: un carril 0 vacío no debe correr el escritorio un carril a la izquierda (' + (gs && gs.lanes.join(',')) + ')');
+  if (gs.x0 !== 12) throw new Error('rejilla: con el carril 0 vacío el origen sigue siendo el canónico, no la x mínima');
+  // y la INVERSA deja de corromper lo guardado: soltar algo en el carril 0 persiste x=12, no x=467
+  // (sin esto la deriva se escribe en datos.json y viaja al otro equipo)
+  if (laneStoreRect(gs, 0).x !== 12) throw new Error('inversa: con el carril 0 vacío, guardar en él debe dar la x del carril 0');
+  // el caso de prueba debe reproducir de verdad la deriva histórica: sin originX, el origen flota
+  if (storedLaneGrid(sinPrimero, 3, o).lanes.join(',') !== '0,1')
+    throw new Error('el caso de prueba ya no reproduce la deriva que motivó el arreglo');
+  // un origen canónico que NO explica lo guardado no manda: escritorio ordenado con otro origen
+  // (p. ej. antes de fijar el nº de columnas) sigue deduciéndose por la x mínima, como antes
+  const desplazado = [40, 495, 950].map(x => ({ x, y: 0, w: 441, h: 200 }));
+  const gd = storedLaneGrid(desplazado, 3, oc);
+  if (!gd || gd.x0 !== 40 || gd.lanes.join(',') !== '0,1,2') throw new Error('rejilla: un origen canónico que no encaja no debe imponerse (' + JSON.stringify(gd) + ')');
   // una ventana redimensionada a mano queda FUERA de la rejilla (sigue siendo libre), sin tumbarla
   const conLibre = real.concat([{ x: 300, y: 700, w: 780, h: 200 }]);
   const gl = storedLaneGrid(conLibre, 3, o);
@@ -871,6 +889,8 @@ eval('globalThis.laneStoreRect = ' + pickFn('laneStoreRect', 'grid, laneIdx'));
   const lp = src.match(/function laneProjection\(\)\{[\s\S]*?\n\}/)[0];
   if (!/c !== 2 && c !== 3 && c !== 4/.test(lp)) throw new Error('0.43.0: los carriles derivados solo actúan con nº de columnas EXPLÍCITO');
   if (!/isMobile\(\)/.test(lp)) throw new Error('0.43.0: en móvil (apilado) no hay carriles que derivar');
+  if (!/originX:\s*guides\.cols\[0\]\.x/.test(lp))
+    throw new Error('0.46.1: la proyección debe pasar el origen canónico de la rejilla; sin él, un carril 0 vacío desplaza el escritorio entero y la deriva acaba persistida');
   for (const fn of ['laneProjection', 'projectWidgets', 'repaintProjection']){
     const body = src.match(new RegExp('function ' + fn + '\\([^)]*\\)\\{[\\s\\S]*?\\n\\}'))[0];
     if (/markDirty\(|saveNow\(/.test(body))

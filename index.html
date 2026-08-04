@@ -1545,7 +1545,7 @@ function syncUI(mode, txt){
    reaparece) y si Recargar está activo. El descarte ✕ vive solo en memoria de la sesión.
    Demora asumida: la CDN de Pages puede servir la versión vieja hasta ~10 min aun con
    no-store (gobierna la caché del navegador, no la CDN); para pestañas de días, irrelevante. */
-const APP_VERSION = "0.46.0";
+const APP_VERSION = "0.46.1";
 let newVersionDetected = null;   // versión superior detectada; detiene futuras consultas
 let verDismissed = false;        // ✕: solo esta sesión — nunca persistido en disco
 let verCheckInflight = false;    // sin consultas concurrentes
@@ -3809,7 +3809,7 @@ function laneProjection(){
   if (!ws.length) return null;
   const guides = spaceGuides(colsOpt());
   const grid = storedLaneGrid(ws.map(widgetRect), guides.cols.length,
-    { gutter: guides.gutter, tol: LAYOUT.laneTol });
+    { gutter: guides.gutter, tol: LAYOUT.laneTol, originX: guides.cols[0].x });
   if (!grid) return null;
   const map = Object.create(null);
   ws.forEach((w, i) => {
@@ -4439,18 +4439,33 @@ function storedLaneGrid(rects, n, opts){
   const pitch = laneW + gutter;
   if (!(laneW >= 1) || !(pitch > 2)) return null;
   const tol = Math.min(o.tol == null ? 24 : o.tol, Math.floor(pitch / 2) - 1);   // jamás ambiguo entre dos carriles
-  let x0 = Infinity;
-  for (const r of rects) x0 = Math.min(x0, +r.x || 0);
-  const lanes = rects.map(r => {
-    const rw = +r.w || 0, rx = +r.x || 0;
-    if (Math.abs(rw - laneW) > tol) return null;   // ancho propio: redimensionada a mano o maximizada
-    const k = Math.round((rx - x0) / pitch);
-    if (k < 0 || k > n - 1) return null;
-    return Math.abs(rx - (x0 + k * pitch)) > tol ? null : k;
-  });
-  const matched = lanes.reduce((acc, k) => acc + (k == null ? 0 : 1), 0);
-  if (matched * 2 < rects.length) return null;
-  return { x0, laneW, pitch, lanes, matched };
+  let minX = Infinity;
+  for (const r of rects) minX = Math.min(minX, +r.x || 0);
+  const solve = x0 => {
+    const lanes = rects.map(r => {
+      const rw = +r.w || 0, rx = +r.x || 0;
+      if (Math.abs(rw - laneW) > tol) return null;   // ancho propio: redimensionada a mano o maximizada
+      const k = Math.round((rx - x0) / pitch);
+      if (k < 0 || k > n - 1) return null;
+      return Math.abs(rx - (x0 + k * pitch)) > tol ? null : k;
+    });
+    return { x0, lanes, matched: lanes.reduce((acc, k) => acc + (k == null ? 0 : 1), 0) };
+  };
+  // El origen NO puede deducirse solo de la x mínima: eso da por hecho que el primer carril tiene
+  // inquilino. Si se vacía (mueves su última ventana a otro escritorio), el origen salta un paso a
+  // la derecha, cada ventana baja un índice de carril y el escritorio entero se desplaza a la
+  // izquierda —«se reduce a dos columnas» sin que tú muevas nada— y además `laneStoreRect` empieza
+  // a PERSISTIR esas x corridas, así que la deriva viaja al otro equipo. Parte de fallo de Ernesto
+  // (2026-08-04). Por eso se prueba también el origen canónico de la rejilla (`columnGuides`
+  // siempre arranca en `pad`) y, a igualdad de encaje, manda ese: explica lo mismo sin depender de
+  // que el carril 0 esté ocupado. Si no explica lo guardado (escritorio ordenado con otro origen),
+  // gana la x mínima y todo sigue como antes; sin `originX`, comportamiento histórico intacto.
+  const byMin = solve(minX);
+  const ox = +o.originX;
+  const canon = (Number.isFinite(ox) && ox !== minX) ? solve(ox) : null;
+  const best = (canon && canon.matched >= byMin.matched) ? canon : byMin;
+  if (best.matched * 2 < rects.length) return null;
+  return { x0: best.x0, laneW, pitch, lanes: best.lanes, matched: best.matched };
 }
 /* Inversa de la proyección: posición GUARDADA de un carril según la rejilla deducida. Al soltar
    o al crear se persiste en unidades de la rejilla del ESCRITORIO, no en píxeles del monitor de
