@@ -2284,5 +2284,62 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
   ['state', 'activeView', 'subViewId', 'subViewSnapshot', 'uid', 'blankSpace', 'toast', 'renderAll', 'markDirty'].forEach(k => { delete globalThis[k]; });
   console.log('OK D5b-B copiar (espacio propio nuevo, vuelve a vista propia, ids regenerados, derivedFrom)');
 
+  // --- 0.46.2: legibilidad portada de Notas.IA (fuente canónica = ese repo, aquí solo la forma) ---
+  {
+    eval('globalThis.READ_ES = ' + src.match(/const READ_ES = (\{[\s\S]*?\n\});/)[1]);
+    eval('globalThis.READ_EN = ' + src.match(/const READ_EN = (\{[\s\S]*?\n\});/)[1]);
+    eval('globalThis.READ_TECH = ' + src.match(/const READ_TECH = (\/.*\/gi);/)[1]);
+    for (const [fn, arg] of [['readScore', 'text, patterns'], ['detectTextLanguage', 'text'], ['countSyllables', 'word, lang'],
+                             ['readabilityBand', 'score, lang'], ['countSentences', 'text'], ['analyzeReadability', 'text']])
+      eval('globalThis.' + fn + ' = ' + pickFn(fn, arg));
+
+    // FIDELIDAD AL CANÓNICO: los coeficientes son los de Szigriszt-Pazos (es) y Flesch (en). Si
+    // alguien los «corrige» aquí, el índice deja de ser comparable con el del bookmarklet y con
+    // la escala INFLESZ. Se cambian ALLÍ y se vuelven a portar.
+    const mod = src.slice(src.indexOf('function analyzeReadability'));
+    if (!/206\.835 - 62\.3 \*/.test(mod)) throw new Error('legibilidad: el índice en español debe seguir siendo Szigriszt-Pazos (206.835 / 62.3) — la fuente canónica es el repo bookmarklet-Notas.IA');
+    if (!/206\.835 - 1\.015 \*/.test(mod)) throw new Error('legibilidad: el índice en inglés debe seguir siendo Flesch Reading Ease');
+    // PURA: no puede tocar DOM, estado ni escritura (se usará dentro del render, y ahí eso duele)
+    for (const fn of ['analyzeReadability', 'detectTextLanguage', 'countSyllables', 'countSentences']){
+      const body = src.match(new RegExp('function ' + fn + '\\([^)]*\\)\\{[\\s\\S]*?\\n\\}'))[0];
+      if (/document\.|markDirty\(|saveNow\(|state\./.test(body)) throw new Error('legibilidad: ' + fn + ' debe ser pura');
+    }
+
+    if (analyzeReadability('').words !== 0 || analyzeReadability('  ').band !== 'Sin texto para analizar')
+      throw new Error('legibilidad: sin texto no se inventa análisis');
+    if (analyzeReadability(null).words !== 0) throw new Error('legibilidad: null no debe romper');
+    if (countSyllables('casa', 'es') !== 2 || countSyllables('sol', 'es') !== 1)
+      throw new Error('legibilidad: sílabas mal contadas en castellano');
+    if (countSyllables('', 'es') !== 1) throw new Error('legibilidad: el suelo de sílabas es 1, nunca 0 (divide)');
+
+    const clinico = 'El paciente acude a consulta por dolor abdominal. Se pauta tratamiento y se cita en una semana. No refiere fiebre.';
+    const a = analyzeReadability(clinico);
+    if (a.lang !== 'es') throw new Error('legibilidad: un texto clínico en castellano debe detectarse como español');
+    if (a.sentences !== 3) throw new Error('legibilidad: oraciones mal contadas (' + a.sentences + ')');
+    if (!(a.score > 0) || !a.band) throw new Error('legibilidad: debe salir índice y banda');
+    if (JSON.stringify(a) !== JSON.stringify(analyzeReadability(clinico)))
+      throw new Error('legibilidad: el mismo texto debe dar SIEMPRE el mismo análisis');
+
+    // el descuento de tecnicismos existe para esto: media consulta sobre informática sigue siendo
+    // castellano, y sin él se analizaría con la fórmula inglesa
+    const tecnico = 'El software de la web tiene un error en la interface y en el server de la app.';
+    if (analyzeReadability(tecnico).lang !== 'es')
+      throw new Error('legibilidad: los tecnicismos en inglés no deben cambiar el idioma del texto');
+    if (analyzeReadability('This is a simple text about the weather and the sea.').lang !== 'en')
+      throw new Error('legibilidad: un texto inglés debe detectarse como inglés');
+
+    // INVARIANTE DE SENTIDO: frases cortas con palabras cortas puntúan MÁS FÁCIL que lo contrario.
+    // Es lo único que de verdad tiene que cumplirse para que el número sirva de algo.
+    const facil = analyzeReadability('El niño come pan. La casa es azul. Hoy hace sol.');
+    const dificil = analyzeReadability('La interpretación fisiopatológica de la descompensación hidroelectrolítica secundaria a la insuficiencia cardíaca congestiva descompensada requiere una valoración multidimensional individualizada.');
+    if (!(facil.score > dificil.score)) throw new Error('legibilidad: el índice debe ordenar fácil por encima de difícil (' + facil.score + ' vs ' + dificil.score + ')');
+    if (readabilityBand(90, 'es') !== 'Muy fácil (primaria, cómics)' || readabilityBand(30, 'es') !== 'Muy difícil (universitario o científico)')
+      throw new Error('legibilidad: bandas INFLESZ mal asignadas');
+    if (analyzeReadability('Hola.').band !== 'Texto muy corto' && analyzeReadability('Hola.').words !== 1)
+      throw new Error('legibilidad: un texto mínimo no debe dar un índice con pretensiones');
+    ['READ_ES', 'READ_EN', 'READ_TECH', 'readScore', 'detectTextLanguage', 'countSyllables', 'readabilityBand', 'countSentences', 'analyzeReadability'].forEach(k => { delete globalThis[k]; });
+    console.log('OK legibilidad portada (Szigriszt-Pazos/INFLESZ + Flesch, idioma con descuento de tecnicismos, pura y determinista)');
+  }
+
   console.log('\nTODO EN VERDE');
 })().catch(e => { console.error(e && e.stack || e); process.exitCode = 1; });

@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.46.2] - 2026-08-04 — preparación interna: análisis de legibilidad
+
+- **Groundwork invisible.** Cabecera incorpora el análisis de legibilidad de **Notas.IA**: detecta si un texto está en español o en inglés (sin dejarse engañar por los tecnicismos ingleses de un texto español), cuenta palabras, oraciones y sílabas, y calcula el índice de lectura con la escala **INFLESZ** para castellano y Flesch para inglés, con su interpretación en palabras («normal, prensa general», «muy difícil, universitario»). **Todavía no aparece en ninguna parte de la interfaz**: es la maquinaria, a la espera de decidir dónde vive.
+- El análisis se mantiene idéntico al del proyecto original, que sigue siendo su fuente: aquí no se cambian ni las fórmulas ni los umbrales.
+
 ## [0.46.1] - 2026-08-04 — vaciar una columna ya no desplaza el escritorio
 
 - **Si te llevas a otro escritorio la última ventana de la primera columna, las demás se quedan donde estaban.** Antes el escritorio se corría una columna a la izquierda —parecía que de tres columnas pasaba a dos— aunque tú no hubieras movido nada más. Ocurría porque la rejilla se deducía a partir de la ventana situada más a la izquierda, así que al quedarse vacía la primera columna se tomaba la segunda por primera. Ahora la rejilla parte del origen que le corresponde al escritorio, y solo recurre a deducirlo cuando ese origen no explica lo que hay guardado.

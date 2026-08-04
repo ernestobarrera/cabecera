@@ -1545,7 +1545,7 @@ function syncUI(mode, txt){
    reaparece) y si Recargar está activo. El descarte ✕ vive solo en memoria de la sesión.
    Demora asumida: la CDN de Pages puede servir la versión vieja hasta ~10 min aun con
    no-store (gobierna la caché del navegador, no la CDN); para pestañas de días, irrelevante. */
-const APP_VERSION = "0.46.1";
+const APP_VERSION = "0.46.2";
 let newVersionDetected = null;   // versión superior detectada; detiene futuras consultas
 let verDismissed = false;        // ✕: solo esta sesión — nunca persistido en disco
 let verCheckInflight = false;    // sin consultas concurrentes
@@ -5682,6 +5682,114 @@ function bodyClock(w, el){
   // insertar la ventana en el DOM y un guard en el primer paint mataba el reloj
   const iv = setInterval(() => { if (!el.isConnected){ clearInterval(iv); return; } paint(); }, analog ? 1000 : 5000);
   paint();
+}
+
+/* --- Legibilidad del texto (portado de Notas.IA, 0.46.2) -----------------------------------
+   FUENTE CANÓNICA: https://github.com/ernestobarrera/bookmarklet-Notas.IA (`src/bookmarklet.js`).
+   Esto es una copia PORTADA, no una bifurcación: si hay que mejorar el análisis, se mejora allí
+   y se vuelve a portar. Aquí solo cambia la forma (funciones puras y sin estado, como el resto
+   del archivo), nunca las fórmulas ni los umbrales.
+   El índice en español es el de Szigriszt-Pazos (base de la escala INFLESZ), no el de Flesch
+   original: es el que está validado para castellano, y es el que se usa para comprobar si un
+   texto dirigido a pacientes se entiende. Para inglés, Flesch Reading Ease.
+   Todo PURO: entra texto, sale un objeto. No toca DOM, ni estado, ni red. */
+const READ_ES = {
+  articles: /\b(el|la|los|las|un|una|unos|unas)\b/gi,
+  conjunctions: /\b(y|e|o|u|pero|sino|porque|que|si)\b/gi,
+  prepositions: /\b(de|del|a|al|en|por|para|con|sin|sobre)\b/gi,
+  pronouns: /\b(yo|tú|él|ella|nosotros|vosotros|ellos|ellas|me|te|se|nos|os)\b/gi,
+  accents: /[áéíóúñ¿¡]/g,
+  common: /\b(está|son|ser|estar|tiene|hace|muy|más|también|todo|cuando|hay)\b/gi
+};
+const READ_EN = {
+  articles: /\b(the|a|an)\b/gi,
+  conjunctions: /\b(and|or|but|because|if|so)\b/gi,
+  prepositions: /\b(in|on|at|to|for|with|by|from|of)\b/gi,
+  pronouns: /\b(i|you|he|she|it|we|they|me|him|her|us|them)\b/gi,
+  auxiliaries: /\b(is|are|was|were|have|has|had|do|does|did)\b/gi,
+  common: /\b(this|that|these|those|there|here|what|when|where|who|which)\b/gi
+};
+// vocabulario técnico que en un texto clínico o informático es inglés SIN que el texto lo sea:
+// sin este descuento, media consulta sobre software se clasificaría como inglés
+const READ_TECH = /\b(software|hardware|web|online|internet|email|smartphone|computer|app|website|cloud|server|database|api|framework|frontend|backend|browser|cookie|cache|debug|interface|network|plugin|script|update)\b/gi;
+function readScore(text, patterns){
+  let n = 0;
+  for (const k in patterns) n += (String(text).match(patterns[k]) || []).length;
+  return n;
+}
+function detectTextLanguage(text){
+  const es = readScore(text, READ_ES);
+  const tech = (String(text).match(READ_TECH) || []).length;
+  const en = readScore(text, READ_EN) - tech * 0.75;
+  const total = es + en;
+  const pct = total > 0 ? (es / total) * 100 : 50;
+  return { lang: es > en ? "es" : "en", spanishPct: Math.round(pct * 10) / 10, technical: tech, hybrid: pct > 15 && pct < 85 };
+}
+/* Sílabas. En español se cuentan grupos vocálicos descontando diptongos y triptongos; en inglés,
+   la aproximación habitual por grupos de vocales quitando la `e` muda. Ninguna es exacta —el
+   índice tampoco lo pretende—, pero sí estable: el mismo texto da siempre el mismo número. */
+function countSyllables(word, lang){
+  let w = String(word).toLowerCase();
+  if (lang === "es"){
+    w = w.replace(/[áéíóú]/g, "a").replace(/[üï]/g, "i").replace(/[^a-zñ]/g, "");
+    const groups = (w.match(/[aeiou]+/g) || []).length;
+    const di = (w.match(/(ai|au|ei|eu|io|ou|oi|ui|iu|ie|ue|ua)/g) || []).length;
+    const tri = (w.match(/(uai|iai|uei|ioi)/g) || []).length;
+    return Math.max(groups - di - tri * 2, 1);
+  }
+  w = w.replace(/(?:[^laeiouy]es|ed|[^laeiouy]e)$/, "").replace(/^y/, "");
+  return (w.match(/[aeiouy]{1,2}/g) || []).length || 1;
+}
+// Bandas de INFLESZ (es) y de Flesch Reading Ease (en). Se devuelve la banda, no solo el número:
+// «53» no le dice nada a nadie, «algo difícil, nivel de bachillerato» sí.
+function readabilityBand(score, lang){
+  if (lang === "es"){
+    if (score <= 40) return "Muy difícil (universitario o científico)";
+    if (score <= 55) return "Algo difícil (bachillerato, divulgación científica)";
+    if (score <= 65) return "Normal (ESO, prensa general)";
+    if (score <= 80) return "Bastante fácil (primaria, prensa deportiva)";
+    return "Muy fácil (primaria, cómics)";
+  }
+  if (score >= 90) return "Very easy (5th grade)";
+  if (score >= 80) return "Easy (6th grade)";
+  if (score >= 70) return "Fairly easy (7th grade)";
+  if (score >= 60) return "Standard (8th–9th grade)";
+  if (score >= 50) return "Fairly difficult (10th–12th grade)";
+  if (score >= 30) return "Difficult (college)";
+  return "Very difficult (college graduate)";
+}
+function countSentences(text){
+  const t = String(text);
+  if (typeof Intl !== "undefined" && Intl.Segmenter){
+    try {
+      const seg = new Intl.Segmenter(undefined, { granularity: "sentence" });
+      const n = Array.from(seg.segment(t)).filter(s => /[a-zA-ZáéíóúüñÁÉÍÓÚÜÑ]/.test(s.segment)).length;
+      if (n > 0) return n;
+    } catch (e){ /* sin Segmenter se cae al recuento por puntuación */ }
+  }
+  return t.replace(/\s+/g, " ").trim().split(/[.!?]+/).filter(s => s.trim().length > 0).length;
+}
+function analyzeReadability(text){
+  const src = String(text == null ? "" : text);
+  const base = { lang: "es", words: 0, sentences: 0, syllables: 0, score: null, band: "Sin texto para analizar", perWord: 0, perSentence: 0, hybrid: false, technical: 0, spanishPct: 50, minutes: 0 };
+  if (!src.trim()) return base;
+  const det = detectTextLanguage(src);
+  const words = src.replace(/\s+/g, " ").trim().split(/\s+/).filter(Boolean);
+  const sentences = countSentences(src);
+  const minutes = Math.max(1, Math.round(words.length / 200));   // 200 palabras/minuto, lectura normal
+  if (!words.length || !sentences)
+    return { ...base, lang: det.lang, hybrid: det.hybrid, technical: det.technical, spanishPct: det.spanishPct, band: "Texto muy corto", minutes };
+  const syl = words.reduce((a, w) => a + countSyllables(w, det.lang), 0);
+  const score = det.lang === "es"
+    ? 206.835 - 62.3 * (syl / words.length) - (words.length / sentences)          // Szigriszt-Pazos
+    : 206.835 - 1.015 * (words.length / sentences) - 84.6 * (syl / words.length); // Flesch
+  return {
+    lang: det.lang, words: words.length, sentences, syllables: syl,
+    score: Math.round(score * 10) / 10, band: readabilityBand(score, det.lang),
+    perWord: Math.round((syl / words.length) * 100) / 100,
+    perSentence: Math.round((words.length / sentences) * 100) / 100,
+    hybrid: det.hybrid, technical: det.technical, spanishPct: det.spanishPct, minutes
+  };
 }
 
 /* --- Markdown (renderizador propio: se escapa TODO antes de aplicar formato) --- */
