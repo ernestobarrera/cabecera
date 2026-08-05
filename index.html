@@ -1545,7 +1545,7 @@ function syncUI(mode, txt){
    reaparece) y si Recargar está activo. El descarte ✕ vive solo en memoria de la sesión.
    Demora asumida: la CDN de Pages puede servir la versión vieja hasta ~10 min aun con
    no-store (gobierna la caché del navegador, no la CDN); para pestañas de días, irrelevante. */
-const APP_VERSION = "0.46.2";
+const APP_VERSION = "0.47.0";
 let newVersionDetected = null;   // versión superior detectada; detiene futuras consultas
 let verDismissed = false;        // ✕: solo esta sesión — nunca persistido en disco
 let verCheckInflight = false;    // sin consultas concurrentes
@@ -5040,7 +5040,7 @@ function bodyTodo(w, el){
 
   const add = () => {
     const t = inp.value.trim(); if (!t) return;
-    const it = { t, done: false };
+    const it = { t, done: false, created: todayIso() };
     w.data.items.push(it); inp.value = "";
     view = "pend"; paint(); markDirty();
     offerTaskToNote(w, it, paint);   // pegar aquí una conversación entera tiene arreglo de un clic
@@ -5051,7 +5051,7 @@ function bodyTodo(w, el){
   search.addEventListener("input", paint);
   // marcador o enlace soltado sobre la lista → una tarea por enlace (la URL queda clicable)
   wireLinkCapture(el, links => {
-    for (const l of links) w.data.items.push({ t: linkCaptureText(l), done: false });
+    for (const l of links) w.data.items.push({ t: linkCaptureText(l), done: false, created: todayIso() });
     view = "pend";
     toast(links.length === 1 ? "Tarea creada desde el enlace" : links.length + " tareas creadas desde los enlaces");
     paint(); markDirty();
@@ -5218,7 +5218,10 @@ function bodyTodo(w, el){
       li.className = "todo-it" + (it.done ? " done" : "") + (taskColor ? " has-task-color" : "");
       if (taskColor) li.style.setProperty("--task-color", taskColor);
       const dm = dueMeta(it);
-      li.innerHTML = `<span class="it-drag" draggable="${view === "pend"}" title="${view === "pend" ? "Arrastrar para reordenar (o usa ↑ ↓)" : "En «Hechas» no se reordena"}">⋮⋮</span><input type="checkbox" ${it.done ? "checked" : ""}><span class="t">${linkifyEsc(it.t)}</span>`
+      // la fecha de alta va en el tooltip del texto, no en la fila: identifica la tarea sin gastar
+      // ancho ni competir con el vencimiento, que es lo que sí exige acción
+      const alta = it.created ? ` title="Anotada el ${esc(fechaLarga(it.created))}"` : "";
+      li.innerHTML = `<span class="it-drag" draggable="${view === "pend"}" title="${view === "pend" ? "Arrastrar para reordenar (o usa ↑ ↓)" : "En «Hechas» no se reordena"}">⋮⋮</span><input type="checkbox" ${it.done ? "checked" : ""}><span class="t"${alta}>${linkifyEsc(it.t)}</span>`
         + (it.note ? `<span class="task-note-mark" title="${esc(it.note)}">i</span>` : "")
         + (dm ? `<span class="due ${dm.cls}">${dm.label}</span>` : "")
         + `<span class="it-actions"><button class="it-color" title="Color"><span class="cdot"></span></button><button class="it-edit" title="Editar">✎</button><button class="it-up" title="Subir">↑</button><button class="it-down" title="Bajar">↓</button><button class="it-due" title="Fecha, nota y aviso">📅</button><button class="it-del" title="Borrar">✕</button></span>`;
@@ -6520,6 +6523,17 @@ function markColor(type){ return CAL_MARK_COLORS[type] || (customMarkType(type) 
 function isoDate(y, m, d){
   return `${y}-${String(m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
 }
+/* Fecha de HOY en horario local. Deliberadamente NO es `toISOString().slice(0,10)`: eso da UTC, y
+   en España a la una de la madrugada devolvería el día anterior. Una tarea creada de madrugada
+   tiene que llevar la fecha que el reloj de la pared marcaba al escribirla. */
+function todayIso(){
+  const n = new Date();
+  return isoDate(n.getFullYear(), n.getMonth(), n.getDate());
+}
+function fechaLarga(iso){
+  const d = parseIsoDate(iso);
+  return isNaN(d) ? String(iso || "") : d.toLocaleDateString("es-ES", { day: "numeric", month: "long", year: "numeric" });
+}
 function parseIsoDate(ds){
   const p = String(ds || "").split("-").map(Number);
   return p.length === 3 ? new Date(p[0], p[1] - 1, p[2]) : new Date(NaN);
@@ -7413,7 +7427,7 @@ function applyCapture(cap, target){
   } else if (cap.kind === "task"){
     const w = (target && target.w) || ensure("todo");
     if (!Array.isArray(w.data.items)) w.data.items = [];
-    w.data.items.push({ t: cap.text, done: false, ...(cap.due ? { due: cap.due } : {}) });
+    w.data.items.push({ t: cap.text, done: false, created: todayIso(), ...(cap.due ? { due: cap.due } : {}) });
     refreshWidget(w); flashWidget(w);
     if (target){
       markDirty();
@@ -7988,7 +8002,7 @@ function paintInbox(){
     d.querySelector(".k").addEventListener("click", () => consume(t => {
       let w = state.widgets.find(x => x.type === "todo");
       if (!w){ addWidget("todo"); w = state.widgets[state.widgets.length - 1]; }
-      w.data.items.push({ t, done: false }); refreshWidget(w);
+      w.data.items.push({ t, done: false, created: todayIso() }); refreshWidget(w);
     }));
     d.querySelector(".c").addEventListener("click", () => consume(t => {
       let w = state.widgets.find(x => x.type === "clips");

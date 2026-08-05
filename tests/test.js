@@ -2284,6 +2284,35 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
   ['state', 'activeView', 'subViewId', 'subViewSnapshot', 'uid', 'blankSpace', 'toast', 'renderAll', 'markDirty'].forEach(k => { delete globalThis[k]; });
   console.log('OK D5b-B copiar (espacio propio nuevo, vuelve a vista propia, ids regenerados, derivedFrom)');
 
+  // --- 0.47.0: fecha de alta de las tareas ---
+  {
+    eval('globalThis.isoDate = ' + pickFn('isoDate', 'y, m, d'));
+    eval('globalThis.todayIso = ' + pickFn('todayIso', ''));
+    const n = new Date();
+    const esperado = n.getFullYear() + '-' + String(n.getMonth() + 1).padStart(2, '0') + '-' + String(n.getDate()).padStart(2, '0');
+    if (todayIso() !== esperado) throw new Error('created: todayIso debe dar la fecha LOCAL');
+    // el fallo que esto evita: a la 01:00 en España, toISOString() devuelve el día ANTERIOR
+    const madrugada = new Date(2026, 7, 5, 1, 0, 0);
+    if (isoDate(madrugada.getFullYear(), madrugada.getMonth(), madrugada.getDate()) !== '2026-08-05')
+      throw new Error('created: la fecha local de la madrugada del 5 debe ser el 5');
+    if (/toISOString/.test(pickFn('todayIso', '')))
+      throw new Error('created: todayIso NO puede usar toISOString — daría UTC y una tarea de madrugada nacería con la fecha de ayer');
+    // TODOS los puntos de alta ponen fecha: si aparece uno nuevo sin ella, esto lo caza
+    const altas = (src.match(/data\.items\.push\(\{ t[^\n]*/g) || []).filter(x => !/plainClone/.test(x));
+    const sinFecha = altas.filter(x => !/created: todayIso\(\)/.test(x));
+    if (sinFecha.length) throw new Error('created: hay ' + sinFecha.length + ' alta(s) de tarea sin fecha: ' + sinFecha.join(' | '));
+    if (altas.length !== 3) throw new Error('created: se esperaban 3 altas en línea (enlaces, captura Ctrl+K, inbox), hay ' + altas.length + ' — si has añadido una vía nueva, dale fecha y actualiza esta cuenta');
+    // la cuarta vía es el campo «Nueva tarea…», que construye el objeto antes de empujarlo
+    if (!/const it = \{ t, done: false, created: todayIso\(\) \}/.test(src))
+      throw new Error('created: el alta manual desde «Nueva tarea…» debe nacer con fecha');
+    // NO viaja en packs ni en escritorios compartidos: es metadato personal, y la proyección C7
+    // solo deja pasar t/done/id. Si alguien la añadiera ahí, se filtraría cuándo apuntas cada cosa.
+    for (const m of src.match(/data\.items = \(Array\.isArray\(d\.items\)[^;]*;/g) || [])
+      if (/created/.test(m)) throw new Error('created: no debe viajar en la proyección de packs/compartir');
+    ['isoDate', 'todayIso'].forEach(k => { delete globalThis[k]; });
+    console.log('OK fecha de alta de tareas (local no UTC, en todos los puntos de alta, fuera de packs)');
+  }
+
   // --- 0.46.2: legibilidad portada de Notas.IA (fuente canónica = ese repo, aquí solo la forma) ---
   {
     eval('globalThis.READ_ES = ' + src.match(/const READ_ES = (\{[\s\S]*?\n\});/)[1]);

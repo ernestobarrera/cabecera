@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.47.0] - 2026-08-05 — las tareas recuerdan cuándo las anotaste
+
+- **Cada tarea nueva guarda su fecha de alta.** Pasa el ratón por el texto de una tarea y te dice el día en que la escribiste, vengas de donde vengas: del campo «Nueva tarea…», de la paleta `Ctrl+K`, de arrastrar un enlace o de una línea de `inbox.txt`. Las tareas anteriores a esta versión no la llevan, porque no se puede inventar.
+- La fecha es la de **tu reloj**, no la universal: una tarea anotada a la una de la madrugada lleva el día que marcaba la pared, no el de ayer.
+- Es un dato **tuyo y privado**: no viaja en los packs ni en los escritorios que compartes.
+- **La guía decía algo que no era cierto** sobre las etiquetas: prometía que el filtro dejaba a la vista los widgets etiquetados «en cualquier espacio», y en realidad actúa dentro del escritorio en el que estés. Corregido, y explicado dónde encontrar el botón 🏷️, que vive en la barra de título y solo aparece al pasar el ratón.
+
 ## [0.46.2] - 2026-08-04 — preparación interna: análisis de legibilidad
 
 - **Groundwork invisible.** Cabecera incorpora el análisis de legibilidad de **Notas.IA**: detecta si un texto está en español o en inglés (sin dejarse engañar por los tecnicismos ingleses de un texto español), cuenta palabras, oraciones y sílabas, y calcula el índice de lectura con la escala **INFLESZ** para castellano y Flesch para inglés, con su interpretación en palabras («normal, prensa general», «muy difícil, universitario»). **Todavía no aparece en ninguna parte de la interfaz**: es la maquinaria, a la espera de decidir dónde vive.
