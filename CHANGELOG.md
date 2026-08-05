@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.48.3] - 2026-08-05 — las respuestas se pueden corregir, y el clic derecho llega a las ventanas
+
+- **Ahora se puede editar y borrar una respuesta.** En la versión anterior quedaban selladas para siempre, y bastaba escribir algo por error para tener un borrón permanente. Se corrige con la regla de cualquier mensajero: **se edita y se borra, y lo editado queda marcado como editado**. Borrar ofrece Deshacer.
+- **El clic derecho también funciona encima de una ventana**, y ofrece lo suyo delante: copiar el texto de una nota o un documento, renombrar, etiquetas, color, cabecera, privado, plegar y cerrar; debajo siguen las acciones del escritorio. Dentro de un campo de texto o con algo seleccionado sigue saliendo el menú del navegador, que es donde están pegar y el corrector.
+
 ## [0.48.2] - 2026-08-05 — conversación por tarea de verdad, y clic derecho en el escritorio
 
 - **Clic derecho sobre el fondo del escritorio**: menú rápido con **añadir widget, buscar, ordenar, plegar todo, cambiar el fondo y papelera**. Encima de una ventana sigue saliendo el menú del navegador, que es donde están copiar y pegar. Cada entrada llama al comando que ya existía, así que hace exactamente lo mismo que su botón.

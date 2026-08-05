@@ -370,7 +370,13 @@ ul.plain{list-style:none}
 .rp-x:hover{color:var(--text); background:rgba(255,255,255,.1)}
 .rp-hilo{max-height:190px; overflow:auto; display:flex; flex-direction:column; gap:6px; margin-bottom:8px}
 .rp{font-size:12.5px; line-height:1.5; padding:6px 9px; border-radius:10px; white-space:pre-wrap; word-break:break-word; max-width:92%}
-.rp-meta{display:block; font-size:10.5px; color:var(--text-dim); margin-bottom:2px}
+.rp-meta{display:flex; align-items:center; gap:6px; font-size:10.5px; color:var(--text-dim); margin-bottom:2px}
+.rp-txt{display:block; white-space:pre-wrap}
+.rp-acts{margin-left:auto; display:flex; gap:2px; opacity:0; transition:opacity .12s ease}
+.rp:hover .rp-acts,.rp:focus-within .rp-acts{opacity:1}
+.rp-acts button{border:none; background:none; color:var(--text-dim); cursor:pointer; font-size:11px; padding:1px 4px; border-radius:5px}
+.rp-acts button:hover{color:var(--text); background:rgba(255,255,255,.12)}
+.rp-edit{min-height:44px; margin-top:3px}
 .rp.de-mi{align-self:flex-end; background:var(--accent-soft); border:1px solid rgba(90,169,247,.28)}
 .rp.de-agente{align-self:flex-start; background:rgba(255,255,255,.05); border:1px solid var(--border-soft)}
 .rp-vacio{font-size:11.5px; color:var(--text-dim); line-height:1.45}
@@ -1606,7 +1612,7 @@ function syncUI(mode, txt){
    reaparece) y si Recargar está activo. El descarte ✕ vive solo en memoria de la sesión.
    Demora asumida: la CDN de Pages puede servir la versión vieja hasta ~10 min aun con
    no-store (gobierna la caché del navegador, no la CDN); para pestañas de días, irrelevante. */
-const APP_VERSION = "0.48.2";
+const APP_VERSION = "0.48.3";
 let newVersionDetected = null;   // versión superior detectada; detiene futuras consultas
 let verDismissed = false;        // ✕: solo esta sesión — nunca persistido en disco
 let verCheckInflight = false;    // sin consultas concurrentes
@@ -5179,10 +5185,12 @@ function bodyTodo(w, el){
     el.querySelectorAll(".due-editor, .reply-editor").forEach(x => x.remove());
     const ed = document.createElement("div");
     ed.className = "reply-editor";
-    const hilo = (Array.isArray(it.replies) ? it.replies : []).map(r => {
+    const hilo = (Array.isArray(it.replies) ? it.replies : []).map((r, i) => {
       const cuando = new Date(+r.at || 0);
       const fecha = isNaN(cuando) ? "" : cuando.toLocaleString("es-ES", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
-      return `<div class="rp ${r.by === "agente" ? "de-agente" : "de-mi"}"><span class="rp-meta">${esc(r.by === "agente" ? "Agente" : "Tú")} · ${esc(fecha)}</span>${esc(r.t)}</div>`;
+      return `<div class="rp ${r.by === "agente" ? "de-agente" : "de-mi"}" data-i="${i}"><span class="rp-meta">${esc(r.by === "agente" ? "Agente" : "Tú")} · ${esc(fecha)}${r.ed ? " · editado" : ""}`
+        + `<span class="rp-acts"><button class="rp-ed" type="button" title="Editar">✎</button><button class="rp-del" type="button" title="Borrar esta respuesta">✕</button></span></span>`
+        + `<span class="rp-txt">${esc(r.t)}</span></div>`;
     }).join("");
     ed.innerHTML = `<div class="rp-head"><b>Conversación</b><button class="rp-x" type="button" title="Cerrar (Esc)">✕</button></div>
       <div class="rp-hilo">${hilo || `<div class="rp-vacio">Aún no hay respuestas. Lo que escribas se guarda con su fecha y no se sobrescribe.</div>`}</div>
@@ -5200,6 +5208,46 @@ function bodyTodo(w, el){
       if (it.replies.length > 50) it.replies.splice(0, it.replies.length - 50);
       ed.remove(); paint(); markDirty();
     };
+    /* 0.48.3 — Ernesto escribió «df» probando y no tenía forma de quitarlo: «esto es un problema».
+       Tenía razón y mi regla anterior era mala. La inmutabilidad protege un registro AJENO, pero
+       aquí el dueño del archivo es él: negarle borrar su propio error no protege nada, solo
+       ensucia. Se cambia por lo que hacen los mensajeros: **se puede editar y borrar, y lo editado
+       queda marcado**. La honestidad la da la marca, no la prohibición. */
+    const reabrir = () => { ed.remove(); replyTo(it, li); };
+    ed.querySelectorAll(".rp-del").forEach(b => b.addEventListener("click", e => {
+      e.stopPropagation();
+      const i = +b.closest(".rp").dataset.i;
+      const borrada = it.replies[i];
+      it.replies.splice(i, 1);
+      if (!it.replies.length) delete it.replies;
+      markDirty(); paint();
+      toastAction("Respuesta borrada.", "Deshacer", () => {
+        if (!Array.isArray(it.replies)) it.replies = [];
+        it.replies.splice(Math.min(i, it.replies.length), 0, borrada);
+        markDirty(); paint();
+      });
+    }));
+    ed.querySelectorAll(".rp-ed").forEach(b => b.addEventListener("click", e => {
+      e.stopPropagation();
+      const caja = b.closest(".rp"), i = +caja.dataset.i, txt = caja.querySelector(".rp-txt");
+      if (caja.querySelector("textarea")) return;
+      const ta2 = document.createElement("textarea");
+      ta2.className = "rp-t rp-edit";
+      ta2.value = it.replies[i].t;
+      txt.replaceWith(ta2);
+      const guardar = () => {
+        const v = ta2.value.trim();
+        if (!v){ ta2.replaceWith(txt); return; }
+        if (v !== it.replies[i].t){ it.replies[i].t = v.slice(0, 2000); it.replies[i].ed = 1; markDirty(); paint(); }
+        reabrir();
+      };
+      ta2.addEventListener("keydown", ev => {
+        if (ev.key === "Escape"){ ev.stopPropagation(); reabrir(); }
+        if (ev.key === "Enter" && (ev.ctrlKey || ev.metaKey)){ ev.preventDefault(); guardar(); }
+      });
+      ta2.addEventListener("blur", guardar);
+      ta2.focus(); ta2.setSelectionRange(ta2.value.length, ta2.value.length);
+    }));
     ed.querySelector(".send").addEventListener("click", enviar);
     ed.querySelector(".rp-x").addEventListener("click", cerrar);
     ed.querySelector('[data-x="1"]').addEventListener("click", cerrar);
@@ -7757,10 +7805,38 @@ function openMenu(mode = "start", point = null){
    sitios que puedan divergir. Solo sobre el fondo: encima de una ventana manda el menú del
    navegador, que es donde están copiar, pegar e inspeccionar. */
 function closeCtx(){ $("#ctx-menu").classList.remove("open"); }
-function openCtx(x, y){
+/* 0.48.3 — el menú también sobre una VENTANA, y con lo suyo delante. Ernesto lo comprobó en el
+   escritorio del aula: «aparece también cuando se pulsa sobre los widgets, y en algún caso es
+   contextual y cambia». Cada tipo ofrece lo que de verdad se le hace: copiar el texto de una nota
+   o un markdown, ver el QR en grande… Lo genérico del escritorio queda debajo, tras un separador,
+   para no perderlo. Sigue sin reimplementar nada: son los comandos que ya existen. */
+function ctxWidgetItems(w, el){
+  // se pulsan los MISMOS botones que ya existen en la ventana: nada de una segunda implementación
+  const pulsar = sel => () => { const b = el.querySelector(sel); if (b) b.click(); };
+  const out = [];
+  const t = (WTYPES[w.type] || {}).name || w.type;
+  if ((w.type === "notes" || w.type === "md") && String(w.data.text || "").trim())
+    out.push(["⧉", "Copiar el texto de " + t.toLowerCase(), async () => {
+      try{ await navigator.clipboard.writeText(w.data.text || ""); toast("Copiado"); }catch(e){ toast("No se pudo copiar", true); }
+    }]);
+  out.push(["✎", "Renombrar la ventana", () => {
+    el.querySelector(".win-title").dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+  }]);
+  out.push(["🏷️", "Etiquetas", () => { el.classList.add("show-more"); pulsar(".tagbtn")(); }]);
+  if (w.type === "notes" || w.type === "todo" || w.type === "md"){
+    out.push(["🎨", "Color de la ventana", () => { el.classList.add("show-more"); pulsar(".colorbtn")(); }]);
+    out.push(["ⓘ", "Cabecera del widget", () => { el.classList.add("show-more"); pulsar(".descbtn")(); }]);
+  }
+  out.push(["👁", w.priv ? "Quitar el marcado de privado" : "Marcar como privado", pulsar(".privbtn")]);
+  out.push([w.collapsed ? "▸" : "▾", w.collapsed ? "Desplegar" : "Plegar", pulsar(".collapse")]);
+  out.push(["✕", "Cerrar la ventana (va a la papelera)", pulsar(".close")]);
+  out.push(["sep"]);
+  return out;
+}
+function openCtx(x, y, w, el){
   const m = $("#ctx-menu");
-  const plegados = state && state.widgets.length && state.widgets.every(w => w.collapsed);
-  const items = [
+  const plegados = state && state.widgets.length && state.widgets.every(x => x.collapsed);
+  const items = (w ? ctxWidgetItems(w, el) : []).concat([
     ["➕", "Añadir widget…", () => openMenu("start", { x, y })],
     ["🔍", "Buscar y ejecutar", () => openMenu("palette"), "Ctrl+K"],
     ["sep"],
@@ -7769,7 +7845,7 @@ function openCtx(x, y){
     ["sep"],
     ["🖼️", "Cambiar el fondo", () => $("#ov-wp").classList.add("open")],
     ["🗑️", "Papelera", () => openTrash()]
-  ];
+  ]);
   m.innerHTML = "";
   for (const it of items){
     if (it[0] === "sep"){ const s = document.createElement("div"); s.className = "sep"; m.appendChild(s); continue; }
@@ -7795,10 +7871,16 @@ function wireUI(){
   $("#btn-fold").addEventListener("click", foldAll);
   $("#desktop").addEventListener("contextmenu", e => {
     if (isMobile()) return;                       // en táctil no hay clic derecho: el menú Inicio es la vía
-    if (e.target.closest(".win")) return;         // encima de una ventana manda el menú del navegador
     if (!viewIsMutable(currentView())) return;    // en un escritorio seguido no hay nada que ordenar ni añadir
+    // dentro de un campo o de una selección manda el menú del navegador: ahí están copiar, pegar,
+    // «buscar con…» y el corrector, y sustituirlos sería empeorar
+    if (e.target.closest("input, textarea, [contenteditable], a")) return;
+    if (String(getSelection() || "").trim().length) return;   // hay texto seleccionado: copiar es del navegador
+    const winEl = e.target.closest(".win");
+    const w = winEl ? state.widgets.find(x => x.id === winEl.dataset.id) : null;
+    if (winEl && !w) return;
     e.preventDefault();
-    openCtx(e.clientX, e.clientY);
+    openCtx(e.clientX, e.clientY, w, winEl);
   });
   document.addEventListener("pointerdown", e => { if (!e.target.closest("#ctx-menu")) closeCtx(); }, true);
   window.addEventListener("blur", closeCtx);

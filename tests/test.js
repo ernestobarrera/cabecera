@@ -2293,8 +2293,14 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
     if (/setDue\(/.test(rp)) throw new Error('responder: no puede reutilizar el editor de vencimiento — recordar y responder son cosas distintas');
     if (!/it\.replies\.push\(\{ at: Date\.now\(\), by: "yo"/.test(rp))
       throw new Error('responder: cada entrada se sella con su instante y su autor, automáticamente');
-    if (/\.replies\[[^\]]*\]\s*=/.test(rp) || /r\.t = /.test(rp))
-      throw new Error('responder: una entrada ya escrita no se edita — si se pudiera reescribir no serviría como registro');
+    // 0.48.3: SÍ se edita y se borra —él es el dueño del archivo y escribir «df» sin poder
+    // quitarlo es un problema real—, pero lo editado queda MARCADO (`ed`), como en un mensajero.
+    if (!/it\.replies\[i\]\.ed = 1/.test(rp))
+      throw new Error('responder: una respuesta editada debe quedar marcada como editada');
+    if (!/r\.ed \? " · editado" : ""/.test(rp))
+      throw new Error('responder: la marca de editado tiene que verse en el hilo, o la edición sería invisible');
+    if (!/toastAction\("Respuesta borrada\."/.test(rp))
+      throw new Error('responder: borrar una respuesta debe poder deshacerse');
     if (!/it\.replies\.splice\(0, it\.replies\.length - 50\)/.test(rp))
       throw new Error('responder: el hilo debe tener tope, o una tarea puede engordar el archivo sin freno');
     if (!/type="date"/.test(src.match(/const setDue = \(it, li\) => \{[\s\S]*?\n  \};/)[0]))
@@ -2311,12 +2317,18 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
     if (!/tag-pick/.test(te)) throw new Error('etiquetas: debe pintarse la lista de etiquetas marcables');
     if (!/normTags\(input\.value\)/.test(te))
       throw new Error('etiquetas: marcar un chip debe escribir en el MISMO campo, para que solo haya una fuente');
-    console.log('OK conversación por tarea (editor propio, entradas selladas e inmutables, con tope y fuera de packs) + etiquetas ofrecidas');
+    console.log('OK conversación por tarea (editor propio, fecha y autor automáticos, editable con marca, borrado deshacible, fuera de packs)');
   }
 
   // --- 0.48.2: clic derecho en el escritorio ---
   {
-    const ctx = src.match(/function openCtx\(x, y\)\{[\s\S]*?\n\}/)[0];
+    const ctx = src.match(/function ctxWidgetItems\(w, el\)\{[\s\S]*?\n\}/)[0]
+              + src.match(/function openCtx\(x, y, w, el\)\{[\s\S]*?\n\}/)[0];
+    // sobre una ventana, el menú NO reimplementa sus botones: los pulsa
+    if (!/const pulsar = sel => \(\) => \{ const b = el\.querySelector\(sel\); if \(b\) b\.click\(\); \};/.test(ctx))
+      throw new Error('clic derecho sobre ventana: debe accionar los botones existentes, no duplicar su lógica');
+    if (/delete w\.priv|w\.collapsed = !w\.collapsed|state\.widgets\.splice/.test(ctx))
+      throw new Error('clic derecho sobre ventana: no puede tocar el estado por su cuenta');
     // REENVÍA, no reimplementa: si alguien copiara aquí la lógica de ordenar o de la papelera,
     // habría dos versiones que pueden divergir (misma regla que el panel de archivos de 0.45.0)
     for (const cmd of ['openMenu\\("start"', 'openMenu\\("palette"\\)', 'orderSpace\\(\\)', 'foldAll\\(\\)', 'openTrash\\(\\)'])
@@ -2324,7 +2336,7 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
     if (/markDirty\(|state\.widgets\.push|addWidget\(/.test(ctx))
       throw new Error('clic derecho: el menú no ejecuta nada por su cuenta, solo llama a comandos existentes');
     // guardas: táctil, encima de una ventana, y vista de solo lectura
-    const wire = src.match(/\$\("#desktop"\)\.addEventListener\("contextmenu"[\s\S]*?\n  \}\);/)[0];
+    const wire = src.match(/"#desktop"\)\.addEventListener\("contextmenu"[\s\S]*?openCtx\([^\n]*/)[0];
     if (!/isMobile\(\)/.test(wire)) throw new Error('clic derecho: en táctil no hay clic derecho que interceptar');
     if (!/e\.target\.closest\("\.win"\)/.test(wire))
       throw new Error('clic derecho: encima de una ventana debe mandar el menú del navegador (copiar/pegar/inspeccionar)');
