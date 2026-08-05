@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.47.1] - 2026-08-05 — el widget Markdown ya admite color y cabecera
+
+- **Markdown se pone al nivel de Nota y Tareas:** ahora también puedes darle **color de ventana** y una **cabecera ⓘ** que explique qué guarda ese documento. No había ninguna razón para que fuera el único que no los tenía. Los dos botones viven donde los demás, en la barra de título al pasar el ratón, y la cabecera se edita haciendo clic sobre ella.
+
 ## [0.47.0] - 2026-08-05 — las tareas recuerdan cuándo las anotaste
 
 - **Cada tarea nueva guarda su fecha de alta.** Pasa el ratón por el texto de una tarea y te dice el día en que la escribiste, vengas de donde vengas: del campo «Nueva tarea…», de la paleta `Ctrl+K`, de arrastrar un enlace o de una línea de `inbox.txt`. Las tareas anteriores a esta versión no la llevan, porque no se puede inventar.

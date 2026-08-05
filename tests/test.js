@@ -1157,8 +1157,10 @@ if (!wpArr[0].includes('#1b2735') || !wpArr[5].includes('#134e5e')) throw new Er
 if (!src.includes('--wp-scrim')) throw new Error('regresión: el velo del fondo ya no es adaptativo (falta --wp-scrim)');
 console.log('OK wpScrim (velo adaptativo por luminancia; presets ampliados sin romper índices)');
 
-// --- cabecera ⓘ también en Tareas (v0.32.0): misma mecánica que en Nota ---
-if (!src.match(/w\.type === "notes" \|\| w\.type === "todo"\) \? `<button class="win-btn descbtn"/)) throw new Error('regresión: el botón ⓘ debe ofrecerse en Nota y en Tareas');
+// --- cabecera ⓘ en Tareas (v0.32.0) y en Markdown (v0.47.1): misma mecánica que en Nota.
+// El invariante ya NO fija la lista de tipos —eso es lo que dejó fuera al markdown durante
+// versiones—, sino que el botón se DERIVE de `colorable`, que es la lista única. ---
+if (!src.match(/const descBtn = colorable \? `<button class="win-btn descbtn"/)) throw new Error('regresión: el botón ⓘ debe derivarse de colorable (lista única de tipos con color y cabecera)');
 if (!src.match(/function bodyTodo[\s\S]{0,400}notes-desc/)) throw new Error('regresión: bodyTodo debe pintar la cabecera opcional (notes-desc)');
 console.log('OK cabecera ⓘ en Tareas (botón + render en bodyTodo)');
 
@@ -2283,6 +2285,28 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
   if (globalThis.state.spaces[1].widgets[1].data.groups[0].links[0].id === 'orig_link') throw new Error('copy: ids de enlaces deben regenerarse');
   ['state', 'activeView', 'subViewId', 'subViewSnapshot', 'uid', 'blankSpace', 'toast', 'renderAll', 'markDirty'].forEach(k => { delete globalThis[k]; });
   console.log('OK D5b-B copiar (espacio propio nuevo, vuelve a vista propia, ids regenerados, derivedFrom)');
+
+  // --- 0.47.1: Markdown con color y cabecera ⓘ, como Nota y Tareas ---
+  {
+    const cl = src.match(/const colorable = [^;]+;/)[0];
+    for (const t of ['notes', 'todo', 'md'])
+      if (!cl.includes('"' + t + '"')) throw new Error('paridad: el tipo ' + t + ' debe poder llevar color y cabecera ⓘ');
+    // el botón de cabecera se DERIVA de colorable: si vuelven a divergir, «· estado» (que es md)
+    // se queda otra vez sin sitio donde declarar su contrato
+    if (!/const descBtn = colorable \?/.test(src))
+      throw new Error('paridad: descBtn debe derivarse de colorable, no repetir la lista de tipos');
+    if (!/if \(colorable\) el\.querySelector\("\.descbtn"\)/.test(src))
+      throw new Error('paridad: el cableado del botón de cabecera debe usar la misma condición');
+    const md = src.match(/function bodyMd\(w, el\)\{[\s\S]*?\n\}/)[0];
+    if (!/notes-desc/.test(md) || !/has-desc/.test(md))
+      throw new Error('paridad: el cuerpo del markdown debe pintar su cabecera ⓘ');
+    if (!/editNoteDesc\(w, el\.closest\("\.win"\)\)/.test(md))
+      throw new Error('paridad: la cabecera del markdown debe abrirse al hacer clic, como en Nota');
+    // y NO viaja en packs ni en compartir: la proyección reconstruye data desde cero
+    if (/desc/.test(src.match(/else if \(w\.type === "md"\)\{ data\.text[^\n]*/)[0]))
+      throw new Error('paridad: la cabecera no debe viajar en la proyección de packs');
+    console.log('OK Markdown con color y cabecera ⓘ (paridad con Nota y Tareas, derivada de una sola condición)');
+  }
 
   // --- 0.47.0: fecha de alta de las tareas ---
   {

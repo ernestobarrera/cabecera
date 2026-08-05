@@ -1545,7 +1545,7 @@ function syncUI(mode, txt){
    reaparece) y si Recargar está activo. El descarte ✕ vive solo en memoria de la sesión.
    Demora asumida: la CDN de Pages puede servir la versión vieja hasta ~10 min aun con
    no-store (gobierna la caché del navegador, no la CDN); para pestañas de días, irrelevante. */
-const APP_VERSION = "0.47.0";
+const APP_VERSION = "0.47.1";
 let newVersionDetected = null;   // versión superior detectada; detiene futuras consultas
 let verDismissed = false;        // ✕: solo esta sesión — nunca persistido en disco
 let verCheckInflight = false;    // sin consultas concurrentes
@@ -3970,9 +3970,11 @@ function buildWindow(w){
   el.dataset.id = w.id;
   el.style.cssText = `left:${paint.x}px; top:${paint.y}px; width:${paint.w}px; height:${paint.h}px; z-index:${+w.z || 1}`;
   const dictBtn = w.type === "notes" ? `<button class="win-btn dict-recv-btn" title="Recibir el dictado en esta nota">🎙️</button>` : "";
-  const colorable = w.type === "notes" || w.type === "todo";
+  // 0.47.1: Markdown entra en el club. No había razón de diseño para excluirlo — y con el
+  // contrato de cada widget viviendo en su cabecera ⓘ, «· estado» no puede ser el único sin ella.
+  const colorable = w.type === "notes" || w.type === "todo" || w.type === "md";
   const colorBtn = colorable ? `<button class="win-btn colorbtn" title="Color de la ventana"><span class="cdot"></span></button>` : "";
-  const descBtn = (w.type === "notes" || w.type === "todo") ? `<button class="win-btn descbtn" title="Cabecera del widget (explica qué guarda)">ⓘ</button>` : "";
+  const descBtn = colorable ? `<button class="win-btn descbtn" title="Cabecera del widget (explica qué guarda)">ⓘ</button>` : "";
   const privBtn = `<button class="win-btn privbtn" title="${w.priv ? "Widget privado: se oculta al activar la privacidad" : "Marcar como privado (se oculta al compartir pantalla)"}">👁</button>`;
   // con privacidad activa, el título propio también es fuga: se muestra el genérico del tipo
   const shownName = (privacyOn && w.priv) ? t.name : (w.t || t.name);
@@ -3987,7 +3989,7 @@ function buildWindow(w){
   if (w.collapsed) el.classList.add("collapsed");
   el.querySelector(".tagbtn").addEventListener("click", e => { e.stopPropagation(); editWidgetTags(w, el); });
   if (colorable) el.querySelector(".colorbtn").addEventListener("click", e => { e.stopPropagation(); editWinColor(w, el); });
-  if (w.type === "notes" || w.type === "todo") el.querySelector(".descbtn").addEventListener("click", e => { e.stopPropagation(); editNoteDesc(w, el); });
+  if (colorable) el.querySelector(".descbtn").addEventListener("click", e => { e.stopPropagation(); editNoteDesc(w, el); });
   el.querySelector(".privbtn").addEventListener("click", e => {
     e.stopPropagation();
     // en directo no se cambian marcas: imposible revelar por un clic accidental (spec 0b)
@@ -6134,7 +6136,10 @@ async function mdOfferImport(w, plain, html){
 }
 function bodyMd(w, el){
   const view = w.data.view !== "edit";
+  const desc = String(w.data.desc || "").trim();
+  el.classList.toggle("has-desc", !!desc);
   el.innerHTML = `
+    ${desc ? `<div class="notes-desc" title="${esc(desc)} (clic para editar)">${esc(desc)}</div>` : ""}
     <div class="md-bar"><button class="mini tg">${view ? "✏️ Editar" : "👁️ Vista"}</button><button class="mini pg" title="Pegar del portapapeles (tabla, Excel, CSV, JSON…)">📋 Pegar</button><button class="mini cp" title="Copiar el Markdown">⧉</button></div>
     ${view ? `<div class="md-view" tabindex="0"></div>` : `<textarea class="notes md-src" placeholder="Escribe Markdown… (#, **, -, [texto](url), tablas con |, \`\`\`)"></textarea>`}`;
   if (view){
@@ -6144,6 +6149,8 @@ function bodyMd(w, el){
     ta.value = w.data.text || "";
     ta.addEventListener("input", () => { w.data.text = ta.value; markDirty(); });
   }
+  const descLine = el.querySelector(".notes-desc");
+  if (descLine) descLine.addEventListener("click", () => editNoteDesc(w, el.closest(".win")));
   el.querySelector(".tg").addEventListener("click", () => { w.data.view = view ? "edit" : "view"; refreshWidget(w); markDirty(); });
   el.querySelector(".cp").addEventListener("click", async () => { await navigator.clipboard.writeText(w.data.text || ""); toast("Markdown copiado"); });
   el.querySelector(".pg").addEventListener("click", async () => {
