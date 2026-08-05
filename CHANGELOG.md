@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.48.2] - 2026-08-05 — conversación por tarea de verdad, y clic derecho en el escritorio
+
+- **Clic derecho sobre el fondo del escritorio**: menú rápido con **añadir widget, buscar, ordenar, plegar todo, cambiar el fondo y papelera**. Encima de una ventana sigue saliendo el menú del navegador, que es donde están copiar y pegar. Cada entrada llama al comando que ya existía, así que hace exactamente lo mismo que su botón.
+
+- **Responder y recordar dejan de compartir formulario.** En 0.48.1 el botón 💬 abría el editor de vencimiento con otro icono, así que para contestar tenías delante un campo «Fecha» que no pintaba nada. Ahora **la conversación tiene su propio editor**: el hilo de lo dicho, quién lo dijo y cuándo, y un cuadro para responder. **La fecha y el autor se ponen solos**, y una respuesta ya escrita no se puede reescribir — una conversación que se puede editar no sirve para saber qué pasó.
+- **Tres cosas separadas y sin mezclarse:** el **vencimiento y el aviso** (📅) son una fecha futura que eliges tú; la **nota** es texto libre que amplías cuando quieras; la **conversación** (💬) son entradas selladas. La tarea muestra 💬 y el número de respuestas cuando hay varias.
+- **El editor de vencimiento ya se puede cerrar con un botón.** Antes había que saber que se cerraba con Esc.
+
 ## [0.48.1] - 2026-08-05 — responder a una tarea, etiquetas que se ofrecen solas, y arreglos de la calculadora
 
 - **Nuevo botón 💬 en cada tarea: responder.** Escribes tu respuesta y se guarda **con la fecha delante y sin borrar lo anterior**, así que una tarea acumula la conversación en lugar de una nota suelta. Cuando una tarea tiene conversación, aparece un 💬 junto a su texto: pasa el ratón para leerla entera, o haz clic para contestar. Ya no hace falta copiar una tarea a otra lista para comentarla.

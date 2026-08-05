@@ -2288,16 +2288,22 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
 
   // --- 0.48.1: responder a una tarea, y etiquetas que se ofrecen ---
   {
-    // RESPONDER no puede estrenar campo: la conversación vive en `it.note`, que ya existía
-    const rep = src.match(/li\.querySelector\("\.it-reply"\)\.addEventListener[\s\S]*?\n      \}\);/)[0];
-    if (/it\.(reply|replies|thread|comments)/.test(rep))
-      throw new Error('responder: no debe crear un campo nuevo — la conversación se acumula en it.note');
-    if (!/setDue\(it, li, true\)/.test(rep)) throw new Error('responder: debe abrir el editor con la nota enfocada');
-    // y NO puede reemplazar lo anterior: se concatena
-    if (!/\.concat\(sello\)/.test(rep) || /ta\.value = sello/.test(rep))
-      throw new Error('responder: la respuesta se AÑADE, nunca sustituye lo ya escrito');
-    // el editor sigue guardando en it.note con su tope
-    if (!/if \(n\) it\.note = n\.slice\(0, 1000\)/.test(src)) throw new Error('responder: se mantiene el tope de la nota');
+    // RESPONDER tiene editor PROPIO: mezclarlo con el de vencimiento fue el error de 0.48.1
+    const rp = src.match(/const replyTo = \(it, li\) => \{[\s\S]*?\n  \};/)[0];
+    if (/setDue\(/.test(rp)) throw new Error('responder: no puede reutilizar el editor de vencimiento — recordar y responder son cosas distintas');
+    if (!/it\.replies\.push\(\{ at: Date\.now\(\), by: "yo"/.test(rp))
+      throw new Error('responder: cada entrada se sella con su instante y su autor, automáticamente');
+    if (/\.replies\[[^\]]*\]\s*=/.test(rp) || /r\.t = /.test(rp))
+      throw new Error('responder: una entrada ya escrita no se edita — si se pudiera reescribir no serviría como registro');
+    if (!/it\.replies\.splice\(0, it\.replies\.length - 50\)/.test(rp))
+      throw new Error('responder: el hilo debe tener tope, o una tarea puede engordar el archivo sin freno');
+    if (!/type="date"/.test(src.match(/const setDue = \(it, li\) => \{[\s\S]*?\n  \};/)[0]))
+      throw new Error('el editor de vencimiento sigue siendo el de la FECHA, y solo el de la fecha');
+    // el de vencimiento ya no obliga a adivinar que se cierra con Esc
+    if (!/class="mini due-x"/.test(src)) throw new Error('el editor de vencimiento necesita un cierre visible, no solo Esc');
+    // la conversación NO viaja en packs ni en escritorios compartidos: la proyección rehace el ítem
+    for (const m of src.match(/data\.items = \(Array\.isArray\(d\.items\)[^;]*;/g) || [])
+      if (/replies/.test(m)) throw new Error('responder: la conversación no puede viajar en packs ni al compartir');
 
     // ETIQUETAS: el editor tiene que OFRECER las que ya existen, no depender de la memoria
     const te = src.match(/function editWidgetTags\(w, el\)\{[\s\S]*?\n\}/)[0];
@@ -2305,7 +2311,28 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
     if (!/tag-pick/.test(te)) throw new Error('etiquetas: debe pintarse la lista de etiquetas marcables');
     if (!/normTags\(input\.value\)/.test(te))
       throw new Error('etiquetas: marcar un chip debe escribir en el MISMO campo, para que solo haya una fuente');
-    console.log('OK responder por tarea (sin campo nuevo, acumulativo) + etiquetas ofrecidas del catálogo global');
+    console.log('OK conversación por tarea (editor propio, entradas selladas e inmutables, con tope y fuera de packs) + etiquetas ofrecidas');
+  }
+
+  // --- 0.48.2: clic derecho en el escritorio ---
+  {
+    const ctx = src.match(/function openCtx\(x, y\)\{[\s\S]*?\n\}/)[0];
+    // REENVÍA, no reimplementa: si alguien copiara aquí la lógica de ordenar o de la papelera,
+    // habría dos versiones que pueden divergir (misma regla que el panel de archivos de 0.45.0)
+    for (const cmd of ['openMenu\\("start"', 'openMenu\\("palette"\\)', 'orderSpace\\(\\)', 'foldAll\\(\\)', 'openTrash\\(\\)'])
+      if (!new RegExp(cmd).test(ctx)) throw new Error('clic derecho: debe reenviar a ' + cmd + ', no reimplementarlo');
+    if (/markDirty\(|state\.widgets\.push|addWidget\(/.test(ctx))
+      throw new Error('clic derecho: el menú no ejecuta nada por su cuenta, solo llama a comandos existentes');
+    // guardas: táctil, encima de una ventana, y vista de solo lectura
+    const wire = src.match(/\$\("#desktop"\)\.addEventListener\("contextmenu"[\s\S]*?\n  \}\);/)[0];
+    if (!/isMobile\(\)/.test(wire)) throw new Error('clic derecho: en táctil no hay clic derecho que interceptar');
+    if (!/e\.target\.closest\("\.win"\)/.test(wire))
+      throw new Error('clic derecho: encima de una ventana debe mandar el menú del navegador (copiar/pegar/inspeccionar)');
+    if (!/viewIsMutable\(currentView\(\)\)/.test(wire))
+      throw new Error('clic derecho: en un escritorio SEGUIDO no se puede ordenar ni añadir');
+    if (!/if \(\$\("#ctx-menu"\)\.classList\.contains\("open"\)\)\{ closeCtx\(\); return; \}/.test(src))
+      throw new Error('clic derecho: Esc debe cerrarlo antes que cualquier otra cosa');
+    console.log('OK clic derecho en el escritorio (reenvía a los comandos existentes, con sus tres guardas)');
   }
 
   // --- 0.48.0: conversión de unidades clínicas ---
