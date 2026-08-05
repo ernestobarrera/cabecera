@@ -2286,6 +2286,28 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
   ['state', 'activeView', 'subViewId', 'subViewSnapshot', 'uid', 'blankSpace', 'toast', 'renderAll', 'markDirty'].forEach(k => { delete globalThis[k]; });
   console.log('OK D5b-B copiar (espacio propio nuevo, vuelve a vista propia, ids regenerados, derivedFrom)');
 
+  // --- 0.48.1: responder a una tarea, y etiquetas que se ofrecen ---
+  {
+    // RESPONDER no puede estrenar campo: la conversación vive en `it.note`, que ya existía
+    const rep = src.match(/li\.querySelector\("\.it-reply"\)\.addEventListener[\s\S]*?\n      \}\);/)[0];
+    if (/it\.(reply|replies|thread|comments)/.test(rep))
+      throw new Error('responder: no debe crear un campo nuevo — la conversación se acumula en it.note');
+    if (!/setDue\(it, li, true\)/.test(rep)) throw new Error('responder: debe abrir el editor con la nota enfocada');
+    // y NO puede reemplazar lo anterior: se concatena
+    if (!/\.concat\(sello\)/.test(rep) || /ta\.value = sello/.test(rep))
+      throw new Error('responder: la respuesta se AÑADE, nunca sustituye lo ya escrito');
+    // el editor sigue guardando en it.note con su tope
+    if (!/if \(n\) it\.note = n\.slice\(0, 1000\)/.test(src)) throw new Error('responder: se mantiene el tope de la nota');
+
+    // ETIQUETAS: el editor tiene que OFRECER las que ya existen, no depender de la memoria
+    const te = src.match(/function editWidgetTags\(w, el\)\{[\s\S]*?\n\}/)[0];
+    if (!/allTags\(\)/.test(te)) throw new Error('etiquetas: el editor debe ofrecer el catálogo ya existente');
+    if (!/tag-pick/.test(te)) throw new Error('etiquetas: debe pintarse la lista de etiquetas marcables');
+    if (!/normTags\(input\.value\)/.test(te))
+      throw new Error('etiquetas: marcar un chip debe escribir en el MISMO campo, para que solo haya una fuente');
+    console.log('OK responder por tarea (sin campo nuevo, acumulativo) + etiquetas ofrecidas del catálogo global');
+  }
+
   // --- 0.48.0: conversión de unidades clínicas ---
   {
     eval('globalThis.CLIN_UNITS = ' + src.match(/const CLIN_UNITS = (\[[\s\S]*?\n\]);/)[1]);

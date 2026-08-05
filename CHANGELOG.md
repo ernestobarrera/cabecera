@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.48.1] - 2026-08-05 — responder a una tarea, etiquetas que se ofrecen solas, y arreglos de la calculadora
+
+- **Nuevo botón 💬 en cada tarea: responder.** Escribes tu respuesta y se guarda **con la fecha delante y sin borrar lo anterior**, así que una tarea acumula la conversación en lugar de una nota suelta. Cuando una tarea tiene conversación, aparece un 💬 junto a su texto: pasa el ratón para leerla entera, o haz clic para contestar. Ya no hace falta copiar una tarea a otra lista para comentarla.
+- **Las etiquetas ya no dependen de tu memoria.** Al editarlas se muestran **todas las que ya usas, en cualquier escritorio**, para marcarlas o desmarcarlas con un clic; el campo de texto sigue ahí para crear una nueva. Antes era un campo en blanco, y bastaba escribir «clinica» donde otro día pusiste «clínica» para partir en dos el mismo eje.
+- **Calculadora, tres correcciones de lo publicado esta misma mañana:** el teclado numérico **no desaparecía** al abrir Historial o Unidades y empujaba los campos fuera de la ventana; teclear en un campo de conversión **escribía también en el visor** de la calculadora; y la lista desplegable de magnitudes se veía **con muy poco contraste**, porque el sistema la pintaba con su propio tema. Además, al abrir un panel **la ventana crece sola** si sus campos no caben.
+
 ## [0.48.0] - 2026-08-05 — las opciones de cada ventana dejan de estar escondidas, y la calculadora se vuelve clínica
 
 - **Nuevo botón ⋯ en la barra de título de cada ventana**, siempre visible. Despliega lo que antes solo aparecía al pasar el ratón y era, en la práctica, invisible: **etiquetas, color de ventana, cabecera ⓘ y marcar como privado**. Ninguna de esas cuatro cosas se podía hacer desde ningún otro sitio, así que quien no descubría el botón no sabía que existían. De paso la barra pasa de ocho botones a cinco. Un widget ya marcado como privado sigue enseñando su 👁 en reposo, porque eso es estado y no una opción.

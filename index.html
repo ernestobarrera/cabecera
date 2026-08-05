@@ -76,7 +76,10 @@ body{font-family:var(--font); color:var(--text); background:#10131a}
 .tag-chip{font-size:11px; padding:2px 8px; border-radius:20px; border:1px solid var(--border-soft); background:rgba(255,255,255,.05); color:var(--text-dim); cursor:pointer; font-family:var(--font)}
 .tag-chip:hover{border-color:var(--accent); color:var(--text)}
 .tag-chip.on{background:var(--accent); color:#0b1220; border-color:var(--accent); font-weight:600}
-.tag-editor{display:flex; gap:6px; align-items:center; padding:8px 10px; border-bottom:1px solid var(--border-soft); background:rgba(0,0,0,.16)}
+.tag-editor{display:flex; flex-direction:column; gap:7px; padding:8px 10px; border-bottom:1px solid var(--border-soft); background:rgba(0,0,0,.16)}
+.tag-row{display:flex; gap:6px; align-items:center}
+.tag-pick{display:flex; flex-wrap:wrap; gap:5px; max-height:88px; overflow:auto}
+.tag-pick.empty{color:var(--text-dim); font-size:11.5px; line-height:1.45}
 .tag-editor input{flex:1; min-width:0; padding:6px 8px; border-radius:8px; border:1px solid var(--border-soft); background:rgba(0,0,0,.25); color:var(--text); font-family:var(--font); font-size:12.5px}
 .tag-editor input:focus{border-color:var(--accent); outline:none}
 #tb-filter{color:var(--accent); border-color:var(--accent); background:var(--accent-soft); gap:8px}
@@ -351,7 +354,10 @@ ul.plain{list-style:none}
 .todo-it .due.today{background:rgba(240,194,94,.20); color:#f0c25e}
 .todo-it .due.future{background:rgba(255,255,255,.06); color:var(--text-dim)}
 .todo-it .due.alarm{border:1px solid rgba(90,169,247,.35)}
-.todo-it .task-note-mark{font-size:11px; color:var(--text-dim)}
+.todo-it .task-note-mark{font-size:11px; color:var(--text-dim); cursor:pointer; flex-shrink:0}
+.todo-it .task-note-mark:hover{color:var(--accent)}
+/* el 💬 de responder se ve siempre en «probar»… no: se ve como los demás, pero la MARCA de que
+   ya hay conversación sí es permanente, porque es contenido, no una acción. */
 .todo-it .it-due{border:none; background:none; color:var(--text-dim); cursor:pointer; font-size:12px; padding:2px 4px; border-radius:6px; opacity:0; flex-shrink:0}
 .todo-it:hover .it-due{opacity:.8}
 .todo-it .it-due:hover{opacity:1; color:var(--text)}
@@ -627,12 +633,18 @@ ul.plain{list-style:none}
   font-size:24px; text-align:right; overflow:hidden; white-space:nowrap; min-height:48px}
 .calc:focus .calc-dsp{border-color:var(--accent)}
 .calc-grid{flex:1; display:grid; grid-template-columns:repeat(4,1fr); gap:6px}
+/* [hidden] es un atributo, pero  le gana: sin esto el teclado seguía ahí y el panel
+   de unidades quedaba empujado fuera de la ventana. */
+.calc-grid[hidden]{display:none}
 .calc-tabs{display:flex; gap:6px; margin-top:8px}
 .calc-hist,.calc-conv{flex:1; overflow:auto; font-size:12.5px}
 .calc-h{padding:5px 7px; border-radius:7px; border:1px solid var(--border-soft); margin-bottom:5px; cursor:pointer; color:var(--text-dim)}
 .calc-h:hover{border-color:var(--accent); color:var(--text)}
 .calc-empty{color:var(--text-dim); font-size:12px; padding:6px 2px; line-height:1.5}
 .calc-u{width:100%; padding:6px 8px; border-radius:8px; border:1px solid var(--border-soft); background:rgba(0,0,0,.25); color:var(--text); font-family:var(--font); font-size:12.5px}
+/* la lista desplegada la pinta el sistema con SU tema: sobre fondo claro, el texto claro del sitio
+   se volvía ilegible. Se fija el par de colores explícitamente. */
+.calc-u option{background:#161b24; color:#e8ecf3}
 .calc-pair{display:flex; align-items:flex-end; gap:6px; margin-top:8px}
 .calc-pair label{flex:1; min-width:0; display:flex; flex-direction:column; gap:3px; font-size:11px; color:var(--text-dim)}
 .calc-pair input{width:100%; box-sizing:border-box; padding:6px 8px; border-radius:8px; border:1px solid var(--border-soft); background:rgba(0,0,0,.25); color:var(--text); font-family:var(--font); font-size:13px}
@@ -1568,7 +1580,7 @@ function syncUI(mode, txt){
    reaparece) y si Recargar está activo. El descarte ✕ vive solo en memoria de la sesión.
    Demora asumida: la CDN de Pages puede servir la versión vieja hasta ~10 min aun con
    no-store (gobierna la caché del navegador, no la CDN); para pestañas de días, irrelevante. */
-const APP_VERSION = "0.48.0";
+const APP_VERSION = "0.48.1";
 let newVersionDetected = null;   // versión superior detectada; detiene futuras consultas
 let verDismissed = false;        // ✕: solo esta sesión — nunca persistido en disco
 let verCheckInflight = false;    // sin consultas concurrentes
@@ -3192,9 +3204,31 @@ function editWidgetTags(w, el){
   el.querySelectorAll(".tag-editor").forEach(x => x.remove());
   const ed = document.createElement("div");
   ed.className = "tag-editor";
-  ed.innerHTML = `<input type="text" value="${esc((w.tags || []).join(", "))}" placeholder="etiquetas separadas por comas"><button class="mini ok">Guardar</button><button class="mini clear">Quitar</button>`;
+  /* 0.48.1 — las etiquetas dependían de la MEMORIA: un campo de texto en blanco no te dice cuáles
+     ya existen, así que escribes «clinica» donde antes pusiste «clínica» y el eje transversal se
+     rompe solo. Ahora, como en los gestores de notas, el editor ofrece las que ya usas en
+     CUALQUIER escritorio (`allTags()` ya era global) para marcarlas o desmarcarlas. El campo de
+     texto sigue ahí para crear una nueva: se ofrece lo conocido, no se impide lo nuevo. */
+  const puestas = new Set(w.tags || []);
+  const catalogo = allTags();
+  const sugeridas = catalogo.length
+    ? `<div class="tag-pick">${catalogo.map(t => `<button class="tag-chip${puestas.has(t) ? " on" : ""}" data-t="${esc(t)}">${esc(t)}</button>`).join("")}</div>`
+    : `<div class="tag-pick empty">Aún no has usado ninguna etiqueta. Escribe la primera aquí abajo.</div>`;
+  ed.innerHTML = sugeridas
+    + `<div class="tag-row"><input type="text" value="${esc((w.tags || []).join(", "))}" placeholder="etiquetas separadas por comas"><button class="mini ok">Guardar</button><button class="mini clear">Quitar</button></div>`;
   el.querySelector(".win-title").after(ed);
   const input = ed.querySelector("input");
+  // marcar un chip escribe en el campo: sigue habiendo UN solo sitio donde vive la verdad
+  ed.querySelectorAll(".tag-pick .tag-chip").forEach(chip => chip.addEventListener("click", e => {
+    e.stopPropagation();
+    const t = chip.dataset.t;
+    const act = normTags(input.value);
+    const i = act.indexOf(t);
+    if (i >= 0) act.splice(i, 1); else act.push(t);
+    input.value = act.join(", ");
+    chip.classList.toggle("on", i < 0);
+    input.focus();
+  }));
   const commit = () => {
     const tags = normTags(input.value);
     w.tags = tags.length ? tags : undefined;
@@ -5104,12 +5138,12 @@ function bodyTodo(w, el){
     if (days === 0) return { cls: "today" + alarm, label: "hoy" + time };
     return { cls: "future" + alarm, label: new Date(it.due + "T00:00:00").toLocaleDateString("es-ES", { day: "numeric", month: "short" }) + time };
   };
-  const setDue = (it, li) => {
+  const setDue = (it, li, enfocarNota) => {
     el.querySelectorAll(".due-editor").forEach(x => x.remove());
     const ed = document.createElement("div");
     ed.className = "due-editor";
     ed.innerHTML = `<div class="due-grid"><label>Fecha<input class="dd" type="date" value="${esc(it.due || "")}"></label><label>Aviso<input class="hh" type="time" value="${esc(it.remind || "")}"></label></div>
-      <label>Nota<textarea class="nn" placeholder="Detalle privado de esta tarea...">${esc(it.note || "")}</textarea></label>
+      <label>Nota y respuestas<textarea class="nn" placeholder="Escribe aquí tu respuesta o una nota. Lo anterior no se borra.">${esc(it.note || "")}</textarea></label>
       <div class="due-actions"><button class="mini ok" type="button">Guardar</button><button class="mini clear" type="button">Quitar fecha</button><button class="mini note-clear" type="button">Quitar nota</button></div>`;
     li.appendChild(ed);
     const date = ed.querySelector(".dd"), time = ed.querySelector(".hh"), note = ed.querySelector(".nn");
@@ -5135,6 +5169,7 @@ function bodyTodo(w, el){
     ed.querySelector(".note-clear").addEventListener("click", () => {
       delete it.note; note.value = ""; commit();
     });
+    if (enfocarNota){ note.focus(); note.setSelectionRange(note.value.length, note.value.length); return; }
     date.focus();
     if (date.showPicker) try{ date.showPicker(); }catch(e){}
   };
@@ -5259,9 +5294,9 @@ function bodyTodo(w, el){
       // ancho ni competir con el vencimiento, que es lo que sí exige acción
       const alta = it.created ? ` title="Anotada el ${esc(fechaLarga(it.created))}"` : "";
       li.innerHTML = `<span class="it-drag" draggable="${view === "pend"}" title="${view === "pend" ? "Arrastrar para reordenar (o usa ↑ ↓)" : "En «Hechas» no se reordena"}">⋮⋮</span><input type="checkbox" ${it.done ? "checked" : ""}><span class="t"${alta}>${linkifyEsc(it.t)}</span>`
-        + (it.note ? `<span class="task-note-mark" title="${esc(it.note)}">i</span>` : "")
+        + (it.note ? `<span class="task-note-mark" title="${esc(it.note)}\n\n(clic para responder o leer entero)">💬</span>` : "")
         + (dm ? `<span class="due ${dm.cls}">${dm.label}</span>` : "")
-        + `<span class="it-actions"><button class="it-color" title="Color"><span class="cdot"></span></button><button class="it-edit" title="Editar">✎</button><button class="it-up" title="Subir">↑</button><button class="it-down" title="Bajar">↓</button><button class="it-due" title="Fecha, nota y aviso">📅</button><button class="it-del" title="Borrar">✕</button></span>`;
+        + `<span class="it-actions"><button class="it-color" title="Color"><span class="cdot"></span></button><button class="it-edit" title="Editar">✎</button><button class="it-reply" title="Responder a esta tarea (se añade fechado, sin borrar lo anterior)">💬</button><button class="it-up" title="Subir">↑</button><button class="it-down" title="Bajar">↓</button><button class="it-due" title="Fecha, nota y aviso">📅</button><button class="it-del" title="Borrar">✕</button></span>`;
       const drag = li.querySelector(".it-drag");
       drag.addEventListener("dragstart", e => {
         if (view !== "pend"){ e.preventDefault(); return; }
@@ -5299,6 +5334,23 @@ function bodyTodo(w, el){
       li.querySelector(".it-up").addEventListener("click", e => { e.stopPropagation(); moveItem(it, -1); });
       li.querySelector(".it-down").addEventListener("click", e => { e.stopPropagation(); moveItem(it, 1); });
       li.querySelector(".it-due").addEventListener("click", e => { e.stopPropagation(); setDue(it, li); });
+      /* 0.48.1 — RESPONDER a una tarea. El canal ya existía (`it.note`), pero vivía detrás de un
+         botón que se llama «fecha» y se pisaba a sí mismo: contestar obligaba a copiar la tarea a
+         otra lista. Ahora hay un 💬 propio que ANTEPONE la fecha y NO borra lo anterior, así que
+         una tarea acumula una conversación en vez de una nota suelta. Sin campo nuevo: el modelo
+         de datos no se toca, y lo que ya había escrito sigue donde estaba. */
+      li.querySelector(".it-reply").addEventListener("click", e => {
+        e.stopPropagation();
+        setDue(it, li, true);
+        const ta = li.querySelector(".due-editor .nn");
+        if (!ta) return;
+        const sello = `\n— ${new Date().toLocaleDateString("es-ES", { day: "numeric", month: "short" })}: `;
+        ta.value = (ta.value.trim() ? ta.value.replace(/\s+$/, "") : "").concat(sello);
+        ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length);
+        ta.scrollTop = ta.scrollHeight;
+      });
+      const marca = li.querySelector(".task-note-mark");
+      if (marca) marca.addEventListener("click", e => { e.stopPropagation(); setDue(it, li, true); });
       li.querySelector(".it-del").addEventListener("click", () => {
         const idx = w.data.items.indexOf(it);
         if (idx >= 0){
@@ -8201,6 +8253,9 @@ function bodyCalc(w, el){
   }
   // teclado: la ventana enfocada captura números y operadores
   box.addEventListener("keydown", e => {
+    // si estás escribiendo en un campo del panel (conversión), esas teclas son SUYAS: sin esto,
+    // teclear 180 en mg/dL lo escribía además en el visor de la calculadora
+    if (e.target !== box && e.target.closest("input, select, textarea")) return;
     const k = e.key;
     if (/^[0-9]$/.test(k)) digit(k);
     else if (k === "." || k === ",") digit(".");
@@ -8241,6 +8296,10 @@ function bodyCalc(w, el){
     elm.hidden = !abrir; otro.hidden = true;
     grid.hidden = abrir;
     if (abrir && elm === hist) pintaHist();
+    // Abrir un panel no puede dejar los campos fuera de la ventana: si no caben, la ventana crece
+    // sola —la misma maquinaria que usa la lista de tareas, con su empuje por colisión y su tope—.
+    // Si no cupiera en el lienzo, se abstiene y al menos el panel es desplazable.
+    if (abrir) growWidgetToContent(w, el);
   };
   el.querySelector(".ch").addEventListener("click", () => panel(hist, conv));
   el.querySelector(".cc").addEventListener("click", () => panel(conv, hist));
