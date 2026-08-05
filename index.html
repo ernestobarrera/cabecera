@@ -91,10 +91,17 @@ body{font-family:var(--font); color:var(--text); background:#10131a}
   border-radius:6px; cursor:pointer; line-height:1}
 .win-btn:hover{background:rgba(255,255,255,.1); color:var(--text)}
 .win-btn.close:hover{background:var(--danger); color:#fff}
-.win-btn.tagbtn,.win-btn.colorbtn,.win-btn.descbtn{opacity:0; pointer-events:none; transition:opacity .14s ease, background .14s ease, color .14s ease}
-.win:hover .win-btn.tagbtn,.win:focus-within .win-btn.tagbtn,
-.win:hover .win-btn.colorbtn,.win:focus-within .win-btn.colorbtn,
-.win:hover .win-btn.descbtn,.win:focus-within .win-btn.descbtn{opacity:1; pointer-events:auto}
+/* Los cuatro «de más» ya no dependen del ratón: se despliegan con el ⋯, que sí está siempre.
+   Se mantiene la transición para que aparezcan con calma, no de golpe. */
+.win-btn.tagbtn,.win-btn.colorbtn,.win-btn.descbtn,.win-btn.privbtn{
+  width:0; opacity:0; pointer-events:none; overflow:hidden; padding:0;
+  transition:opacity .14s ease, width .14s ease, background .14s ease, color .14s ease}
+.win.show-more .win-btn.tagbtn,.win.show-more .win-btn.colorbtn,
+.win.show-more .win-btn.descbtn,.win.show-more .win-btn.privbtn{width:24px; opacity:1; pointer-events:auto}
+/* un widget ya marcado como privado enseña su 👁 siempre: es estado, no una opción escondida */
+.win.priv .win-btn.privbtn{width:24px; opacity:.75; pointer-events:auto}
+.win-btn.morebtn{opacity:.55}
+.win:hover .win-btn.morebtn,.win.show-more .win-btn.morebtn{opacity:1}
 .win-btn.colorbtn{display:inline-flex; align-items:center; justify-content:center}
 .cdot{display:inline-block; width:13px; height:13px; border-radius:50%; flex-shrink:0; box-sizing:border-box;
   border:1px solid rgba(255,255,255,.4);
@@ -191,11 +198,10 @@ body{font-family:var(--font); color:var(--text); background:#10131a}
 .dock-btn:hover{background:var(--accent-soft); border-color:var(--accent); color:var(--text)}
 #desk-privacy.on{background:var(--accent-soft); border-color:var(--accent); color:var(--text)}
 /* --- privacidad escénica: el overlay OPACO es la garantía (visual, no cifrado) --- */
-.win-btn.privbtn{opacity:0; pointer-events:none; transition:opacity .14s ease}
-.win:hover .win-btn.privbtn,.win:focus-within .win-btn.privbtn{opacity:1; pointer-events:auto}
-.win.priv .win-btn.privbtn{opacity:.45; pointer-events:auto}   /* indicador en reposo: se ve qué está marcado */
-.win.priv:hover .win-btn.privbtn{opacity:1}
-@media (any-hover:none){ .win-btn.privbtn{opacity:.45; pointer-events:auto} }
+/* 0.48.0: privado vive dentro del ⋯ como los otros tres (regla arriba). Aquí solo queda el
+   realce del que YA está marcado, que es estado y no opción. */
+.win.priv:hover .win-btn.privbtn,.win.priv.show-more .win-btn.privbtn{opacity:1}
+@media (any-hover:none){ .win.priv .win-btn.privbtn{width:24px; opacity:.6; pointer-events:auto} }
 #desktop.privacy-on .win.priv .win-body{pointer-events:none; overflow:hidden; position:relative}
 #desktop.privacy-on .win.priv .win-body > *{visibility:hidden}
 #desktop.privacy-on .win.priv .win-body::after{content:"👁 privado"; position:absolute; inset:0; display:flex;
@@ -266,6 +272,10 @@ body{font-family:var(--font); color:var(--text); background:#10131a}
 .btn.primary:hover{filter:brightness(1.1)}
 .btn.danger{color:var(--danger); border-color:rgba(243,108,108,.4)}
 .hint{font-size:12px; color:var(--text-dim); margin-top:10px; line-height:1.5}
+/* El modo «solo navegador» es una decisión con consecuencias (se pierde al limpiar el navegador),
+   así que se avisa DONDE se toma, no en la guía: quien elige «Ahora no» tiene que leerlo. */
+.warn-local{font-size:12.5px; line-height:1.55; margin-top:12px; padding:10px 12px; border-radius:9px;
+  border:1px solid rgba(240,194,94,.35); background:rgba(240,194,94,.08); color:var(--text)}
 /* diálogo propio del sitio (sustituye confirm/prompt nativos): coherente con el resto de modales */
 .dlg-panel{width:min(440px, 92vw)}
 .dlg-field{display:flex; flex-direction:column; gap:5px; font-size:12px; color:var(--text-dim); margin-top:12px}
@@ -617,6 +627,18 @@ ul.plain{list-style:none}
   font-size:24px; text-align:right; overflow:hidden; white-space:nowrap; min-height:48px}
 .calc:focus .calc-dsp{border-color:var(--accent)}
 .calc-grid{flex:1; display:grid; grid-template-columns:repeat(4,1fr); gap:6px}
+.calc-tabs{display:flex; gap:6px; margin-top:8px}
+.calc-hist,.calc-conv{flex:1; overflow:auto; font-size:12.5px}
+.calc-h{padding:5px 7px; border-radius:7px; border:1px solid var(--border-soft); margin-bottom:5px; cursor:pointer; color:var(--text-dim)}
+.calc-h:hover{border-color:var(--accent); color:var(--text)}
+.calc-empty{color:var(--text-dim); font-size:12px; padding:6px 2px; line-height:1.5}
+.calc-u{width:100%; padding:6px 8px; border-radius:8px; border:1px solid var(--border-soft); background:rgba(0,0,0,.25); color:var(--text); font-family:var(--font); font-size:12.5px}
+.calc-pair{display:flex; align-items:flex-end; gap:6px; margin-top:8px}
+.calc-pair label{flex:1; min-width:0; display:flex; flex-direction:column; gap:3px; font-size:11px; color:var(--text-dim)}
+.calc-pair input{width:100%; box-sizing:border-box; padding:6px 8px; border-radius:8px; border:1px solid var(--border-soft); background:rgba(0,0,0,.25); color:var(--text); font-family:var(--font); font-size:13px}
+.calc-pair input:focus{border-color:var(--accent); outline:none}
+.calc-eq{color:var(--text-dim); padding-bottom:7px}
+.calc-src{margin-top:8px; font-size:11px; color:var(--text-dim); line-height:1.45}
 .calc-k{border-radius:9px; border:1px solid var(--border-soft); background:rgba(255,255,255,.05); color:var(--text);
   font-size:15px; cursor:pointer; font-family:var(--font)}
 .calc-k:hover{background:rgba(255,255,255,.12)}
@@ -778,6 +800,7 @@ ul.plain{list-style:none}
       <button class="btn primary" id="boot-pick">📁 Conectar carpeta</button>
       <button class="btn" id="boot-close">Ahora no</button>
     </div>
+    <p class="warn-local"><b>Si eliges «Ahora no», tus datos vivirán solo dentro de este navegador.</b> Funciona igual de bien, pero conviene que sepas lo que implica: no se sincronizan con otro equipo, y <b>se borran si limpias los datos de navegación</b> o si usas una ventana privada. Puedes conectar la carpeta más adelante desde la barra inferior, y también guardar copias con «Guardar copia» — házlo de vez en cuando si te quedas en este modo.</p>
     <div class="hint" id="boot-hint">Requiere Edge o Chrome. El navegador te pedirá permiso sobre esa carpeta; márcalo como "Permitir siempre" si te lo ofrece.</div>
   </div>
 </div>
@@ -1531,7 +1554,7 @@ function syncUI(mode, txt){
     ok: "Sincronización activa. Clic para comprobar ahora",
     saving: "Guardando cambios",
     err: "Revisar sincronización o conflicto",
-    local: "Solo local. Clic para sincronizar equipos"
+    local: "Solo en este navegador: no se sincroniza y se pierde si limpias los datos de navegación. Clic para conectar una carpeta"
   };
   $("#tb-sync").title = hints[mode] || "Estado de sincronización";
   renderVersionNotice();   // choke-point: toda transición de guardado/conflicto pasa por aquí
@@ -1545,7 +1568,7 @@ function syncUI(mode, txt){
    reaparece) y si Recargar está activo. El descarte ✕ vive solo en memoria de la sesión.
    Demora asumida: la CDN de Pages puede servir la versión vieja hasta ~10 min aun con
    no-store (gobierna la caché del navegador, no la CDN); para pestañas de días, irrelevante. */
-const APP_VERSION = "0.47.1";
+const APP_VERSION = "0.48.0";
 let newVersionDetected = null;   // versión superior detectada; detiene futuras consultas
 let verDismissed = false;        // ✕: solo esta sesión — nunca persistido en disco
 let verCheckInflight = false;    // sin consultas concurrentes
@@ -3981,12 +4004,24 @@ function buildWindow(w){
   if (w.priv) el.classList.add("priv");
   el.innerHTML = `
     <div class="win-title" title="Doble clic para renombrar"><span class="ico">${t.ico}</span><span class="tname">${esc(shownName)}</span><span class="sp"></span>
-      ${dictBtn}${descBtn}${colorBtn}${privBtn}<button class="win-btn tagbtn" title="Etiquetas">🏷️</button><button class="win-btn maxb" title="${w.max ? "Restaurar tamaño" : "Maximizar"}">${w.max ? "❐" : "⛶"}</button><button class="win-btn collapse" title="Plegar / desplegar">${w.collapsed ? "▸" : "▾"}</button><button class="win-btn close" title="Cerrar">✕</button></div>
+      ${dictBtn}<button class="win-btn morebtn" title="Más opciones: etiquetas, color, cabecera, privado">⋯</button>${descBtn}${colorBtn}${privBtn}<button class="win-btn tagbtn" title="Etiquetas">🏷️</button><button class="win-btn maxb" title="${w.max ? "Restaurar tamaño" : "Maximizar"}">${w.max ? "❐" : "⛶"}</button><button class="win-btn collapse" title="Plegar / desplegar">${w.collapsed ? "▸" : "▾"}</button><button class="win-btn close" title="Cerrar">✕</button></div>
     <div class="win-tags"></div>
     <div class="win-body"></div>
     <div class="win-resize" data-rz="se"></div>
     <div class="rz rz-n" data-rz="n"></div><div class="rz rz-s" data-rz="s"></div><div class="rz rz-e" data-rz="e"></div><div class="rz rz-w" data-rz="w"></div><div class="rz rz-ne" data-rz="ne"></div><div class="rz rz-nw" data-rz="nw"></div><div class="rz rz-sw" data-rz="sw"></div>`;
   if (w.collapsed) el.classList.add("collapsed");
+  /* 0.48.0 — «esconder ≠ ordenar». Etiquetas, color, cabecera y privado estaban a opacidad cero:
+     medio widget era indescubrible, y ninguno de los cuatro tenía OTRA puerta (la paleta filtra
+     por etiquetas que ya existen, pero no sirve para poner la primera). Ernesto, que ha escrito
+     el proyecto, no encontraba el botón de etiquetas — ese es el dato. El criterio que se aplica
+     ahora: solo puede esconderse lo que se alcanza por otra vía, actúa sobre algo ya visible y
+     compra calma real. Estos cuatro fallaban lo primero, así que pasan a un ⋯ SIEMPRE visible,
+     que además baja la barra de 8 botones a 5. */
+  el.querySelector(".morebtn").addEventListener("click", e => {
+    e.stopPropagation();
+    el.classList.toggle("show-more");
+    if (el.classList.contains("show-more")) el.querySelector(".tagbtn").focus();
+  });
   el.querySelector(".tagbtn").addEventListener("click", e => { e.stopPropagation(); editWidgetTags(w, el); });
   if (colorable) el.querySelector(".colorbtn").addEventListener("click", e => { e.stopPropagation(); editWinColor(w, el); });
   if (colorable) el.querySelector(".descbtn").addEventListener("click", e => { e.stopPropagation(); editNoteDesc(w, el); });
@@ -8058,9 +8093,50 @@ function startTaskAlerts(){
 }
 
 /* --- Calculadora (ejecución inmediata, sin eval) --- */
+/* Conversión de unidades CLÍNICAS (0.48.0). No es un conversor genérico de metros y libras: son
+   las magnitudes que aparecen al leer una analítica extranjera o un artículo anglosajón, donde el
+   sistema convencional (mg/dL) y el internacional (mmol/L) conviven y confundirlos tiene coste.
+
+   CADA FACTOR ES EL PESO MOLECULAR DE LA SUSTANCIA, no una constante inventada: convertir de masa
+   a cantidad es dividir por él. Se dejan a la vista en la propia interfaz —y aquí— para que
+   cualquiera pueda comprobarlos, que es la condición que puso Ernesto. Fuente de los pesos:
+   valores estándar de los propios laboratorios (IFCC / unidades SI), los mismos que publican las
+   tablas de conversión de las revistas médicas.
+
+   HbA1c es el caso aparte y por eso lleva su propia fórmula: NGSP (%) e IFCC (mmol/mol) NO se
+   relacionan por un peso molecular sino por la ecuación maestra acordada,
+   IFCC = (NGSP − 2,15) × 10,929. Meterla como un factor más habría sido un error silencioso.
+
+   Redondeo: se muestran los decimales que el laboratorio usa para esa magnitud, no todos los que
+   da el float — un potasio con cuatro decimales es ruido que finge precisión. */
+const CLIN_UNITS = [
+  { id: "glucosa",     n: "Glucosa",        a: "mg/dL", b: "mmol/L", f: 18.016,  dec: [0, 2], src: "peso molecular 180,16" },
+  { id: "creatinina",  n: "Creatinina",     a: "mg/dL", b: "µmol/L", f: 0.011312, dec: [2, 0], src: "peso molecular 113,12" },
+  { id: "colesterol",  n: "Colesterol",     a: "mg/dL", b: "mmol/L", f: 38.67,   dec: [0, 2], src: "peso molecular 386,65" },
+  { id: "trigliceridos", n: "Triglicéridos", a: "mg/dL", b: "mmol/L", f: 88.57,  dec: [0, 2], src: "peso molecular 885,7" },
+  { id: "urea",        n: "Urea / BUN",     a: "mg/dL", b: "mmol/L", f: 6.006,   dec: [0, 2], src: "peso molecular 60,06 (urea, no BUN)" },
+  { id: "calcio",      n: "Calcio",         a: "mg/dL", b: "mmol/L", f: 4.008,   dec: [1, 2], src: "peso molecular 40,08" },
+  { id: "bilirrubina", n: "Bilirrubina",    a: "mg/dL", b: "µmol/L", f: 0.05847, dec: [2, 0], src: "peso molecular 584,7" },
+  { id: "acidourico",  n: "Ácido úrico",    a: "mg/dL", b: "µmol/L", f: 0.016811, dec: [1, 0], src: "peso molecular 168,11" },
+  { id: "hba1c",       n: "HbA1c",          a: "%",     b: "mmol/mol", dec: [1, 0], src: "ecuación maestra IFCC-NGSP, no un peso molecular",
+    toB: v => (v - 2.15) * 10.929, toA: v => v / 10.929 + 2.15 }
+];
+// a → b divide por el factor; b → a multiplica. Las que traen fórmula propia la usan. PURAS.
+function clinConvert(u, valor, haciaB){
+  // ojo: Number("") es 0, no NaN — sin este corte, vaciar el campo escribiría un 0 en el otro
+  if (!u || valor === null || valor === undefined || String(valor).trim() === "") return null;
+  const v = Number(valor);
+  if (!Number.isFinite(v)) return null;
+  const r = u.toB ? (haciaB ? u.toB(v) : u.toA(v)) : (haciaB ? v / u.f : v * u.f);
+  if (!Number.isFinite(r)) return null;
+  const d = u.dec[haciaB ? 1 : 0];
+  return Number(r.toFixed(d));
+}
 function bodyCalc(w, el){
-  el.innerHTML = `<div class="calc" tabindex="0"><div class="calc-dsp">0</div><div class="calc-grid"></div></div>`;
+  el.innerHTML = `<div class="calc" tabindex="0"><div class="calc-dsp">0</div><div class="calc-hist" hidden></div><div class="calc-conv" hidden></div><div class="calc-grid"></div>
+    <div class="calc-tabs"><button class="mini ch" title="Últimas operaciones">🕘 Historial</button><button class="mini cc" title="Conversión de unidades clínicas">🧪 Unidades</button></div></div>`;
   const dsp = el.querySelector(".calc-dsp"), grid = el.querySelector(".calc-grid"), box = el.querySelector(".calc");
+  const hist = el.querySelector(".calc-hist"), conv = el.querySelector(".calc-conv");
   let acc = null, op = null, cur = "0", fresh = true;
   const fmt = v => {
     if (!Number.isFinite(v)) return "Error";
@@ -8085,7 +8161,26 @@ function bodyCalc(w, el){
     else if (acc === null || fresh === false) acc = n;
     cur = fmt(acc); op = o; fresh = true; show();
   };
-  const equals = () => { if (op === null) return; cur = fmt(apply(acc, parseFloat(cur), op)); acc = null; op = null; fresh = true; show(); };
+  // El historial es de SESIÓN, no se guarda: una calculadora que persiste lo que has calculado
+  // acaba siendo un registro de lo que estabas mirando, y esto se usa en consulta.
+  const historial = [];
+  const pintaHist = () => {
+    hist.innerHTML = historial.length
+      ? historial.slice(-12).reverse().map(h => `<div class="calc-h" title="Clic para reutilizar el resultado" data-v="${esc(h.r)}">${esc(h.e)} <b>= ${esc(h.r)}</b></div>`).join("")
+      : `<div class="calc-empty">Aquí se irán guardando tus operaciones mientras la ventana esté abierta.</div>`;
+    hist.querySelectorAll(".calc-h").forEach(n => n.addEventListener("click", () => {
+      cur = n.dataset.v; fresh = true; show(); box.focus();
+    }));
+  };
+  const equals = () => {
+    if (op === null) return;
+    const izq = fmt(acc), der = cur;
+    cur = fmt(apply(acc, parseFloat(cur), op));
+    historial.push({ e: `${izq} ${op} ${der}`, r: cur });
+    if (historial.length > 60) historial.shift();
+    pintaHist();
+    acc = null; op = null; fresh = true; show();
+  };
   const clearAll = () => { acc = null; op = null; cur = "0"; fresh = true; show(); };
   const back = () => { if (fresh || cur === "Error") return; cur = cur.length > 1 ? cur.slice(0, -1) : "0"; show(); };
   const pct = () => { cur = fmt(parseFloat(cur) / 100); fresh = false; show(); };
@@ -8120,6 +8215,35 @@ function bodyCalc(w, el){
     else return;
     e.stopPropagation();
   });
+
+  // --- conversión clínica: dos campos vivos, sin botón de «convertir» ---
+  conv.innerHTML = `<select class="calc-u">${CLIN_UNITS.map(u => `<option value="${u.id}">${esc(u.n)}</option>`).join("")}</select>
+    <div class="calc-pair"><label><span class="ua"></span><input class="va" type="number" step="any" inputmode="decimal"></label>
+    <span class="calc-eq">=</span><label><span class="ub"></span><input class="vb" type="number" step="any" inputmode="decimal"></label></div>
+    <div class="calc-src"></div>`;
+  const sel = conv.querySelector(".calc-u"), va = conv.querySelector(".va"), vb = conv.querySelector(".vb");
+  const unidad = () => CLIN_UNITS.find(u => u.id === sel.value) || CLIN_UNITS[0];
+  const pintaUnidad = () => {
+    const u = unidad();
+    conv.querySelector(".ua").textContent = u.a;
+    conv.querySelector(".ub").textContent = u.b;
+    // el factor a la vista, siempre: quien convierte una analítica tiene derecho a comprobarlo
+    conv.querySelector(".calc-src").textContent = "Factor: " + u.src;
+    va.value = ""; vb.value = "";
+  };
+  va.addEventListener("input", () => { const r = clinConvert(unidad(), va.value, true); vb.value = r === null ? "" : r; });
+  vb.addEventListener("input", () => { const r = clinConvert(unidad(), vb.value, false); va.value = r === null ? "" : r; });
+  sel.addEventListener("change", pintaUnidad);
+  pintaUnidad();
+
+  const panel = (elm, otro) => {
+    const abrir = elm.hidden;
+    elm.hidden = !abrir; otro.hidden = true;
+    grid.hidden = abrir;
+    if (abrir && elm === hist) pintaHist();
+  };
+  el.querySelector(".ch").addEventListener("click", () => panel(hist, conv));
+  el.querySelector(".cc").addEventListener("click", () => panel(conv, hist));
   show();
 }
 

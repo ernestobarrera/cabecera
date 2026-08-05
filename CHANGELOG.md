@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.48.0] - 2026-08-05 — las opciones de cada ventana dejan de estar escondidas, y la calculadora se vuelve clínica
+
+- **Nuevo botón ⋯ en la barra de título de cada ventana**, siempre visible. Despliega lo que antes solo aparecía al pasar el ratón y era, en la práctica, invisible: **etiquetas, color de ventana, cabecera ⓘ y marcar como privado**. Ninguna de esas cuatro cosas se podía hacer desde ningún otro sitio, así que quien no descubría el botón no sabía que existían. De paso la barra pasa de ocho botones a cinco. Un widget ya marcado como privado sigue enseñando su 👁 en reposo, porque eso es estado y no una opción.
+- **La calculadora estrena 🕘 Historial**: las últimas operaciones de la sesión, y un clic en cualquiera reutiliza su resultado. No se guarda al cerrar la ventana, a propósito.
+- **Y estrena 🧪 Unidades: conversión de magnitudes clínicas** entre unidades convencionales e internacionales — glucosa, creatinina, colesterol, triglicéridos, urea, calcio, bilirrubina, ácido úrico y HbA1c. Escribes en cualquiera de los dos lados y el otro se actualiza. **El factor empleado se muestra siempre debajo** (es el peso molecular de la sustancia) para que se pueda comprobar, y cada magnitud se redondea con los decimales que usa el laboratorio. La HbA1c es la excepción declarada: se convierte con la ecuación acordada entre las dos escalas, no con un peso molecular.
+- **Aviso claro al elegir «Ahora no»** en la pantalla de sincronización: si tus datos se quedan solo en el navegador, ahora se te dice que no viajan a otro equipo y que **se pierden si limpias los datos de navegación**. El indicador de la barra inferior lo repite al pasar el ratón.
+
 ## [0.47.1] - 2026-08-05 — el widget Markdown ya admite color y cabecera
 
 - **Markdown se pone al nivel de Nota y Tareas:** ahora también puedes darle **color de ventana** y una **cabecera ⓘ** que explique qué guarda ese documento. No había ninguna razón para que fuera el único que no los tenía. Los dos botones viven donde los demás, en la barra de título al pasar el ratón, y la cabecera se edita haciendo clic sobre ella.

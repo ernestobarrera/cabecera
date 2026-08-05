@@ -2286,6 +2286,40 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
   ['state', 'activeView', 'subViewId', 'subViewSnapshot', 'uid', 'blankSpace', 'toast', 'renderAll', 'markDirty'].forEach(k => { delete globalThis[k]; });
   console.log('OK D5b-B copiar (espacio propio nuevo, vuelve a vista propia, ids regenerados, derivedFrom)');
 
+  // --- 0.48.0: conversión de unidades clínicas ---
+  {
+    eval('globalThis.CLIN_UNITS = ' + src.match(/const CLIN_UNITS = (\[[\s\S]*?\n\]);/)[1]);
+    eval('globalThis.clinConvert = ' + pickFn('clinConvert', 'u, valor, haciaB'));
+    const u = id => CLIN_UNITS.find(x => x.id === id);
+    // VALORES DE REFERENCIA COMPROBABLES (los que publican las tablas de conversión clínicas).
+    // Si alguien toca un factor, esto cae: una conversión mal hecha en consulta no es un bug menor.
+    if (clinConvert(u('glucosa'), 100, true) !== 5.55) throw new Error('glucosa: 100 mg/dL deben ser 5,55 mmol/L');
+    if (clinConvert(u('glucosa'), 5.55, false) !== 100) throw new Error('glucosa: 5,55 mmol/L deben volver a 100 mg/dL');
+    if (clinConvert(u('creatinina'), 1, true) !== 88) throw new Error('creatinina: 1 mg/dL deben ser ~88 µmol/L');
+    if (clinConvert(u('colesterol'), 200, true) !== 5.17) throw new Error('colesterol: 200 mg/dL deben ser 5,17 mmol/L');
+    if (clinConvert(u('trigliceridos'), 150, true) !== 1.69) throw new Error('triglicéridos: 150 mg/dL deben ser 1,69 mmol/L');
+    if (clinConvert(u('calcio'), 10, true) !== 2.5) throw new Error('calcio: 10 mg/dL deben ser 2,50 mmol/L');
+    if (clinConvert(u('acidourico'), 6, true) !== 357) throw new Error('ácido úrico: 6 mg/dL deben ser ~357 µmol/L');
+    // HbA1c NO va por peso molecular: usa la ecuación maestra IFCC-NGSP. 7% = 53 mmol/mol.
+    if (clinConvert(u('hba1c'), 7, true) !== 53) throw new Error('HbA1c: 7% deben ser 53 mmol/mol (ecuación maestra, no un factor)');
+    if (clinConvert(u('hba1c'), 53, false) !== 7) throw new Error('HbA1c: 53 mmol/mol deben volver a 7%');
+    if (u('hba1c').f !== undefined) throw new Error('HbA1c no puede tener factor: relacionarla por peso molecular es un error silencioso');
+    // ida y vuelta en todas: convertir y desconvertir no puede derivar más allá del redondeo
+    for (const un of CLIN_UNITS){
+      const ida = clinConvert(un, 100, true), vuelta = clinConvert(un, ida, false);
+      if (Math.abs(vuelta - 100) > 1) throw new Error('ida y vuelta inestable en ' + un.id + ': 100 → ' + ida + ' → ' + vuelta);
+    }
+    // entradas basura no inventan números
+    if (clinConvert(u('glucosa'), '', true) !== null || clinConvert(u('glucosa'), 'abc', true) !== null)
+      throw new Error('conversión: sin número válido no se devuelve resultado');
+    if (clinConvert(null, 5, true) !== null) throw new Error('conversión: sin magnitud no hay resultado');
+    // cada magnitud declara su fuente a la vista: es la condición que puso Ernesto
+    for (const un of CLIN_UNITS)
+      if (!un.src || un.src.length < 8) throw new Error('conversión: ' + un.id + ' debe declarar de dónde sale su factor');
+    ['CLIN_UNITS', 'clinConvert'].forEach(k => { delete globalThis[k]; });
+    console.log('OK unidades clínicas (factores comprobables, HbA1c por ecuación maestra, ida y vuelta estable, fuentes declaradas)');
+  }
+
   // --- 0.47.1: Markdown con color y cabecera ⓘ, como Nota y Tareas ---
   {
     const cl = src.match(/const colorable = [^;]+;/)[0];
