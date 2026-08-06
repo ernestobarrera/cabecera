@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.49.0] - 2026-08-06 — la versión a la vista, la página que no se pierde y el 🤖 que ya no se tapa
+
+- **La versión que estás usando se ve en la barra de abajo.** Tras recargar no había forma de saber si la página que tienes delante es la recién publicada. Ahora está escrita, y **al pulsarla comprueba en el momento** si hay una más nueva: si la hay, se enciende en ámbar y el siguiente clic recarga.
+- **La lista de tareas ya no vuelve a la primera página sola.** Con muchas tareas, cualquier guardado o relectura reconstruye la lista, y eso te devolvía al principio: si estabas en la página 3, había que volver a recorrerla entera. La posición se conserva mientras sea la misma lista (cambiar a «Hechas» o filtrar sí empieza por el principio).
+- **Al pasar el ratón por una tarea ya no se tapa la marca de conversación.** La banda de botones flota sobre el final de la fila y ocultaba justo el 💬/🤖 en el momento de ir a por él. Ahora **el botón de responder es la propia señal**: se pinta 🤖 en ámbar cuando hay una respuesta sin contestar.
+- **La fecha de alta se ve en la fila, no solo en el tooltip.** De hoy, la hora; de otro día, el día y el mes. Las tareas nuevas guardan además la hora. Un dato que hay que ir a buscar no sirve para hacerte una idea de un vistazo.
+
 ## [0.48.4] - 2026-08-06 — se ve de un vistazo qué conversación te está esperando
 
 - **Una tarea con una respuesta sin contestar se marca con 🤖** en lugar del 💬 habitual, y en color de aviso. Desaparece sola en cuanto respondes. No hay ningún «leído» que mantener: se deduce de quién habló el último, así que no puede quedarse desfasado.

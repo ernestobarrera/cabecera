@@ -1372,8 +1372,16 @@ const chVer = (fs.readFileSync(path.join(__dirname, '..', 'CHANGELOG.md'), 'utf8
 if (!appVer || appVer !== txtVer || appVer !== chVer)
   throw new Error(`deriva de versión: APP_VERSION=${appVer} version.txt=${txtVer} CHANGELOG=${chVer}`);
 // invariantes de fuente del aviso:
-if (!src.match(/if \(location\.protocol === "file:" \|\| newVersionDetected \|\| verCheckInflight\) return/))
-  throw new Error('regresión: checkVersion permite consultas concurrentes, en file: o tras detectar');
+if (!src.match(/if \(location\.protocol === "file:" \|\| verCheckInflight\) return/))
+  throw new Error('regresión: checkVersion permite consultas concurrentes o en file:');
+// 0.49.0: tras detectar no se vuelve a preguntar NUNCA salvo que lo pida una persona (clic en la
+// píldora). Si esta guarda se relaja sin `force`, vuelve el sondeo continuo que el gate prohibió.
+if (!src.match(/if \(newVersionDetected && !force\) return/))
+  throw new Error('regresión: checkVersion reconsulta tras detectar sin que lo pida una persona');
+if (!src.match(/renderVerPill\(\);\s*\/\/ la píldora y el aviso salen del mismo estado/))
+  throw new Error('regresión: la píldora de versión no se repinta con el aviso (podrían contradecirse)');
+if (!src.match(/if \(dirty \|\| saving \|\| conflictPending\)\{ toast\("Hay cambios guardándose/))
+  throw new Error('regresión: la píldora recarga sin la guarda de edición en vuelo');
 if (!src.includes('fetch("version.txt", { cache: "no-store" })')) throw new Error('regresión: el chequeo ya no usa no-store (y no debe llevar query de cache-bust)');
 if (src.includes('version.txt?')) throw new Error('regresión: cache-bust por query (descartado por el gate: la CDN lo ignora)');
 if (!src.match(/vn-go"\)\.addEventListener\("click", \(\) => \{\s*\n[^\n]*\n\s*[^\n]*\n\s*if \(dirty \|\| saving \|\| conflictPending\)/))
@@ -2432,14 +2440,79 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
     if (sinFecha.length) throw new Error('created: hay ' + sinFecha.length + ' alta(s) de tarea sin fecha: ' + sinFecha.join(' | '));
     if (altas.length !== 3) throw new Error('created: se esperaban 3 altas en línea (enlaces, captura Ctrl+K, inbox), hay ' + altas.length + ' — si has añadido una vía nueva, dale fecha y actualiza esta cuenta');
     // la cuarta vía es el campo «Nueva tarea…», que construye el objeto antes de empujarlo
-    if (!/const it = \{ t, done: false, created: todayIso\(\) \}/.test(src))
-      throw new Error('created: el alta manual desde «Nueva tarea…» debe nacer con fecha');
+    if (!/const it = \{ t, done: false, created: todayIso\(\), createdT: horaCorta\(\) \}/.test(src))
+      throw new Error('created: el alta manual desde «Nueva tarea…» debe nacer con fecha y hora');
+    // 0.49.0: las MISMAS cuatro vías guardan la hora. Van juntas a propósito: una tarea con fecha
+    // y sin hora no es un error, pero una vía nueva que ponga una y no la otra sí lo es.
+    const sinHora = altas.filter(x => !/createdT: horaCorta\(\)/.test(x));
+    if (sinHora.length) throw new Error('createdT: hay ' + sinHora.length + ' alta(s) de tarea sin hora: ' + sinHora.join(' | '));
     // NO viaja en packs ni en escritorios compartidos: es metadato personal, y la proyección C7
     // solo deja pasar t/done/id. Si alguien la añadiera ahí, se filtraría cuándo apuntas cada cosa.
     for (const m of src.match(/data\.items = \(Array\.isArray\(d\.items\)[^;]*;/g) || [])
       if (/created/.test(m)) throw new Error('created: no debe viajar en la proyección de packs/compartir');
     ['isoDate', 'todayIso'].forEach(k => { delete globalThis[k]; });
     console.log('OK fecha de alta de tareas (local no UTC, en todos los puntos de alta, fuera de packs)');
+  }
+
+  // --- 0.49.0: la señal 🤖 no se tapa, la página no se pierde, la hora se ve ------------------
+  {
+    // (1) La banda de acciones FLOTA sobre el final de la fila (invariante de 0.46.0, arriba), así
+    // que al pasar el ratón tapaba la marca 💬/🤖 justo cuando ibas a pulsarla. La salida NO es
+    // reservarle hueco —eso acorta el texto y devuelve el reflow que costó dos versiones cerrar—
+    // sino que el botón que la atiende asuma la señal.
+    const pintarFn = src.match(/function pintar\(list\)\{[\s\S]*?\n  \}/)[0];
+    if (!pintarFn.includes('it-reply${meToca ? " me-toca" : ""}'))
+      throw new Error('el botón de responder debe heredar «me toca»: si no, el hover tapa el 🤖 y la señal desaparece al ir a por ella');
+    if (!/\.it-actions \.it-reply\.me-toca\{[^}]*var\(--warn\)/.test(html))
+      throw new Error('el 🤖 del botón de responder debe verse en color de aviso, como la marca que sustituye');
+    if (/\.todo-it:hover\{[^}]*padding-right/.test(html))
+      throw new Error('reservar hueco a la banda al pasar el ratón reintroduce el reflow de la fila: se descartó a propósito');
+
+    // (2) La página visible sobrevive al repintado. `renderBody` reconstruye el cuerpo en cada
+    // guardado; con `page` solo en el closure, 150 tareas volvían a la página 1 cada pocos segundos.
+    const todoFn = src.match(/function bodyTodo\(w, el\)\{[\s\S]*?\n\}\n/)[0];
+    if (!/const todoPage = new Map\(\)/.test(src))
+      throw new Error('la página visible debe conservarse fuera del closure de bodyTodo');
+    if (!/let page = todoPage\.get\(w\.id\) \|\| 0/.test(todoFn))
+      throw new Error('bodyTodo debe recuperar la página guardada, no empezar siempre en 0');
+    const sueltas = todoFn.split('\n').filter(l =>
+      /(?:^|[^.\w])page\s*(=[^=]|\+\+|--)/.test(l) && !/let page = todoPage/.test(l) && !/const setPage/.test(l));
+    if (sueltas.length)
+      throw new Error('la página debe cambiarse SIEMPRE por setPage o no sobrevive al repintado: ' + sueltas[0].trim());
+    const setPageFn = todoFn.match(/const setPage = p => \{[^}]*\};/)[0];
+    // superviviente de la prueba de mutación: se puede canalizar TODO por setPage y que setPage no
+    // guarde nada — la posición se perdería igual y ningún otro test lo notaba
+    if (!/todoPage\.set\(w\.id, p\)/.test(setPageFn))
+      throw new Error('setPage debe escribir en todoPage: si no, canalizarlo todo por él no sirve de nada');
+    if (/markDirty|saveNow/.test(setPageFn))
+      throw new Error('cambiar de página no puede ensuciar el archivo: es estado de presentación, no contenido');
+    if (/todoPage/.test(src.match(/function serialize[\s\S]*?\n\}/)?.[0] || ''))
+      throw new Error('la página visible no puede persistirse: viajaría entre equipos y habría que sanearla y fusionarla');
+    // cambiar de lista (pendientes ↔ hechas, o filtrar) empieza por la primera: conservar la
+    // posición solo tiene sentido dentro de la MISMA lista
+    if (!/search\.value = ""; setPage\(0\); paint\(\)/.test(todoFn))
+      throw new Error('cambiar de vista debe volver a la primera página');
+    if (!/search\.addEventListener\("input", \(\) => \{ setPage\(0\); paint\(\); \}\)/.test(todoFn))
+      throw new Error('filtrar en hechas debe volver a la primera página');
+
+    // (3) La etiqueta de alta, visible en la fila. Convención de bandeja de correo: de hoy la
+    // hora, de otro día el día. El tooltip conserva la fecha larga completa.
+    for (const [fn, arg] of [['isoDate', 'y, m, d'], ['parseIsoDate', 'ds'], ['todayIso', ''],
+                             ['fechaLarga', 'iso'], ['altaMeta', 'created, hora']])
+      eval('globalThis.' + fn + ' = ' + pickFn(fn, arg));
+    const hoy = todayIso();
+    if (altaMeta(hoy, '12:25').corto !== '12:25') throw new Error('altaMeta: una tarea de hoy debe mostrar la hora');
+    const dm = d => new Date(d).toLocaleDateString('es-ES', { day: 'numeric', month: 'numeric' });
+    if (altaMeta(hoy, undefined).corto !== dm(new Date())) throw new Error('altaMeta: sin hora guardada (tareas previas a 0.49.0) se muestra el día, no un hueco ni «--:--»');
+    if (altaMeta('2026-08-01', '09:00').corto !== dm(new Date(2026, 7, 1))) throw new Error('altaMeta: de otro día se muestra el día, aunque tenga hora — la hora sola sería ambigua');
+    if (!altaMeta(hoy, '12:25').largo.startsWith('Anotada el ')) throw new Error('altaMeta: el tooltip conserva la fecha larga');
+    if (!altaMeta(hoy, '12:25').largo.endsWith(', 12:25')) throw new Error('altaMeta: el tooltip debe añadir la hora cuando existe');
+    if (altaMeta('basura', '12:25') !== null) throw new Error('altaMeta: una fecha corrupta no debe pintar nada');
+    if (!/const am = it\.created \? altaMeta\(it\.created, it\.createdT\) : null/.test(pintarFn))
+      throw new Error('la fila debe derivar su etiqueta de alta de altaMeta');
+    if (!/\.todo-it \.alta\{/.test(html)) throw new Error('falta el estilo de la etiqueta de alta');
+    ['isoDate', 'parseIsoDate', 'todayIso', 'fechaLarga', 'altaMeta'].forEach(k => { delete globalThis[k]; });
+    console.log('OK 0.49.0 (el 🤖 sobrevive al hover, la página al repintado, la hora de alta a la vista)');
   }
 
   // --- 0.46.2: legibilidad portada de Notas.IA (fuente canónica = ese repo, aquí solo la forma) ---

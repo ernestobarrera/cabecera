@@ -197,6 +197,12 @@ body{font-family:var(--font); color:var(--text); background:#10131a}
 #tb-sync .dot.err{background:var(--danger)} #tb-sync .dot.local{background:#8a8f9c}
 #tb-sync{cursor:pointer}
 #tb-sync:hover{background:rgba(255,255,255,.07); color:var(--text)}
+/* 0.49.0 — versión que estás usando, a la vista. Sin esto, tras un F5 no había forma de saber si
+   la página que tienes delante es la recién publicada salvo pidiendo version.txt a mano. Discreta
+   por defecto; se enciende en ámbar solo cuando hay una más nueva esperando. */
+#tb-ver{font-size:11.5px; letter-spacing:.02em; opacity:.72; font-variant-numeric:tabular-nums}
+#tb-ver:hover{opacity:1}
+#tb-ver.hay-nueva{opacity:1; color:var(--warn); border-color:rgba(240,194,94,.35); background:rgba(240,194,94,.08)}
 #tb-clock{text-align:right; line-height:1.15; cursor:default}
 #tb-clock .h{font-size:14px; font-weight:600; color:var(--text)}
 #tb-clock .d{font-size:10.5px; color:var(--text-dim); text-transform:capitalize}
@@ -358,6 +364,11 @@ ul.plain{list-style:none}
 .color-dot:hover,.color-dot.on{box-shadow:0 0 0 2px var(--accent)}
 .color-dot.none{position:relative}
 .color-dot.none::after{content:"∅"; position:absolute; inset:0; color:var(--text-dim); font-size:11px; line-height:16px; text-align:center}
+/* fecha/hora de alta: informativa, nunca compite con el vencimiento. Va antes que `.due` y con la
+   convención de cualquier bandeja de correo — de hoy, la hora; de otro día, el día. Existe porque
+   dentro del tooltip no servía para hacerse una idea de un vistazo, que era el punto del campo. */
+.todo-it .alta{font-size:10.5px; color:var(--text-dim); opacity:.62; white-space:nowrap; flex-shrink:0; cursor:default}
+.todo-it:hover .alta{opacity:.9}
 .todo-it .due{font-size:10.5px; padding:1px 7px; border-radius:20px; white-space:nowrap; flex-shrink:0}
 .todo-it .due.overdue{background:rgba(243,108,108,.18); color:#f36c6c}
 .todo-it .due.today{background:rgba(240,194,94,.20); color:#f0c25e}
@@ -393,6 +404,13 @@ ul.plain{list-style:none}
 /* el 🤖 sin contestar no puede pasar desapercibido: es la única señal de que el agente te dejó
    algo y no lo has visto. Se apaga solo en cuanto respondes, porque se deriva de quién habló último. */
 .todo-it .task-note-mark.me-toca{color:var(--warn); font-weight:600}
+/* 0.49.0 — la banda de acciones FLOTA sobre el final de la fila (ver más abajo por qué), así que
+   al pasar el ratón tapaba justo la marca 💬/🤖: la señal de que hay conversación desaparecía en
+   el momento de ir a por ella. En vez de reservarle sitio —que acortaría el texto y devolvería el
+   reflow que costó dos versiones cerrar—, el botón que la atiende ASUME la señal: `it-reply` se
+   pinta 🤖 en ámbar cuando hay respuesta sin contestar. No se tapa nada porque el aviso y la
+   acción pasan a ser el mismo objeto, en el mismo sitio. */
+.todo-it .it-actions .it-reply.me-toca{color:var(--warn); font-weight:600; opacity:1}
 /* el 💬 de responder se ve siempre en «probar»… no: se ve como los demás, pero la MARCA de que
    ya hay conversación sí es permanente, porque es contenido, no una acción. */
 .todo-it .it-due{border:none; background:none; color:var(--text-dim); cursor:pointer; font-size:12px; padding:2px 4px; border-radius:6px; opacity:0; flex-shrink:0}
@@ -792,6 +810,7 @@ ul.plain{list-style:none}
   <div class="tb-item" id="tb-tasks" title="Tareas vencidas o que vencen hoy"></div>
   <div class="tb-item" id="tb-pill" title="Píldora informativa — clic para cambiar"></div>
   <div class="tb-item" id="tb-inbox" title="Hay texto nuevo en inbox.txt">📥 Bandeja <span id="tb-inbox-n"></span></div>
+  <div class="tb-item" id="tb-ver" title="Versión que estás usando"></div>
   <div class="tb-item" id="tb-sync" title="Estado de sincronización"><span class="dot"></span><span id="tb-sync-t">—</span></div>
   <div class="tb-item" id="tb-clock"><div><div class="h"></div><div class="d"></div></div></div>
 </div>
@@ -1618,7 +1637,7 @@ function syncUI(mode, txt){
    reaparece) y si Recargar está activo. El descarte ✕ vive solo en memoria de la sesión.
    Demora asumida: la CDN de Pages puede servir la versión vieja hasta ~10 min aun con
    no-store (gobierna la caché del navegador, no la CDN); para pestañas de días, irrelevante. */
-const APP_VERSION = "0.48.4";
+const APP_VERSION = "0.49.0";
 let newVersionDetected = null;   // versión superior detectada; detiene futuras consultas
 let verDismissed = false;        // ✕: solo esta sesión — nunca persistido en disco
 let verCheckInflight = false;    // sin consultas concurrentes
@@ -1631,8 +1650,12 @@ function semverGt(a, b){
   for (let i = 1; i <= 3; i++){ const d = (+pa[i]) - (+pb[i]); if (d) return d > 0; }
   return false;
 }
-async function checkVersion(){
-  if (location.protocol === "file:" || newVersionDetected || verCheckInflight) return;
+async function checkVersion(force){
+  if (location.protocol === "file:" || verCheckInflight) return;
+  // sin `force` no se vuelve a preguntar una vez detectada: el aviso ya está puesto y consultar
+  // más no cambia nada. Con `force` (clic en la píldora) sí, porque ahí el usuario está pidiendo
+  // una respuesta AHORA — es el único caso en que la consulta la pide él y no el temporizador.
+  if (newVersionDetected && !force) return;
   verCheckInflight = true;
   try{
     const r = await fetch("version.txt", { cache: "no-store" });
@@ -1647,7 +1670,42 @@ async function checkVersion(){
 }
 // Única función que decide el aviso (idempotente). No compite con la barra de conflicto:
 // mientras conflictPending, el aviso se retira y reaparece al resolverse (vía syncUI).
+/* 0.49.0 — la versión, en la barra de abajo. El aviso flotante solo aparece cuando hay algo nuevo;
+   la pregunta que él se hacía tras cada F5 («¿estoy ya en la última?») no la contestaba nadie.
+   Deriva de las MISMAS variables que el aviso, así que no puede decir una cosa distinta.
+   Pulsarla fuerza la comprobación: es el único caso en que la consulta la pide una persona. */
+function renderVerPill(){
+  const el = document.getElementById("tb-ver");
+  if (!el) return;
+  const hay = !!newVersionDetected;
+  el.textContent = "v" + APP_VERSION + (hay ? " ▲" : "");
+  el.classList.toggle("hay-nueva", hay);
+  el.title = hay
+    ? `Estás en la ${APP_VERSION} y ya hay publicada la ${newVersionDetected} — clic para recargar`
+    : (location.protocol === "file:"
+        ? `Versión ${APP_VERSION} (abierta como archivo local: no se comprueba si hay más nueva)`
+        : `Versión ${APP_VERSION} — clic para comprobar si hay una más nueva publicada`);
+}
+function wireVerPill(){
+  const el = document.getElementById("tb-ver");
+  if (!el) return;
+  el.addEventListener("click", async () => {
+    if (newVersionDetected){
+      // misma guarda que el botón Recargar del aviso: recargar nunca puede perder una edición en vuelo
+      if (dirty || saving || conflictPending){ toast("Hay cambios guardándose: espera un momento y vuelve a pulsar."); return; }
+      location.reload();
+      return;
+    }
+    if (location.protocol === "file:"){ toast("Estás abriendo el archivo en local: no hay nada publicado con lo que comparar."); return; }
+    await checkVersion(true);
+    toast(newVersionDetected
+      ? `Hay una versión nueva (${newVersionDetected}). Pulsa otra vez para recargar.`
+      : `Estás al día: ${APP_VERSION} es la última publicada.`);
+  });
+  renderVerPill();
+}
 function renderVersionNotice(){
+  renderVerPill();   // la píldora y el aviso salen del mismo estado; se pintan a la vez
   let el = document.getElementById("ver-notice");
   const show = newVersionDetected && !verDismissed && !conflictPending;
   if (!show){ if (el) el.remove(); return; }
@@ -1673,6 +1731,7 @@ function renderVersionNotice(){
   go.title = blocked ? "Hay cambios guardándose: espera un momento" : "Recargar para actualizar";
 }
 function startVersionChecks(){
+  wireVerPill();    // la píldora se pinta ya, antes de saber si hay algo nuevo
   checkVersion();   // al cargar
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible" && Date.now() - verLastCheck > 30 * 60000) checkVersion();
@@ -5129,6 +5188,15 @@ function offerTaskToNote(w, it, repaint){
   });
 }
 
+/* 0.49.0 — la PÁGINA visible de cada lista de tareas, conservada entre repintados.
+   `renderBody` reconstruye el cuerpo entero en cada guardado, cambio de espacio o relectura del
+   archivo, y con `page` viviendo solo dentro del closure eso te devolvía a la página 1 cada pocos
+   segundos: con 150 tareas, volver a empezar el recorrido cada vez que abrías un tooltip.
+   Vive en MEMORIA y por `widgetId`, nunca en datos.json — es estado de presentación, la misma
+   línea que ya se fijó para la ordenación de las tablas: si se persistiera, viajaría entre equipos
+   y habría que sanearlo, fusionarlo y limpiar huérfanos para no ganar nada. */
+const todoPage = new Map();
+
 function bodyTodo(w, el){
   const desc = String(w.data.desc || "").trim();
   el.classList.toggle("has-desc", !!desc);
@@ -5144,23 +5212,28 @@ function bodyTodo(w, el){
   const toggle = el.querySelector(".todo-toggle"), search = el.querySelector(".todo-search");
   const bar = el.querySelector(".todo-bar");
   let view = "pend";   // "pend" (pendientes) | "done" (histórico de hechas)
-  let page = 0;        // 0.44.0: página visible cuando las tareas no caben ni creciendo el widget
+  // 0.44.0: página visible cuando las tareas no caben ni creciendo el widget.
+  // 0.49.0: se recupera de `todoPage` para sobrevivir al repintado (ver la nota de arriba).
+  let page = todoPage.get(w.id) || 0;
+  const setPage = p => { page = p; todoPage.set(w.id, p); };
   let dragItem = null;
 
   const add = () => {
     const t = inp.value.trim(); if (!t) return;
-    const it = { t, done: false, created: todayIso() };
+    const it = { t, done: false, created: todayIso(), createdT: horaCorta() };
     w.data.items.push(it); inp.value = "";
     view = "pend"; paint(); markDirty();
     offerTaskToNote(w, it, paint);   // pegar aquí una conversación entera tiene arreglo de un clic
   };
   el.querySelector(".todo-add .mini").addEventListener("click", add);
   inp.addEventListener("keydown", e => { if (e.key === "Enter") add(); });
-  toggle.addEventListener("click", () => { view = view === "pend" ? "done" : "pend"; search.value = ""; paint(); });
-  search.addEventListener("input", paint);
+  // cambiar de vista o filtrar empieza por la primera página: conservar la posición solo tiene
+  // sentido dentro de la MISMA lista; entre listas distintas sería memoria de otra cosa
+  toggle.addEventListener("click", () => { view = view === "pend" ? "done" : "pend"; search.value = ""; setPage(0); paint(); });
+  search.addEventListener("input", () => { setPage(0); paint(); });
   // marcador o enlace soltado sobre la lista → una tarea por enlace (la URL queda clicable)
   wireLinkCapture(el, links => {
-    for (const l of links) w.data.items.push({ t: linkCaptureText(l), done: false, created: todayIso() });
+    for (const l of links) w.data.items.push({ t: linkCaptureText(l), done: false, created: todayIso(), createdT: horaCorta() });
     view = "pend";
     toast(links.length === 1 ? "Tarea creada desde el enlace" : links.length + " tareas creadas desde los enlaces");
     paint(); markDirty();
@@ -5400,7 +5473,7 @@ function bodyTodo(w, el){
         .sort((a, b) => (b.doneAt || 0) - (a.doneAt || 0));
       vacio = `<div class="empty">${q ? "Nada coincide." : "Aún no has completado tareas."}</div>`;
     }
-    if (!list.length){ ul.innerHTML = vacio; page = 0; renderPager(1, 0); return; }
+    if (!list.length){ ul.innerHTML = vacio; setPage(0); renderPager(1, 0); return; }
 
     // 0.44.0 (#88): primero se pinta la lista entera y se deja que el widget CREZCA hasta que
     // quepa (tope autoMaxH, y solo si su carril tiene sitio). Después se mide cuántas caben de
@@ -5409,7 +5482,9 @@ function bodyTodo(w, el){
     pintar(list);
     const per = growAndCount(list.length);
     const pages = per ? Math.ceil(list.length / per) : 1;
-    page = Math.max(0, Math.min(page, pages - 1));
+    // el clamp también se recuerda: si borras tareas y la última página desaparece, la posición
+    // que se conserva es la corregida, no la que ya no existe
+    setPage(Math.max(0, Math.min(page, pages - 1)));
     if (pages > 1) pintar(list.slice(page * per, page * per + per));
     renderPager(pages, list.length);
   }
@@ -5426,13 +5501,15 @@ function bodyTodo(w, el){
       // Cero campos nuevos y cero forma de que se desincronice (misma regla que los carriles).
       const ultima = nRep ? it.replies[nRep - 1] : null;
       const meToca = !!(ultima && ultima.by === "agente");
-      // la fecha de alta va en el tooltip del texto, no en la fila: identifica la tarea sin gastar
-      // ancho ni competir con el vencimiento, que es lo que sí exige acción
-      const alta = it.created ? ` title="Anotada el ${esc(fechaLarga(it.created))}"` : "";
+      // la fecha de alta va TAMBIÉN en la fila desde 0.49.0 (ver altaMeta): el tooltip sigue dando
+      // la fecha larga completa, pero la señal corta se ve sin tener que buscarla
+      const am = it.created ? altaMeta(it.created, it.createdT) : null;
+      const alta = am ? ` title="${esc(am.largo)}"` : "";
       li.innerHTML = `<span class="it-drag" draggable="${view === "pend"}" title="${view === "pend" ? "Arrastrar para reordenar (o usa ↑ ↓)" : "En «Hechas» no se reordena"}">⋮⋮</span><input type="checkbox" ${it.done ? "checked" : ""}><span class="t"${alta}>${linkifyEsc(it.t)}</span>`
         + (nRep || it.note ? `<span class="task-note-mark${meToca ? " me-toca" : ""}" title="${esc(meToca ? "Respuesta del agente sin contestar (" + nRep + " en el hilo) — clic para leerla" : nRep ? nRep + " respuesta(s) — clic para leer y contestar" : it.note)}">${meToca ? "🤖" : "💬"}${nRep > 1 ? " " + nRep : ""}</span>` : "")
+        + (am ? `<span class="alta" title="${esc(am.largo)}">${esc(am.corto)}</span>` : "")
         + (dm ? `<span class="due ${dm.cls}">${dm.label}</span>` : "")
-        + `<span class="it-actions"><button class="it-color" title="Color"><span class="cdot"></span></button><button class="it-edit" title="Editar">✎</button><button class="it-reply" title="Responder a esta tarea (se añade fechado, sin borrar lo anterior)">💬</button><button class="it-up" title="Subir">↑</button><button class="it-down" title="Bajar">↓</button><button class="it-due" title="Fecha, nota y aviso">📅</button><button class="it-del" title="Borrar">✕</button></span>`;
+        + `<span class="it-actions"><button class="it-color" title="Color"><span class="cdot"></span></button><button class="it-edit" title="Editar">✎</button><button class="it-reply${meToca ? " me-toca" : ""}" title="${meToca ? "Respuesta del agente sin contestar — clic para leerla y responder" : "Responder a esta tarea (se añade fechado, sin borrar lo anterior)"}">${meToca ? "🤖" : "💬"}</button><button class="it-up" title="Subir">↑</button><button class="it-down" title="Bajar">↓</button><button class="it-due" title="Fecha, nota y aviso">📅</button><button class="it-del" title="Borrar">✕</button></span>`;
       const drag = li.querySelector(".it-drag");
       drag.addEventListener("dragstart", e => {
         if (view !== "pend"){ e.preventDefault(); return; }
@@ -5511,8 +5588,8 @@ function bodyTodo(w, el){
       + `<button class="mini next" title="Tareas siguientes"${page >= pages - 1 ? " disabled" : ""}>›</button>`
       + `<span class="pg dim">${total} pendientes</span>`;
     if (!old) bar.appendChild(nav);
-    nav.querySelector(".prev").addEventListener("click", () => { page--; paint(); });
-    nav.querySelector(".next").addEventListener("click", () => { page++; paint(); });
+    nav.querySelector(".prev").addEventListener("click", () => { setPage(page - 1); paint(); });
+    nav.querySelector(".next").addEventListener("click", () => { setPage(page + 1); paint(); });
   }
   paint();
 }
@@ -6747,6 +6824,25 @@ function todayIso(){
   const n = new Date();
   return isoDate(n.getFullYear(), n.getMonth(), n.getDate());
 }
+/* Hora local «HH:MM». Mismo criterio que todayIso y por la misma razón: reloj de pared, no UTC. */
+function horaCorta(){
+  const n = new Date();
+  return `${String(n.getHours()).padStart(2, "0")}:${String(n.getMinutes()).padStart(2, "0")}`;
+}
+/* 0.49.0 — etiqueta de alta VISIBLE en la fila de la tarea. De hoy, la hora; de otro día, el día y
+   el mes: la convención de cualquier bandeja de correo, y la única que cabe en el ancho que hay.
+   Antes esto solo vivía en el tooltip, y un dato que hay que ir a buscar no sirve para hacerse una
+   idea de un vistazo. Las tareas anteriores a 0.49.0 no guardaron hora: muestran el día, sin
+   hueco raro ni un «--:--» inventado. Devuelve null si la fecha no es válida — así una tarea con
+   `created` corrupto no pinta basura. */
+function altaMeta(created, hora){
+  const d = parseIsoDate(created);
+  if (isNaN(d)) return null;
+  const corto = (created === todayIso() && hora)
+    ? hora
+    : d.toLocaleDateString("es-ES", { day: "numeric", month: "numeric" });
+  return { corto, largo: "Anotada el " + fechaLarga(created) + (hora ? ", " + hora : "") };
+}
 function fechaLarga(iso){
   const d = parseIsoDate(iso);
   return isNaN(d) ? String(iso || "") : d.toLocaleDateString("es-ES", { day: "numeric", month: "long", year: "numeric" });
@@ -7644,7 +7740,7 @@ function applyCapture(cap, target){
   } else if (cap.kind === "task"){
     const w = (target && target.w) || ensure("todo");
     if (!Array.isArray(w.data.items)) w.data.items = [];
-    w.data.items.push({ t: cap.text, done: false, created: todayIso(), ...(cap.due ? { due: cap.due } : {}) });
+    w.data.items.push({ t: cap.text, done: false, created: todayIso(), createdT: horaCorta(), ...(cap.due ? { due: cap.due } : {}) });
     refreshWidget(w); flashWidget(w);
     if (target){
       markDirty();
@@ -8297,7 +8393,7 @@ function paintInbox(){
     d.querySelector(".k").addEventListener("click", () => consume(t => {
       let w = state.widgets.find(x => x.type === "todo");
       if (!w){ addWidget("todo"); w = state.widgets[state.widgets.length - 1]; }
-      w.data.items.push({ t, done: false, created: todayIso() }); refreshWidget(w);
+      w.data.items.push({ t, done: false, created: todayIso(), createdT: horaCorta() }); refreshWidget(w);
     }));
     d.querySelector(".c").addEventListener("click", () => consume(t => {
       let w = state.widgets.find(x => x.type === "clips");
