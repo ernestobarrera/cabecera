@@ -399,6 +399,11 @@ ul.plain{list-style:none}
   border:1px solid var(--border-soft); background:rgba(0,0,0,.25); color:var(--text); font-family:var(--font); font-size:12.5px}
 .rp-t:focus{border-color:var(--accent); outline:none}
 .rp-actions{display:flex; gap:6px; margin-top:7px}
+/* «👍 Vale»: responder de un clic. No es una acción menor disfrazada de atajo — deja una entrada
+   fechada igual que cualquier otra, que es justo lo que un check no dejaría. */
+.rp-actions .ok{border-color:rgba(90,169,247,.35)}
+/* aviso de «Hechas»: hay respuestas que llegaron después de cerrar. Informa, no reclama. */
+.todo-bar .tog-aviso{color:var(--warn); font-weight:600; margin-left:2px}
 .todo-it .task-note-mark{font-size:11px; color:var(--text-dim); cursor:pointer; flex-shrink:0}
 .todo-it .task-note-mark:hover{color:var(--accent)}
 /* el 🤖 sin contestar no puede pasar desapercibido: es la única señal de que el agente te dejó
@@ -1637,7 +1642,7 @@ function syncUI(mode, txt){
    reaparece) y si Recargar está activo. El descarte ✕ vive solo en memoria de la sesión.
    Demora asumida: la CDN de Pages puede servir la versión vieja hasta ~10 min aun con
    no-store (gobierna la caché del navegador, no la CDN); para pestañas de días, irrelevante. */
-const APP_VERSION = "0.49.0";
+const APP_VERSION = "0.50.0";
 let newVersionDetected = null;   // versión superior detectada; detiene futuras consultas
 let verDismissed = false;        // ✕: solo esta sesión — nunca persistido en disco
 let verCheckInflight = false;    // sin consultas concurrentes
@@ -5197,6 +5202,19 @@ function offerTaskToNote(w, it, repaint){
    y habría que sanearlo, fusionarlo y limpiar huérfanos para no ganar nada. */
 const todoPage = new Map();
 
+/* 0.50.0 — ¿esta tarea CERRADA tiene algo que llegó después de cerrarla?
+   Nace de una regla suya: si el agente tiene que contestarle en una tarea que él dio por hecha, no
+   se la reabre («yo no revisaré las cerradas», pero cerrar es suyo). La salida es avisar sin
+   reabrir: se cuenta y se enseña en la puerta de «Hechas», donde no exige acción ninguna.
+   Derivado del ORDEN y de la fecha, sin ningún campo de «visto» — mismo invariante que el 🤖.
+   Si la tarea es vieja y no guardó `doneAt`, se cuenta igual: preferimos un aviso de más que
+   esconder una respuesta que el usuario nunca llegaría a ver. */
+function agenteTrasCierre(it){
+  if (!it || !it.done || !Array.isArray(it.replies) || !it.replies.length) return false;
+  const u = it.replies[it.replies.length - 1];
+  return !!(u && u.by === "agente" && (!it.doneAt || u.at > it.doneAt));
+}
+
 function bodyTodo(w, el){
   const desc = String(w.data.desc || "").trim();
   el.classList.toggle("has-desc", !!desc);
@@ -5275,12 +5293,18 @@ function bodyTodo(w, el){
       <div class="rp-hilo">${hilo || `<div class="rp-vacio">Aún no hay respuestas. Lo que escribas se guarda con su fecha y no se sobrescribe.</div>`}</div>
       ${it.note ? `<div class="rp-nota"><b>Nota:</b> ${esc(it.note)}</div>` : ""}
       <textarea class="rp-t" placeholder="Escribe tu respuesta…  (Ctrl+Enter para enviar)"></textarea>
-      <div class="rp-actions"><button class="mini send" type="button">Responder</button><button class="mini" type="button" data-x="1">Cerrar</button></div>`;
+      <div class="rp-actions"><button class="mini send" type="button">Responder</button><button class="mini ok" type="button" title="Responder «Vale» sin escribir — apaga el 🤖 y deja constancia de que lo leíste">👍 Vale</button><button class="mini" type="button" data-x="1">Cerrar</button></div>`;
     li.appendChild(ed);
     const ta = ed.querySelector(".rp-t");
     const cerrar = () => { ed.remove(); };
-    const enviar = () => {
-      const t = ta.value.trim();
+    /* 0.50.0 — el 🤖 se apaga SOLO respondiendo, y eso se queda así: una regla única, derivada del
+       orden, sin ningún «leído» que guardar (no sabría en cuál de sus dos equipos lo leyó). Lo que
+       se abarata es responder. Su objeción, que es la que decide: un robot que desaparece sin dejar
+       comentario es incongruente — un «Vale» fechado es trazabilidad, un check no lo es.
+       `enviar` acepta un texto por defecto: si ya había escrito algo, se manda LO SUYO. El botón
+       nunca puede tragarse lo que estaba escribiendo. */
+    const enviar = (porDefecto) => {
+      const t = ta.value.trim() || (porDefecto || "");
       if (!t){ cerrar(); return; }
       if (!Array.isArray(it.replies)) it.replies = [];
       it.replies.push({ at: Date.now(), by: "yo", t: t.slice(0, 2000) });
@@ -5331,7 +5355,9 @@ function bodyTodo(w, el){
       ta2.addEventListener("blur", guardar);
       ta2.focus(); ta2.setSelectionRange(ta2.value.length, ta2.value.length);
     }));
-    ed.querySelector(".send").addEventListener("click", enviar);
+    // envuelto a propósito: pasar `enviar` pelado le colaría el MouseEvent como texto por defecto
+    ed.querySelector(".send").addEventListener("click", () => enviar());
+    ed.querySelector(".rp-actions .ok").addEventListener("click", () => enviar("Vale"));
     ed.querySelector(".rp-x").addEventListener("click", cerrar);
     ed.querySelector('[data-x="1"]').addEventListener("click", cerrar);
     ed.addEventListener("keydown", e => {
@@ -5460,7 +5486,12 @@ function bodyTodo(w, el){
 
   function paint(){
     const doneN = w.data.items.filter(i => i.done).length;
-    toggle.textContent = view === "pend" ? `🗂️ Hechas (${doneN})` : "‹ Pendientes";
+    // 0.50.0 — lo que llegó DESPUÉS de que la dieras por hecha. Es información, no trabajo: por eso
+    // no reabre la tarea (cerrar es tuyo) y por eso el aviso vive aquí, en la puerta de «Hechas».
+    const avisoN = w.data.items.filter(agenteTrasCierre).length;
+    toggle.innerHTML = view === "pend"
+      ? `🗂️ Hechas (${doneN})` + (avisoN ? ` <span class="tog-aviso" title="${avisoN} tarea(s) cerrada(s) con una respuesta que llegó después: entra y léelas">· 🤖 ${avisoN}</span>` : "")
+      : "‹ Pendientes";
     search.style.display = view === "done" ? "" : "none";
 
     let list, vacio;

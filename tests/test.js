@@ -2515,6 +2515,47 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
     console.log('OK 0.49.0 (el 🤖 sobrevive al hover, la página al repintado, la hora de alta a la vista)');
   }
 
+  // --- 0.50.0: responder de un clic, y aviso de lo que llegó tras cerrar ----------------------
+  {
+    // (1) «👍 Vale» no puede ser un atajo que se trague lo escrito, ni un «visto» disfrazado:
+    // inserta una respuesta fechada como cualquier otra. Esa es la razón por la que se eligió
+    // frente a un check — un check no deja constancia.
+    if (!/const enviar = \(porDefecto\) => \{\s*\n\s*const t = ta\.value\.trim\(\) \|\| \(porDefecto \|\| ""\);/.test(src))
+      throw new Error('«Vale» debe ceder ante lo que el usuario ya había escrito');
+    if (!/\.rp-actions \.ok"\)\.addEventListener\("click", \(\) => enviar\("Vale"\)\)/.test(src))
+      throw new Error('falta el botón «Vale» o no manda una respuesta real');
+    // pasar `enviar` pelado a addEventListener le colaría el MouseEvent como texto por defecto
+    if (/\.send"\)\.addEventListener\("click", enviar\)/.test(src))
+      throw new Error('«Responder» debe envolver enviar(): pelado recibe el evento como texto');
+    if (!/it\.replies\.push\(\{ at: Date\.now\(\), by: "yo"/.test(src))
+      throw new Error('«Vale» debe quedar como entrada fechada del usuario, no como una marca de visto');
+
+    // (2) El aviso de «Hechas» se DERIVA; no existe ningún campo de «visto» que mantener.
+    eval('globalThis.agenteTrasCierre = ' + pickFn('agenteTrasCierre', 'it'));
+    const base = { done: true, doneAt: 1000 };
+    if (agenteTrasCierre({ ...base, replies: [{ at: 2000, by: 'agente' }] }) !== true)
+      throw new Error('una respuesta del agente posterior al cierre debe avisar');
+    if (agenteTrasCierre({ ...base, replies: [{ at: 500, by: 'agente' }] }) !== false)
+      throw new Error('lo dicho ANTES de cerrar ya lo vio al cerrar: no avisa');
+    if (agenteTrasCierre({ ...base, replies: [{ at: 2000, by: 'agente' }, { at: 3000, by: 'yo' }] }) !== false)
+      throw new Error('si él habló el último, no hay nada que leer');
+    if (agenteTrasCierre({ done: false, replies: [{ at: 2000, by: 'agente' }] }) !== false)
+      throw new Error('una tarea abierta ya se señala con el 🤖 de su fila: aquí solo van las cerradas');
+    if (agenteTrasCierre({ done: true, replies: [{ at: 2000, by: 'agente' }] }) !== true)
+      throw new Error('sin doneAt (tareas antiguas) se avisa igual: mejor un aviso de más que esconder una respuesta');
+    if (agenteTrasCierre({ done: true, replies: [] }) !== false || agenteTrasCierre(null) !== false)
+      throw new Error('sin respuestas no hay aviso');
+    if (/visto|leido|leído|seen/i.test(pickFn('agenteTrasCierre', 'it')))
+      throw new Error('el aviso no puede guardar un «visto»: se deriva del orden y la fecha, como el 🤖');
+    if (!/const avisoN = w\.data\.items\.filter\(agenteTrasCierre\)\.length/.test(src))
+      throw new Error('el contador de «Hechas» debe derivarse de agenteTrasCierre');
+    // y NO reabre la tarea: cerrar es del usuario (regla suya, 06/08)
+    if (/agenteTrasCierre[\s\S]{0,400}?\bit\.done = false/.test(src))
+      throw new Error('el aviso jamás puede reabrir una tarea cerrada');
+    delete globalThis.agenteTrasCierre;
+    console.log('OK 0.50.0 («Vale» deja constancia, el aviso de «Hechas» se deriva y no reabre nada)');
+  }
+
   // --- 0.46.2: legibilidad portada de Notas.IA (fuente canónica = ese repo, aquí solo la forma) ---
   {
     eval('globalThis.READ_ES = ' + src.match(/const READ_ES = (\{[\s\S]*?\n\});/)[1]);

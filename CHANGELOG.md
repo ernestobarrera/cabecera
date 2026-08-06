@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.50.0] - 2026-08-06 — responder de un clic, y aviso de lo que llegó después de cerrar
+
+- **Botón «👍 Vale» en la conversación.** Hasta ahora, la única forma de quitar el 🤖 de una tarea era escribir algo, aunque solo quisieras decir «ok». Ahora se hace de un clic, y sigue quedando una respuesta fechada: **un «Vale» con fecha es constancia de que lo leíste; una marca de visto no lo sería.** Si ya habías escrito algo, el botón manda lo tuyo — nunca se traga lo que estabas escribiendo.
+- **«Hechas» avisa de lo que llegó tarde.** Si alguien responde en una tarea *después* de que la dieras por hecha, el botón muestra `🗂️ Hechas (12) · 🤖 2`. La tarea **no se reabre**: cerrar sigue siendo cosa tuya, y esto es información, no trabajo pendiente. El aviso se apaga tarea a tarea, según respondes a cada una.
+
 ## [0.49.0] - 2026-08-06 — la versión a la vista, la página que no se pierde y el 🤖 que ya no se tapa
 
 - **La versión que estás usando se ve en la barra de abajo.** Tras recargar no había forma de saber si la página que tienes delante es la recién publicada. Ahora está escrita, y **al pulsarla comprueba en el momento** si hay una más nueva: si la hay, se enciende en ámbar y el siguiente clic recarga.
