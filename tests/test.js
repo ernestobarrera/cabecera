@@ -2301,6 +2301,16 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
       throw new Error('responder: la marca de editado tiene que verse en el hilo, o la edición sería invisible');
     if (!/toastAction\("Respuesta borrada\."/.test(rp))
       throw new Error('responder: borrar una respuesta debe poder deshacerse');
+    // 0.48.4: el turno se DERIVA de quién habló el último. Nada que guardar, nada que desincronizar.
+    if (!/const meToca = !!\(ultima && ultima\.by === "agente"\)/.test(src))
+      throw new Error('turno: «te toca» debe deducirse del autor de la última entrada, no guardarse en un campo');
+    if (/\bit\.(pendiente|unread|leido|visto)\b/.test(src))
+      throw new Error('turno: no puede existir un campo de «sin leer» — se deriva, o acabará mintiendo');
+    if (!/meToca \? "🤖" : "💬"/.test(src))
+      throw new Error('turno: la tarea con respuesta del agente sin contestar tiene que verse distinta');
+    // editar una entrada del agente no puede borrar su autoría en silencio
+    if (!/it\.replies\[i\]\.by === "agente"\) toast\(/.test(rp))
+      throw new Error('turno: editar lo que dijo el agente debe avisar de que seguirá figurando como suyo');
     if (!/it\.replies\.splice\(0, it\.replies\.length - 50\)/.test(rp))
       throw new Error('responder: el hilo debe tener tope, o una tarea puede engordar el archivo sin freno');
     if (!/type="date"/.test(src.match(/const setDue = \(it, li\) => \{[\s\S]*?\n  \};/)[0]))

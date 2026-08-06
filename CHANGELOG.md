@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.48.4] - 2026-08-06 — se ve de un vistazo qué conversación te está esperando
+
+- **Una tarea con una respuesta sin contestar se marca con 🤖** en lugar del 💬 habitual, y en color de aviso. Desaparece sola en cuanto respondes. No hay ningún «leído» que mantener: se deduce de quién habló el último, así que no puede quedarse desfasado.
+- **Al editar una respuesta, la burbuja pasa a ocupar todo el ancho.** Antes se quedaba del tamaño del texto anterior y escribir ahí era incómodo.
+- **Editar una respuesta que no es tuya avisa antes:** seguirá figurando como de su autor, marcada como editada. Puedes hacerlo —el archivo es tuyo— pero sin que la autoría se pierda por el camino.
+
 ## [0.48.3] - 2026-08-05 — las respuestas se pueden corregir, y el clic derecho llega a las ventanas
 
 - **Ahora se puede editar y borrar una respuesta.** En la versión anterior quedaban selladas para siempre, y bastaba escribir algo por error para tener un borrón permanente. Se corrige con la regla de cualquier mensajero: **se edita y se borra, y lo editado queda marcado como editado**. Borrar ofrece Deshacer.

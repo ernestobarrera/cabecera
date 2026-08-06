@@ -376,7 +376,10 @@ ul.plain{list-style:none}
 .rp:hover .rp-acts,.rp:focus-within .rp-acts{opacity:1}
 .rp-acts button{border:none; background:none; color:var(--text-dim); cursor:pointer; font-size:11px; padding:1px 4px; border-radius:5px}
 .rp-acts button:hover{color:var(--text); background:rgba(255,255,255,.12)}
-.rp-edit{min-height:44px; margin-top:3px}
+.rp-edit{min-height:64px; margin-top:3px}
+/* al editar, la burbuja deja de ajustarse al texto y ocupa el ancho entero: si no, escribes en
+   una caja del tamaño de lo que había, que es justo lo contrario de lo que necesitas. */
+.rp.editando{max-width:100%; width:100%; align-self:stretch}
 .rp.de-mi{align-self:flex-end; background:var(--accent-soft); border:1px solid rgba(90,169,247,.28)}
 .rp.de-agente{align-self:flex-start; background:rgba(255,255,255,.05); border:1px solid var(--border-soft)}
 .rp-vacio{font-size:11.5px; color:var(--text-dim); line-height:1.45}
@@ -387,6 +390,9 @@ ul.plain{list-style:none}
 .rp-actions{display:flex; gap:6px; margin-top:7px}
 .todo-it .task-note-mark{font-size:11px; color:var(--text-dim); cursor:pointer; flex-shrink:0}
 .todo-it .task-note-mark:hover{color:var(--accent)}
+/* el 🤖 sin contestar no puede pasar desapercibido: es la única señal de que el agente te dejó
+   algo y no lo has visto. Se apaga solo en cuanto respondes, porque se deriva de quién habló último. */
+.todo-it .task-note-mark.me-toca{color:var(--warn); font-weight:600}
 /* el 💬 de responder se ve siempre en «probar»… no: se ve como los demás, pero la MARCA de que
    ya hay conversación sí es permanente, porque es contenido, no una acción. */
 .todo-it .it-due{border:none; background:none; color:var(--text-dim); cursor:pointer; font-size:12px; padding:2px 4px; border-radius:6px; opacity:0; flex-shrink:0}
@@ -1612,7 +1618,7 @@ function syncUI(mode, txt){
    reaparece) y si Recargar está activo. El descarte ✕ vive solo en memoria de la sesión.
    Demora asumida: la CDN de Pages puede servir la versión vieja hasta ~10 min aun con
    no-store (gobierna la caché del navegador, no la CDN); para pestañas de días, irrelevante. */
-const APP_VERSION = "0.48.3";
+const APP_VERSION = "0.48.4";
 let newVersionDetected = null;   // versión superior detectada; detiene futuras consultas
 let verDismissed = false;        // ✕: solo esta sesión — nunca persistido en disco
 let verCheckInflight = false;    // sin consultas concurrentes
@@ -5231,6 +5237,10 @@ function bodyTodo(w, el){
       e.stopPropagation();
       const caja = b.closest(".rp"), i = +caja.dataset.i, txt = caja.querySelector(".rp-txt");
       if (caja.querySelector("textarea")) return;
+      // editar lo que dijo el agente se permite (el archivo es suyo) pero se avisa: la entrada
+      // conserva su autoría y quedará marcada, para que dentro de un mes no parezca que lo dijo él
+      if (it.replies[i].by === "agente") toast("Vas a editar una respuesta del agente: seguirá figurando como suya, marcada como editada");
+      caja.classList.add("editando");
       const ta2 = document.createElement("textarea");
       ta2.className = "rp-t rp-edit";
       ta2.value = it.replies[i].t;
@@ -5412,11 +5422,15 @@ function bodyTodo(w, el){
       if (taskColor) li.style.setProperty("--task-color", taskColor);
       const dm = dueMeta(it);
       const nRep = Array.isArray(it.replies) ? it.replies.length : 0;
+      // «te toca» se DERIVA de quién habló el último: si fue el agente, hay algo sin contestar.
+      // Cero campos nuevos y cero forma de que se desincronice (misma regla que los carriles).
+      const ultima = nRep ? it.replies[nRep - 1] : null;
+      const meToca = !!(ultima && ultima.by === "agente");
       // la fecha de alta va en el tooltip del texto, no en la fila: identifica la tarea sin gastar
       // ancho ni competir con el vencimiento, que es lo que sí exige acción
       const alta = it.created ? ` title="Anotada el ${esc(fechaLarga(it.created))}"` : "";
       li.innerHTML = `<span class="it-drag" draggable="${view === "pend"}" title="${view === "pend" ? "Arrastrar para reordenar (o usa ↑ ↓)" : "En «Hechas» no se reordena"}">⋮⋮</span><input type="checkbox" ${it.done ? "checked" : ""}><span class="t"${alta}>${linkifyEsc(it.t)}</span>`
-        + (nRep || it.note ? `<span class="task-note-mark" title="${esc(nRep ? nRep + " respuesta(s) — clic para leer y contestar" : it.note)}">💬${nRep > 1 ? " " + nRep : ""}</span>` : "")
+        + (nRep || it.note ? `<span class="task-note-mark${meToca ? " me-toca" : ""}" title="${esc(meToca ? "Respuesta del agente sin contestar (" + nRep + " en el hilo) — clic para leerla" : nRep ? nRep + " respuesta(s) — clic para leer y contestar" : it.note)}">${meToca ? "🤖" : "💬"}${nRep > 1 ? " " + nRep : ""}</span>` : "")
         + (dm ? `<span class="due ${dm.cls}">${dm.label}</span>` : "")
         + `<span class="it-actions"><button class="it-color" title="Color"><span class="cdot"></span></button><button class="it-edit" title="Editar">✎</button><button class="it-reply" title="Responder a esta tarea (se añade fechado, sin borrar lo anterior)">💬</button><button class="it-up" title="Subir">↑</button><button class="it-down" title="Bajar">↓</button><button class="it-due" title="Fecha, nota y aviso">📅</button><button class="it-del" title="Borrar">✕</button></span>`;
       const drag = li.querySelector(".it-drag");
