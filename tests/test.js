@@ -1371,6 +1371,19 @@ const txtVer = fs.readFileSync(path.join(__dirname, '..', 'version.txt'), 'utf8'
 const chVer = (fs.readFileSync(path.join(__dirname, '..', 'CHANGELOG.md'), 'utf8').match(/^## \[(\d+\.\d+\.\d+)\]/m) || [])[1];
 if (!appVer || appVer !== txtVer || appVer !== chVer)
   throw new Error(`deriva de versión: APP_VERSION=${appVer} version.txt=${txtVer} CHANGELOG=${chVer}`);
+// CUARTA pata (0.51.0): el sello del manual interno. `CONTRATO: se actualiza en la MISMA pasada en
+// que cambia un contrato`, pero eso dependía de que alguien se acordara — y falló el mismo día en
+// que se escribió: 0.51.0 salió con el manual diciendo 0.50.0, y lo vio Ernesto, no un test.
+// Es CONDICIONAL a propósito: `_privado/` está gitignorado, así que en un clon limpio o en CI no
+// existe y no se comprueba nada. Aquí no vale fallar por ausencia; vale fallar por MENTIRA.
+const manPath = path.join(__dirname, '..', '_privado', 'MANUAL-CABECERA.md');
+if (fs.existsSync(manPath)){
+  const manVer = (fs.readFileSync(manPath, 'utf8').match(/Cubre hasta \*\*v(\d+\.\d+\.\d+)\*\*/) || [])[1];
+  if (!manVer)
+    throw new Error('el manual existe pero no declara hasta qué versión cubre: el sello es su única señal de frescura');
+  if (manVer !== appVer)
+    throw new Error(`el manual dice cubrir v${manVer} y la app es v${appVer}: actualízalo en ESTA pasada (R28), no en la siguiente`);
+}
 // invariantes de fuente del aviso:
 if (!src.match(/if \(location\.protocol === "file:" \|\| verCheckInflight\) return/))
   throw new Error('regresión: checkVersion permite consultas concurrentes o en file:');
