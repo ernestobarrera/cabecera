@@ -2369,7 +2369,7 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
   // --- 0.48.2: clic derecho en el escritorio ---
   {
     const ctx = src.match(/function ctxWidgetItems\(w, el\)\{[\s\S]*?\n\}/)[0]
-              + src.match(/function openCtx\(x, y, w, el\)\{[\s\S]*?\n\}/)[0];
+              + src.match(/function openCtx\(x, y, w, el, propios\)\{[\s\S]*?\n\}/)[0];
     // sobre una ventana, el menú NO reimplementa sus botones: los pulsa
     if (!/const pulsar = sel => \(\) => \{ const b = el\.querySelector\(sel\); if \(b\) b\.click\(\); \};/.test(ctx))
       throw new Error('clic derecho sobre ventana: debe accionar los botones existentes, no duplicar su lógica');
@@ -2684,8 +2684,12 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
     // datos CEDEN su sitio a las acciones, y ceden con `visibility` (conserva el hueco), nunca con
     // `display` (lo colapsa y devuelve el reflow).
     const acts = parseInt((html.match(/--todo-acts:\s*(\d+)px/) || [])[1], 10);
-    if (!(acts > 0 && acts <= 64))
-      throw new Error(`--todo-acts=${acts}px: reservar el ancho entero de la banda deja un páramo a la derecha de la hora`);
+    if (!(acts > 0 && acts <= 24))
+      throw new Error(`--todo-acts=${acts}px: es un margen muerto en TODAS las filas; el sitio de la banda lo pone la columna de fecha`);
+    // 0.54.0: el hueco que la banda necesita sale de la columna de fecha, que tiene ancho mínimo
+    // propio y va alineada a la derecha — se lee como orden, no como un margen al final.
+    if (!/\.todo-it \.alta\{[^}]*min-width:\d+px/.test(html) || !/\.todo-it \.alta\{[^}]*text-align:right/.test(html))
+      throw new Error('la columna de fecha necesita ancho mínimo y alineación derecha, o el hueco vuelve a leerse como margen muerto');
     if (!/\.todo-it:hover \.alta,\.todo-it:hover \.due\{visibility:hidden\}/.test(html))
       throw new Error('la fecha y el vencimiento deben ceder su sitio a la banda al pasar el ratón');
     if (/\.todo-it:hover \.alta[^{]*\{[^}]*display:none/.test(html))
@@ -2875,6 +2879,28 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
     if (!/const alarmasSonadas = new Map\(\)/.test(src) || /alarmSounded|w\.data\.alarmFired/.test(src))
       throw new Error('I7: una alarma sonada es de esta sesión y de este equipo, no viaja en datos.json');
     console.log('OK 0.53.0 (la etiqueta trae su contrato, la lista se ordena, el sondeo se espacia y la alarma deja rastro)');
+  }
+
+  // --- 0.54.0: el filtro de etiqueta deja de ser ciego fuera de su escritorio ------------------
+  {
+    // La guía prometió durante meses que el filtro era global, y nunca lo fue. Ahora dice la
+    // verdad Y además cuenta lo que hay fuera y te lleva. Lo que NO se hace —pintar widgets de
+    // otro espacio aquí— tiene su motivo escrito en el código: las posiciones son por espacio.
+    const bar = src.match(/function renderTagFilterBar\(\)\{[\s\S]*?\n\}/)[0];
+    if (!/tagFilterMapa\(\)/.test(bar))
+      throw new Error('la barra debe saber en qué otros escritorios vive la etiqueta');
+    if (!/tf-otros/.test(bar) || !/gotoSpace/.test(bar))
+      throw new Error('saber dónde está sin poder ir es la mitad del problema');
+    const mapa = src.match(/function tagFilterMapa\(\)\{[\s\S]*?\n\}/)[0];
+    if (!/privacyOn && w\.priv/.test(mapa))
+      throw new Error('el recuento por escritorio no puede contar widgets privados con la privacidad activa: el número es fuga');
+    // Cambiar de escritorio no puede escribir en el archivo: abrir jamás escribe (I1).
+    const goto = src.match(/function gotoSpace\(si\)\{[\s\S]*?\n\}/)[0];
+    if (/markDirty|saveNow|writeDataFile/.test(goto))
+      throw new Error('I1: navegar entre escritorios no puede provocar un guardado');
+    if (!/si < 0 \|\| si >= state\.spaces\.length/.test(goto))
+      throw new Error('una sincronización puede borrar el escritorio destino mientras el menú está abierto');
+    console.log('OK 0.54.0 (el filtro dice cuántos hay en otros escritorios y te lleva, sin pintar lo ajeno)');
   }
 
   console.log('\nTODO EN VERDE');

@@ -25,8 +25,11 @@
   /* Respiro a la derecha de una fila de tarea. NO es el ancho de la banda de acciones (~148 px):
      la banda se gana el sitio haciendo que la fecha y el vencimiento cedan el suyo al pasar el
      ratón (ver `.todo-it`). Reservar la banda entera dejaba la hora a 148 px del borde con un
-     páramo detrás, que fue la regresión de 0.51.0. */
-  --todo-acts: 46px;
+     páramo detrás, que fue la regresión de 0.51.0. En 0.54.0 baja de 46 a 20 px: el sitio que le
+     faltaba a la banda lo pone ahora la COLUMNA DE FECHA, que tiene ancho mínimo propio como en
+     cualquier bandeja de correo. Así el hueco vive dentro de una columna alineada —que se lee como
+     orden— y no como un margen muerto al final de la fila. */
+  --todo-acts: 20px;
 }
 *{box-sizing:border-box; margin:0; padding:0}
 html,body{height:100%; overflow:hidden}
@@ -224,6 +227,9 @@ body{font-family:var(--font); color:var(--text); background:#10131a}
 #tb-inbox{display:none}
 #tb-inbox.has{display:flex; color:var(--warn); border-color:rgba(240,194,94,.35); background:rgba(240,194,94,.08)}
 /* aviso propio de tareas con fecha: al margen de la píldora rotatoria */
+.tf-n{font-variant-numeric:tabular-nums; opacity:.75}
+.tf-otros{cursor:pointer; border-left:1px solid var(--border-soft); padding-left:7px; margin-left:2px; opacity:.85}
+.tf-otros:hover{opacity:1; color:var(--accent)}
 #tb-tasks{display:none; color:var(--warn); border-color:rgba(240,194,94,.35); background:rgba(240,194,94,.08); white-space:nowrap; font-variant-numeric:tabular-nums}
 #tb-tasks.overdue{color:var(--danger); border-color:rgba(243,108,108,.4); background:rgba(243,108,108,.09)}
 /* 0.53.0 — el temporizador sonaba y sacaba un aviso pasajero: si no estabas mirando, no quedaba
@@ -423,7 +429,8 @@ ul.plain{list-style:none}
    dentro del tooltip no servía para hacerse una idea de un vistazo, que era el punto del campo. */
 /* `margin-left:auto` pega la fecha al borde derecho: el hueco vacío queda ENTRE el texto y la
    fecha, que es lo normal en cualquier lista, en vez de detrás de la fecha, que era el páramo. */
-.todo-it .alta{font-size:10.5px; color:var(--text-dim); opacity:.62; white-space:nowrap; flex-shrink:0; cursor:default; margin-left:auto}
+.todo-it .alta{font-size:10.5px; color:var(--text-dim); opacity:.62; white-space:nowrap; flex-shrink:0; cursor:default;
+  margin-left:auto; min-width:74px; text-align:right}
 .todo-it:hover .alta{opacity:.9}
 .todo-it .due{font-size:10.5px; padding:1px 7px; border-radius:20px; white-space:nowrap; flex-shrink:0}
 .todo-it .due.overdue{background:rgba(243,108,108,.18); color:#f36c6c}
@@ -495,8 +502,11 @@ ul.plain{list-style:none}
    Mientras se edita se oculta del todo (clase `editing`, puesta por `editItem`): esos botones no
    sirven de nada con el textarea abierto y su aparición por foco era la otra mitad del salto.
    En pantallas táctiles no hay hover, así que allí sigue en el flujo, debajo, como hasta ahora. */
-.todo-it .it-actions{display:none; position:absolute; right:4px; bottom:2px; z-index:2; align-items:center; gap:2px;
-  padding:1px 3px; border-radius:8px; background:rgba(24,28,37,.94); box-shadow:0 0 0 1px var(--border-soft)}
+.todo-it .it-actions{display:none; position:absolute; right:4px; bottom:2px; z-index:2; align-items:center; gap:1px;
+  padding:1px 2px; border-radius:8px; background:rgba(24,28,37,.94); box-shadow:0 0 0 1px var(--border-soft)}
+/* 0.54.0 — la banda va apretada a propósito: cada píxel que ocupa es un píxel que hay que
+   reservarle en TODAS las filas, las miles de veces que no la estás usando. */
+.todo-it .it-actions button{padding:2px 3px; font-size:11.5px}
 .todo-it:hover .it-actions{display:flex}
 .todo-it.editing .it-actions{display:none}
 .todo-it .it-actions button{opacity:1}
@@ -1764,7 +1774,7 @@ function syncUI(mode, txt){
    reaparece) y si Recargar está activo. El descarte ✕ vive solo en memoria de la sesión.
    Demora asumida: la CDN de Pages puede servir la versión vieja hasta ~10 min aun con
    no-store (gobierna la caché del navegador, no la CDN); para pestañas de días, irrelevante. */
-const APP_VERSION = "0.53.0";
+const APP_VERSION = "0.54.0";
 let newVersionDetected = null;   // versión superior detectada; detiene futuras consultas
 let verDismissed = false;        // ✕: solo esta sesión — nunca persistido en disco
 let verCheckInflight = false;    // sin consultas concurrentes
@@ -3596,14 +3606,50 @@ function setTagFilter(tag){
   tagFilter = tag || null;
   renderAll();
 }
+/* 0.54.0 — el filtro DEJA DE SER CIEGO fuera de su escritorio.
+   Su queja del 05/08: «sin esto, ia-bandeja no te enseña todas tus bandejas a la vez, que era el
+   punto». Y la guía llegó a prometer durante meses que el filtro era global, cuando nunca lo fue.
+   QUÉ SE HACE: el filtro sigue ocultando dentro del escritorio en el que estás —eso no cambia—,
+   pero ahora la barra dice CUÁNTOS hay aquí y cuántos en otros escritorios, y te lleva a ellos de
+   un clic sin perder el filtro (que ya sobrevivía al cambio de pestaña, solo que no se notaba).
+   QUÉ NO SE HACE Y POR QUÉ: pintar a la vez, en un mismo escritorio, widgets que pertenecen a
+   otros. Las posiciones son POR ESPACIO, así que dos widgets de escritorios distintos se solaparían
+   sin remedio, y arrastrar o redimensionar uno prestado escribiría en el espacio equivocado. Eso no
+   es una mejora del filtro: es cambiar el modelo de espacios, y necesita decisión y gate propios. */
+function tagFilterMapa(){
+  if (!tagFilter || !state) return [];
+  return state.spaces.map((sp, si) => ({
+    si, nombre: sp.name || ("Escritorio " + (si + 1)),
+    n: (sp.widgets || []).filter(w => (w.tags || []).includes(tagFilter) && !(privacyOn && w.priv)).length
+  })).filter(x => x.n > 0);
+}
 function renderTagFilterBar(){
   const el = $("#tb-filter");
   if (!el) return;
-  if (tagFilter){
-    el.style.display = "flex";
-    el.innerHTML = `🏷️ ${esc(tagFilter)} <span class="tf-x" title="Quitar filtro">✕</span>`;
-    el.querySelector(".tf-x").addEventListener("click", () => setTagFilter(null));
-  } else { el.style.display = "none"; el.innerHTML = ""; }
+  if (!tagFilter){ el.style.display = "none"; el.innerHTML = ""; return; }
+  const mapa = tagFilterMapa();
+  const aqui = (mapa.find(x => x.si === state.active) || { n: 0 }).n;
+  const fuera = mapa.filter(x => x.si !== state.active);
+  const nFuera = fuera.reduce((a, x) => a + x.n, 0);
+  el.style.display = "flex";
+  el.innerHTML = `🏷️ ${esc(tagFilter)} <span class="tf-n">${aqui}</span>`
+    + (nFuera ? ` <span class="tf-otros" title="${esc(fuera.map(x => x.nombre + " (" + x.n + ")").join(" · "))} — clic para ir">+${nFuera} en ${fuera.length === 1 ? "otro" : fuera.length + " escritorios"}</span>` : "")
+    + ` <span class="tf-x" title="Quitar filtro">✕</span>`;
+  el.querySelector(".tf-x").addEventListener("click", e => { e.stopPropagation(); setTagFilter(null); });
+  const otros = el.querySelector(".tf-otros");
+  // un solo destino salta directo; varios, se elige. Nada de un desplegable para una sola opción.
+  if (otros) otros.addEventListener("click", e => {
+    e.stopPropagation();
+    if (fuera.length === 1){ gotoSpace(fuera[0].si); return; }
+    openCtx(e.clientX, e.clientY - 10 * fuera.length, null, null, fuera.map(x =>
+      ["🏷️", `${x.nombre} — ${x.n} widget${x.n === 1 ? "" : "s"}`, () => gotoSpace(x.si)]));
+  });
+}
+// cambiar de escritorio CONSERVANDO el filtro: ya ocurría, pero no había forma de provocarlo
+function gotoSpace(si){
+  if (!state || si < 0 || si >= state.spaces.length) return;
+  state.active = si;
+  renderAll();
 }
 
 /* ---------- tour interactivo (coach-marks) ---------- */
@@ -8315,10 +8361,12 @@ function ctxWidgetItems(w, el){
   out.push(["sep"]);
   return out;
 }
-function openCtx(x, y, w, el){
+function openCtx(x, y, w, el, propios){
   const m = $("#ctx-menu");
   const plegados = state && state.widgets.length && state.widgets.every(x => x.collapsed);
-  const items = (w ? ctxWidgetItems(w, el) : []).concat([
+  // 0.54.0: con `propios` se reutiliza el mismo menú para una lista puntual (los escritorios donde
+  // vive una etiqueta), en vez de inventar un desplegable nuevo que habría que estilar y colocar.
+  const items = propios || (w ? ctxWidgetItems(w, el) : []).concat([
     ["➕", "Añadir widget…", () => openMenu("start", { x, y })],
     ["🔍", "Buscar y ejecutar", () => openMenu("palette"), ATAJOS.palette.teclas],
     ["⌨️", "Atajos de teclado", () => openAtajos()],

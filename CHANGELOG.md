@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.54.0] - 2026-08-07 — el filtro de etiqueta deja de ser ciego, y la fila respira
+
+- **El filtro de etiqueta dice qué hay fuera de este escritorio.** Seguía actuando solo dentro del escritorio activo —y la guía llegó a prometer lo contrario durante meses—. Ahora el indicador de la barra muestra **cuántos widgets hay aquí y cuántos en otros escritorios**, y al pulsarlo te lleva sin perder el filtro: si solo hay otro, salta directo; si hay varios, eliges. Lo que sigue sin hacerse, a propósito, es pintar a la vez widgets de escritorios distintos: las posiciones son por escritorio y se solaparían sin remedio.
+- **El margen a la derecha de la fecha, otra vez más pequeño.** Pasa de 46 a 20 px. El sitio que necesitan los botones lo pone ahora la propia **columna de fecha**, con ancho fijo y alineada a la derecha, como en un gestor de correo: el hueco queda dentro de una columna alineada —que se lee como orden— en vez de al final de la fila —que se lee como olvido—.
+
 ## [0.53.0] - 2026-08-07 — la etiqueta trae su contrato puesto, y la lista se ordena
 
 - **Poner una etiqueta `ia-` aplica sola la cabecera ⓘ y el color.** Antes había que escribirla a mano en cada widget, con una redacción distinta cada vez. Ahora la cabecera se *deriva* del contrato vigente: si mañana cambia la convención, se actualizan solas —**retroactivamente**— las que puso Cabecera. **Lo que hayas escrito tú no se toca jamás**, ni la cabecera ni el color. Y el selector ofrece las `ia-` aunque no uses ninguna todavía: antes solo mostraba las ya usadas, así que la primera era imposible de elegir de la lista.
