@@ -1161,7 +1161,11 @@ console.log('OK wpScrim (velo adaptativo por luminancia; presets ampliados sin r
 // El invariante ya NO fija la lista de tipos —eso es lo que dejó fuera al markdown durante
 // versiones—, sino que el botón se DERIVE de `colorable`, que es la lista única. ---
 if (!src.match(/const descBtn = colorable \? `<button class="win-btn descbtn"/)) throw new Error('regresión: el botón ⓘ debe derivarse de colorable (lista única de tipos con color y cabecera)');
-if (!src.match(/function bodyTodo[\s\S]{0,400}notes-desc/)) throw new Error('regresión: bodyTodo debe pintar la cabecera opcional (notes-desc)');
+// 0.52.0: los tres cuerpos ya no repiten el literal — llaman a `descHtml`, que es el único
+// sitio donde se pinta la ⓘ. El invariante es el mismo (que la pinten), por la vía nueva.
+if (!src.match(/function bodyTodo[\s\S]{0,400}descHtml\(desc, w\.id\)/)) throw new Error('regresión: bodyTodo debe pintar la cabecera opcional (descHtml)');
+if (!src.match(/function bodyNote[\s\S]{0,400}descHtml\(desc, w\.id\)/)) throw new Error('regresión: bodyNote debe pintar la cabecera opcional (descHtml)');
+if ((src.match(/class="notes-desc/g) || []).length !== 1) throw new Error('la ⓘ debe pintarse en UN solo sitio (descHtml): tres copias fue lo que dejó al markdown atrás durante versiones');
 console.log('OK cabecera ⓘ en Tareas (botón + render en bodyTodo)');
 
 // espacios: índice activo tras borrar
@@ -2424,10 +2428,10 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
     if (!/if \(colorable\) el\.querySelector\("\.descbtn"\)/.test(src))
       throw new Error('paridad: el cableado del botón de cabecera debe usar la misma condición');
     const md = src.match(/function bodyMd\(w, el\)\{[\s\S]*?\n\}/)[0];
-    if (!/notes-desc/.test(md) || !/has-desc/.test(md))
+    if (!/descHtml\(desc, w\.id\)/.test(md) || !/has-desc/.test(md))
       throw new Error('paridad: el cuerpo del markdown debe pintar su cabecera ⓘ');
-    if (!/editNoteDesc\(w, el\.closest\("\.win"\)\)/.test(md))
-      throw new Error('paridad: la cabecera del markdown debe abrirse al hacer clic, como en Nota');
+    if (!/wireDesc\(el, w\)/.test(md))
+      throw new Error('paridad: la cabecera del markdown debe cablearse como las demás (clic edita, ⌄ despliega)');
     // y NO viaja en packs ni en compartir: la proyección reconstruye data desde cero
     if (/desc/.test(src.match(/else if \(w\.type === "md"\)\{ data\.text[^\n]*/)[0]))
       throw new Error('paridad: la cabecera no debe viajar en la proyección de packs');
@@ -2659,11 +2663,24 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
     // una tarea de una línea tapaba el final del texto. El hueco tiene que estar SIEMPRE: uno que
     // aparezca con el hover es justo el reflow prohibido arriba.
     if (!/--todo-acts:\s*\d+px/.test(html))
-      throw new Error('el ancho de la banda de acciones debe ser una variable única, o al añadir un botón el hueco se queda corto en silencio');
-    if (!/@media \(any-hover:hover\)\{ \.todo-it\{padding-right:var\(--todo-acts\)\} \}/.test(html))
-      throw new Error('la fila debe reservar hueco permanente a la banda: sin él, el hover tapa fecha, vencimiento y texto');
+      throw new Error('el respiro derecho de la fila debe ser una variable única, no un número suelto');
+    if (!/\.todo-it\{padding-right:var\(--todo-acts\)\}/.test(html))
+      throw new Error('la fila necesita un respiro a la derecha, o la banda se come el final del texto');
     if (/\.todo-it:hover\{[^}]*padding-right/.test(html))
       throw new Error('el hueco NO puede depender del hover: eso es el reflow que costó dos versiones cerrar');
+    // 0.52.0 — corrección de la corrección. Reservar la banda ENTERA (148 px) dejaba la hora
+    // flotando lejos del borde con un páramo detrás: regresión reportada el mismo día. Ahora los
+    // datos CEDEN su sitio a las acciones, y ceden con `visibility` (conserva el hueco), nunca con
+    // `display` (lo colapsa y devuelve el reflow).
+    const acts = parseInt((html.match(/--todo-acts:\s*(\d+)px/) || [])[1], 10);
+    if (!(acts > 0 && acts <= 64))
+      throw new Error(`--todo-acts=${acts}px: reservar el ancho entero de la banda deja un páramo a la derecha de la hora`);
+    if (!/\.todo-it:hover \.alta,\.todo-it:hover \.due\{visibility:hidden\}/.test(html))
+      throw new Error('la fecha y el vencimiento deben ceder su sitio a la banda al pasar el ratón');
+    if (/\.todo-it:hover \.alta[^{]*\{[^}]*display:none/.test(html))
+      throw new Error('ceder con display colapsa el hueco y devuelve el salto: tiene que ser visibility');
+    if (!/\.todo-it \.alta\{[^}]*margin-left:auto/.test(html))
+      throw new Error('la fecha va pegada al borde derecho, o el hueco vacío aparece detrás de ella en vez de delante');
     const actsRule = cssOf('.todo-it .it-actions');
     if (!/position:absolute/.test(actsRule))
       throw new Error('el hueco reservado no sustituye a que la banda flote: si vuelve al flujo, vuelve el salto');
@@ -2683,6 +2700,76 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
     if (!/flex-shrink:0/.test(cssOf('.calc-tabs')))
       throw new Error('las pestañas 🕘/🧪 son el único acceso a Historial y Unidades: no pueden ser lo que cede');
     console.log('OK 0.51.0 (el borrador no se pierde, la banda no tapa, la conversación no estruja, las pestañas no se recortan)');
+  }
+
+  // --- 0.52.0: las etiquetas dejan de empujar el escritorio ------------------------------------
+  {
+    const cssOf = sel => {
+      const m = html.match(new RegExp(sel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\{([^}]*)\\}'));
+      if (!m) throw new Error('no encontrada la regla CSS ' + sel);
+      return m[1];
+    };
+    // La franja de etiquetas estaba oculta y se desplegaba con :hover, DEBAJO del título: pasar el
+    // ratón por el escritorio empujaba el cuerpo de cada ventana hacia abajo, una tras otra.
+    // Misma lección que la banda de acciones: aparecer no puede cambiar el alto de nada.
+    if (/\.win:hover \.win-tags\{display:flex\}/.test(html))
+      throw new Error('las etiquetas no pueden desplegarse con el hover: eso empuja el cuerpo de la ventana hacia abajo');
+    if (!/display:flex/.test(cssOf('.win-tags')))
+      throw new Error('las etiquetas van siempre a la vista, no ocultas');
+    // Y tienen que estar DENTRO de la barra de título: fuera de ella vuelven a ocupar alto propio.
+    const titulo = (html.match(/<div class="win-title"[\s\S]*?<\/div>/) || [''])[0];
+    if (!titulo.includes('class="win-tags"'))
+      throw new Error('la insignia de etiquetas vive en la barra de título; fuera, vuelve a añadir alto');
+    if (/<div class="win-tags"><\/div>\s*\n\s*<div class="win-body">/.test(html))
+      throw new Error('quedó la franja antigua bajo el título: dos sitios para lo mismo');
+    // La barra de título es zona de arrastre: sin frenar el mousedown, filtrar arrastra la ventana.
+    const pinta = (src.match(/function paintWinTags\([\s\S]*?\n\}/) || [''])[0];
+    if (!/draggable="false"/.test(pinta) || !/mousedown[\s\S]{0,60}stopPropagation/.test(pinta))
+      throw new Error('la insignia está en la zona de arrastre: sin frenar el mousedown, pulsarla mueve la ventana');
+    if (!/\.win-tags \.tag-chip\.sistema\{/.test(html))
+      throw new Error('una etiqueta ia-* es contrato de máquina y debe distinguirse de las del usuario');
+    if (!/\/\^ia-\/\.test\(tg\)/.test(pinta))
+      throw new Error('la distinción de ia-* se deriva del prefijo, no de una lista que haya que mantener');
+    // El molde que mide el alto de una ventana para «Ordenar» tiene que llevar el MISMO esqueleto
+    // que `renderWin`. Al mover las etiquetas se quedó atrás y añadía una franja fantasma a cada
+    // medida: un divergente silencioso que solo se nota como altos raros al ordenar.
+    const molde = (src.match(/host\.innerHTML = '([^']*)'/) || [])[1] || '';
+    for (const pieza of ['win-title', 'win-tags', 'win-body'])
+      if (!molde.includes(pieza)) throw new Error(`el molde de medida no lleva ${pieza}: medirá un alto que no existe`);
+    if (molde.indexOf('win-tags') > molde.indexOf('win-body'))
+      throw new Error('en el molde, las etiquetas van dentro del título, igual que en renderWin');
+    // La ⓘ se lee entera. Vivía recortada a una línea con el resto solo en el tooltip, y aquí es
+    // donde vive el CONTRATO de cada widget de la superficie: un contrato que hay que ir a buscar
+    // con el ratón no está a la vista. Ceder con line-clamp, no con nowrap+ellipsis.
+    if (!/-webkit-line-clamp:2/.test(cssOf('.notes-desc .dtxt')))
+      throw new Error('la cabecera ⓘ debe mostrar dos líneas, no una recortada');
+    if (/white-space:nowrap/.test(cssOf('.notes-desc .dtxt')))
+      throw new Error('nowrap deja la ⓘ en una línea y el resto solo en el tooltip: era el fallo');
+    if (!/\.notes-desc\.abierta \.dtxt\{-webkit-line-clamp:unset/.test(html))
+      throw new Error('debe poder desplegarse entera');
+    if (!/descAbierta = new Set\(\)/.test(src) || /descAbierta/.test((src.match(/function sanitizeState[\s\S]*?\n\}/) || [''])[0]))
+      throw new Error('desplegada o no es presentación (I7): en memoria, jamás en datos.json');
+    const wire = (src.match(/function wireDesc\([\s\S]*?\n\}/) || [''])[0];
+    if (!/stopPropagation/.test(wire))
+      throw new Error('el botón ⌄ vive dentro de la línea que edita al hacer clic: sin frenar el evento, desplegar abre el editor');
+
+    // Dos pestañas con su propio recuento, y el 🤖 en las DOS. Antes solo existía el de «Hechas»,
+    // y por eso Ernesto veía un robot en el contador y no encontraba la tarea: estaba en la otra.
+    if (!/function esperaRespuestaSuya\(it\)/.test(src))
+      throw new Error('el 🤖 de Pendientes debe derivarse igual que el de cada fila, no contarse aparte');
+    // superviviente de la prueba de mutación: se podía definir la función y NO usarla para contar,
+    // dejando el aviso de Pendientes clavado en cero sin que nada se quejara
+    if (!/const pendBot = w\.data\.items\.filter\(i => !i\.done && esperaRespuestaSuya\(i\)\)\.length/.test(src))
+      throw new Error('el contador de Pendientes debe USAR esperaRespuestaSuya sobre las tareas vivas');
+    if (/it\.leido|lastRead|leidoAt/.test(src))
+      throw new Error('I4: el turno se deriva del orden, nunca se guarda un «leído»');
+    const pintar = (src.match(/function paint\(\)\{[\s\S]*?\n    let list, vacio;/) || [''])[0];
+    for (const [re, m] of [[/data-v="pend"/, 'pestaña de Pendientes'], [/data-v="done"/, 'pestaña de Hechas'],
+                           [/Pendientes \(\$\{pendN\}\)/, 'recuento de pendientes'], [/Hechas \(\$\{doneN\}\)/, 'recuento de hechas']])
+      if (!re.test(pintar)) throw new Error(`falta ${m}: el acceso y el recuento son cosas distintas y las dos vistas necesitan ambas`);
+    if (/search\.style\.display/.test(src))
+      throw new Error('la lupa vale en las dos vistas: esconderla en Pendientes era la mitad de lo útil con 168 ítems');
+    console.log('OK 0.52.0 (las etiquetas son insignia en el título: siempre visibles y sin empujar nada)');
   }
 
   console.log('\nTODO EN VERDE');

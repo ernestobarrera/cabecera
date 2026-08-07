@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.52.0] - 2026-08-07 — moverse por una lista larga, y dejar de empujar el escritorio
+
+- **Las etiquetas ya no mueven nada.** Aparecían al pasar el ratón, en una franja bajo el título, y eso empujaba el contenido de cada ventana hacia abajo según recorrías el escritorio. Ahora son **insignias pequeñas junto al nombre, siempre visibles**: no se mueve nada y ves de un vistazo cómo está etiquetado cada widget. Las `ia-*` se distinguen en azul.
+- **Dos pestañas con su propio recuento: 📋 Pendientes (n) y 🗂️ Hechas (n).** Antes había un botón que alternaba y mostraba el número de la vista contraria, que se leía como si fuera el de donde estabas. Además el aviso **· 🤖 n** aparece ahora **en las dos**: en Pendientes, lo que espera respuesta tuya; en Hechas, lo que llegó después de cerrarla. Antes solo existía el de Hechas, y por eso se podía ver un robot en el contador sin encontrar la tarea.
+- **El buscador filtra la vista en la que estés**, no solo las hechas. Con listas largas, lo que más se busca es una tarea viva que se ha ido a la página 7.
+- **La cabecera ⓘ se puede leer entera.** Se mostraba en una sola línea recortada y el resto vivía en el tooltip. Ahora ocupa dos líneas y el botón **⌄** la despliega completa; el clic sobre el texto sigue abriendo la edición.
+- **Corregido el margen que dejó la versión anterior.** Al arreglar que los botones taparan el final de la fila, 0.51.0 reservó el ancho entero de la banda y dejó la hora flotando lejos del borde con un hueco vacío detrás. Ahora la fecha va pegada al borde y **cede su sitio a los botones** solo mientras pasas el ratón: nada tapado, ningún salto y ningún margen raro.
+
 ## [0.51.0] - 2026-08-07 — cuatro cosas que estorbaban a diario
 
 - **Lo que estabas escribiendo en «Nueva tarea…» ya no se pierde.** Bastaba cambiar de escritorio —o que llegara una actualización desde el otro equipo— para que la caja se vaciara sin avisar. Era el único de estos fallos que **destruía trabajo**, y por eso va el primero. El texto a medio escribir se conserva por lista mientras la pestaña siga abierta; al crear la tarea, se limpia.

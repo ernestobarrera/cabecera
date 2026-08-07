@@ -22,9 +22,11 @@
   --radius: 14px;
   --shadow: 0 12px 40px rgba(0,0,0,.45);
   --font: "Segoe UI", system-ui, -apple-system, sans-serif;
-  /* ancho de la banda de acciones de una tarea (7 botones). Un solo número: si se añade o se quita
-     un botón de `.it-actions`, se ajusta AQUÍ y el hueco reservado de la fila lo sigue solo. */
-  --todo-acts: 148px;
+  /* Respiro a la derecha de una fila de tarea. NO es el ancho de la banda de acciones (~148 px):
+     la banda se gana el sitio haciendo que la fecha y el vencimiento cedan el suyo al pasar el
+     ratón (ver `.todo-it`). Reservar la banda entera dejaba la hora a 148 px del borde con un
+     páramo detrás, que fue la regresión de 0.51.0. */
+  --todo-acts: 46px;
 }
 *{box-sizing:border-box; margin:0; padding:0}
 html,body{height:100%; overflow:hidden}
@@ -72,10 +74,21 @@ body{font-family:var(--font); color:var(--text); background:#10131a}
 .win.collapsed .win-body,.win.collapsed .win-resize{display:none}
 .win.collapsed .win-title{border-bottom:none}
 .win-btn.collapse{font-size:11px}
-.win-tags{display:none; flex-wrap:wrap; gap:5px; padding:0 10px 8px}
-/* etiquetas solo al pasar el ratón: estado en reposo minimalista */
-.win:hover .win-tags{display:flex}
-.win.collapsed .win-tags{display:none}
+/* 0.52.0 — LAS ETIQUETAS VIVEN EN LA BARRA DE TÍTULO, siempre a la vista y sin reflow.
+   Antes eran una franja propia bajo el título, oculta y desplegada con `:hover`: pasar el ratón
+   por el escritorio empujaba el cuerpo de cada ventana hacia abajo, uno detrás de otro (parte de
+   fallo de Ernesto, 07/08: «se mueve todo hacia abajo para resaltar la etiqueta»). Aparecer y
+   desaparecer NUNCA puede cambiar el alto de nada — es la misma lección que la banda de acciones
+   de las tareas, que costó dos versiones.
+   Como insignia junto al nombre además resuelve lo otro: qué widgets son superficie humano-agente
+   se ve de un vistazo, sin tener que pasar por encima de cada uno. Se encoge antes que el título
+   y no lo empuja fuera. */
+.win-tags{display:flex; align-items:center; gap:4px; min-width:0; flex-shrink:1; overflow:hidden}
+.win.collapsed .win-tags{display:flex}
+.win-tags .tag-chip{font-size:9.5px; padding:1px 6px; max-width:96px; overflow:hidden;
+  text-overflow:ellipsis; white-space:nowrap; flex-shrink:1}
+/* una insignia `ia-*` se distingue: es contrato de máquina, no una etiqueta cualquiera del usuario */
+.win-tags .tag-chip.sistema{border-color:rgba(90,169,247,.34); background:rgba(90,169,247,.12); color:#9fc9f5}
 .tag-chip{font-size:11px; padding:2px 8px; border-radius:20px; border:1px solid var(--border-soft); background:rgba(255,255,255,.05); color:var(--text-dim); cursor:pointer; font-family:var(--font)}
 .tag-chip:hover{border-color:var(--accent); color:var(--text)}
 .tag-chip.on{background:var(--accent); color:#0b1220; border-color:var(--accent); font-weight:600}
@@ -340,14 +353,21 @@ textarea.notes{width:100%; height:100%; min-height:110px; resize:none; border:no
 .mini.warn:hover{background:rgba(243,108,108,.15); border-color:var(--danger)}
 ul.plain{list-style:none}
 .todo-it{position:relative; display:flex; align-items:center; gap:9px; padding:6px 4px; border-radius:8px; flex-wrap:wrap; --task-color:transparent}
-/* 0.51.0 — HUECO PERMANENTE para la banda de acciones (ver `.it-actions`). La banda flota sobre el
-   final de la fila, y ahí es donde viven también la fecha, el vencimiento y la marca 💬/🤖: al pasar
-   el ratón los tapaba, y en una tarea de una sola línea tapaba además el final del texto.
-   En 0.49.0 descarté reservar sitio diciendo que devolvería el salto. Era un error de razonamiento:
-   el salto lo provoca un hueco que APARECE con el hover, no uno que está siempre. Este está siempre,
-   así que el alto de la fila no cambia nunca y la invariante de 0.46.0 sigue intacta.
+/* 0.51.0 → 0.52.0 — HUECO para la banda de acciones, corregido.
+   0.51.0 reservó el ancho ENTERO de la banda (148 px) como relleno permanente de la fila. Arregló
+   el solape y creó otra cosa peor a diario: la hora quedaba flotando a 148 px del borde, con un
+   páramo a su derecha. Parte de fallo de Ernesto el mismo día: «ahora hay un margen derecho al lado
+   de la hora». Era una regresión mía.
+   La salida es la que usa cualquier bandeja de correo: la fila NO reserva la banda entera, sino un
+   respiro normal; la fecha y el vencimiento se pegan al borde derecho (`margin-left:auto`), y al
+   pasar el ratón CEDEN SU SITIO a la banda con `visibility:hidden` — que conserva el hueco, así que
+   no hay reflow. Los datos y las acciones comparten ranura porque nunca los quieres a la vez:
+   miras la fecha cuando lees, pulsas los botones cuando actúas.
    Solo donde hay hover: en táctil la banda va en el flujo y no tapa nada. */
-@media (any-hover:hover){ .todo-it{padding-right:var(--todo-acts)} }
+@media (any-hover:hover){
+  .todo-it{padding-right:var(--todo-acts)}
+  .todo-it:hover .alta,.todo-it:hover .due{visibility:hidden}
+}
 .todo-it:hover{background:rgba(255,255,255,.04)}
 .todo-it.has-task-color{box-shadow:inset 3px 0 0 var(--task-color); padding-left:8px}
 .todo-it input[type=checkbox]{width:16px; height:16px; accent-color:var(--accent); cursor:pointer; flex-shrink:0}
@@ -378,7 +398,9 @@ ul.plain{list-style:none}
 /* fecha/hora de alta: informativa, nunca compite con el vencimiento. Va antes que `.due` y con la
    convención de cualquier bandeja de correo — de hoy, la hora; de otro día, el día. Existe porque
    dentro del tooltip no servía para hacerse una idea de un vistazo, que era el punto del campo. */
-.todo-it .alta{font-size:10.5px; color:var(--text-dim); opacity:.62; white-space:nowrap; flex-shrink:0; cursor:default}
+/* `margin-left:auto` pega la fecha al borde derecho: el hueco vacío queda ENTRE el texto y la
+   fecha, que es lo normal en cualquier lista, en vez de detrás de la fecha, que era el páramo. */
+.todo-it .alta{font-size:10.5px; color:var(--text-dim); opacity:.62; white-space:nowrap; flex-shrink:0; cursor:default; margin-left:auto}
 .todo-it:hover .alta{opacity:.9}
 .todo-it .due{font-size:10.5px; padding:1px 7px; border-radius:20px; white-space:nowrap; flex-shrink:0}
 .todo-it .due.overdue{background:rgba(243,108,108,.18); color:#f36c6c}
@@ -461,7 +483,18 @@ ul.plain{list-style:none}
 }
 .todo-it .t a{color:var(--accent); text-decoration:underline; text-underline-offset:2px; word-break:break-all}
 /* cabecera opcional de una nota o lista de tareas: línea dim arriba, nítida al pasar el ratón */
-.notes-desc{flex-shrink:0; font-size:11px; color:var(--text-dim); opacity:.6; padding:2px 2px 5px; margin-bottom:5px; border-bottom:1px dashed var(--border-soft); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; cursor:text}
+/* 0.52.0 — la cabecera ⓘ SE PUEDE LEER ENTERA. Era una línea con puntos suspensivos y el resto
+   solo en el tooltip; como aquí vive el contrato de cada widget de la superficie, un contrato que
+   hay que ir a buscar con el ratón no es un contrato a la vista (parte de fallo de Ernesto, 06 y
+   07/08: además, ir al tooltip le hacía perder la página de la lista). Ahora se recorta a dos
+   líneas y el botón ⌄ la despliega entera. El clic sobre el texto sigue abriendo la edición.
+   Desplegada o no vive en MEMORIA, por widgetId (I7): es estado de presentación, no contenido. */
+.notes-desc{flex-shrink:0; font-size:11px; color:var(--text-dim); opacity:.6; padding:2px 2px 5px; margin-bottom:5px; border-bottom:1px dashed var(--border-soft); cursor:text;
+  display:flex; align-items:flex-start; gap:6px}
+.notes-desc .dtxt{flex:1; min-width:0; display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden; white-space:pre-wrap; word-break:break-word; line-height:1.45}
+.notes-desc.abierta .dtxt{-webkit-line-clamp:unset; overflow:visible}
+.notes-desc .dmas{border:none; background:none; color:var(--text-dim); cursor:pointer; font-size:11px; line-height:1.4; padding:0 3px; border-radius:5px; flex-shrink:0}
+.notes-desc .dmas:hover{color:var(--text); background:rgba(255,255,255,.1)}
 .win:hover .notes-desc,.win:focus-within .notes-desc{opacity:1}
 .win-body.has-desc{display:flex; flex-direction:column}
 .win-body.has-desc textarea.notes{height:auto; flex:1; min-height:60px}
@@ -499,7 +532,13 @@ ul.plain{list-style:none}
 .todo-pager .pg{font-size:11.5px; color:var(--text-dim); min-width:34px; text-align:center}
 .todo-pager .pg.dim{opacity:.72}
 .todo-pager .mini{padding:1px 8px; line-height:1.4}
-.todo-toggle{flex-shrink:0}
+/* 0.52.0 — dos pestañas, cada una con SU recuento. Antes era un botón que alternaba y mostraba el
+   número de la vista contraria: se leía como el de donde estabas. */
+.todo-tabs{display:flex; gap:4px; flex-shrink:0}
+.todo-tabs .tab{font-size:12px; padding:4px 9px; border-radius:8px; border:1px solid var(--border-soft);
+  background:rgba(255,255,255,.04); color:var(--text-dim); cursor:pointer; font-family:var(--font); white-space:nowrap}
+.todo-tabs .tab:hover{border-color:var(--accent); color:var(--text)}
+.todo-tabs .tab.on{background:var(--accent-soft); border-color:var(--accent); color:var(--text); font-weight:600}
 .todo-search{flex:1; min-width:110px; padding:5px 9px; border-radius:8px; border:1px solid var(--border-soft); background:rgba(255,255,255,.05); color:var(--text); font-family:var(--font); font-size:13px}
 .todo-search:focus{border-color:var(--accent); outline:none}
 .task-edit{flex:1; min-width:80px; padding:2px 3px; border-radius:6px; border:1px solid var(--accent);
@@ -1665,7 +1704,7 @@ function syncUI(mode, txt){
    reaparece) y si Recargar está activo. El descarte ✕ vive solo en memoria de la sesión.
    Demora asumida: la CDN de Pages puede servir la versión vieja hasta ~10 min aun con
    no-store (gobierna la caché del navegador, no la CDN); para pestañas de días, irrelevante. */
-const APP_VERSION = "0.51.0";
+const APP_VERSION = "0.52.0";
 let newVersionDetected = null;   // versión superior detectada; detiene futuras consultas
 let verDismissed = false;        // ✕: solo esta sesión — nunca persistido en disco
 let verCheckInflight = false;    // sin consultas concurrentes
@@ -3380,11 +3419,17 @@ function paintWinTags(el, w){
   const tags = w.tags || [];
   if (!tags.length){ strip.style.display = "none"; strip.innerHTML = ""; return; }
   strip.style.display = "";
-  strip.innerHTML = tags.map(tg => `<button class="tag-chip${tagFilter === tg ? " on" : ""}" data-t="${esc(tg)}">${esc(tg)}</button>`).join("");
-  strip.querySelectorAll(".tag-chip").forEach(c => c.addEventListener("click", e => {
-    e.stopPropagation();
-    setTagFilter(c.dataset.t === tagFilter ? null : c.dataset.t);
-  }));
+  // 0.52.0: viven en la barra de título, que es zona de arrastre — de ahí `draggable="false"`, o
+  // intentar filtrar arrastraría la ventana. El tooltip lleva el nombre entero porque la insignia
+  // se recorta con puntos suspensivos cuando el título es largo.
+  strip.innerHTML = tags.map(tg => `<button class="tag-chip${tagFilter === tg ? " on" : ""}${/^ia-/.test(tg) ? " sistema" : ""}" draggable="false" data-t="${esc(tg)}" title="${esc(tg)} — clic para filtrar por esta etiqueta">${esc(tg)}</button>`).join("");
+  strip.querySelectorAll(".tag-chip").forEach(c => {
+    c.addEventListener("mousedown", e => e.stopPropagation());   // no arrancar el arrastre de la ventana
+    c.addEventListener("click", e => {
+      e.stopPropagation();
+      setTagFilter(c.dataset.t === tagFilter ? null : c.dataset.t);
+    });
+  });
 }
 function allTags(){
   const set = new Set();
@@ -3788,7 +3833,10 @@ function measureContentH(w, width){
   const host = document.createElement("div");
   host.className = "win";
   host.style.cssText = "position:absolute; left:-10000px; top:0; width:" + width + "px; height:auto; min-height:0; visibility:hidden; pointer-events:none";
-  host.innerHTML = '<div class="win-title"><span class="ico">·</span><span class="tname">m</span><span class="sp"></span></div><div class="win-tags"></div><div class="win-body"></div>';
+  // Este molde MIDE el alto de una ventana, así que su esqueleto tiene que ser el mismo que el de
+  // `renderWin` — si diverge, «Ordenar» calcula altos que no existen. Desde 0.52.0 las etiquetas
+  // van DENTRO de la barra de título: dejarlas fuera aquí añadía una franja fantasma a cada medida.
+  host.innerHTML = '<div class="win-title"><span class="ico">·</span><span class="tname">m</span><div class="win-tags"></div><span class="sp"></span></div><div class="win-body"></div>';
   document.body.appendChild(host);
   try{
     renderBody(w, host.querySelector(".win-body"));
@@ -4162,9 +4210,8 @@ function buildWindow(w){
   const shownName = (privacyOn && w.priv) ? t.name : (w.t || t.name);
   if (w.priv) el.classList.add("priv");
   el.innerHTML = `
-    <div class="win-title" title="Doble clic para renombrar"><span class="ico">${t.ico}</span><span class="tname">${esc(shownName)}</span><span class="sp"></span>
+    <div class="win-title" title="Doble clic para renombrar"><span class="ico">${t.ico}</span><span class="tname">${esc(shownName)}</span><div class="win-tags"></div><span class="sp"></span>
       ${dictBtn}<button class="win-btn morebtn" title="Más opciones: etiquetas, color, cabecera, privado">⋯</button>${descBtn}${colorBtn}${privBtn}<button class="win-btn tagbtn" title="Etiquetas">🏷️</button><button class="win-btn maxb" title="${w.max ? "Restaurar tamaño" : "Maximizar"}">${w.max ? "❐" : "⛶"}</button><button class="win-btn collapse" title="Plegar / desplegar">${w.collapsed ? "▸" : "▾"}</button><button class="win-btn close" title="Cerrar">✕</button></div>
-    <div class="win-tags"></div>
     <div class="win-body"></div>
     <div class="win-resize" data-rz="se"></div>
     <div class="rz rz-n" data-rz="n"></div><div class="rz rz-s" data-rz="s"></div><div class="rz rz-e" data-rz="e"></div><div class="rz rz-w" data-rz="w"></div><div class="rz rz-ne" data-rz="ne"></div><div class="rz rz-nw" data-rz="nw"></div><div class="rz rz-sw" data-rz="sw"></div>`;
@@ -5071,13 +5118,12 @@ function editWinColor(w, el){
 function bodyNotes(w, el){
   const desc = String(w.data.desc || "").trim();
   el.classList.toggle("has-desc", !!desc);
-  el.innerHTML = (desc ? `<div class="notes-desc" title="${esc(desc)} (clic para editar)">${esc(desc)}</div>` : "")
+  el.innerHTML = (desc ? `${descHtml(desc, w.id)}` : "")
     + `<textarea class="notes" placeholder="Escribe aquí…"></textarea>`;
   const ta = el.querySelector("textarea");
   ta.value = w.data.text || "";
   ta.addEventListener("input", () => { w.data.text = ta.value; markDirty(); });
-  const line = el.querySelector(".notes-desc");
-  if (line) line.addEventListener("click", () => editNoteDesc(w, el.closest(".win")));
+  wireDesc(el, w);
   // marcador o enlace soltado sobre la nota → se añade al final, una línea por enlace
   wireLinkCapture(el, links => {
     const add = links.map(linkCaptureText).join("\n");
@@ -5235,6 +5281,28 @@ const todoPage = new Map();
    para no ganar nada. */
 const todoDraft = new Map();
 
+/* 0.52.0 — la cabecera ⓘ, en un solo sitio. La pintaban tres cuerpos distintos (Nota, Tareas y
+   Markdown) con el mismo literal copiado: al hacerla desplegable habría habido que tocar los tres
+   y acordarse de los tres. `descAbierta` guarda por widgetId cuáles están desplegadas, en MEMORIA
+   y nunca en datos.json (I7: es presentación, y persistirla obligaría a sanearla y fusionarla). */
+const descAbierta = new Set();
+const descHtml = (desc, wid) =>
+  `<div class="notes-desc${descAbierta.has(wid) ? " abierta" : ""}">`
+  + `<span class="dtxt" title="${esc(desc)} (clic para editar)">${esc(desc)}</span>`
+  + `<button class="dmas" type="button" title="${descAbierta.has(wid) ? "Plegar la cabecera" : "Ver la cabecera entera"}">${descAbierta.has(wid) ? "⌃" : "⌄"}</button></div>`;
+// Devuelve la línea ya cableada, o null si el widget no tiene cabecera.
+function wireDesc(el, w, onToggle){
+  const line = el.querySelector(".notes-desc");
+  if (!line) return null;
+  line.querySelector(".dtxt").addEventListener("click", () => editNoteDesc(w, el.closest(".win")));
+  line.querySelector(".dmas").addEventListener("click", e => {
+    e.stopPropagation();   // sobre el texto, el clic edita: el botón no puede heredar eso
+    if (descAbierta.has(w.id)) descAbierta.delete(w.id); else descAbierta.add(w.id);
+    if (onToggle) onToggle(); else refreshWidget(w);
+  });
+  return line;
+}
+
 /* 0.50.0 — ¿esta tarea CERRADA tiene algo que llegó después de cerrarla?
    Nace de una regla suya: si el agente tiene que contestarle en una tarea que él dio por hecha, no
    se la reabre («yo no revisaré las cerradas», pero cerrar es suyo). La salida es avisar sin
@@ -5247,18 +5315,25 @@ function agenteTrasCierre(it){
   const u = it.replies[it.replies.length - 1];
   return !!(u && u.by === "agente" && (!it.doneAt || u.at > it.doneAt));
 }
+/* 0.52.0 — ¿esta tarea VIVA tiene la última palabra del agente? Es la misma derivación por orden
+   que pinta el 🤖 de cada fila (I4: nunca se guarda un «leído»), sacada a función para poder
+   contarlas en la pestaña. Existía el contador de «Hechas» y no el de «Pendientes», y por eso
+   Ernesto veía un robot en el recuento y no daba con la tarea: estaba en otra vista. */
+function esperaRespuestaSuya(it){
+  if (!it || !Array.isArray(it.replies) || !it.replies.length) return false;
+  return it.replies[it.replies.length - 1].by === "agente";
+}
 
 function bodyTodo(w, el){
   const desc = String(w.data.desc || "").trim();
   el.classList.toggle("has-desc", !!desc);
-  el.innerHTML = (desc ? `<div class="notes-desc" title="${esc(desc)} (clic para editar)">${esc(desc)}</div>` : "")
+  el.innerHTML = (desc ? `${descHtml(desc, w.id)}` : "")
     + `
     <div class="todo-add"><input type="text" placeholder="Nueva tarea…"><button class="mini">＋</button></div>
-    <div class="todo-bar"><button class="mini todo-toggle"></button><input type="search" class="todo-search" placeholder="Buscar en hechas…" style="display:none"></div>
+    <div class="todo-bar"><div class="todo-tabs todo-toggle"></div><input type="search" class="todo-search" placeholder="Buscar…"></div>
     <ul class="plain todo-list"></ul>`;
   if (!Array.isArray(w.data.items)) w.data.items = [];
-  const dline = el.querySelector(".notes-desc");
-  if (dline) dline.addEventListener("click", () => editNoteDesc(w, el.closest(".win")));
+  wireDesc(el, w);
   const inp = el.querySelector(".todo-add input"), ul = el.querySelector(".todo-list");
   const toggle = el.querySelector(".todo-toggle"), search = el.querySelector(".todo-search");
   const bar = el.querySelector(".todo-bar");
@@ -5287,8 +5362,9 @@ function bodyTodo(w, el){
   el.querySelector(".todo-add .mini").addEventListener("click", add);
   inp.addEventListener("keydown", e => { if (e.key === "Enter") add(); });
   // cambiar de vista o filtrar empieza por la primera página: conservar la posición solo tiene
-  // sentido dentro de la MISMA lista; entre listas distintas sería memoria de otra cosa
-  toggle.addEventListener("click", () => { view = view === "pend" ? "done" : "pend"; search.value = ""; setPage(0); paint(); });
+  // sentido dentro de la MISMA lista; entre listas distintas sería memoria de otra cosa.
+  // 0.52.0: el cambio de vista lo cablea `paint()` en cada pestaña, porque los botones se
+  // repintan con sus recuentos; aquí ya no queda nada que escuchar.
   search.addEventListener("input", () => { setPage(0); paint(); });
   // marcador o enlace soltado sobre la lista → una tarea por enlace (la URL queda clicable)
   wireLinkCapture(el, links => {
@@ -5530,15 +5606,34 @@ function bodyTodo(w, el){
     // 0.50.0 — lo que llegó DESPUÉS de que la dieras por hecha. Es información, no trabajo: por eso
     // no reabre la tarea (cerrar es tuyo) y por eso el aviso vive aquí, en la puerta de «Hechas».
     const avisoN = w.data.items.filter(agenteTrasCierre).length;
-    toggle.innerHTML = view === "pend"
-      ? `🗂️ Hechas (${doneN})` + (avisoN ? ` <span class="tog-aviso" title="${avisoN} tarea(s) cerrada(s) con una respuesta que llegó después: entra y léelas">· 🤖 ${avisoN}</span>` : "")
-      : "‹ Pendientes";
-    search.style.display = view === "done" ? "" : "none";
+    // 0.52.0 — DOS PESTAÑAS CON SU RECUENTO, no un botón que alterna. Su crítica del 07/08, y es
+    // de fondo, no cosmética: se estaban mezclando dos cosas distintas —el ACCESO a una vista y el
+    // RECUENTO de esa vista—, así que «Hechas (12)» desde Pendientes se leía como si el 12 fuera de
+    // donde estás. Con dos pestañas, cada número dice de lo suyo y se ve dónde estás sin pensar.
+    // El 🤖 va en las DOS: en Hechas es lo que llegó tras cerrar; en Pendientes, lo que espera
+    // respuesta tuya. Antes solo existía el de Hechas y por eso «veía un robot y no lo encontraba».
+    const pendN = w.data.items.filter(i => !i.done).length;
+    const pendBot = w.data.items.filter(i => !i.done && esperaRespuestaSuya(i)).length;
+    const bot = (n, t) => n ? ` <span class="tog-aviso" title="${t}">· 🤖 ${n}</span>` : "";
+    toggle.innerHTML =
+      `<button class="tab${view === "pend" ? " on" : ""}" data-v="pend" type="button">📋 Pendientes (${pendN})`
+      + bot(pendBot, `${pendBot} tarea(s) pendiente(s) con una respuesta del agente sin contestar`) + `</button>`
+      + `<button class="tab${view === "done" ? " on" : ""}" data-v="done" type="button">🗂️ Hechas (${doneN})`
+      + bot(avisoN, `${avisoN} tarea(s) cerrada(s) con una respuesta que llegó después: entra y léelas`) + `</button>`;
+    toggle.querySelectorAll(".tab").forEach(b => b.addEventListener("click", () => {
+      if (view === b.dataset.v) return;
+      view = b.dataset.v; search.value = ""; setPage(0); paint();
+    }));
+    // 0.52.0 — la lupa vale en las DOS vistas. Con 168 ítems, «buscar solo en hechas» era la mitad
+    // de lo útil: lo que más se busca es una tarea viva que se ha ido a la página 7.
+    search.placeholder = view === "pend" ? "Buscar en pendientes…" : "Buscar en hechas…";
 
     let list, vacio;
     if (view === "pend"){
-      list = w.data.items.filter(i => !i.done);
-      vacio = `<div class="empty">Sin tareas pendientes.</div>`;
+      const q = search.value.trim().toLowerCase();
+      list = w.data.items.filter(i => !i.done && (!q || i.t.toLowerCase().includes(q)));
+      vacio = q ? `<div class="empty">Ninguna tarea pendiente con «${esc(search.value.trim())}».</div>`
+                : `<div class="empty">Sin tareas pendientes.</div>`;
     } else {
       const q = search.value.trim().toLowerCase();
       list = w.data.items.filter(i => i.done && (!q || i.t.toLowerCase().includes(q)))
@@ -6498,7 +6593,7 @@ function bodyMd(w, el){
   const desc = String(w.data.desc || "").trim();
   el.classList.toggle("has-desc", !!desc);
   el.innerHTML = `
-    ${desc ? `<div class="notes-desc" title="${esc(desc)} (clic para editar)">${esc(desc)}</div>` : ""}
+    ${desc ? `${descHtml(desc, w.id)}` : ""}
     <div class="md-bar"><button class="mini tg">${view ? "✏️ Editar" : "👁️ Vista"}</button><button class="mini pg" title="Pegar del portapapeles (tabla, Excel, CSV, JSON…)">📋 Pegar</button><button class="mini cp" title="Copiar el Markdown">⧉</button></div>
     ${view ? `<div class="md-view" tabindex="0"></div>` : `<textarea class="notes md-src" placeholder="Escribe Markdown… (#, **, -, [texto](url), tablas con |, \`\`\`)"></textarea>`}`;
   if (view){
@@ -6508,8 +6603,7 @@ function bodyMd(w, el){
     ta.value = w.data.text || "";
     ta.addEventListener("input", () => { w.data.text = ta.value; markDirty(); });
   }
-  const descLine = el.querySelector(".notes-desc");
-  if (descLine) descLine.addEventListener("click", () => editNoteDesc(w, el.closest(".win")));
+  wireDesc(el, w);
   el.querySelector(".tg").addEventListener("click", () => { w.data.view = view ? "edit" : "view"; refreshWidget(w); markDirty(); });
   el.querySelector(".cp").addEventListener("click", async () => { await navigator.clipboard.writeText(w.data.text || ""); toast("Markdown copiado"); });
   el.querySelector(".pg").addEventListener("click", async () => {
