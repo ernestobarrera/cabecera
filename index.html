@@ -338,7 +338,11 @@ body{font-family:var(--font); color:var(--text); background:#10131a}
 /* ---------- overlays / modales ---------- */
 .overlay{position:fixed; inset:0; z-index:900; display:none; align-items:center; justify-content:center; background:rgba(5,7,12,.72); backdrop-filter:blur(6px)}
 .overlay.open{display:flex}
-.modal{width:min(560px, 92vw); max-height:86vh; overflow:auto; background:rgba(20,24,32,.84); border:1px solid var(--border);
+/* 0.56.0 — los diálogos siguen la escala de accesibilidad (`--uiz`). Van con `zoom` y no con
+   font-size por lo mismo que las ventanas: la hoja está en px. Se centran con flexbox, así que
+   escalarlos no los descoloca; los menús que se colocan con píxeles calculados en JS quedan fuera
+   a propósito. */
+.modal{zoom:var(--uiz, 1); width:min(560px, 92vw); max-height:86vh; overflow:auto; background:rgba(20,24,32,.84); border:1px solid var(--border);
   border-radius:14px; box-shadow:var(--shadow); padding:22px}
 .modal h2{font-size:19px; margin-bottom:6px}
 .modal p{font-size:13.5px; color:var(--text-dim); line-height:1.55; margin-bottom:10px}
@@ -416,9 +420,16 @@ ul.plain{list-style:none}
    no hay reflow. Los datos y las acciones comparten ranura porque nunca los quieres a la vez:
    miras la fecha cuando lees, pulsas los botones cuando actúas.
    Solo donde hay hover: en táctil la banda va en el flujo y no tapa nada. */
+/* 0.56.0 — la MARCA 💬/🤖 cede el sitio igual que la fecha y el vencimiento. Parte de fallo suya
+   del 07/08: «en tareas de una sola línea el flotante tapa las marcas igual». Cierto, y la razón
+   es que 0.51.0 solo hizo ceder a `.alta` y `.due`: la marca va a su izquierda y la banda es más
+   ancha que las dos juntas, así que en cuanto la fila es corta la alcanza. No se pierde señal —
+   el propio botón `it-reply` de la banda se pinta 🤖 en ámbar cuando hay respuesta sin contestar
+   (invariante de 0.49.0), así que mientras la banda tapa la marca, la banda ES la marca.
+   `visibility:hidden` y no `display:none`: el hueco se conserva y no hay reflow. */
 @media (any-hover:hover){
   .todo-it{padding-right:var(--todo-acts)}
-  .todo-it:hover .alta,.todo-it:hover .due{visibility:hidden}
+  .todo-it:hover .alta,.todo-it:hover .due,.todo-it:hover .task-note-mark{visibility:hidden}
 }
 .todo-it:hover{background:rgba(255,255,255,.04)}
 .todo-it.has-task-color{box-shadow:inset 3px 0 0 var(--task-color); padding-left:8px}
@@ -927,7 +938,7 @@ ul.plain{list-style:none}
 </div>
 
 <div id="taskbar">
-  <button id="btn-inicio">⊞ Inicio</button>
+  <button id="btn-inicio" title="Añadir widgets y configuración  ·  Ctrl+clic derecho sobre el escritorio lo abre junto al puntero">⊞ Inicio</button>
   <button id="btn-fold" title="Plegar / desplegar todos los widgets">⊟</button>
   <div id="tb-spaces" title="Espacios (escritorios): clic para cambiar, doble clic para renombrar, arrastra para reordenar"></div>
   <button id="space-add" title="Nuevo espacio">＋</button>
@@ -1101,7 +1112,7 @@ ul.plain{list-style:none}
       </select>
     </div>
     <div class="field" style="flex-direction:column; align-items:stretch; gap:4px">
-      <label for="cfg-scale" style="font-size:13px"><b>Tamaño de la letra</b> <span style="color:var(--text-dim)">— todo el sitio; el zoom por ventana sigue siendo aparte</span></label>
+      <label for="cfg-scale" style="font-size:13px"><b>Tamaño de la letra</b> <span style="color:var(--text-dim)">— el contenido de las ventanas y los diálogos, sin moverlas de sitio; el zoom de una ventana suelta sigue siendo aparte</span></label>
       <select id="cfg-scale" class="cfg-sel">
         <option value="100">Normal</option>
         <option value="110">Grande (110 %)</option>
@@ -1559,9 +1570,36 @@ function applyFont(){
      El contraste sube las variables de borde y de texto atenuado. Se hizo con variables y no con
      un tema aparte para que no haya dos paletas que mantener: el modo alto es la misma paleta con
      los grises menos grises. */
-  const esc = [100, 110, 125].includes(+a.uiScale) ? +a.uiScale : 100;
-  document.documentElement.style.fontSize = esc === 100 ? "" : (16 * esc / 100) + "px";
+  /* 0.56.0 — CORRECCIÓN: en 0.55.0 esto se aplicaba como `font-size` de la raíz y NO HACÍA NADA.
+     Parte de fallo suyo el mismo día: «pues lo he hecho y no se mueve nada». La causa es que la
+     hoja entera está escrita en px —159 declaraciones de `font-size`, cero `rem`—, así que el
+     tamaño de la raíz no lo hereda nadie. Reescribirlas todas a rem sería un diff enorme y
+     frágil; se usa el mismo mecanismo que ya funciona para el zoom por ventana: `zoom`, que rehace
+     el flujo en vez de estirar píxeles. Se aplica al CONTENIDO de las ventanas y a los diálogos,
+     que es donde se lee, y no a la barra ni a los menús flotantes: esos se colocan con píxeles
+     calculados en JS y escalarlos los movería de sitio, que es justo lo que la función promete no
+     hacer. La etiqueta del panel ⚙ dice ahora exactamente eso, ni más. */
+  document.documentElement.style.fontSize = "";
+  document.documentElement.style.setProperty("--uiz", uiFactor());
   document.documentElement.classList.toggle("contraste-alto", a.contrast === "alto");
+  // las ventanas ya pintadas se reajustan en el sitio: el panel ⚙ tiene previsualización
+  document.querySelectorAll(".win").forEach(el => {
+    const w = state && (state.widgets || []).find(x => x.id === el.dataset.id);
+    if (w) aplicaZoom(el, w);
+  });
+}
+// escala de interfaz: whitelist, como las pilas tipográficas — nunca un número libre del archivo
+const UI_ESCALAS = [100, 110, 125];
+function uiScale(){ const v = +appSettings().uiScale; return UI_ESCALAS.includes(v) ? v : 100; }
+function uiFactor(){ return uiScale() / 100; }
+/* El zoom efectivo del cuerpo de una ventana es el PRODUCTO de los dos: el global (accesibilidad)
+   y el suyo propio (Ctrl+rueda). Se multiplica aquí, en un solo sitio, porque `zoom` anidado ya
+   compone y tener dos elementos que lo apliquen por separado obligaría a un envoltorio nuevo. */
+function aplicaZoom(el, w){
+  const b = el && el.querySelector(".win-body");
+  if (!b) return;
+  const z = (zoomDe(w) / 100) * uiFactor();
+  b.style.zoom = z === 1 ? "" : z;
 }
 // Panel ⚙ — edición TRANSACCIONAL (gate): el modal es un borrador; la preview tipográfica es solo
 // DOM; el estado se toca ÚNICAMENTE en Guardar (un markDirty). Cancelar/Esc revierte la preview.
@@ -1816,7 +1854,7 @@ function syncUI(mode, txt){
    reaparece) y si Recargar está activo. El descarte ✕ vive solo en memoria de la sesión.
    Demora asumida: la CDN de Pages puede servir la versión vieja hasta ~10 min aun con
    no-store (gobierna la caché del navegador, no la CDN); para pestañas de días, irrelevante. */
-const APP_VERSION = "0.55.0";
+const APP_VERSION = "0.56.0";
 let newVersionDetected = null;   // versión superior detectada; detiene futuras consultas
 let verDismissed = false;        // ✕: solo esta sesión — nunca persistido en disco
 let verCheckInflight = false;    // sin consultas concurrentes
@@ -3670,10 +3708,38 @@ function tagFilterMapa(){
     n: (sp.widgets || []).filter(w => (w.tags || []).includes(tagFilter) && !(privacyOn && w.priv)).length
   })).filter(x => x.n > 0);
 }
+/* 0.56.0 — el MARCADOR de etiqueta vive siempre en la barra, no solo cuando ya filtras.
+   Pedido suyo del 07/08 («este filtro no debería vivir también en la barra de estado, junto al
+   icono de tareas pendientes… busca si es UX y canónico»): lo es, y por la razón que él daba —
+   Evernote y Obsidian lo ponen a la vista porque un filtro de uso diario no puede vivir solo
+   detrás de un atajo. Iba DETRÁS del filtro transversal a propósito: un control global que
+   filtrase solo el escritorio activo habría sido peor que no tenerlo. Eso se cerró en 0.54.0, así
+   que la dependencia ya no existe. El desplegable reutiliza `openCtx` con una lista propia, el
+   mismo mecanismo que el salto entre escritorios: cero superficie nueva que estilar. */
+function tagsConteo(){
+  if (!state) return [];
+  const m = new Map();
+  state.spaces.forEach(sp => (sp.widgets || []).forEach(w => {
+    if (privacyOn && w.priv) return;   // una etiqueta de un widget oculto no se ofrece: su nombre es fuga
+    (w.tags || []).forEach(t => m.set(t, (m.get(t) || 0) + 1));
+  }));
+  return [...m.entries()].sort((a, b) => a[0].localeCompare(b[0], "es"));
+}
 function renderTagFilterBar(){
   const el = $("#tb-filter");
   if (!el) return;
-  if (!tagFilter){ el.style.display = "none"; el.innerHTML = ""; return; }
+  if (!tagFilter){
+    const tags = tagsConteo();
+    if (!tags.length){ el.style.display = "none"; el.innerHTML = ""; return; }
+    el.style.display = "flex";
+    el.title = "Filtrar por etiqueta — " + tags.length + (tags.length === 1 ? " etiqueta en uso" : " etiquetas en uso");
+    el.innerHTML = `🏷️ <span class="tf-n">${tags.length}</span>`;
+    el.onclick = e => openCtx(e.clientX, e.clientY - 12 * Math.min(tags.length, 12), null, null,
+      tags.map(([t, n]) => ["🏷️", `${t} — ${n} widget${n === 1 ? "" : "s"}`, () => setTagFilter(t)]));
+    return;
+  }
+  el.onclick = null;
+  el.title = "Filtro por etiqueta activo";
   const mapa = tagFilterMapa();
   const aqui = (mapa.find(x => x.si === state.active) || { n: 0 }).n;
   const fuera = mapa.filter(x => x.si !== state.active);
@@ -4446,7 +4512,7 @@ function buildWindow(w){
     <div class="win-resize" data-rz="se"></div>
     <div class="rz rz-n" data-rz="n"></div><div class="rz rz-s" data-rz="s"></div><div class="rz rz-e" data-rz="e"></div><div class="rz rz-w" data-rz="w"></div><div class="rz rz-ne" data-rz="ne"></div><div class="rz rz-nw" data-rz="nw"></div><div class="rz rz-sw" data-rz="sw"></div>`;
   if (w.collapsed) el.classList.add("collapsed");
-  { const b = el.querySelector(".win-body"); if (b && zoomDe(w) !== 100) b.style.zoom = zoomDe(w) / 100; }
+  aplicaZoom(el, w);   // zoom propio de la ventana × escala global de accesibilidad
   /* 0.48.0 — «esconder ≠ ordenar». Etiquetas, color, cabecera y privado estaban a opacidad cero:
      medio widget era indescubrible, y ninguno de los cuatro tenía OTRA puerta (la paleta filtra
      por etiquetas que ya existen, pero no sirve para poner la primera). Ernesto, que ha escrito
@@ -5604,8 +5670,7 @@ function setZoom(w, z){
   toast("Zoom de la ventana: " + v + "%");
 }
 function aplicarZoom(w){
-  const el = document.querySelector('.win[data-id="' + w.id + '"] .win-body');
-  if (el) el.style.zoom = zoomDe(w) === 100 ? "" : (zoomDe(w) / 100);
+  aplicaZoom(document.querySelector('.win[data-id="' + w.id + '"]'), w);
 }
 
 function bodyTodo(w, el){
@@ -8309,8 +8374,15 @@ function paletteEntries(){
   add("📦", "Guardar, compartir o reutilizar…", "cuál de los tres archivos necesito", () => { closeMenu(); openResourceGuide(); }, "copia seguridad backup compartir pack plantilla exportar importar restaurar archivo json cual de los tres necesito diferencia entre formatos me equivoco");
   add("👁", "Seguir un escritorio por URL", "verlo en solo lectura", () => { closeMenu(); promptFollowUrl(); }, "seguir escritorio url compartido solo lectura suscribir suscripcion ver");
   add("📥", "Abrir un escritorio compartido", "desde un archivo", () => { closeMenu(); importSharedFile(); }, "abrir importar escritorio compartido archivo json recibir exportado restaurar espacio");
+  /* 0.56.0 — la paleta entiende los MISMOS sinónimos que el filtro del menú Inicio (`busca` en
+     WTYPES). Parte de fallo suya del 07/08: le pedí que escribiera «vacaciones» «en el filtro
+     nuevo» y lo escribió en la caja de arriba, que es la que tiene el foco al abrir el menú — y
+     allí no salía nada. Dos buscadores en el mismo panel que no entienden lo mismo es lo que él
+     llamó «comportamiento poco armónico», y tenía razón: la fuente de sinónimos es única, lo que
+     faltaba era consultarla desde aquí. */
   for (const [type, t] of Object.entries(WTYPES)) if (type !== "intro")
-    add("➕", "Añadir " + t.name, "widget nuevo", () => { addWidget(type); closeMenu(); }, "añadir crear nuevo " + t.name);
+    add("➕", "Añadir " + t.name, "widget nuevo", () => { addWidget(type); closeMenu(); },
+      "añadir crear nuevo " + t.name + " " + type + " " + (t.busca || ""));
   [["⚙","Ajustes generales","act-config"],["❓","Guía","act-ayuda"],["🧩","Packs","act-packs"],["🖼️","Fondo","act-wallpaper"],["📁","Sincronizar equipos","act-folder"],["🧭","Ordenar","act-arrange"],["🗑️","Papelera","act-trash"],["📦","Guardar, compartir o reutilizar","act-archivos"],["⬇️","Exportar copia","act-export"],["⬆️","Importar copia","act-import"],["📥","Abrir escritorio compartido","act-open-shared"],["♻️","Restaurar copia","act-restore"]]
     .forEach(([ic, label, id]) => add(ic, label, "acción", () => { closeMenu(); const b = $("#" + id); if (b) b.click(); }, label + " configuración"));
   return E;
@@ -8536,6 +8608,12 @@ function wireUI(){
     // «buscar con…» y el corrector, y sustituirlos sería empeorar
     if (e.target.closest("input, textarea, [contenteditable], a")) return;
     if (String(getSelection() || "").trim().length) return;   // hay texto seleccionado: copiar es del navegador
+    /* 0.56.0 — Ctrl+clic derecho abre INICIO junto al puntero. Estaba anunciado en la tabla de
+       atajos desde 0.53.0 y no existía: lo implementado era Ctrl+DOBLE clic. Parte de fallo suya
+       del 07/08 («el atajo de control mas botón derecho, no abre inicio»), y del tipo peor: un
+       atajo escrito y no implementado gasta la confianza en toda la tabla. El doble clic con Ctrl
+       se queda, porque ya está en el hábito de quien lo use. */
+    if (e.ctrlKey || e.metaKey){ e.preventDefault(); openMenu("start", { x: e.clientX, y: e.clientY }); return; }
     const winEl = e.target.closest(".win");
     const w = winEl ? state.widgets.find(x => x.id === winEl.dataset.id) : null;
     if (winEl && !w) return;
@@ -8615,8 +8693,19 @@ function wireUI(){
     if (e.ctrlKey) openMenu("start", { x: e.clientX, y: e.clientY });
     else openMenu("palette");
   });
+  /* 0.56.0 — cerrar el menú al pulsar FUERA se decide por `composedPath()`, no por `e.target`.
+     Parte de fallo suya del 07/08: «al pulsar una etiqueta de filtros se cierra inicio y no las
+     puedo ver». La causa no estaba aquí a la vista: pulsar una categoría repinta la fila entera
+     (`pintarTipos`), así que para cuando este listener corría, el botón pulsado ya estaba
+     DESPRENDIDO del DOM y `closest("#menu")` devolvía null — el menú se cerraba solo. El camino
+     del evento se fija al despacharlo y sigue conteniendo a sus ancestros aunque el nodo se
+     retire, así que resuelve la familia entera del defecto, no solo el caso de las categorías. */
   document.addEventListener("click", e => {
-    if (!e.target.closest("#menu") && !e.target.closest("#btn-inicio") && !e.target.closest("#desk-dock")) closeMenu();
+    const camino = e.composedPath ? e.composedPath() : [];
+    const dentro = camino.length
+      ? camino.some(n => n && (n.id === "menu" || n.id === "btn-inicio" || n.id === "desk-dock"))
+      : !!(e.target.closest("#menu") || e.target.closest("#btn-inicio") || e.target.closest("#desk-dock"));
+    if (!dentro) closeMenu();
   });
   /* 0.55.0 — Ctrl+rueda sobre una ventana la amplía o la reduce. Se anuncia en el menú y en la
      lista de atajos, así que TIENE que existir: un atajo escrito y no implementado es peor que no
@@ -9067,6 +9156,10 @@ function clinConvert(u, valor, haciaB){
   const d = u.dec[haciaB ? 1 : 0];
   return Number(r.toFixed(d));
 }
+/* Historial de la calculadora POR WIDGET y en memoria (I7): ni se guarda en `datos.json` —sería un
+   registro de lo que has estado mirando en consulta— ni se pierde al repintar. Ver la nota larga
+   dentro de `bodyCalc`. */
+const calcHist = new Map();
 function bodyCalc(w, el){
   el.innerHTML = `<div class="calc" tabindex="0"><div class="calc-dsp">0</div><div class="calc-hist" hidden></div><div class="calc-conv" hidden></div><div class="calc-grid"></div>
     <div class="calc-tabs"><button class="mini ch" title="Últimas operaciones">🕘 Historial</button><button class="mini cc" title="Conversión de unidades clínicas">🧪 Unidades</button></div></div>`;
@@ -9096,9 +9189,15 @@ function bodyCalc(w, el){
     else if (acc === null || fresh === false) acc = n;
     cur = fmt(acc); op = o; fresh = true; show();
   };
-  // El historial es de SESIÓN, no se guarda: una calculadora que persiste lo que has calculado
-  // acaba siendo un registro de lo que estabas mirando, y esto se usa en consulta.
-  const historial = [];
+  /* El historial es de SESIÓN, no se guarda: una calculadora que persiste lo que has calculado
+     acaba siendo un registro de lo que estabas mirando, y esto se usa en consulta.
+     0.56.0 — pero «de sesión» tenía que significar la SESIÓN, no el repintado. Parte de fallo suya
+     del 07/08: «al cambiar de escritorio se pierde». Era el mismo defecto que `todoPage` y
+     `todoDraft` (I7): vivía en el cierre de `bodyCalc`, y `renderBody` reconstruye el cuerpo cada
+     vez que se cambia de escritorio, llega una relectura o se repinta el widget. Ahora vive en un
+     Map por widgetId, en MEMORIA: sobrevive al repintado y muere con la pestaña, que es
+     exactamente lo que promete la ⓘ y lo que exige el motivo clínico de no persistirlo. */
+  const historial = calcHist.get(w.id) || calcHist.set(w.id, []).get(w.id);
   const pintaHist = () => {
     hist.innerHTML = historial.length
       ? historial.slice(-12).reverse().map(h => `<div class="calc-h" title="Clic para reutilizar el resultado" data-v="${esc(h.r)}">${esc(h.e)} <b>= ${esc(h.r)}</b></div>`).join("")

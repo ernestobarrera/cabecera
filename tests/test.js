@@ -2690,8 +2690,11 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
     // propio y va alineada a la derecha — se lee como orden, no como un margen al final.
     if (!/\.todo-it \.alta\{[^}]*min-width:\d+px/.test(html) || !/\.todo-it \.alta\{[^}]*text-align:right/.test(html))
       throw new Error('la columna de fecha necesita ancho mínimo y alineación derecha, o el hueco vuelve a leerse como margen muerto');
-    if (!/\.todo-it:hover \.alta,\.todo-it:hover \.due\{visibility:hidden\}/.test(html))
-      throw new Error('la fecha y el vencimiento deben ceder su sitio a la banda al pasar el ratón');
+    // 0.56.0 — y la MARCA 💬/🤖 cede con ellos. Solo cedían `.alta` y `.due`, pero la marca va a su
+    // izquierda y la banda es más ancha que las dos juntas: en una tarea de una línea la alcanzaba
+    // igual (parte de fallo suya, 07/08). No se pierde señal porque `it-reply` la asume en ámbar.
+    if (!/\.todo-it:hover \.alta,\.todo-it:hover \.due,\.todo-it:hover \.task-note-mark\{visibility:hidden\}/.test(html))
+      throw new Error('la fecha, el vencimiento y la marca 💬/🤖 deben ceder su sitio a la banda al pasar el ratón');
     if (/\.todo-it:hover \.alta[^{]*\{[^}]*display:none/.test(html))
       throw new Error('ceder con display colapsa el hueco y devuelve el salto: tiene que ser visibility');
     if (!/\.todo-it \.alta\{[^}]*margin-left:auto/.test(html))
@@ -2954,11 +2957,28 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
 
     // (3) ACCESIBILIDAD. El tamaño crece el TEXTO, no la geometría: un zoom global movería las
     // ventanas y estropearía los carriles.
+    /* 0.56.0 — ESTE TEST ESTABA MAL. Fijaba el mecanismo (`font-size` de la raíz) en vez del
+       efecto, así que daba verde sobre una función INERTE: la hoja está escrita en px y nadie
+       hereda el tamaño de la raíz. Se comprueba ahora lo que él comprobó a mano y falló —«lo he
+       hecho y no se mueve nada»—: que el mecanismo elegido sea compatible con las unidades reales
+       de la hoja, y que llegue al contenido. Lección para el resto de la suite: un test que fija
+       CÓMO se hace algo no prueba que se haga. */
+    const remS = (html.match(/font-size:\s*[\d.]+rem/g) || []).length;
+    const pxS  = (html.match(/font-size:\s*[\d.]+px/g) || []).length;
     const af = src.match(/function applyFont\(\)\{[\s\S]*?\n\}/)[0];
-    if (!/documentElement\.style\.fontSize/.test(af))
-      throw new Error('el tamaño de letra se aplica como font-size de la raíz, no como zoom del documento');
+    if (remS === 0 && /documentElement\.style\.fontSize\s*=\s*[^\s"']/.test(af))
+      throw new Error(`la hoja tiene ${pxS} font-size en px y ${remS} en rem: escalar la raíz no cambia nada — el ajuste sería inerte`);
     if (/documentElement\.style\.zoom/.test(af))
       throw new Error('un zoom global movería las ventanas de sitio: no es lo mismo texto grande que todo grande');
+    if (!/setProperty\("--uiz"/.test(af)) throw new Error('la escala se publica como variable --uiz, que es lo que consumen ventanas y diálogos');
+    const azo = src.match(/function aplicaZoom\(el, w\)\{[\s\S]*?\n\}/)[0];
+    if (!/uiFactor\(\)/.test(azo) || !/zoomDe\(w\)/.test(azo))
+      throw new Error('el zoom del cuerpo es el PRODUCTO del propio de la ventana y el global: si no, uno pisa al otro');
+    if (!/\.modal\{zoom:var\(--uiz/.test(html))
+      throw new Error('los diálogos siguen la escala: es la otra mitad de donde se lee');
+    for (const sel of ['#taskbar', '#menu', '#ctx-menu'])
+      if (new RegExp(sel.replace('#', '#') + '\\{[^}]*zoom:').test(html))
+        throw new Error(`${sel} se coloca con píxeles calculados en JS: escalarlo lo movería de sitio, que es justo lo que la función promete no hacer`);
     if (!/\.contraste-alto\{/.test(html)) throw new Error('falta el modo de alto contraste');
     for (const v of ['--border:', '--text-dim:'])
       if (!cssOf(':root.contraste-alto').includes(v)) throw new Error(`el alto contraste debe subir ${v}`);
@@ -2969,6 +2989,48 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
     if (!/uiScale === 110 \|\| s\.appSettings\.uiScale === 125/.test(san) || !/contrast === "alto"/.test(san))
       throw new Error('los ajustes nuevos entran por la whitelist, como los demás: nada de copiar appSettings a ciegas');
     console.log('OK 0.55.0 (menú a dos niveles derivado de WTYPES, zoom por ventana con su atajo real, letra y contraste)');
+  }
+
+  // --- 0.56.0: cinco partes de fallo suyas del 07/08 + el marcador de etiqueta -----------------
+  {
+    // (1) EL MENÚ NO SE CIERRA AL REPINTARSE POR DENTRO. Pulsar una categoría llama a
+    // `pintarTipos`, que rehace la fila: el botón pulsado queda desprendido y `e.target.closest`
+    // devuelve null. El camino del evento se fija al despacharlo y sobrevive a eso.
+    const cerrador = src.match(/document\.addEventListener\("click", e => \{[\s\S]*?\n  \}\);/)[0];
+    if (!/composedPath/.test(cerrador))
+      throw new Error('cerrar por e.target cierra el menú cuando el propio menú se repinta al pulsarlo: hay que mirar el camino del evento');
+
+    // (2) EL ATAJO ANUNCIADO EXISTE (R27 + honestidad). Ctrl+clic derecho abre Inicio; estaba en
+    // la tabla desde 0.53.0 y lo implementado era Ctrl+DOBLE clic.
+    if (!/inicio:\s*\{ teclas: "Ctrl\+clic derecho"/.test(src))
+      throw new Error('la tabla única debe declarar el atajo de Inicio');
+    const ctxm = src.match(/\$\("#desktop"\)\.addEventListener\("contextmenu"[\s\S]*?\n  \}\);/)[0];
+    if (!/e\.ctrlKey[\s\S]{0,120}openMenu\("start"/.test(ctxm))
+      throw new Error('Ctrl+clic derecho está anunciado: si no abre Inicio, la tabla de atajos deja de ser fiable entera');
+    if (!/id="btn-inicio"[^>]*title="[^"]*Ctrl\+clic derecho/.test(html))
+      throw new Error('R27: el atajo se muestra junto a la función que evita, también en el hover del botón');
+
+    // (3) LOS DOS BUSCADORES DEL MENÚ ENTIENDEN LO MISMO. La caja de arriba es la que tiene el
+    // foco al abrir: si no conoce los sinónimos, «vacaciones» no encuentra Permisos.
+    const pe = src.match(/function paletteEntries\(\)\{[\s\S]*?\n\}/)[0];
+    if (!/t\.busca/.test(pe))
+      throw new Error('la paleta debe mirar los mismos sinónimos que el filtro de tipos: es la caja que tiene el foco');
+
+    // (4) EL HISTORIAL DE LA CALCULADORA SOBREVIVE AL REPINTADO, Y NO AL CIERRE (I7).
+    if (!/const calcHist = new Map\(\)/.test(src))
+      throw new Error('el historial vivía en el cierre de bodyCalc: cambiar de escritorio lo borraba');
+    if (/data\.hist|w\.data\.historial/.test(src))
+      throw new Error('el historial NO se persiste: sería un registro de lo que has estado mirando en consulta');
+
+    // (5) EL MARCADOR DE ETIQUETA VIVE SIEMPRE EN LA BARRA, y no ofrece etiquetas de widgets
+    // ocultos por privacidad: el nombre de una etiqueta ya es contenido.
+    const tc = src.match(/function tagsConteo\(\)\{[\s\S]*?\n\}/)[0];
+    if (!/privacyOn && w\.priv/.test(tc))
+      throw new Error('privacidad escénica: una etiqueta de un widget oculto no se ofrece en el desplegable');
+    const rf = src.match(/function renderTagFilterBar\(\)\{[\s\S]*?\n\}/)[0];
+    if (!/if \(!tagFilter\)\{[\s\S]*?tagsConteo\(\)/.test(rf))
+      throw new Error('sin filtro activo la barra debe mostrar el marcador, no esconderse: era el punto del pedido');
+    console.log('OK 0.56.0 (el menú no se cierra solo, el atajo existe, los buscadores concuerdan, el historial aguanta y la etiqueta vive en la barra)');
   }
 
   console.log('\nTODO EN VERDE');
