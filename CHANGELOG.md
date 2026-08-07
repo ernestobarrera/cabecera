@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.51.0] - 2026-08-07 — cuatro cosas que estorbaban a diario
+
+- **Lo que estabas escribiendo en «Nueva tarea…» ya no se pierde.** Bastaba cambiar de escritorio —o que llegara una actualización desde el otro equipo— para que la caja se vaciara sin avisar. Era el único de estos fallos que **destruía trabajo**, y por eso va el primero. El texto a medio escribir se conserva por lista mientras la pestaña siga abierta; al crear la tarea, se limpia.
+- **La banda de botones ya no tapa el final de la fila.** Flota sobre ella, y ahí es donde viven la fecha, el vencimiento y la marca 💬/🤖: al pasar el ratón los ocultaba, y en una tarea de una sola línea tapaba además el final del propio texto. Ahora la fila **reserva ese hueco siempre**, así que nada se cubre y el alto de la fila no cambia al pasar por encima.
+- **Al responder dentro de una tarea, el texto ya no se estruja en una columna.** El cuadro de conversación entraba al lado del texto en vez de debajo, y una tarea normal pasaba a ocupar quince líneas. Ahora ocupa la fila entera, como el de vencimiento.
+- **🕘 Historial y 🧪 Unidades vuelven a verse en la calculadora.** En una ventana baja, el teclado empujaba las dos pestañas fuera del recorte y las funciones parecían no existir. Ahora cede el teclado, que se puede apretar, y no el único acceso que hay a ellas.
+
 ## [0.50.0] - 2026-08-06 — responder de un clic, y aviso de lo que llegó después de cerrar
 
 - **Botón «👍 Vale» en la conversación.** Hasta ahora, la única forma de quitar el 🤖 de una tarea era escribir algo, aunque solo quisieras decir «ok». Ahora se hace de un clic, y sigue quedando una respuesta fechada: **un «Vale» con fecha es constancia de que lo leíste; una marca de visto no lo sería.** Si ya habías escrito algo, el botón manda lo tuyo — nunca se traga lo que estabas escribiendo.

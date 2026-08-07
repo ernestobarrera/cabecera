@@ -22,6 +22,9 @@
   --radius: 14px;
   --shadow: 0 12px 40px rgba(0,0,0,.45);
   --font: "Segoe UI", system-ui, -apple-system, sans-serif;
+  /* ancho de la banda de acciones de una tarea (7 botones). Un solo número: si se añade o se quita
+     un botón de `.it-actions`, se ajusta AQUÍ y el hueco reservado de la fila lo sigue solo. */
+  --todo-acts: 148px;
 }
 *{box-sizing:border-box; margin:0; padding:0}
 html,body{height:100%; overflow:hidden}
@@ -337,6 +340,14 @@ textarea.notes{width:100%; height:100%; min-height:110px; resize:none; border:no
 .mini.warn:hover{background:rgba(243,108,108,.15); border-color:var(--danger)}
 ul.plain{list-style:none}
 .todo-it{position:relative; display:flex; align-items:center; gap:9px; padding:6px 4px; border-radius:8px; flex-wrap:wrap; --task-color:transparent}
+/* 0.51.0 — HUECO PERMANENTE para la banda de acciones (ver `.it-actions`). La banda flota sobre el
+   final de la fila, y ahí es donde viven también la fecha, el vencimiento y la marca 💬/🤖: al pasar
+   el ratón los tapaba, y en una tarea de una sola línea tapaba además el final del texto.
+   En 0.49.0 descarté reservar sitio diciendo que devolvería el salto. Era un error de razonamiento:
+   el salto lo provoca un hueco que APARECE con el hover, no uno que está siempre. Este está siempre,
+   así que el alto de la fila no cambia nunca y la invariante de 0.46.0 sigue intacta.
+   Solo donde hay hover: en táctil la banda va en el flujo y no tapa nada. */
+@media (any-hover:hover){ .todo-it{padding-right:var(--todo-acts)} }
 .todo-it:hover{background:rgba(255,255,255,.04)}
 .todo-it.has-task-color{box-shadow:inset 3px 0 0 var(--task-color); padding-left:8px}
 .todo-it input[type=checkbox]{width:16px; height:16px; accent-color:var(--accent); cursor:pointer; flex-shrink:0}
@@ -375,7 +386,13 @@ ul.plain{list-style:none}
 .todo-it .due.future{background:rgba(255,255,255,.06); color:var(--text-dim)}
 .todo-it .due.alarm{border:1px solid rgba(90,169,247,.35)}
 /* --- conversación por tarea (0.48.2): editor propio, separado del de vencimiento --- */
-.reply-editor{margin:6px 0 2px; padding:9px 10px; border-radius:10px; border:1px solid var(--border-soft); background:rgba(0,0,0,.22)}
+/* 0.51.0 — el editor se cuelga del `li` de la tarea, que es un flex con wrap: sin `flex:1 0 100%`
+   entraba como HERMANO del texto y lo estrujaba en una columna estrecha a la izquierda, donde una
+   tarea normal ocupaba quince líneas (parte de fallo de Ernesto, 07/08). `.due-editor` ya lo hacía
+   bien desde su versión; esto es la misma regla, que se quedó sin copiar al añadir la conversación
+   en 0.48.2. Si añades un tercer editor colgado del `li`, necesita esta línea. */
+.reply-editor{margin:6px 0 2px; padding:9px 10px; border-radius:10px; border:1px solid var(--border-soft); background:rgba(0,0,0,.22);
+  position:static; width:100%; flex:1 0 100%}
 .rp-head{display:flex; align-items:center; justify-content:space-between; font-size:12px; color:var(--text-dim); margin-bottom:7px}
 .rp-x{border:none; background:none; color:var(--text-dim); cursor:pointer; font-size:13px; padding:0 4px; border-radius:6px}
 .rp-x:hover{color:var(--text); background:rgba(255,255,255,.1)}
@@ -411,10 +428,12 @@ ul.plain{list-style:none}
 .todo-it .task-note-mark.me-toca{color:var(--warn); font-weight:600}
 /* 0.49.0 — la banda de acciones FLOTA sobre el final de la fila (ver más abajo por qué), así que
    al pasar el ratón tapaba justo la marca 💬/🤖: la señal de que hay conversación desaparecía en
-   el momento de ir a por ella. En vez de reservarle sitio —que acortaría el texto y devolvería el
-   reflow que costó dos versiones cerrar—, el botón que la atiende ASUME la señal: `it-reply` se
-   pinta 🤖 en ámbar cuando hay respuesta sin contestar. No se tapa nada porque el aviso y la
-   acción pasan a ser el mismo objeto, en el mismo sitio. */
+   el momento de ir a por ella. El botón que la atiende ASUME la señal: `it-reply` se pinta 🤖 en
+   ámbar cuando hay respuesta sin contestar, así que el aviso y la acción son el mismo objeto.
+   0.51.0 — esto resolvió la SEÑAL pero no el solape: la banda seguía tapando la fecha, el
+   vencimiento y, en tareas de una línea, el final del propio texto (parte de fallo de Ernesto,
+   07/08). El hueco permanente de `.todo-it` lo cierra; la razón por la que en 0.49.0 lo descarté
+   era falsa y está explicada allí. Las dos piezas se quedan: son independientes. */
 .todo-it .it-actions .it-reply.me-toca{color:var(--warn); font-weight:600; opacity:1}
 /* el 💬 de responder se ve siempre en «probar»… no: se ve como los demás, pero la MARCA de que
    ya hay conversación sí es permanente, porque es contenido, no una acción. */
@@ -692,11 +711,15 @@ ul.plain{list-style:none}
 .calc-dsp{background:rgba(0,0,0,.3); border:1px solid var(--border-soft); border-radius:10px; padding:10px 12px;
   font-size:24px; text-align:right; overflow:hidden; white-space:nowrap; min-height:48px}
 .calc:focus .calc-dsp{border-color:var(--accent)}
-.calc-grid{flex:1; display:grid; grid-template-columns:repeat(4,1fr); gap:6px}
+/* `min-height:0` no es cosmético: sin él un item flex no baja de su contenido, así que en una
+   ventana baja el teclado empujaba las pestañas 🕘/🧪 fuera del recorte y el Historial parecía no
+   existir (Ernesto, 07/08: «no he encontrado esta opción»). Ahora cede el teclado, que se puede
+   apretar, y no las pestañas, que son el único acceso a Historial y Unidades. */
+.calc-grid{flex:1; min-height:0; display:grid; grid-template-columns:repeat(4,1fr); gap:6px}
 /* [hidden] es un atributo, pero  le gana: sin esto el teclado seguía ahí y el panel
    de unidades quedaba empujado fuera de la ventana. */
 .calc-grid[hidden]{display:none}
-.calc-tabs{display:flex; gap:6px; margin-top:8px}
+.calc-tabs{display:flex; gap:6px; margin-top:8px; flex-shrink:0}
 .calc-hist,.calc-conv{flex:1; overflow:auto; font-size:12.5px}
 .calc-h{padding:5px 7px; border-radius:7px; border:1px solid var(--border-soft); margin-bottom:5px; cursor:pointer; color:var(--text-dim)}
 .calc-h:hover{border-color:var(--accent); color:var(--text)}
@@ -1642,7 +1665,7 @@ function syncUI(mode, txt){
    reaparece) y si Recargar está activo. El descarte ✕ vive solo en memoria de la sesión.
    Demora asumida: la CDN de Pages puede servir la versión vieja hasta ~10 min aun con
    no-store (gobierna la caché del navegador, no la CDN); para pestañas de días, irrelevante. */
-const APP_VERSION = "0.50.0";
+const APP_VERSION = "0.51.0";
 let newVersionDetected = null;   // versión superior detectada; detiene futuras consultas
 let verDismissed = false;        // ✕: solo esta sesión — nunca persistido en disco
 let verCheckInflight = false;    // sin consultas concurrentes
@@ -5202,6 +5225,16 @@ function offerTaskToNote(w, it, repaint){
    y habría que sanearlo, fusionarlo y limpiar huérfanos para no ganar nada. */
 const todoPage = new Map();
 
+/* 0.51.0 — el TEXTO A MEDIO ESCRIBIR de la caja «Nueva tarea…», conservado entre repintados.
+   Mismo problema que `todoPage` y mucho peor consecuencia: `renderBody` reconstruye el cuerpo con
+   innerHTML, así que la caja se sustituye por una vacía y lo tecleado se pierde sin rastro. Bastaba
+   cambiar de escritorio —o que llegara una relectura del archivo— para quedarse sin el apunte. Es
+   el único fallo de los detectados que DESTRUYE trabajo del usuario, no que lo estorbe.
+   Vive en memoria y por `widgetId`, nunca en datos.json, por la misma razón que la página: es un
+   borrador de la sesión, no contenido; persistirlo obligaría a sanearlo y fusionarlo entre equipos
+   para no ganar nada. */
+const todoDraft = new Map();
+
 /* 0.50.0 — ¿esta tarea CERRADA tiene algo que llegó después de cerrarla?
    Nace de una regla suya: si el agente tiene que contestarle en una tarea que él dio por hecha, no
    se la reabre («yo no revisaré las cerradas», pero cerrar es suyo). La salida es avisar sin
@@ -5236,10 +5269,18 @@ function bodyTodo(w, el){
   const setPage = p => { page = p; todoPage.set(w.id, p); };
   let dragItem = null;
 
+  // 0.51.0 — el borrador sobrevive al repintado (ver la nota de `todoDraft`). Se restaura ANTES de
+  // cablear el listener para que reponerlo no cuente como escritura del usuario.
+  const draft = todoDraft.get(w.id);
+  if (draft) inp.value = draft;
+  inp.addEventListener("input", () => {
+    if (inp.value) todoDraft.set(w.id, inp.value); else todoDraft.delete(w.id);
+  });
+
   const add = () => {
     const t = inp.value.trim(); if (!t) return;
     const it = { t, done: false, created: todayIso(), createdT: horaCorta() };
-    w.data.items.push(it); inp.value = "";
+    w.data.items.push(it); inp.value = ""; todoDraft.delete(w.id);
     view = "pend"; paint(); markDirty();
     offerTaskToNote(w, it, paint);   // pegar aquí una conversación entera tiene arreglo de un clic
   };

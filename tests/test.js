@@ -2457,9 +2457,10 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
   // --- 0.49.0: la señal 🤖 no se tapa, la página no se pierde, la hora se ve ------------------
   {
     // (1) La banda de acciones FLOTA sobre el final de la fila (invariante de 0.46.0, arriba), así
-    // que al pasar el ratón tapaba la marca 💬/🤖 justo cuando ibas a pulsarla. La salida NO es
-    // reservarle hueco —eso acorta el texto y devuelve el reflow que costó dos versiones cerrar—
-    // sino que el botón que la atiende asuma la señal.
+    // que al pasar el ratón tapaba la marca 💬/🤖 justo cuando ibas a pulsarla. Parte de la salida
+    // es que el botón que la atiende asuma la señal. Lo que sigue prohibido es reservar el hueco
+    // AL PASAR EL RATÓN: eso sí devuelve el reflow. El hueco permanente de 0.51.0 es otra cosa y
+    // tiene su propio test más abajo.
     const pintarFn = src.match(/function pintar\(list\)\{[\s\S]*?\n  \}/)[0];
     if (!pintarFn.includes('it-reply${meToca ? " me-toca" : ""}'))
       throw new Error('el botón de responder debe heredar «me toca»: si no, el hover tapa el 🤖 y la señal desaparece al ir a por ella');
@@ -2611,6 +2612,64 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
       throw new Error('legibilidad: un texto mínimo no debe dar un índice con pretensiones');
     ['READ_ES', 'READ_EN', 'READ_TECH', 'readScore', 'detectTextLanguage', 'countSyllables', 'readabilityBand', 'countSentences', 'analyzeReadability'].forEach(k => { delete globalThis[k]; });
     console.log('OK legibilidad portada (Szigriszt-Pazos/INFLESZ + Flesch, idioma con descuento de tecnicismos, pura y determinista)');
+  }
+
+  // --- 0.51.0: cuatro partes de fallo del 07/08 -----------------------------------------------
+  {
+    // `cssOf` del bloque de 0.46.0 es local a aquel bloque: aquí hace falta el propio.
+    const cssOf = sel => {
+      const m = html.match(new RegExp(sel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\{([^}]*)\\}'));
+      if (!m) throw new Error('no encontrada la regla CSS ' + sel);
+      return m[1];
+    };
+
+    // (1) EL BORRADOR DE «Nueva tarea…» SOBREVIVE AL REPINTADO. Es el único de los cuatro que
+    // destruía trabajo: `renderBody` sustituye el input por uno vacío en cada guardado, cambio de
+    // escritorio o relectura del archivo, y lo tecleado se perdía sin rastro.
+    const todoFn = src.match(/function bodyTodo\(w, el\)\{[\s\S]*?\n\}\n/)[0];
+    if (!/const todoDraft = new Map\(\)/.test(src))
+      throw new Error('el borrador de la caja de nueva tarea debe vivir fuera del closure de bodyTodo, o el repintado lo borra');
+    if (!/todoDraft\.get\(w\.id\)/.test(todoFn))
+      throw new Error('bodyTodo debe RESTAURAR el borrador al reconstruir el cuerpo');
+    if (!/inp\.addEventListener\("input"[\s\S]{0,140}todoDraft\.set\(w\.id/.test(todoFn))
+      throw new Error('el borrador debe guardarse mientras se escribe: restaurarlo sin guardarlo no repone nada');
+    // superviviente de la prueba de mutación: se puede guardar y restaurar y no limpiar nunca, y
+    // entonces la caja resucita el texto de una tarea YA creada cada vez que se repinta
+    const addFn = todoFn.match(/const add = \(\) => \{[\s\S]*?\n  \};/)[0];
+    if (!/todoDraft\.delete\(w\.id\)/.test(addFn))
+      throw new Error('al crear la tarea hay que limpiar el borrador, o el texto ya usado reaparece en la caja');
+    if (/todoDraft/.test(src.match(/function sanitizeState[\s\S]*?\n\}/) ? src.match(/function sanitizeState[\s\S]*?\n\}/)[0] : ''))
+      throw new Error('el borrador es estado de sesión: no debe tocar datos.json');
+
+    // (2) HUECO PERMANENTE para la banda de acciones. La banda flota sobre el final de la fila, que
+    // es donde viven la fecha, el vencimiento y la marca 💬/🤖: al pasar el ratón los tapaba, y en
+    // una tarea de una línea tapaba el final del texto. El hueco tiene que estar SIEMPRE: uno que
+    // aparezca con el hover es justo el reflow prohibido arriba.
+    if (!/--todo-acts:\s*\d+px/.test(html))
+      throw new Error('el ancho de la banda de acciones debe ser una variable única, o al añadir un botón el hueco se queda corto en silencio');
+    if (!/@media \(any-hover:hover\)\{ \.todo-it\{padding-right:var\(--todo-acts\)\} \}/.test(html))
+      throw new Error('la fila debe reservar hueco permanente a la banda: sin él, el hover tapa fecha, vencimiento y texto');
+    if (/\.todo-it:hover\{[^}]*padding-right/.test(html))
+      throw new Error('el hueco NO puede depender del hover: eso es el reflow que costó dos versiones cerrar');
+    const actsRule = cssOf('.todo-it .it-actions');
+    if (!/position:absolute/.test(actsRule))
+      throw new Error('el hueco reservado no sustituye a que la banda flote: si vuelve al flujo, vuelve el salto');
+
+    // (3) EL EDITOR DE CONVERSACIÓN OCUPA LA FILA ENTERA. Se cuelga del `li`, que es flex con wrap:
+    // sin `flex:1 0 100%` entra como hermano del texto y lo estruja en una columna estrecha.
+    const rep = cssOf('.reply-editor');
+    if (!/flex:1 0 100%/.test(rep) || !/width:100%/.test(rep))
+      throw new Error('el editor de conversación debe ocupar la fila entera, o estruja el texto de la tarea en una columna');
+    if (!/flex:1 0 100%/.test(cssOf('.due-editor')))
+      throw new Error('la misma regla vale para el editor de vencimiento: son hermanos del mismo li');
+
+    // (4) LAS PESTAÑAS DE LA CALCULADORA NO SE RECORTAN. Sin `min-height:0` el teclado no baja de su
+    // contenido y empuja 🕘 Historial y 🧪 Unidades fuera del recorte: la función parece no existir.
+    if (!/min-height:0/.test(cssOf('.calc-grid')))
+      throw new Error('el teclado de la calculadora debe poder encogerse, o expulsa a las pestañas fuera de la ventana');
+    if (!/flex-shrink:0/.test(cssOf('.calc-tabs')))
+      throw new Error('las pestañas 🕘/🧪 son el único acceso a Historial y Unidades: no pueden ser lo que cede');
+    console.log('OK 0.51.0 (el borrador no se pierde, la banda no tapa, la conversación no estruja, las pestañas no se recortan)');
   }
 
   console.log('\nTODO EN VERDE');
