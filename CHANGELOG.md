@@ -1,5 +1,31 @@
 # Changelog
 
+## [0.57.0] - 2026-08-07 — la papelera deja de pesar, sin dejar de ser una papelera
+
+Un tercio del archivo de datos que tus equipos releen continuamente era papelera: 346 KB de widgets
+enteros, con sus imágenes dentro. El tope que había contaba **elementos**, no bytes, así que treinta
+elementos podían ser treinta kilobytes o tres megas. Esto lo arregla, y de paso arregla algo peor
+que apareció al revisarlo.
+
+- **Lo que sale de la papelera va a un archivo de recuperación, no al vacío.** Al pulsar **Reducir…**
+  se te dice cuántos elementos y cuántos bytes van a salir —los más antiguos primero— y, si aceptas,
+  se escriben en `cabecera-papelera/` dentro de tu carpeta de datos: **un archivo por cada vez que
+  reduces**, que no se toca nunca más. Ese archivo **no se relee**, y por eso deja de pesar. Puedes
+  recuperar de ahí cuando quieras con **🗄️ Archivo de papelera**, y recuperar **copia**: el archivo
+  se queda intacto.
+- **Primero se escribe, luego se comprueba leyéndolo, y solo entonces se quita.** Si algo falla, no
+  se quita nada. Como mucho puedes acabar con un elemento repetido; nunca con ninguno. Y sin carpeta
+  conectada la reducción no se hace y te lo dice, porque sin carpeta no hay dónde poner la red.
+- **La papelera dice lo que ocupa**, siempre que tenga algo, y por encima de 200 KB aparece un aviso
+  🗑️ en la barra de abajo. La acción se llama **Revisar**, no «Vaciar»: nada se mueve sin que veas
+  antes qué se mueve. **Lo que ya tenías acumulado no se ha tocado**: sigue ahí hasta que decidas.
+- **Corregido un fallo que podía perder o resucitar elementos entre tus dos equipos.** La papelera se
+  combinaba juntando las dos listas y cortando a treinta. Eso tenía dos consecuencias silenciosas: lo
+  que quitabas en un equipo **volvía** cuando el otro sincronizaba, y con muchos elementos por lado el
+  corte **descartaba los del otro equipo** sin decir nada. Ahora se combina elemento a elemento, como
+  ya se hacía con los escritorios que sigues, y **ningún camino recorta la papelera en silencio**: el
+  tope de treinta sigue existiendo, pero como objetivo de la reducción, que archiva antes de quitar.
+
 ## [0.56.0] - 2026-08-07 — cinco cosas que no hacían lo que decían
 
 - **El menú Inicio ya no se cierra al pulsar una categoría.** Filtrar por «Trabajo» o «Tiempo» cerraba el menú entero, así que la novedad de la versión anterior era prácticamente inusable. La causa estaba escondida: al pulsar una categoría, la fila se repinta, y para cuando se comprobaba si el clic había caído dentro del menú, el botón pulsado ya no estaba en la página — así que contaba como clic fuera. Ahora se mira el **camino que recorrió el clic**, que no se borra, y eso cierra la familia entera del fallo, no solo este caso.

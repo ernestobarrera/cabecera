@@ -307,6 +307,9 @@ eval('globalThis.migrate = ' + pickFn('migrate', 's'));
 eval('globalThis.sanitizeWidgetShape = ' + pickFn('sanitizeWidgetShape', 'w'));
 eval('globalThis.detHash = ' + pickFn('detHash', 'str'));                       // D1: dependencia de sanitizeState
 eval('globalThis.bootstrapElementIds = ' + pickFn('bootstrapElementIds', 's')); // D1: la llama sanitizeState
+eval('globalThis.canonJSON = ' + pickFn('canonJSON', 'v'));                      // 0.57.0: base de la identidad legacy de la papelera
+eval('globalThis.trashLegacyId = ' + pickFn('trashLegacyId', 'item'));
+eval('globalThis.trashConIds = ' + pickFn('trashConIds', 'arr'));                // la llama sanitizeState
 eval('globalThis.sanitizeState = ' + pickFn('sanitizeState', 's'));
 eval('globalThis.bindSpace = ' + pickFn('bindSpace', 's'));
 
@@ -2007,10 +2010,43 @@ eval('globalThis.conflictDecisionCovers = ' + pickFn('conflictDecisionCovers', '
   res = mergeStates(B(), L, R, 'local');
   if (res.conflicts.length || res.merged.calendarMarks.length !== 2) throw new Error('unión de marcas fallida');
 
-  // papelera: unión deduplicada (red de seguridad, jamás conflicto)
+  /* PAPELERA — fusión a TRES BANDAS por id (0.57.0, corrección exigida por el gate de Codex).
+     Antes era unión deduplicada + corte a 30, y el corte se comía lo del otro equipo. Los
+     elementos legacy sin id reciben uno determinista del contenido, así que el mismo elemento en
+     los dos lados sigue siendo UNO. */
   L = B(); L.trash = [{ kind: 'widget', a: 1 }];
   R = B(); R.trash = [{ kind: 'widget', a: 1 }, { kind: 'widget', b: 2 }];
   if (mergeStates(B(), L, R, 'local').merged.trash.length !== 2) throw new Error('papelera mal unida');
+
+  // (a) RESURRECCIÓN: lo que estaba en BASE y un lado purgó NO puede volver por el otro lado.
+  // Es el fallo concreto que el gate señaló: sin esto, purgar solo retrasa.
+  const X = { id: 'tr_x', at: 10, kind: 'widget', label: 'X' }, Y = { id: 'tr_y', at: 20, kind: 'widget', label: 'Y' };
+  let BB = B(); BB.trash = [X, Y];
+  L = B(); L.trash = [Y];              // aquí se purgó X
+  R = B(); R.trash = [X, Y];           // el otro equipo aún no lo sabe
+  let mt = mergeStates(BB, L, R, 'local').merged.trash;
+  if (mt.some(t => t.id === 'tr_x')) throw new Error('resurrección: la purga de un equipo vuelve por la fusión del otro');
+  // y al revés: purgado en el REMOTO, presente en el local
+  L = B(); L.trash = [X, Y];
+  R = B(); R.trash = [Y];
+  if (mergeStates(BB, L, R, 'local').merged.trash.some(t => t.id === 'tr_x'))
+    throw new Error('resurrección simétrica: el borrado remoto no se respeta');
+
+  // (b) SIN PÉRDIDA POR EL CORTE: 30 propios y 30 ajenos deben sobrevivir los 60. El tope de 30 es
+  // objetivo de la reducción (que archiva antes de quitar), nunca un truncado de la fusión.
+  const many = (p, n) => Array.from({ length: n }, (_, i) => ({ id: p + i, at: i, kind: 'widget', label: p + i }));
+  L = B(); L.trash = many('l', 30);
+  R = B(); R.trash = many('r', 30);
+  if (mergeStates(B(), L, R, 'local').merged.trash.length !== 60)
+    throw new Error('el corte a 30 en la fusión descarta la papelera del otro equipo sin decirlo');
+
+  // (c) CONVERGENCIA: los dos equipos deben escribir EL MISMO archivo. Con orden por inserción,
+  // cada uno ordenaba a su manera y se daban mtime mutuamente para siempre.
+  const c1 = mergeStates(B(), L, R, 'local').merged.trash.map(t => t.id).join(',');
+  const c2 = mergeStates(B(), R, L, 'remote').merged.trash.map(t => t.id).join(',');
+  if (c1 !== c2) throw new Error('la papelera fusionada no converge: el orden depende de quién fusiona');
+  const ats = mergeStates(B(), L, R, 'local').merged.trash.map(t => t.at || 0);
+  if (ats.some((v, i) => i && v > ats[i - 1])) throw new Error('el orden estable es `at` descendente');
 
   // ⚙ cambiado distinto en los dos lados → conflicto de configuración nombrado
   L = B(); L.appSettings = { font: 'humanist' };
@@ -3031,6 +3067,75 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
     if (!/if \(!tagFilter\)\{[\s\S]*?tagsConteo\(\)/.test(rf))
       throw new Error('sin filtro activo la barra debe mostrar el marcador, no esconderse: era el punto del pedido');
     console.log('OK 0.56.0 (el menú no se cierra solo, el atajo existe, los buscadores concuerdan, el historial aguanta y la etiqueta vive en la barra)');
+  }
+
+  // --- 0.57.0: papelera acotada por peso y archivo frío (gate de Codex, 07/08) -----------------
+  {
+    // (1) IDENTIDAD LEGACY DETERMINISTA. El mismo elemento existe en los dos equipos: un id
+    // aleatorio lo duplicaría en la primera fusión, que es lo contrario de lo que se busca.
+    const a = { kind: 'widget', label: 'X', data: { n: 1 } };
+    if (trashLegacyId(a) !== trashLegacyId({ data: { n: 1 }, label: 'X', kind: 'widget' }))
+      throw new Error('el id legacy debe derivar del contenido canónico: si depende del orden de claves, no converge');
+    if (trashLegacyId(a) === trashLegacyId({ ...a, label: 'Y' }))
+      throw new Error('dos elementos distintos no pueden compartir id');
+    if (trashConIds([{ id: 'tr_1', kind: 'x' }])[0].id !== 'tr_1')
+      throw new Error('un id ya existente no se toca jamás');
+
+    // (2) CARGAR NO TIRA NADA. El corte a 30 en el saneo borraba en silencio lo que llegaba del
+    // otro equipo tras una fusión, que legítimamente puede pasar de 30.
+    const st = sanitizeState(migrate({ version: 2, active: 0, spaces: [{ id: 's0', name: 'E', settings: {}, widgets: [] }],
+      trash: Array.from({ length: 45 }, (_, i) => ({ id: 't' + i, kind: 'widget', at: i })) }));
+    if (st.trash.length !== 45) throw new Error('cargar no puede truncar la papelera: eso es pérdida silenciosa sin dónde recuperar');
+    // sin comentarios: si no, la propia nota que EXPLICA el corte retirado dispara el test
+    const sinCom = s => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+    const pt = sinCom(src.match(/function pushTrash\([\s\S]*?\n\}/)[0]);
+    if (/slice\(0, ?(30|TRASH_MAX_N)\)/.test(pt))
+      throw new Error('borrar algo no puede tirar el elemento 31: el tope es objetivo de la reducción, que archiva antes de quitar');
+
+    // (3) ORDEN TRANSACCIONAL. Escribir el lote → releerlo y verificar → quitar de la papelera →
+    // guardar. Si falla el archivo frío, no se quita nada. Es la condición que hace que reducir
+    // no pueda perder.
+    const elf = src.match(/async function escribirLoteFrio\(items\)\{[\s\S]*?\n\}/)[0];
+    if (!/createWritable[\s\S]*getFile\(\)[\s\S]*items\.length/.test(elf))
+      throw new Error('el lote se verifica RELEYÉNDOLO: que el archivo exista no prueba que contenga lo que se le mandó');
+    const red = src.match(/async function reducirPapelera\(\)\{[\s\S]*?\n\}/)[0];
+    const iEscribe = red.indexOf('escribirLoteFrio'), iQuita = red.indexOf('state.trash =');
+    if (iEscribe < 0 || iQuita < 0 || iQuita < iEscribe)
+      throw new Error('se quita de la papelera ANTES de tener el lote verificado: un fallo ahí es pérdida');
+    if (!/catch[\s\S]{0,400}return false/.test(red))
+      throw new Error('si el archivo frío falla, la reducción tiene que abortar sin tocar la papelera');
+    if (!/backend !== "fs" \|\| !dirHandle/.test(red))
+      throw new Error('sin carpeta conectada no hay red debajo: no se reduce y se explica');
+
+    // (4) NADA AUTOMÁTICO. Ni al cargar, ni por temporizador: el gate lo descartó explícitamente
+    // (acoplaría editar una tarea con borrar contenido antiguo sin relación visible).
+    if (/function sanitizeState[\s\S]*?reducirPapelera/.test(src.slice(src.indexOf('function sanitizeState'), src.indexOf('function sanitizeState') + 4000)))
+      throw new Error('abrir jamás escribe: el saneo no puede disparar la reducción');
+    if (/set(Interval|Timeout)\([^)]*reducirPapelera/.test(src))
+      throw new Error('purga por reloj: descartada por el gate — menos temporizadores, menos comportamiento invisible');
+    const tm = src.match(/function trasMutarPapelera\(\)\{[\s\S]*?\n\}/)[0];
+    if (/reducirPapelera/.test(tm))
+      throw new Error('el disparador por mutación avisa; mover siempre pasa por el diálogo que enseña qué se mueve');
+
+    // (5) EL PESO SE MIDE, NO SE GUARDA. Un número persistido es un número que puede mentir.
+    if (/trashBytes\s*:|\.trashBytes\s*=|state\.trashBytes/.test(src))
+      throw new Error('el peso de la papelera no se persiste: se calcula');
+    if (!/new TextEncoder/.test(src)) throw new Error('peso en bytes UTF-8 serializados, no en longitud de cadena');
+    const AV = +src.match(/TRASH_AVISO = (\d+)/)[1] * 1024, OB = +src.match(/TRASH_OBJETIVO = (\d+)/)[1] * 1024;
+    if (!(AV > OB)) throw new Error('sin histéresis el aviso reaparece al minuto siguiente y se convierte en ruido');
+
+    // (6) EL ARCHIVO FRÍO NO SE RELEE NI SE FABRICA POR MIRARLO, y son LOTES, no un archivo único.
+    const ll = src.match(/async function listarLotesFrios\(\)\{[\s\S]*?\n\}/)[0];
+    if (/create: true/.test(ll)) throw new Error('enumerar el archivo frío no puede crear la carpeta: mirar nunca fabrica nada');
+    if (!/getDirectoryHandle\(TRASH_DIR, \{ create: true \}\)/.test(elf))
+      throw new Error('el lote vive en su carpeta propia, creada solo al escribir de verdad');
+    if (/POLL|poll|readDataFile/.test(ll) || /TRASH_DIR/.test(src.match(/async function readDataFile[\s\S]*?\n\}/)?.[0] || ''))
+      throw new Error('el archivo frío NO entra en el ciclo de relectura: ese es todo su valor');
+    // recuperar del archivo COPIA: el lote es un hecho pasado y no se reescribe
+    const ra = src.match(/async function renderArchivoFrio\(\)\{[\s\S]*?\n\}/)[0];
+    if (/createWritable|removeEntry/.test(ra))
+      throw new Error('recuperar no puede modificar ni borrar el lote: volvería a ser un archivo mutable multiequipo');
+    console.log('OK 0.57.0 (papelera por peso, fusión sin resurrección, lotes fríos inmutables y reducción transaccional)');
   }
 
   console.log('\nTODO EN VERDE');

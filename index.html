@@ -945,6 +945,7 @@ ul.plain{list-style:none}
   <button id="tb-cols" title="Columnas: Auto, 2, 3 o 4. Elegir una ordena el escritorio al instante (con Deshacer) y rige los carriles al arrastrar">▤ Auto</button>
   <div id="tb-spacer"></div>
   <div class="tb-item" id="tb-filter" title="Filtro por etiqueta activo" style="display:none"></div>
+  <div class="tb-item" id="tb-trash" title="La papelera ocupa espacio en tu archivo de datos" style="display:none"></div>
   <div class="tb-item" id="tb-tasks" title="Tareas vencidas o que vencen hoy"></div>
   <div class="tb-item" id="tb-alarm" title="Alarmas de temporizador que ya han sonado — clic para ir al temporizador"></div>
   <div class="tb-item" id="tb-pill" title="Píldora informativa — clic para cambiar"></div>
@@ -1170,7 +1171,11 @@ ul.plain{list-style:none}
     <h2>🗑️ Papelera</h2>
     <p>Guarda recuperaciones recientes de elementos no privados. Las notas no se guardan aquí al borrarlas: solo ofrecen deshacer inmediato en memoria.</p>
     <div id="trash-list"></div>
+    <p class="note" id="trash-peso" style="display:none"></p>
+    <div id="trash-archivo" style="display:none"></div>
     <div class="row">
+      <button class="btn" id="trash-reduce">Reducir…</button>
+      <button class="btn" id="trash-archivo-btn">🗄️ Archivo de papelera</button>
       <button class="btn" id="trash-close">Cerrar</button>
     </div>
   </div>
@@ -1284,6 +1289,9 @@ ul.plain{list-style:none}
 
 const DATA_FILE = "datos.json";
 const INBOX_FILE = "inbox.txt";
+// Archivo frío de la papelera: una CARPETA de lotes inmutables, no un archivo único mutable.
+// Dos equipos compitiendo por el mismo archivo sobre OneDrive fue lo primero que descartó el gate.
+const TRASH_DIR = "cabecera-papelera";
 const POLL_MS = 4000;
 /* 0.53.0 — con la pestaña en segundo plano se relee cada 30 s en vez de cada 4. Aprobado el 05/08
    y sin construir desde entonces. Motivo: cada ciclo lee ~1,1 MB de una carpeta sincronizada por
@@ -1489,7 +1497,12 @@ function sanitizeState(s){
     s.migratedCalH300 = true;
   }
   s.active = Math.min(Math.max(0, s.active | 0), s.spaces.length - 1);
-  s.trash = Array.isArray(s.trash) ? s.trash.filter(x => x && typeof x === "object" && typeof x.kind === "string").slice(0, 30) : [];
+  /* Los elementos legacy reciben id determinista aquí también, no solo en la fusión: así el que se
+     escribe en el archivo frío es el mismo objeto que la fusión sabe identificar.
+     0.57.0 — y se quita el `slice(0, 30)`: cargar no puede tirar elementos. Con dos equipos, la
+     papelera fusionada supera los 30 con toda legitimidad, y truncar al abrir borraba en silencio
+     lo que el otro equipo había mandado. El tope vive ahora en la reducción, que archiva primero. */
+  s.trash = trashConIds(Array.isArray(s.trash) ? s.trash.filter(x => x && typeof x === "object" && typeof x.kind === "string") : []);
   // conceptos de calendario propios del usuario: id-slug, etiqueta y color hex.
   // Se sanean ANTES que las marcas para que validTypes los incluya.
   s.customMarkTypes = (Array.isArray(s.customMarkTypes) ? s.customMarkTypes : []).map(c => {
@@ -1854,7 +1867,7 @@ function syncUI(mode, txt){
    reaparece) y si Recargar está activo. El descarte ✕ vive solo en memoria de la sesión.
    Demora asumida: la CDN de Pages puede servir la versión vieja hasta ~10 min aun con
    no-store (gobierna la caché del navegador, no la CDN); para pestañas de días, irrelevante. */
-const APP_VERSION = "0.56.0";
+const APP_VERSION = "0.57.0";
 let newVersionDetected = null;   // versión superior detectada; detiene futuras consultas
 let verDismissed = false;        // ✕: solo esta sesión — nunca persistido en disco
 let verCheckInflight = false;    // sin consultas concurrentes
@@ -2008,15 +2021,170 @@ function dlgPrompt(fields, o = {}){   // fields: [{ key, label, value, placehold
               { label: o.okLabel || "Guardar", collect: true, primary: true }] });
 }
 function plainClone(x){ return JSON.parse(JSON.stringify(x)); }
+
+/* ============================================================
+   Papelera: identidad, presupuesto por peso y archivo frío (0.57.0)
+   Spec completa y veredicto: `_privado/spec-papelera-y-peso.md`.
+   ============================================================ */
+/* Identidad de un elemento legacy. FNV-1a de 32 bits sobre el JSON canónico: síncrono, sin
+   dependencias y —lo único que importa aquí— DETERMINISTA, para que el mismo elemento reciba el
+   mismo id en los dos equipos y la fusión lo trate como uno solo. No es un hash criptográfico y no
+   pretende serlo: solo tiene que ser estable y no chocar entre unas decenas de elementos. */
+function trashLegacyId(item){
+  const s = canonJSON(item);
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++){ h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
+  return "trl_" + h.toString(36) + "_" + s.length.toString(36);
+}
+function trashConIds(arr){
+  if (!Array.isArray(arr)) return [];
+  return arr.map(x => (x && typeof x === "object" && !x.id) ? { ...x, id: trashLegacyId(x) } : x);
+}
+/* Peso SERIALIZADO, nunca estimado: son los bytes que de verdad viajan en `datos.json`, que es lo
+   que se relee cada pocos segundos en dos equipos. Se calcula al vuelo y NO se guarda en el
+   archivo: un número persistido es un número que puede mentir. */
+const enc = typeof TextEncoder !== "undefined" ? new TextEncoder() : null;
+function bytesDe(v){
+  const s = JSON.stringify(v === undefined ? null : v);
+  return enc ? enc.encode(s).length : s.length;
+}
+function trashBytes(){ return state && Array.isArray(state.trash) ? bytesDe(state.trash) : 0; }
+// Histéresis: se avisa a 200 KiB y se reduce hasta bajar de 150 KiB. Sin ella, el aviso volvería
+// al minuto siguiente y acabaría siendo ruido que se ignora.
+const TRASH_AVISO = 200 * 1024, TRASH_OBJETIVO = 150 * 1024, TRASH_MAX_N = 30;
+const kb = n => n >= 1024 * 1024 ? (n / 1024 / 1024).toFixed(1) + " MB" : Math.round(n / 1024) + " KB";
+/* Qué saldría si se redujera AHORA. Puro y sin efectos: lo consume tanto el diálogo de
+   confirmación —que tiene que decir cuántos y cuántos bytes ANTES de mover nada— como la propia
+   reducción. Salen los más ANTIGUOS primero: aquí la antigüedad sirve para elegir candidatos, que
+   es lo único para lo que el gate la admite (como reloj que dispara escrituras, descartada). */
+function trashCandidatos(){
+  const items = (state && Array.isArray(state.trash)) ? state.trash : [];
+  if (!items.length) return [];
+  const orden = [...items].sort((a, b) => (a.at || 0) - (b.at || 0));   // el más viejo, el primero en salir
+  // se mide cada elemento UNA vez y se va restando, en vez de reserializar la lista entera en cada
+  // vuelta: con imágenes dentro, eso son megabytes de trabajo por pulsación
+  const pesoDe = new Map(items.map(x => [x.id, bytesDe(x)]));
+  let restanN = items.length, restanB = bytesDe(items);
+  const fuera = [];
+  for (const cand of orden){
+    if (restanB <= TRASH_OBJETIVO && restanN <= TRASH_MAX_N) break;
+    /* EXCEPCIÓN del gate: si el elemento recién borrado pesa él solo más que el presupuesto, se
+       conserva y se avisa. Una papelera que se salta a sí misma para cumplir una cifra es peor que
+       un archivo grande. Aquí se traduce en no dejar NUNCA la papelera vacía: el último sobrevive
+       aunque no baje del umbral. */
+    if (restanN <= 1) break;
+    fuera.push(cand);
+    restanN--;
+    restanB -= (pesoDe.get(cand.id) || 0) + 1;
+  }
+  return fuera;
+}
 function pushTrash(kind, label, data){
   if (!Array.isArray(state.trash)) state.trash = [];
   const item = { id: "tr_" + uid(), at: Date.now(), kind, label: String(label || "Elemento").slice(0, 120), data };
   state.trash.unshift(item);
-  state.trash = state.trash.slice(0, 30);
+  /* 0.57.0 — AQUÍ YA NO SE CORTA. Había un `slice(0, 30)` y era una pérdida silenciosa: tras
+     fusionar con el otro equipo la papelera puede tener 60 elementos legítimos, y el siguiente
+     borrado tiraba 31 sin decir nada ni dejar dónde recuperarlos. El tope de 30 sigue existiendo,
+     pero como OBJETIVO de la reducción (`trashCandidatos`), que archiva antes de quitar. La regla
+     que manda es «no perder», no «no crecer». */
+  trasMutarPapelera();   // evalúa el presupuesto tras una mutación REAL de la papelera; solo avisa
   return item.id;
 }
 function dropTrash(id){
   state.trash = (state.trash || []).filter(x => x.id !== id);
+}
+
+/* ---------- archivo frío: escritura por LOTES INMUTABLES ----------
+   Un lote se escribe una vez y no se vuelve a tocar: ni se fusiona, ni se sondea, ni se relee en
+   el ciclo normal. Ese es todo su valor — los bytes salen del archivo que dos equipos releen cada
+   pocos segundos. El nombre lleva marca de tiempo y sufijo aleatorio: dos equipos que reduzcan en
+   el mismo segundo no pueden colisionar. */
+function loteNombre(){
+  const d = new Date(), p = n => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}-${p(d.getMinutes())}-${p(d.getSeconds())}-${uid()}.json`;
+}
+/* ORDEN TRANSACCIONAL, y no es negociable (gate, §3): escribir el lote → RELEERLO y verificar →
+   quitar de la papelera → guardar datos.json. Si escribir o verificar falla, no se quita nada. Un
+   fallo entre quitar y guardar puede dejar el elemento duplicado —está en el lote y sigue en la
+   papelera— pero nunca perdido. Duplicar es recuperable; perder, no. */
+async function escribirLoteFrio(items){
+  if (backend !== "fs" || !dirHandle) throw new Error("sin-carpeta");
+  const dir = await dirHandle.getDirectoryHandle(TRASH_DIR, { create: true });
+  const nombre = loteNombre();
+  const lote = { cabeceraPapelera: 1, at: Date.now(), equipo: (dirHandle.name || ""), items: plainClone(items) };
+  const payload = JSON.stringify(lote, null, 2);
+  const fh = await dir.getFileHandle(nombre, { create: true });
+  const w = await fh.createWritable();
+  await w.write(payload);
+  await w.close();
+  // verificación por RELECTURA: que el archivo exista no prueba que contenga lo que se le mandó
+  const leido = JSON.parse(await (await fh.getFile()).text());
+  if (!leido || leido.cabeceraPapelera !== 1 || !Array.isArray(leido.items) || leido.items.length !== items.length)
+    throw new Error("verificacion");
+  const ids = new Set(leido.items.map(x => x && x.id));
+  for (const it of items) if (!ids.has(it.id)) throw new Error("verificacion");
+  return nombre;
+}
+async function listarLotesFrios(){
+  if (backend !== "fs" || !dirHandle) return [];
+  let dir;
+  try{ dir = await dirHandle.getDirectoryHandle(TRASH_DIR); }catch(e){ return []; }   // sin create: mirar no fabrica nada
+  const out = [];
+  for await (const [nombre, h] of dir.entries())
+    if (h.kind === "file" && /\.json$/i.test(nombre)) out.push({ nombre, h });
+  return out.sort((a, b) => b.nombre.localeCompare(a.nombre));   // el más reciente arriba
+}
+async function leerLoteFrio(h){
+  const d = JSON.parse(await (await h.getFile()).text());
+  return (d && d.cabeceraPapelera === 1 && Array.isArray(d.items)) ? d : null;
+}
+/* La reducción. Se dispara SOLO desde aquí, y aquí solo se llega por acción humana («Revisar») o
+   tras una mutación real de la papelera. Nunca al cargar, nunca por temporizador, nunca en el
+   primer guardado de una edición cualquiera: eso acoplaría editar una tarea con borrar contenido
+   antiguo sin relación visible. */
+async function reducirPapelera(){
+  const fuera = trashCandidatos();
+  if (!fuera.length){ toast("La papelera ya está dentro del presupuesto"); return false; }
+  if (backend !== "fs" || !dirHandle){
+    await dlgConfirm("El archivo de recuperación vive en tu carpeta sincronizada, y ahora mismo no hay ninguna conectada. Sin ella no hay red debajo, así que no se quita nada: conecta la carpeta desde «📁 Sincronizar equipos» y vuelve a intentarlo.",
+      { title: "No se puede reducir todavía", okLabel: "Entendido", cancelLabel: "Cerrar" });
+    return false;
+  }
+  const bytes = bytesDe(fuera);
+  const ok = await dlgConfirm(
+    `Se moverán ${fuera.length} elemento${fuera.length === 1 ? "" : "s"} (${kb(bytes)}) al archivo de recuperación, dentro de tu carpeta de datos (${TRASH_DIR}/). Salen los más antiguos.\n\nNo se borra nada: siguen ahí y puedes recuperarlos desde «Archivo de papelera». Lo que se consigue es que dejen de viajar en el archivo que tus dos equipos releen continuamente.`,
+    { title: "Reducir la papelera", okLabel: "Mover al archivo" });
+  if (!ok) return false;
+  let nombre;
+  try{
+    nombre = await escribirLoteFrio(fuera);
+  }catch(e){
+    toast(e && e.message === "verificacion"
+      ? "El archivo de recuperación no se pudo verificar: no se ha quitado nada"
+      : "No se pudo escribir el archivo de recuperación: no se ha quitado nada", true);
+    return false;
+  }
+  const ids = new Set(fuera.map(x => x.id));
+  state.trash = (state.trash || []).filter(x => !ids.has(x.id));
+  markDirty();
+  renderTrash();
+  renderTrashChip();
+  toast(`${fuera.length} elemento${fuera.length === 1 ? "" : "s"} en ${TRASH_DIR}/${nombre}`);
+  return true;
+}
+/* Indicador de la barra: aparece SOLO por encima del umbral y su acción se llama «Revisar», no
+   «Vaciar». La diferencia no es de redacción: revisar enseña qué se va a mover y pide
+   confirmación, que es lo que exige «nada destructivo en silencio». Los 346 KB que ya existían
+   cuando esto se construyó NO se tocan al cargar, por lo mismo. */
+function renderTrashChip(){
+  const el = $("#tb-trash");
+  if (!el || !state) return;
+  const b = trashBytes(), n = (state.trash || []).length;
+  if (b < TRASH_AVISO && n <= TRASH_MAX_N){ el.style.display = "none"; return; }
+  el.style.display = "flex";
+  el.textContent = `🗑️ ${kb(b)}`;
+  el.title = `La papelera ocupa ${kb(b)} en ${n} elementos dentro de tu archivo de datos, que se relee continuamente en tus equipos — clic para revisarla`;
 }
 function renderDock(){
   const b = $("#desk-trash"), n = $("#desk-trash-n");
@@ -2029,6 +2197,19 @@ function restoreTrash(id){
   if (!guardMutation()) return;   // D5b: no restaurar sobre el espacio propio oculto (inerte en A)
   const item = (state.trash || []).find(x => x.id === id);
   if (!item) return;
+  if (!restoreItem(item)) return;
+  dropTrash(id);
+  renderAll();
+  renderTrash();
+  markDirty();
+  toast("Elemento restaurado");
+}
+/* 0.57.0 — restaurar es una operación sobre EL ELEMENTO, no sobre la papelera. Se separa porque el
+   archivo frío también restaura, y allí el gate exige que recuperar COPIE sin modificar el lote:
+   un lote es un hecho pasado, y reescribirlo lo convertiría en el archivo mutable multiequipo que
+   se descartó. Devuelve si se aplicó algo. */
+function restoreItem(item){
+  if (!item) return false;
   const d = item.data || {};
   if (item.kind === "widget" && d.widget){
     const w = plainClone(d.widget);
@@ -2059,12 +2240,8 @@ function restoreTrash(id){
     if (!w){ addWidget("search"); w = state.widgets[state.widgets.length - 1]; }
     if (!Array.isArray(w.data.engines)) w.data.engines = [];
     w.data.engines.push(plainClone(d.engine));
-  }
-  dropTrash(id);
-  renderAll();
-  renderTrash();
-  markDirty();
-  toast("Elemento restaurado");
+  } else return false;
+  return true;
 }
 /* 0.53.0 — la lista completa, derivada de la MISMA tabla que anota los menús. Que no haya dos
    sitios donde mirar es el punto: una lista escrita a mano se queda vieja y nadie se entera. */
@@ -2073,7 +2250,12 @@ function openAtajos(){
     `<div class="atajo-fila"><span class="kbd-hint">${esc(a.teclas)}</span>${a.alt ? `<span class="kbd-hint">${esc(a.alt)}</span>` : ""}<span>${esc(a.que)}</span></div>`).join("");
   $("#ov-atajos").classList.add("open");
 }
-function openTrash(){ renderTrash(); $("#ov-trash").classList.add("open"); }
+function openTrash(){
+  renderTrash();
+  const a = $("#trash-archivo");
+  if (a){ a.style.display = "none"; a.innerHTML = ""; }   // el archivo frío se lee solo si lo pides
+  $("#ov-trash").classList.add("open");
+}
 function renderTrash(){
   const box = $("#trash-list");
   if (!box) return;
@@ -2086,10 +2268,80 @@ function renderTrash(){
     d.innerHTML = `<span class="t"><b>${esc(item.label)}</b><br><span class="empty" style="padding:0">${esc(when)} · ${esc(item.kind)}</span></span>
       <button class="mini rs">Restaurar</button><button class="it-del rm" style="opacity:1" title="Quitar de la papelera">✕</button>`;
     d.querySelector(".rs").addEventListener("click", () => restoreTrash(item.id));
-    d.querySelector(".rm").addEventListener("click", () => { dropTrash(item.id); renderTrash(); markDirty(); });
+    d.querySelector(".rm").addEventListener("click", () => { dropTrash(item.id); renderTrash(); markDirty(); trasMutarPapelera(); });
     box.appendChild(d);
   });
+  // el peso se dice SIEMPRE que hay algo, no solo por encima del umbral: es la cifra que explica
+  // por qué existe el botón «Reducir», y esconderla hasta que duele es lo que la hace incomprensible
+  const p = $("#trash-peso"), b = trashBytes();
+  if (p){
+    p.style.display = items.length ? "" : "none";
+    p.innerHTML = `Ocupa <b>${esc(kb(b))}</b> dentro de <code>datos.json</code>, que tus equipos releen continuamente.`
+      + (b >= TRASH_AVISO ? " Por encima de " + kb(TRASH_AVISO) + " conviene reducirla: lo más antiguo pasa a un archivo aparte de tu carpeta, del que se puede recuperar." : "");
+  }
+  const rb = $("#trash-reduce");
+  if (rb) rb.style.display = trashCandidatos().length ? "" : "none";
   renderDock();
+  renderTrashChip();
+}
+/* Se llama tras una mutación REAL de la papelera. No reduce por su cuenta: evalúa y AVISA.
+   Desviación consciente del gate, y su motivo: el gate autoriza reducir aquí, pero también fija
+   que nada destructivo ocurra en silencio y que el usuario vea qué se mueve antes de moverlo.
+   Un modal saltando encima justo después de borrar un widget sería lo peor de las dos reglas, así
+   que este disparador enciende el indicador de la barra y lo dice una vez; el movimiento siempre
+   pasa por el diálogo de «Reducir». */
+let avisoPapeleraDado = false;
+function trasMutarPapelera(){
+  renderTrashChip();
+  const b = trashBytes();
+  if (b < TRASH_AVISO){ avisoPapeleraDado = false; return; }
+  if (avisoPapeleraDado) return;
+  avisoPapeleraDado = true;
+  toast(`La papelera ocupa ${kb(b)} de tu archivo — pulsa 🗑️ en la barra de abajo para revisarla`);
+}
+
+/* ---------- archivo frío: lo que ya salió de la papelera ---------- */
+async function renderArchivoFrio(){
+  const box = $("#trash-archivo");
+  if (!box) return;
+  box.style.display = "";
+  box.innerHTML = `<div class="empty">Buscando lotes en ${esc(TRASH_DIR)}/…</div>`;
+  if (backend !== "fs" || !dirHandle){
+    box.innerHTML = `<div class="empty">El archivo de recuperación vive en tu carpeta sincronizada; ahora no hay ninguna conectada.</div>`;
+    return;
+  }
+  const lotes = await listarLotesFrios();
+  if (!lotes.length){
+    box.innerHTML = `<div class="empty">Todavía no hay nada archivado. Aquí aparecerá lo que salga de la papelera al reducirla.</div>`;
+    return;
+  }
+  box.innerHTML = "";
+  for (const l of lotes){
+    let d = null;
+    try{ d = await leerLoteFrio(l.h); }catch(e){}
+    if (!d) continue;
+    const cab = document.createElement("div");
+    cab.className = "empty";
+    cab.style.padding = "6px 0 2px";
+    cab.innerHTML = `<b>${esc(l.nombre)}</b> · ${d.items.length} elemento${d.items.length === 1 ? "" : "s"}`;
+    box.appendChild(cab);
+    d.items.forEach(item => {
+      const row = document.createElement("div");
+      row.className = "inbox-line";
+      const when = new Date(item.at || d.at || Date.now()).toLocaleString("es-ES", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+      row.innerHTML = `<span class="t"><b>${esc(item.label || "Elemento")}</b><br><span class="empty" style="padding:0">${esc(when)} · ${esc(item.kind || "")}</span></span>
+        <button class="mini rs">Recuperar</button>`;
+      // recuperar COPIA: el lote no se toca (gate §2). Si algún día molesta, se borra el archivo
+      // desde el explorador, que es donde vive.
+      row.querySelector(".rs").addEventListener("click", () => {
+        if (!guardMutation()) return;
+        if (!restoreItem(item)){ toast("Ese elemento ya no se puede recuperar en esta versión", true); return; }
+        renderAll(); markDirty();
+        toast("Recuperado del archivo (el archivo se conserva intacto)");
+      });
+      box.appendChild(row);
+    });
+  }
 }
 
 /* ============================================================
@@ -2126,6 +2378,14 @@ function canonJSON(v){
 // de pestañas) los resuelve el LOCAL sin conflicto; la papelera es unión acotada.
 function mergeStates(base, local, remote, prefer){
   prefer = prefer === "remote" ? "remote" : "local";
+  /* La papelera se fusiona POR ID (ver más abajo), así que un elemento antiguo sin `id` rompería
+     la fusión en silencio: quedaría fuera de las tres bandas y reaparecería por unión. Se le da uno
+     DETERMINISTA, derivado de su contenido: el mismo elemento existe en los dos equipos y un id
+     aleatorio lo duplicaría en la primera fusión. Copias superficiales: mergeStates es pura y no
+     puede tocar lo que le entra. */
+  base = { ...base, trash: trashConIds(base.trash) };
+  local = { ...local, trash: trashConIds(local.trash) };
+  remote = { ...remote, trash: trashConIds(remote.trash) };
   const conflicts = [];
   const clone = v => v === undefined ? undefined : JSON.parse(JSON.stringify(v));
   const pick3 = (b, l, r, conflict) => {
@@ -2211,12 +2471,20 @@ function mergeStates(base, local, remote, prefer){
   // (riesgo 6); borrado-vs-edición del mismo id = conflicto nombrado, como los widgets.
   const subscriptions = mergeById("subscriptions", "subscription", x => x && (x.displayName || x.shareId || x.subscriptionId), "subscriptionId");
 
-  // papelera: unión deduplicada y acotada — red de seguridad, nunca conflicto
-  const seen = new Set(); const trash = [];
-  for (const t of [...(local.trash || []), ...(remote.trash || [])]){
-    const c = canonJSON(t);
-    if (!seen.has(c)){ seen.add(c); trash.push(clone(t)); }
-  }
+  /* PAPELERA — fusión a TRES BANDAS por id (0.57.0, corrección exigida por el gate de Codex del
+     07/08). Antes era unión deduplicada de LOCAL+REMOTO y corte a 30, y tenía dos fallos que solo
+     se vuelven graves en cuanto existe una purga:
+       · RESURRECCIÓN: si BASE tiene X, A lo purga y B lo conserva mientras toca otro widget, la
+         unión vuelve a meter X. Es el mismo riesgo que ya obligó a fusionar `subscriptions` por id.
+       · PÉRDIDA POR EL CORTE: con 30 elementos distintos por lado, la unión da 60 y el slice se
+         queda con los primeros — los locales — descartando los remotos sin decir nada.
+     Con `mergeById`, ausente en un lado y presente en BASE significa BORRADO, que es lo que hace
+     falta para que purgar purgue. Un elemento de papelera no se edita nunca, así que aquí pick3
+     no puede producir choques: solo altas y bajas.
+     Orden final ESTABLE por `at` descendente e `id` de desempate: sin eso, dos equipos con el mismo
+     contenido escriben archivos distintos y se dan mtime mutuamente para siempre. */
+  const trash = mergeById("trash", "papelera", x => x && x.label)
+    .sort((a, b) => (b.at || 0) - (a.at || 0) || String(a.id).localeCompare(String(b.id)));
 
   // active: el LOCAL manda (decisión 0.7h), pero por IDENTIDAD de espacio, no por índice — un
   // reorden remoto de pestañas (que la fusión acepta en silencio) no debe cambiar qué escritorio
@@ -2229,7 +2497,7 @@ function mergeStates(base, local, remote, prefer){
     active: activeIx >= 0 ? activeIx : 0,
     spaces,
     calendarMarks,
-    trash: trash.slice(0, 30),
+    trash,   // 0.57.0: sin corte — fusionar no puede tirar lo que el otro equipo mandó (ver pushTrash)
     dictTargetId: pick3Silent(base.dictTargetId, local.dictTargetId, remote.dictTargetId)
   };
   if (customMarkTypes.length) merged.customMarkTypes = customMarkTypes;
@@ -3445,6 +3713,7 @@ function renderAll(){
   renderTagFilterBar();
   renderDock();
   renderTaskChip();
+  renderTrashChip();
   repaintPill();
   renderColsControl();
   renderLaneAmbient();
@@ -8846,6 +9115,9 @@ function wireUI(){
   $("#act-trash").addEventListener("click", () => { closeMenu(); openTrash(); });
   $("#atajos-close").addEventListener("click", () => $("#ov-atajos").classList.remove("open"));
   $("#trash-close").addEventListener("click", () => $("#ov-trash").classList.remove("open"));
+  $("#trash-reduce").addEventListener("click", () => reducirPapelera());
+  $("#trash-archivo-btn").addEventListener("click", () => renderArchivoFrio());
+  $("#tb-trash").addEventListener("click", openTrash);
   $("#mark-save").addEventListener("click", saveCalendarMark);
   $("#mark-close").addEventListener("click", () => $("#ov-mark").classList.remove("open"));
   $("#mark-custom-new").addEventListener("click", () => {

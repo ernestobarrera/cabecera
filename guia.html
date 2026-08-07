@@ -188,6 +188,9 @@
   <h2><span class="ic">🗑️</span> Papelera</h2>
   <p class="lead">Recuperación ligera sin convertir Cabecera en un gestor pesado.</p>
   <p>Los widgets y elementos no privados borrados pasan a Papelera y pueden restaurarse desde Inicio o desde el acceso inferior derecho. Las notas no se guardan en la papelera por privacidad; al borrarlas solo aparece un deshacer inmediato.</p>
+  <p><b>La papelera pesa, y ahora se ve cuánto.</b> Vive dentro de tu <code>datos.json</code>, el archivo que tus equipos releen continuamente, y guarda los elementos enteros —con sus imágenes dentro—, así que unos pocos widgets grandes pueden ser cientos de kilobytes. El modal te dice lo que ocupa, y si pasa de <b>200 KB</b> aparece además un aviso <span class="tag">🗑️</span> en la barra de abajo.</p>
+  <p><b>Reducir no borra: archiva.</b> Al pulsar <b>Reducir…</b> se te dice <b>cuántos elementos y cuántos bytes</b> van a salir —los más antiguos primero— y, si aceptas, se escriben en un archivo aparte dentro de tu carpeta de datos (<code>cabecera-papelera/</code>), <b>uno por cada vez que reduces</b>. Ese archivo no se relee nunca: por eso deja de pesar. Puedes recuperar de ahí cuando quieras con <b>🗄️ Archivo de papelera</b>, y recuperar <b>copia</b>: el archivo se queda intacto.</p>
+  <p class="note">Primero se escribe el archivo, después se comprueba leyéndolo, y solo entonces se quita de la papelera. Si algo falla por el camino, <b>no se quita nada</b>: como mucho tendrás el elemento dos veces, nunca ninguna. Y si no tienes carpeta conectada, la reducción no se hace y te lo dice: sin carpeta no hay dónde poner la red.</p>
 </section>
 
 <section id="buscar">
