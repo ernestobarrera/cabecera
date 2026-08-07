@@ -2903,5 +2903,73 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
     console.log('OK 0.54.0 (el filtro dice cuántos hay en otros escritorios y te lleva, sin pintar lo ajeno)');
   }
 
+  // --- 0.55.0: menú a dos niveles, zoom por ventana y accesibilidad ---------------------------
+  {
+    const cssOf = sel => {
+      const m = html.match(new RegExp(sel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\{([^}]*)\\}'));
+      if (!m) throw new Error('no encontrada la regla CSS ' + sel);
+      return m[1];
+    };
+    // (1) La rejilla del menú se GENERA. Estaba escrita a mano en el HTML, duplicando WTYPES, que
+    // es exactamente el patrón que dejó al Markdown fuera del club de la ⓘ durante versiones.
+    // se mira el tipo LITERAL (`data-add="links"`), no la plantilla que lo genera (`data-add="${t}"`)
+    if (/data-add="[a-z]/.test(html))
+      throw new Error('la rejilla del menú no puede llevar tipos escritos a mano: se desincroniza de WTYPES en silencio');
+    if (!/data-add="\$\{t\}"/.test(src))
+      throw new Error('la rejilla debe generarse desde WTYPES');
+    const WT = eval('(' + src.match(/const WTYPES = (\{[\s\S]*?\n\});/)[1] + ')');
+    const WC = eval('(' + src.match(/const WCATS = (\{[^}]*\})/)[1] + ')');
+    for (const [t, x] of Object.entries(WT)){
+      if (!(x.cat in WC)) throw new Error(`el tipo «${t}» tiene la categoría «${x.cat}», que no existe`);
+      if (!x.busca) throw new Error(`«${t}» no declara sinónimos: un buscador que solo case con el nombre no sirve a quien no se sabe los nombres`);
+    }
+    const pt = src.match(/function pintarTipos\(\)\{[\s\S]*?\n\}/)[0];
+    if (!/x\.busca/.test(pt)) throw new Error('el buscador de tipos debe mirar los sinónimos');
+    if (!/t !== "intro"/.test(pt)) throw new Error('«Bienvenida» no se ofrece como widget nuevo');
+    if (!/wcatSel/.test(pt) || /appSettings\(\)\.wcat|state\.wcat/.test(src))
+      throw new Error('I7: la categoría elegida es de esta sesión, no viaja en datos.json');
+
+    // (2) ZOOM POR VENTANA. `zoom` y no `transform: scale()`: scale desplaza las zonas de clic y
+    // arrastrar o redimensionar dejaría de caer donde se ve.
+    const az = src.match(/function aplicarZoom\(w\)\{[\s\S]*?\n\}/)[0];
+    if (/transform/.test(az) || /scale\(/.test(az))
+      throw new Error('el zoom con transform deforma la caja y descoloca el arrastre: tiene que ser la propiedad zoom');
+    const sz = src.match(/function setZoom\(w, z\)\{[\s\S]*?\n\}/)[0];
+    if (!/if \(v === 100\) delete w\.data\.zoom/.test(sz))
+      throw new Error('el 100 % es el defecto y no se guarda: si no, engorda el archivo con lo que ya es por omisión');
+    if (!/Math\.min\(ZOOM_MAX, Math\.max\(ZOOM_MIN/.test(sz) || !/Math\.min\(ZOOM_MAX, Math\.max\(ZOOM_MIN/.test(src.match(/const zoomDe = [\s\S]*?\n\};/)[0]))
+      throw new Error('el zoom se acota al leer Y al escribir: un archivo tocado a mano no puede romper la ventana');
+    // R27 + honestidad: el atajo se anuncia, así que tiene que existir de verdad.
+    if (!/zoom:\s*\{ teclas: "Ctrl\+rueda/.test(src)) throw new Error('el zoom debe declarar su atajo en la tabla única');
+    if (!/document\.addEventListener\("wheel"[\s\S]{0,400}setZoom/.test(src))
+      throw new Error('se anuncia Ctrl+rueda: un atajo escrito y no implementado es peor que no anunciarlo');
+    // superviviente de la prueba de mutación: `{ passive: false }` aparece en otros listeners de
+    // rueda del proyecto, así que buscarlo suelto daba verde aunque ESTE lo perdiera. Se comprueba
+    // dentro del propio manejador, que es donde importa: sin él, Ctrl+rueda hace zoom del navegador.
+    const wheel = (src.match(/document\.addEventListener\("wheel"[\s\S]*?\n  \}, \{[^}]*\}\);/) || [''])[0];
+    if (!/passive: false/.test(wheel))
+      throw new Error('sin passive:false ESTE manejador no puede frenar el zoom del navegador y el atajo hace otra cosa');
+    if (!/e\.preventDefault\(\)/.test(wheel))
+      throw new Error('hay que frenar el evento explícitamente: passive:false solo da permiso para hacerlo');
+
+    // (3) ACCESIBILIDAD. El tamaño crece el TEXTO, no la geometría: un zoom global movería las
+    // ventanas y estropearía los carriles.
+    const af = src.match(/function applyFont\(\)\{[\s\S]*?\n\}/)[0];
+    if (!/documentElement\.style\.fontSize/.test(af))
+      throw new Error('el tamaño de letra se aplica como font-size de la raíz, no como zoom del documento');
+    if (/documentElement\.style\.zoom/.test(af))
+      throw new Error('un zoom global movería las ventanas de sitio: no es lo mismo texto grande que todo grande');
+    if (!/\.contraste-alto\{/.test(html)) throw new Error('falta el modo de alto contraste');
+    for (const v of ['--border:', '--text-dim:'])
+      if (!cssOf(':root.contraste-alto').includes(v)) throw new Error(`el alto contraste debe subir ${v}`);
+    if (/--accent:|--danger:|--warn:|--ok:/.test(cssOf(':root.contraste-alto')))
+      throw new Error('el alto contraste no puede tocar los colores de estado: rojo=vencido y ámbar=hoy tienen significado');
+    // whitelist estricta, como el resto de appSettings
+    const san = src.match(/function sanitizeState\(s\)\{[\s\S]*?\n\}/)[0];
+    if (!/uiScale === 110 \|\| s\.appSettings\.uiScale === 125/.test(san) || !/contrast === "alto"/.test(san))
+      throw new Error('los ajustes nuevos entran por la whitelist, como los demás: nada de copiar appSettings a ciegas');
+    console.log('OK 0.55.0 (menú a dos niveles derivado de WTYPES, zoom por ventana con su atajo real, letra y contraste)');
+  }
+
   console.log('\nTODO EN VERDE');
 })().catch(e => { console.error(e && e.stack || e); process.exitCode = 1; });

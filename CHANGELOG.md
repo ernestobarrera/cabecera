@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.55.0] - 2026-08-07 — menú Inicio con categorías, zoom por ventana y accesibilidad
+
+- **El menú Inicio agrupa los tipos por categorías, con su recuento y un buscador.** Trabajo, Tiempo, Herramientas y Contenido, y el número de cada una. El buscador entiende **sinónimos**: escribes «vacaciones» y aparece **Permisos**, aunque no se llame así — un buscador que solo case con el nombre no sirve a quien no se sabe los nombres. Con un único resultado, `Enter` lo añade. Además la rejilla **se genera de la lista de tipos**: estaba escrita a mano y podía quedarse atrás.
+- **Zoom por ventana.** Ampliar o reducir el contenido de una ventana concreta sin cambiar su tamaño: útil para ver entera una tabla ancha, o para agrandar la letra de una nota que lees de lejos. Está en el clic derecho —ampliar, reducir, volver al 100 %, escribir el porcentaje— y con **Ctrl+rueda** encima de la ventana.
+- **Tamaño de letra y contraste alto**, en ⚙ Ajustes generales. El tamaño (110 % o 125 %) afecta **al texto, no a la geometría**: tus ventanas no se mueven de sitio. El contraste alto aclara bordes y texto atenuado sin tocar los colores de estado, porque el rojo de «vencido» y el ámbar de «hoy» significan algo.
+
 ## [0.54.0] - 2026-08-07 — el filtro de etiqueta deja de ser ciego, y la fila respira
 
 - **El filtro de etiqueta dice qué hay fuera de este escritorio.** Seguía actuando solo dentro del escritorio activo —y la guía llegó a prometer lo contrario durante meses—. Ahora el indicador de la barra muestra **cuántos widgets hay aquí y cuántos en otros escritorios**, y al pulsarlo te lleva sin perder el filtro: si solo hay otro, salta directo; si hay varios, eliges. Lo que sigue sin hacerse, a propósito, es pintar a la vez widgets de escritorios distintos: las posiciones son por escritorio y se solaparían sin remedio.

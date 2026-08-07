@@ -31,6 +31,18 @@
      orden— y no como un margen muerto al final de la fila. */
   --todo-acts: 20px;
 }
+/* Contraste alto: la MISMA paleta con los grises menos grises. Sube bordes y texto atenuado, que
+   es donde se pierde legibilidad con luz directa o en un proyector. No cambia acentos ni colores
+   de estado: esos ya contrastan, y tocarlos rompería el significado (rojo = vencido, ámbar = hoy). */
+:root.contraste-alto{
+  --border: rgba(255,255,255,.30);
+  --border-soft: rgba(255,255,255,.20);
+  --text-dim: #c3ccdb;
+  --glass: rgba(18,22,29,.90);
+  --glass-soft: rgba(18,22,29,.80);
+}
+:root.contraste-alto .notes-desc{opacity:.9}
+:root.contraste-alto .todo-it .alta{opacity:.85}
 *{box-sizing:border-box; margin:0; padding:0}
 html,body{height:100%; overflow:hidden}
 body{font-family:var(--font); color:var(--text); background:#10131a}
@@ -302,6 +314,17 @@ body{font-family:var(--font); color:var(--text); background:#10131a}
 .res-item .u{color:var(--text-dim); font-size:11.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:45%; text-align:right; flex-shrink:0}
 #menu-widgets{padding:6px 12px 12px; overflow:auto; min-height:0; flex:1}
 #menu-widgets h4, #menu-actions h4{font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--text-dim); margin:8px 2px 8px}
+#wfind{width:100%; padding:7px 10px; border-radius:9px; border:1px solid var(--border-soft);
+  background:rgba(255,255,255,.05); color:var(--text); font-family:var(--font); font-size:13px; margin-bottom:8px}
+#wfind:focus{border-color:var(--accent); outline:none}
+#wcats{display:flex; flex-wrap:wrap; gap:5px; margin-bottom:9px}
+.wcat{font-size:11.5px; padding:3px 9px; border-radius:999px; border:1px solid var(--border-soft);
+  background:rgba(255,255,255,.04); color:var(--text-dim); cursor:pointer; font-family:var(--font)}
+.wcat:hover{border-color:var(--accent); color:var(--text)}
+.wcat.on{background:var(--accent-soft); border-color:var(--accent); color:var(--text); font-weight:600}
+/* una categoría sin resultados se ve, pero apagada: esconderla haría bailar la fila al teclear */
+.wcat.vacia{opacity:.38; pointer-events:none}
+.wc-n{font-variant-numeric:tabular-nums; opacity:.7}
 .wgrid{display:grid; grid-template-columns:repeat(3,1fr); gap:8px}
 .wcard{display:flex; flex-direction:column; align-items:center; gap:6px; padding:12px 6px; border-radius:12px;
   border:1px solid var(--border-soft); background:rgba(255,255,255,.03); cursor:pointer; font-size:12.5px; color:var(--text)}
@@ -928,24 +951,10 @@ ul.plain{list-style:none}
   <div id="menu-results"></div>
   <div id="menu-widgets">
     <h4>Añadir widget</h4>
-    <div class="wgrid">
-      <div class="wcard" data-add="links"><span class="ico">🔗</span>Enlaces</div>
-      <div class="wcard" data-add="notes"><span class="ico">📝</span>Nota</div>
-      <div class="wcard" data-add="todo"><span class="ico">✅</span>Tareas</div>
-      <div class="wcard" data-add="clips"><span class="ico">📋</span>Portapapeles</div>
-      <div class="wcard" data-add="qr"><span class="ico">🔳</span>QR</div>
-      <div class="wcard" data-add="clock"><span class="ico">🕐</span>Reloj</div>
-      <div class="wcard" data-add="md"><span class="ico">📄</span>Markdown</div>
-      <div class="wcard" data-add="img"><span class="ico">🖼️</span>Imagen</div>
-      <div class="wcard" data-add="timer"><span class="ico">⏱️</span>Temporizador</div>
-      <div class="wcard" data-add="cal"><span class="ico">📅</span>Mes</div>
-      <div class="wcard" data-add="year"><span class="ico">🗓️</span>Año</div>
-      <div class="wcard" data-add="leave"><span class="ico">🧾</span>Permisos</div>
-      <div class="wcard" data-add="search"><span class="ico">🔎</span>Buscadores</div>
-      <div class="wcard" data-add="calc"><span class="ico">🧮</span>Calculadora</div>
-      <div class="wcard" data-add="files"><span class="ico">📂</span>Archivos</div>
-      <div class="wcard" data-add="dictado"><span class="ico">🎙️</span>Dictado</div>
-    </div>
+    <input id="wfind" type="text" placeholder="Filtrar tipos…" autocomplete="off">
+    <div id="wcats"></div>
+    <div class="wgrid"></div>
+    <div id="wvacio" class="empty" style="display:none">Ningún tipo coincide.</div>
   </div>
   <div id="menu-actions">
     <h4 style="width:100%">Configuración</h4>
@@ -1089,6 +1098,21 @@ ul.plain{list-style:none}
         <option value="system">Sistema (Segoe UI)</option>
         <option value="humanist">Humanista (Verdana)</option>
         <option value="classic">Clásica (Georgia)</option>
+      </select>
+    </div>
+    <div class="field" style="flex-direction:column; align-items:stretch; gap:4px">
+      <label for="cfg-scale" style="font-size:13px"><b>Tamaño de la letra</b> <span style="color:var(--text-dim)">— todo el sitio; el zoom por ventana sigue siendo aparte</span></label>
+      <select id="cfg-scale" class="cfg-sel">
+        <option value="100">Normal</option>
+        <option value="110">Grande (110 %)</option>
+        <option value="125">Muy grande (125 %)</option>
+      </select>
+    </div>
+    <div class="field" style="flex-direction:column; align-items:stretch; gap:4px">
+      <label for="cfg-contrast" style="font-size:13px"><b>Contraste</b> <span style="color:var(--text-dim)">— sube bordes y texto atenuado; útil con luz directa o proyector</span></label>
+      <select id="cfg-contrast" class="cfg-sel">
+        <option value="normal">Normal</option>
+        <option value="alto">Alto</option>
       </select>
     </div>
     <div class="field" style="flex-direction:column; align-items:stretch; gap:4px">
@@ -1508,6 +1532,8 @@ function sanitizeState(s){
     const a = {};
     if (s.appSettings.font === "humanist" || s.appSettings.font === "classic") a.font = s.appSettings.font;   // "system" = default → ausencia
     if (s.appSettings.defaultCols === 2 || s.appSettings.defaultCols === 3 || s.appSettings.defaultCols === 4) a.defaultCols = s.appSettings.defaultCols;
+    if (s.appSettings.uiScale === 110 || s.appSettings.uiScale === 125) a.uiScale = s.appSettings.uiScale;
+    if (s.appSettings.contrast === "alto") a.contrast = "alto";
     if (Object.keys(a).length) s.appSettings = a; else delete s.appSettings;
   } else if ("appSettings" in s) delete s.appSettings;
   s.version = 2;
@@ -1523,8 +1549,19 @@ const FONT_STACKS = {
 };
 function appSettings(){ return (state && state.appSettings && typeof state.appSettings === "object") ? state.appSettings : {}; }
 function applyFont(){
-  const id = FONT_STACKS[appSettings().font] ? appSettings().font : "system";
+  const a = appSettings();
+  const id = FONT_STACKS[a.font] ? a.font : "system";
   document.documentElement.style.setProperty("--font", FONT_STACKS[id]);
+  /* 0.55.0 — TAMAÑO DE LETRA Y CONTRASTE (quick-win de accesibilidad, aprobado por mí el 07/08
+     porque no requería decisión suya). El tamaño se aplica como font-size de la raíz, no como zoom
+     del documento: así crece el TEXTO y no la geometría, y las ventanas siguen donde las dejaste
+     —un zoom global movería todo y estropearía los carriles—.
+     El contraste sube las variables de borde y de texto atenuado. Se hizo con variables y no con
+     un tema aparte para que no haya dos paletas que mantener: el modo alto es la misma paleta con
+     los grises menos grises. */
+  const esc = [100, 110, 125].includes(+a.uiScale) ? +a.uiScale : 100;
+  document.documentElement.style.fontSize = esc === 100 ? "" : (16 * esc / 100) + "px";
+  document.documentElement.classList.toggle("contraste-alto", a.contrast === "alto");
 }
 // Panel ⚙ — edición TRANSACCIONAL (gate): el modal es un borrador; la preview tipográfica es solo
 // DOM; el estado se toca ÚNICAMENTE en Guardar (un markDirty). Cancelar/Esc revierte la preview.
@@ -1532,6 +1569,8 @@ function openConfig(){
   const a = appSettings();
   $("#cfg-font").value = FONT_STACKS[a.font] ? a.font : "system";
   $("#cfg-defcols").value = (a.defaultCols === 2 || a.defaultCols === 3 || a.defaultCols === 4) ? String(a.defaultCols) : "auto";
+  $("#cfg-scale").value = [110, 125].includes(+a.uiScale) ? String(+a.uiScale) : "100";
+  $("#cfg-contrast").value = a.contrast === "alto" ? "alto" : "normal";
   $("#ov-config").classList.add("open");
 }
 function saveConfig(){
@@ -1540,6 +1579,9 @@ function saveConfig(){
   if (f !== "system" && FONT_STACKS[f]) a.font = f;   // se persiste SOLO el id de la whitelist
   const dc = +$("#cfg-defcols").value;
   if (dc === 2 || dc === 3 || dc === 4) a.defaultCols = dc;
+  const sc = +$("#cfg-scale").value;
+  if (sc === 110 || sc === 125) a.uiScale = sc;                       // 100 = defecto → ausencia
+  if ($("#cfg-contrast").value === "alto") a.contrast = "alto";       // normal = defecto → ausencia
   if (Object.keys(a).length) state.appSettings = a;
   else delete state.appSettings;   // todo por defecto = ausencia (el estado canónico)
   $("#ov-config").classList.remove("open");
@@ -1774,7 +1816,7 @@ function syncUI(mode, txt){
    reaparece) y si Recargar está activo. El descarte ✕ vive solo en memoria de la sesión.
    Demora asumida: la CDN de Pages puede servir la versión vieja hasta ~10 min aun con
    no-store (gobierna la caché del navegador, no la CDN); para pestañas de días, irrelevante. */
-const APP_VERSION = "0.54.0";
+const APP_VERSION = "0.55.0";
 let newVersionDetected = null;   // versión superior detectada; detiene futuras consultas
 let verDismissed = false;        // ✕: solo esta sesión — nunca persistido en disco
 let verCheckInflight = false;    // sin consultas concurrentes
@@ -3312,24 +3354,29 @@ async function checkFollowedPack(interactive = false){
 /* ============================================================
    Render de escritorio y ventanas
    ============================================================ */
+/* `cat` (0.55.0) agrupa los tipos en el menú Inicio. Va AQUÍ, en la fuente única, y no en una
+   lista aparte: la rejilla del menú estaba escrita a mano en el HTML y ya se había quedado
+   desincronizada de esta tabla. Un tipo nuevo aparece solo en el menú, en su categoría.
+   `busca` son sinónimos para el buscador — cómo lo llamarías tú, no cómo se llama el widget. */
+const WCATS = { trabajo: "Trabajo", tiempo: "Tiempo", util: "Herramientas", contenido: "Contenido" };
 const WTYPES = {
-  links: { ico: "🔗", name: "Enlaces",      w: 300, h: 340 },
-  notes: { ico: "📝", name: "Nota",         w: 300, h: 220 },
-  todo:  { ico: "✅", name: "Tareas",       w: 300, h: 260 },
-  clips: { ico: "📋", name: "Portapapeles", w: 320, h: 300 },
-  qr:    { ico: "🔳", name: "QR",           w: 260, h: 330 },
-  clock: { ico: "🕐", name: "Reloj",        w: 240, h: 170 },
-  md:    { ico: "📄", name: "Markdown",     w: 340, h: 320 },
-  img:   { ico: "🖼️", name: "Imagen",       w: 340, h: 280 },
-  timer: { ico: "⏱️", name: "Temporizador", w: 290, h: 210 },
-  cal:   { ico: "📅", name: "Mes",          w: 310, h: 360, minW: 260, minH: 280 },
-  year:  { ico: "🗓️", name: "Año",          w: 520, h: 520, minW: 300, minH: 340 },
-  leave: { ico: "🧾", name: "Permisos",     w: 390, h: 430 },
-  search:{ ico: "🔎", name: "Buscadores",   w: 300, h: 330 },
-  calc:  { ico: "🧮", name: "Calculadora",  w: 260, h: 340 },
-  files: { ico: "📂", name: "Archivos",     w: 380, h: 360 },
-  dictado:{ ico: "🎙️", name: "Dictado",     w: 330, h: 300 },
-  intro: { ico: "👋", name: "Bienvenida",   w: 350, h: 280 }
+  links: { ico: "🔗", name: "Enlaces",      w: 300, h: 340, cat: "contenido", busca: "marcadores favoritos urls webs sitios" },
+  notes: { ico: "📝", name: "Nota",         w: 300, h: 220, cat: "trabajo",   busca: "texto apuntes escribir bloc" },
+  todo:  { ico: "✅", name: "Tareas",       w: 300, h: 260, cat: "trabajo",   busca: "pendientes lista checklist to-do" },
+  clips: { ico: "📋", name: "Portapapeles", w: 320, h: 300, cat: "trabajo",   busca: "snippets fragmentos copiar pegar plantillas" },
+  qr:    { ico: "🔳", name: "QR",           w: 260, h: 330, cat: "util",      busca: "codigo movil compartir enlace" },
+  clock: { ico: "🕐", name: "Reloj",        w: 240, h: 170, cat: "tiempo",    busca: "hora analogico digital" },
+  md:    { ico: "📄", name: "Markdown",     w: 340, h: 320, cat: "trabajo",   busca: "documento tabla formato texto rico" },
+  img:   { ico: "🖼️", name: "Imagen",       w: 340, h: 280, cat: "contenido", busca: "foto captura pantalla dibujo" },
+  timer: { ico: "⏱️", name: "Temporizador", w: 290, h: 210, cat: "tiempo",    busca: "cuenta atras cronometro alarma vueltas" },
+  cal:   { ico: "📅", name: "Mes",          w: 310, h: 360, minW: 260, minH: 280, cat: "tiempo", busca: "calendario dias festivos marcas semana" },
+  year:  { ico: "🗓️", name: "Año",          w: 520, h: 520, minW: 300, minH: 340, cat: "tiempo", busca: "calendario anual resumen vacaciones" },
+  leave: { ico: "🧾", name: "Permisos",     w: 390, h: 430, cat: "tiempo",    busca: "vacaciones dias asuntos propios computo" },
+  search:{ ico: "🔎", name: "Buscadores",   w: 300, h: 330, cat: "util",      busca: "google pubmed buscar motores" },
+  calc:  { ico: "🧮", name: "Calculadora",  w: 260, h: 340, cat: "util",      busca: "calcular numeros unidades clinicas conversion" },
+  files: { ico: "📂", name: "Archivos",     w: 380, h: 360, cat: "contenido", busca: "carpeta documentos abrir local" },
+  dictado:{ ico: "🎙️", name: "Dictado",     w: 330, h: 300, cat: "util",      busca: "voz hablar transcribir microfono" },
+  intro: { ico: "👋", name: "Bienvenida",   w: 350, h: 280, cat: "contenido", busca: "ayuda empezar tour" }
 };
 
 // La píldora muestra recuentos del espacio ACTIVO: renderAll la repinta para que no se quede
@@ -4370,6 +4417,13 @@ function buildWindow(w){
   const paint = isMobile() ? widgetRect(w) : projectWidgets([w])[0];
   const el = document.createElement("div");
   el.className = "win" + (widgetsNuevos.has(w.id) ? " novedad" : "");
+  // 0.55.0 — ZOOM POR VENTANA. Del escritorio del aula, propuesto el 05/08 y aprobado el 06/08.
+  // Sirve para una tabla ancha que quieres ver entera achicándola, o para agrandar la letra de una
+  // nota que lees de lejos en clase. Se usa `zoom` y no `transform: scale()` a propósito: scale
+  // deforma la caja y desplaza las zonas de clic —arrastrar y redimensionar dejarían de caer donde
+  // se ven—, mientras que zoom rehace el flujo y mantiene la geometría coherente.
+  // Solo afecta al CONTENIDO, nunca al tamaño de la ventana: son dos cosas distintas y confundirlas
+  // era el riesgo (achicar para ver más NO debe encoger la ventana).
   el.dataset.id = w.id;
   // 0.53.0 — apagar el resplandor es un ACTO tuyo: un clic dentro. Deliberadamente NO con el hover,
   // porque pasarías por encima sin querer y lo darías por leído sin haberlo leído (condición suya).
@@ -4392,6 +4446,7 @@ function buildWindow(w){
     <div class="win-resize" data-rz="se"></div>
     <div class="rz rz-n" data-rz="n"></div><div class="rz rz-s" data-rz="s"></div><div class="rz rz-e" data-rz="e"></div><div class="rz rz-w" data-rz="w"></div><div class="rz rz-ne" data-rz="ne"></div><div class="rz rz-nw" data-rz="nw"></div><div class="rz rz-sw" data-rz="sw"></div>`;
   if (w.collapsed) el.classList.add("collapsed");
+  { const b = el.querySelector(".win-body"); if (b && zoomDe(w) !== 100) b.style.zoom = zoomDe(w) / 100; }
   /* 0.48.0 — «esconder ≠ ordenar». Etiquetas, color, cabecera y privado estaban a opacidad cero:
      medio widget era indescubrible, y ninguno de los cuatro tenía OTRA puerta (la paleta filtra
      por etiquetas que ya existen, pero no sirve para poner la primera). Ernesto, que ha escrito
@@ -5531,6 +5586,27 @@ const venceMs = it => {
   return isNaN(d) ? Number.MAX_SAFE_INTEGER : d.getTime();
 };
 const sortDe = w => (TODO_SORTS[w && w.data && w.data.sort] ? w.data.sort : "manual");
+
+/* Zoom de una ventana, en un solo sitio. Acotado a 50–200: por debajo no se lee y por encima no
+   cabe nada, y un valor guardado fuera de rango (archivo tocado a mano, versión futura) se
+   corrige en vez de romper. 100 es el defecto y NO se guarda, para no engordar el archivo con lo
+   que ya es el valor por omisión. */
+const ZOOM_MIN = 50, ZOOM_MAX = 200, ZOOM_PASO = 10;
+const zoomDe = w => {
+  const z = Math.round(Number((w.data || {}).zoom) || 100);
+  return Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, z));
+};
+function setZoom(w, z){
+  const v = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, Math.round(z)));
+  if (v === 100) delete w.data.zoom; else w.data.zoom = v;
+  aplicarZoom(w);
+  markDirty();
+  toast("Zoom de la ventana: " + v + "%");
+}
+function aplicarZoom(w){
+  const el = document.querySelector('.win[data-id="' + w.id + '"] .win-body');
+  if (el) el.style.zoom = zoomDe(w) === 100 ? "" : (zoomDe(w) / 100);
+}
 
 function bodyTodo(w, el){
   const desc = String(w.data.desc || "").trim();
@@ -8178,7 +8254,9 @@ const ATAJOS = {
   enviar:   { teclas: "Ctrl+Enter",  que: "Enviar una respuesta o guardar sin soltar el teclado" },
   inicio:   { teclas: "Ctrl+clic derecho", que: "Abrir el menú Inicio donde tengas el ratón" },
   libre:    { teclas: "Alt+arrastrar", que: "Mover una ventana sin que el imán la alinee" },
-  renombra: { teclas: "Doble clic",  que: "Renombrar una ventana o una pestaña de escritorio" }
+  renombra: { teclas: "Doble clic",  que: "Renombrar una ventana o una pestaña de escritorio" },
+  zoom:     { teclas: "Ctrl+rueda ↑", que: "Ampliar el contenido de la ventana bajo el ratón" },
+  zoomOut:  { teclas: "Ctrl+rueda ↓", que: "Reducir el contenido de la ventana bajo el ratón" }
 };
 const kbd = k => {
   const a = ATAJOS[k];
@@ -8311,6 +8389,42 @@ function renderResults(q){
     box.appendChild(d);
   });
 }
+/* 0.55.0 — MENÚ INICIO A DOS NIVELES: categorías con recuento + buscador.
+   Tomado del escritorio digital del aula y pedido por él el 05/08, con su propio matiz: «con 18
+   tipos quizá basta con recuento y buscador». Tenía razón, así que las categorías FILTRAN pero no
+   esconden — «Todos» sigue siendo el estado inicial y de un clic.
+   El buscador mira también los SINÓNIMOS (`busca` en WTYPES): buscas «vacaciones» y aparece
+   Permisos, que no se llama así. Un buscador que solo case con el nombre no ayuda a quien no se
+   sabe los nombres, que es justo quien necesita el buscador.
+   Estado en MEMORIA (I7): la categoría elegida es de esta sesión, no contenido. */
+let wcatSel = "";
+function pintarTipos(){
+  const grid = $("#menu .wgrid"), cats = $("#wcats"), vacio = $("#wvacio");
+  if (!grid || !cats) return;
+  const q = ($("#wfind").value || "").trim().toLowerCase();
+  const tipos = Object.entries(WTYPES).filter(([t]) => t !== "intro");
+  const casa = ([t, x]) => !q || (x.name + " " + t + " " + (x.busca || "")).toLowerCase().includes(q);
+  const visibles = tipos.filter(x => casa(x) && (!wcatSel || x[1].cat === wcatSel));
+
+  // los recuentos son de lo que hay TRAS el buscador: si filtras «vacaciones», una categoría con
+  // (0) te dice que ahí no está, en vez de prometer tipos que el filtro ya descartó
+  const conteo = {};
+  for (const [, x] of tipos.filter(casa)) conteo[x.cat] = (conteo[x.cat] || 0) + 1;
+  const total = tipos.filter(casa).length;
+  cats.innerHTML = [["", "Todos", total]].concat(Object.entries(WCATS).map(([k, n]) => [k, n, conteo[k] || 0]))
+    .map(([k, n, c]) => `<button class="wcat${wcatSel === k ? " on" : ""}${!c ? " vacia" : ""}" data-c="${k}">${esc(n)} <span class="wc-n">${c}</span></button>`).join("");
+  cats.querySelectorAll(".wcat").forEach(b => b.addEventListener("click", () => {
+    wcatSel = wcatSel === b.dataset.c ? "" : b.dataset.c;
+    pintarTipos();
+  }));
+
+  grid.innerHTML = visibles.map(([t, x]) =>
+    `<div class="wcard" data-add="${t}" title="${esc(x.name)}"><span class="ico">${x.ico}</span>${esc(x.name)}</div>`).join("");
+  grid.querySelectorAll(".wcard").forEach(c =>
+    c.addEventListener("click", () => { addWidget(c.dataset.add); closeMenu(); }));
+  vacio.style.display = visibles.length ? "none" : "";
+}
+
 function openMenu(mode = "start", point = null){
   const menu = $("#menu");
   menu.classList.add("open");
@@ -8324,6 +8438,9 @@ function openMenu(mode = "start", point = null){
     menu.style.bottom = "auto";
   }
   $("#menu-search").value = "";
+  // el menú se abre siempre en el mismo sitio: un filtro heredado de la vez anterior es una
+  // trampa (buscas un tipo, no aparece, y no ves por qué)
+  if ($("#wfind")){ $("#wfind").value = ""; wcatSel = ""; pintarTipos(); }
   renderResults("");
   setTimeout(() => $("#menu-search").focus(), 30);
 }
@@ -8351,6 +8468,18 @@ function ctxWidgetItems(w, el){
     el.querySelector(".win-title").dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
   }, ATAJOS.renombra.teclas]);
   out.push(["🏷️", "Etiquetas", () => { el.classList.add("show-more"); pulsar(".tagbtn")(); }]);
+  // 0.55.0 — zoom del contenido. Va aquí y no en la barra de título porque es de uso ocasional:
+  // meterlo entre los botones de la barra pagaría espacio permanente por algo que se usa a ratos.
+  {
+    const z = zoomDe(w);
+    out.push(["🔍", `Ampliar el contenido${z >= ZOOM_MAX ? " (al máximo)" : ""}`, () => setZoom(w, z + ZOOM_PASO), ATAJOS.zoom.teclas]);
+    out.push(["🔍", `Reducir el contenido${z <= ZOOM_MIN ? " (al mínimo)" : ""}`, () => setZoom(w, z - ZOOM_PASO), ATAJOS.zoomOut.teclas]);
+    if (z !== 100) out.push(["↺", `Zoom al 100 % (ahora ${z} %)`, () => setZoom(w, 100)]);
+    out.push(["🔢", "Escribir el zoom…", async () => {
+      const r = await dlgPrompt([{ key: "z", label: `Porcentaje entre ${ZOOM_MIN} y ${ZOOM_MAX}`, value: String(z) }], { title: "Zoom de la ventana" });
+      if (r && String(r.z).trim() !== "" && Number.isFinite(Number(r.z))) setZoom(w, Number(r.z));
+    }]);
+  }
   if (w.type === "notes" || w.type === "todo" || w.type === "md"){
     out.push(["🎨", "Color de la ventana", () => { el.classList.add("show-more"); pulsar(".colorbtn")(); }]);
     out.push(["ⓘ", "Cabecera del widget", () => { el.classList.add("show-more"); pulsar(".descbtn")(); }]);
@@ -8489,6 +8618,21 @@ function wireUI(){
   document.addEventListener("click", e => {
     if (!e.target.closest("#menu") && !e.target.closest("#btn-inicio") && !e.target.closest("#desk-dock")) closeMenu();
   });
+  /* 0.55.0 — Ctrl+rueda sobre una ventana la amplía o la reduce. Se anuncia en el menú y en la
+     lista de atajos, así que TIENE que existir: un atajo escrito y no implementado es peor que no
+     anunciarlo. `passive:false` es obligatorio para poder frenar el zoom del navegador, que es lo
+     que ocurriría si no. Fuera de una ventana no se toca nada: ahí el zoom del navegador es lo
+     que se espera. */
+  document.addEventListener("wheel", e => {
+    if (!e.ctrlKey && !e.metaKey) return;
+    const win = e.target.closest && e.target.closest(".win");
+    if (!win || !state) return;
+    const w = (state.widgets || []).find(x => x.id === win.dataset.id);
+    if (!w) return;
+    e.preventDefault();
+    setZoom(w, zoomDe(w) + (e.deltaY < 0 ? ZOOM_PASO : -ZOOM_PASO));
+  }, { passive: false });
+
   document.addEventListener("keydown", e => {
     if ((e.key === "k" || e.key === "K") && (e.ctrlKey || e.metaKey)){ e.preventDefault(); openMenu("palette"); }
     if (e.key === "/" && !e.target.closest("input,textarea")){ e.preventDefault(); openMenu("palette"); }
@@ -8526,7 +8670,16 @@ function wireUI(){
     if (e.key === "Enter" && items[selIdx]) items[selIdx].click();
   });
 
-  $$("#menu .wcard").forEach(c => c.addEventListener("click", () => { addWidget(c.dataset.add); closeMenu(); }));
+  // 0.55.0 — la rejilla se pinta desde WTYPES, así que el cableado también es dinámico
+  $("#wfind").addEventListener("input", () => pintarTipos());
+  $("#wfind").addEventListener("keydown", e => {
+    // Enter con un solo resultado lo añade: con el buscador delante, obligar a coger el ratón
+    // para el único candidato es el paso que sobra
+    if (e.key !== "Enter") return;
+    const solo = $("#menu .wgrid .wcard");
+    if (solo.length === 1){ addWidget(solo[0].dataset.add); closeMenu(); }
+  });
+  pintarTipos();
 
   // fondo
   const grid = $("#wp-presets");
