@@ -1469,9 +1469,20 @@ console.log('OK enlaces arrastrables (guardián de documento + asa presente)');
   const m = rule[1].match(/opacity:\s*([\d.]+)/);
   if (!m || parseFloat(m[1]) < 0.3) throw new Error('regresión: el asa de las tareas vuelve a ser (casi) invisible en reposo');
   if (!/align-self:\s*flex-start/.test(rule[1])) throw new Error('regresión: el asa debe anclarse arriba (en una tarea larga se va a media altura)');
-  if (!src.match(/it-drag" draggable="\$\{view === "pend"\}/)) throw new Error('regresión: el asa de tareas perdió su condición de arrastre');
+  // 0.53.0: la condición pasa de «estoy en Pendientes» a «además el orden es el manual». Con un
+  // criterio automático, mover algo a mano no lo deja movido —el siguiente repintado lo devuelve
+  // a su sitio—, así que ofrecer el gesto sería prometer algo que no ocurre.
+  if (!src.match(/it-drag" draggable="\$\{reordenable\}/)) throw new Error('regresión: el asa de tareas perdió su condición de arrastre');
+  if (!src.match(/const reordenable = view === "pend" && sortDe\(w\) === "manual"/))
+    throw new Error('reordenable debe exigir vista de Pendientes Y orden manual');
+  for (const g of ['if (!reordenable){ e.preventDefault(); return; }', 'if (!dragItem || !reordenable) return;'])
+    if (!src.includes(g)) throw new Error('el arrastre debe estar cerrado también en los manejadores, no solo en el atributo: ' + g);
+  // superviviente potencial: dejar ↑↓ activos con orden automático movería el array por debajo
+  // sin que la lista lo reflejara — el peor caso, porque el dato cambia y no se ve
+  if ((src.match(/if \(!reordenable\)\{ toast\("Con un orden automático/g) || []).length !== 2)
+    throw new Error('↑ y ↓ deben avisar y no mover cuando el orden es automático');
 }
-console.log('OK asa de arrastre de tareas (visible en reposo, anclada arriba, solo en Pendientes)');
+console.log('OK asa de arrastre de tareas (visible en reposo, anclada arriba, solo con orden manual)');
 
 // --- E (2026-07-28): una tarea que es en realidad un texto largo se ofrece mudar a una nota ---
 eval('globalThis.TASK_LONG = ' + src.match(/const TASK_LONG = (\d+);/)[1]);
@@ -2770,6 +2781,100 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
     if (/search\.style\.display/.test(src))
       throw new Error('la lupa vale en las dos vistas: esconderla en Pendientes era la mitad de lo útil con 168 ítems');
     console.log('OK 0.52.0 (las etiquetas son insignia en el título: siempre visibles y sin empujar nada)');
+  }
+
+  // --- 0.53.0: etiquetas con efecto, ordenación y cadencia de relectura ------------------------
+  {
+    // (1) ETIQUETAS CON EFECTO, con la exigencia que puso Ernesto el 06/08: la ⓘ debe poder
+    // actualizarse SOLA cuando cambie la convención, «con carácter retroactivo y futuro». Eso
+    // obliga a distinguir lo suyo de lo derivado, o el producto pisaría lo que él escribió.
+    const IA_ROLES = eval('(' + src.match(/const IA_ROLES = (\{[\s\S]*?\n\});/)[1] + ')');
+    const WIN_COLORS = eval('(' + src.match(/const WIN_COLORS = (\{[^}]*\})/)[1] + ')');
+    for (const [rol, v] of Object.entries(IA_ROLES)){
+      if (!(v.color in WIN_COLORS)) throw new Error(`ia-${rol} pide el color «${v.color}», que no existe en WIN_COLORS`);
+      if (!v.desc || v.desc.length < 60) throw new Error(`la ⓘ derivada de ia-${rol} tiene que explicar el contrato, no ser una etiqueta`);
+    }
+    // La pasada vive en sanitizeState y no en renderAll: es el único punto por el que pasa TODO
+    // estado que entra (carga, poll, fusión, importación, restauración).
+    const san = src.match(/function sanitizeState\(s\)\{[\s\S]*?\n\}/)[0];
+    if (!/IA_ROLES\[rol\.slice\(3\)\]/.test(san))
+      throw new Error('la pasada retroactiva debe ir en sanitizeState, o los caminos que no repintan se quedan fuera');
+    if (!/w\.data\.descAuto/.test(san))
+      throw new Error('sin marca de «lo escribió el producto» no se puede regenerar sin pisar lo del usuario');
+    // superviviente de la prueba de mutación: la réplica ejecutable de más abajo NO protege el
+    // código real —se puede quitar la guarda de sanitizeState y la réplica seguiría pasando—. Esta
+    // es la única línea que impide que el producto sobrescriba una cabecera escrita por Ernesto,
+    // así que se fija sobre el fuente, literal, en los DOS sitios donde se aplica el efecto.
+    const guarda = /if \(!String\(w\.data\.desc \|\| ""\)\.trim\(\) \|\| w\.data\.descAuto\)/;
+    if (!guarda.test(san))
+      throw new Error('sanitizeState debe respetar la cabecera escrita por el usuario: solo se regenera lo vacío o lo derivado');
+    const efecto = src.match(/function aplicarEfectoEtiquetas\(w\)\{[\s\S]*?\n\}/)[0];
+    if (!/\(!previa \|\| w\.data\.descAuto\)/.test(efecto))
+      throw new Error('la misma guarda vale al poner la etiqueta a mano: son dos caminos al mismo efecto');
+    if (!/if \(!w\.data\.color\)/.test(efecto) || !/if \(!w\.data\.color\)/.test(san))
+      throw new Error('el color derivado nunca pisa uno elegido por el usuario');
+
+    // Réplica ejecutable de esa pasada: lo que importa no es el texto, es a QUÉ no toca.
+    const pasada = st => { for (const sp of st.spaces) for (const w of (sp.widgets || [])){
+      const rol = (w.tags || []).map(String).find(x => /^ia-/.test(x));
+      if (!rol || !IA_ROLES[rol.slice(3)]) continue;
+      const { color, desc } = IA_ROLES[rol.slice(3)];
+      if (!w.data) w.data = {};
+      if (!String(w.data.desc || '').trim() || w.data.descAuto){ w.data.desc = desc; w.data.descAuto = true; }
+      if (!w.data.color) w.data.color = color;
+    } };
+    const st = { spaces: [{ widgets: [
+      { id: 'a', tags: ['ia-bandeja'], data: {} },
+      { id: 'b', tags: ['ia-probar'], data: { desc: 'MI TEXTO', color: 'rosa' } },
+      { id: 'c', tags: ['ia-estado'], data: { desc: 'viejo auto', descAuto: true } },
+      { id: 'd', tags: ['clinica'], data: {} },
+      { id: 'e', tags: ['ia-inventada'], data: {} }
+    ] }] };
+    pasada(st);
+    const c = st.spaces[0].widgets;
+    if (!c[0].data.desc || c[0].data.color !== IA_ROLES.bandeja.color) throw new Error('una ia-* nueva debe traer su ⓘ y su color puestos');
+    if (c[1].data.desc !== 'MI TEXTO' || c[1].data.color !== 'rosa' || c[1].data.descAuto)
+      throw new Error('LO QUE ESCRIBIÓ EL USUARIO NO SE TOCA JAMÁS: es la única línea que no se puede cruzar aquí');
+    if (c[2].data.desc !== IA_ROLES.estado.desc) throw new Error('lo derivado debe regenerarse con el contrato vigente (retroactividad)');
+    if (c[3].data.desc || c[3].data.color) throw new Error('una etiqueta normal no dispara nada');
+    if (c[4].data.desc) throw new Error('un rol ia-* desconocido no puede inventarse una cabecera');
+    const antes = JSON.stringify(st); pasada(st);
+    if (JSON.stringify(antes) !== JSON.stringify(JSON.stringify(st)) && antes !== JSON.stringify(st))
+      throw new Error('la pasada debe ser idempotente, o los dos equipos se escriben en bucle');
+
+    // Y las DECLARADAS se ofrecen aunque no se usen: mientras solo se ofrecieran las ya usadas, la
+    // primera ia-* era imposible de elegir de la lista — una puerta cerrada por diseño.
+    const ed = src.match(/function editWidgetTags\([\s\S]*?\n\}/)[0];
+    if (!/Object\.keys\(IA_ROLES\)\.map\(r => "ia-" \+ r\)/.test(ed))
+      throw new Error('el selector debe ofrecer también las etiquetas declaradas del contrato');
+
+    // (2) ORDENACIÓN. Criterios genéricos a propósito: se descartó ordenar por el prefijo
+    // «▶ En cola», que es convención de SU superficie y ataría el producto a un flujo concreto.
+    const SORTS = src.match(/const TODO_SORTS = \{[\s\S]*?\n\};/)[0];
+    if (/En cola|▶/.test(SORTS)) throw new Error('la ordenación no puede conocer los prefijos de la superficie: es workflow, no producto');
+    if (!/manual:\s*\{[^}]*cmp: null/.test(SORTS)) throw new Error('«a mano» debe ser un criterio sin comparador, y el que manda por defecto');
+    if (!/list\.sort\(cmp\)/.test(src) || !/if \(cmp\) list\.sort/.test(src))
+      throw new Error('ordenar sobre la lista FILTRADA (copia), nunca sobre w.data.items: volver a «A mano» debe devolver tu orden');
+    const paintFn = src.match(/function paint\(\)\{[\s\S]*?\n    let list, vacio;/)[0];
+    if (/w\.data\.items\.sort/.test(paintFn)) throw new Error('reordenar el array real destruye el orden manual del usuario');
+    if (!/w\.data\.sort = orden\.value/.test(src)) throw new Error('el criterio es preferencia del usuario y viaja en w.data, como w.data.view del Markdown');
+
+    // (3) CADENCIA. Se espacia, no se apaga: el aviso de vencidas y el de versión nueva dependen
+    // de que el estado siga vivo en segundo plano.
+    if (!/const POLL_MS_OCULTA = \d+/.test(src)) throw new Error('falta la cadencia de segundo plano');
+    const oculta = +src.match(/const POLL_MS_OCULTA = (\d+)/)[1], normal = +src.match(/const POLL_MS = (\d+)/)[1];
+    if (!(oculta > normal)) throw new Error('la cadencia oculta tiene que ser MÁS espaciada que la normal');
+    if (!/function armPoll\(\)\{/.test(src) || (src.match(/pollTimer = setInterval/g) || []).length !== 1)
+      throw new Error('el sondeo se arma en UN solo sitio, o se acumulan intervalos al cambiar de pestaña');
+    if (!/armPoll\(\);   \/\/ 0\.53\.0/.test(src)) throw new Error('el visibilitychange debe reprogramar la cadencia');
+
+    // (4) ALARMA DEL TEMPORIZADOR: un canal para el instante y otro para el rastro, sin un tercero.
+    // se descuenta la definición: lo que se cuenta son las LLAMADAS desde los dos disparos
+    if ((src.match(/(?<!function )marcarAlarma\(w,/g) || []).length !== 2)
+      throw new Error('las DOS vías de disparo (cuenta atrás y alarma) deben dejar rastro');
+    if (!/const alarmasSonadas = new Map\(\)/.test(src) || /alarmSounded|w\.data\.alarmFired/.test(src))
+      throw new Error('I7: una alarma sonada es de esta sesión y de este equipo, no viaja en datos.json');
+    console.log('OK 0.53.0 (la etiqueta trae su contrato, la lista se ordena, el sondeo se espacia y la alarma deja rastro)');
   }
 
   console.log('\nTODO EN VERDE');

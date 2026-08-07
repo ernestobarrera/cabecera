@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.53.0] - 2026-08-07 — la etiqueta trae su contrato puesto, y la lista se ordena
+
+- **Poner una etiqueta `ia-` aplica sola la cabecera ⓘ y el color.** Antes había que escribirla a mano en cada widget, con una redacción distinta cada vez. Ahora la cabecera se *deriva* del contrato vigente: si mañana cambia la convención, se actualizan solas —**retroactivamente**— las que puso Cabecera. **Lo que hayas escrito tú no se toca jamás**, ni la cabecera ni el color. Y el selector ofrece las `ia-` aunque no uses ninguna todavía: antes solo mostraba las ya usadas, así que la primera era imposible de elegir de la lista.
+- **La lista de tareas se puede ordenar**: a mano (como siempre), por fecha de alta —recientes o antiguas arriba— o por vencimiento. El criterio se guarda por lista y viaja entre equipos. Con un orden automático el arrastre se desactiva, porque mover algo a mano no lo dejaría movido; al volver a «a mano», tu orden sigue exactamente como lo dejaste.
+- **Los atajos se anuncian junto a la función que evitan**, en la paleta y en el menú del clic derecho, y hay una lista completa dentro de la app (**⌨️ Atajos de teclado** en Ctrl+K). Salen todos de una tabla única, así que no puede haber un atajo que exista y no se anuncie.
+- **Un widget que recibe contenido nuevo se señala** con un contorno en el color del escritorio: cuando otro equipo o un asistente escribe en él, deja de pasar desapercibido. **No se apaga al pasar el ratón** —eso lo daría por leído sin haberlo leído—: se apaga al entrar en el widget.
+- **La alarma del temporizador deja rastro.** Sonaba y mostraba un aviso pasajero; si no estabas delante, no quedaba nada. Ahora persiste un **⏰ en la barra de abajo** hasta que lo atiendes, y al pulsarlo te lleva al temporizador que sonó. Un canal para el instante y otro para el rastro, sin un tercero.
+- **En segundo plano, el archivo se relee cada 30 segundos en vez de cada 4.** En una pestaña que llevas horas sin mirar, 900 lecturas por hora de un archivo de 1 MB no vigilan nada. No se apaga del todo: los avisos de tareas y de versión siguen vivos, y al volver comprueba de inmediato.
+
 ## [0.52.0] - 2026-08-07 — moverse por una lista larga, y dejar de empujar el escritorio
 
 - **Las etiquetas ya no mueven nada.** Aparecían al pasar el ratón, en una franja bajo el título, y eso empujaba el contenido de cada ventana hacia abajo según recorrías el escritorio. Ahora son **insignias pequeñas junto al nombre, siempre visibles**: no se mueve nada y ves de un vistazo cómo está etiquetado cada widget. Las `ia-*` se distinguen en azul.
