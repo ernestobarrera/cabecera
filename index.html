@@ -30,6 +30,10 @@
      cualquier bandeja de correo. Así el hueco vive dentro de una columna alineada —que se lee como
      orden— y no como un margen muerto al final de la fila. */
   --todo-acts: 20px;
+  /* ancho mínimo de la columna de fecha de una tarea. NO es estética: es el hueco del que sale el
+     sitio de la banda de acciones al pasar el ratón (ver el bloque de `.todo-it` y su aritmética).
+     Subirlo si la banda gana botones; bajarlo vuelve a tapar la marca 💬/🤖 en tareas de una línea. */
+  --todo-fecha: 104px;
 }
 /* Contraste alto: la MISMA paleta con los grises menos grises. Sube bordes y texto atenuado, que
    es donde se pierde legibilidad con luz directa o en un proyector. No cambia acentos ni colores
@@ -424,20 +428,24 @@ ul.plain{list-style:none}
    no hay reflow. Los datos y las acciones comparten ranura porque nunca los quieres a la vez:
    miras la fecha cuando lees, pulsas los botones cuando actúas.
    Solo donde hay hover: en táctil la banda va en el flujo y no tapa nada. */
-/* 0.58.0 — la MARCA 💬/🤖 SE MUDA al principio de la fila, y con eso deja de ser un problema.
-   Historia corta de tres versiones fallando en lo mismo: 0.51.0 hizo ceder `.alta` y `.due` a la
-   banda; 0.56.0 añadió la marca a esa lista; y en las dos la marca seguía sin verse al pasar el
-   ratón — antes tapada, después escondida, para él lo mismo. Y en una tarea de varias líneas
-   desaparecía sin que nada la tapara siquiera: la banda va abajo y la marca al centro, así que se
-   ocultaba por una regla ciega, no por un solape. Parte de fallo suya, 09/08: «esto es muy
-   importante, me dificulta trabajar contigo».
-   La causa de fondo NO era el ancho de la banda: era que la señal vivía en el mismo extremo que las
-   acciones. Mientras compartan ranura, cada arreglo mueve el problema. Ahora la marca vive en una
-   ranura fija al principio, junto a la casilla, donde la banda —anclada al borde derecho— no puede
-   alcanzarla en ninguna geometría. La ranura se reserva SIEMPRE, tenga conversación o no, para que
-   el texto de todas las filas empiece en la misma columna y las marcas se lean como columna.
-   El número de respuestas va en superíndice absoluto: informa sin ensanchar la ranura.
-   `.alta` y `.due` sí siguen cediendo — son datos, no señal, y ahí el mecanismo de 0.51.0 vale. */
+/* 0.58.1 — LA MARCA 💬/🤖 NO SE OCULTA NUNCA, y el sitio de la banda sale de la COLUMNA DE FECHA,
+   que es de donde 0.54.0 dijo que tenía que salir. Se revierte entera la mudanza de 0.58.0: el
+   diseño le gustaba y la marca vuelve donde estaba, tras el texto.
+   Lo que iba mal, y era solo esto: desde 0.51.0 la banda no tapaba la marca en tareas de VARIAS
+   líneas (la banda va abajo, la marca al centro), pero sí en las de UNA, porque ahí la fila mide lo
+   que mide la banda. 0.56.0 «lo arregló» ocultando la marca al pasar el ratón — y con eso la
+   escondió también en las de varias líneas, donde funcionaba. Eso es lo que él reportó el 09/08.
+   LA ARITMÉTICA, que es lo único que hay que respetar aquí (medidas desde el borde derecho del
+   `li`): la banda ocupa [4 px, 4+ancho]. La columna de fecha empieza en `padding-right` (20) + su
+   `min-width`, y la marca queda 9 px (el `gap`) a su izquierda. Para que la banda no la alcance:
+       min-width de `.alta`  ≥  ancho de la banda − 4 − 20 − 9 + margen
+   Con siete botones la banda mide ~122 px, así que 74 px se quedaba 23 px corto cuando la tarea no
+   tiene vencimiento — que es el caso normal en su bandeja. Con `.due` presente ya sobraba sitio, y
+   por eso el fallo parecía caprichoso. `--todo-fecha` es ese número, con margen para que el emoji
+   mida distinto en otra plataforma. SI SE AÑADE UN BOTÓN A LA BANDA, hay que subirlo: hay test que
+   cuenta los botones para que nadie lo cambie sin enterarse.
+   `.alta` y `.due` siguen cediendo con `visibility` al pasar el ratón: son datos, y compartir
+   ranura con las acciones es correcto para ellos. La marca no, porque es un aviso. */
 @media (any-hover:hover){
   .todo-it{padding-right:var(--todo-acts)}
   .todo-it:hover .alta,.todo-it:hover .due{visibility:hidden}
@@ -475,7 +483,7 @@ ul.plain{list-style:none}
 /* `margin-left:auto` pega la fecha al borde derecho: el hueco vacío queda ENTRE el texto y la
    fecha, que es lo normal en cualquier lista, en vez de detrás de la fecha, que era el páramo. */
 .todo-it .alta{font-size:10.5px; color:var(--text-dim); opacity:.62; white-space:nowrap; flex-shrink:0; cursor:default;
-  margin-left:auto; min-width:74px; text-align:right}
+  margin-left:auto; min-width:var(--todo-fecha); text-align:right}
 .todo-it:hover .alta{opacity:.9}
 .todo-it .due{font-size:10.5px; padding:1px 7px; border-radius:20px; white-space:nowrap; flex-shrink:0}
 .todo-it .due.overdue{background:rgba(243,108,108,.18); color:#f36c6c}
@@ -518,13 +526,7 @@ ul.plain{list-style:none}
 .rp-actions .ok{border-color:rgba(90,169,247,.35)}
 /* aviso de «Hechas»: hay respuestas que llegaron después de cerrar. Informa, no reclama. */
 .todo-bar .tog-aviso{color:var(--warn); font-weight:600; margin-left:2px}
-/* la ranura de la marca: ancho fijo, al principio de la fila y anclada arriba (una tarea de seis
-   líneas no debe llevar su señal flotando a media altura). `vacia` conserva el hueco sin pintar
-   nada — es lo que mantiene alineado el texto de todas las filas. */
-.todo-it .task-note-mark{position:relative; width:16px; flex-shrink:0; align-self:flex-start; margin-top:3px;
-  font-size:11px; line-height:1; text-align:center; color:var(--text-dim); cursor:pointer}
-.todo-it .task-note-mark.vacia{visibility:hidden; cursor:default}
-.todo-it .task-note-mark b{position:absolute; top:-3px; right:-4px; font-size:8.5px; font-weight:700; line-height:1}
+.todo-it .task-note-mark{font-size:11px; color:var(--text-dim); cursor:pointer; flex-shrink:0}
 .todo-it .task-note-mark:hover{color:var(--accent)}
 /* el 🤖 sin contestar no puede pasar desapercibido: es la única señal de que el agente te dejó
    algo y no lo has visto. Se apaga solo en cuanto respondes, porque se deriva de quién habló último. */
@@ -537,9 +539,9 @@ ul.plain{list-style:none}
    vencimiento y, en tareas de una línea, el final del propio texto (parte de fallo de Ernesto,
    07/08). El hueco permanente de `.todo-it` lo cierra; la razón por la que en 0.49.0 lo descarté
    era falsa y está explicada allí. Las dos piezas se quedan: son independientes.
-   0.58.0 — la marca ya no vive en el extremo derecho, así que el ámbar de `it-reply` deja de ser
-   el sustituto de una señal tapada y pasa a ser lo que debió ser siempre: la MISMA señal en el
-   botón que la atiende. Redundancia deliberada, no parche. */
+   0.58.1 — la marca sigue donde estaba, pero ya no la alcanza nadie: el hueco lo da `--todo-fecha`.
+   El ámbar de `it-reply` se queda igualmente, y ahora es redundancia deliberada y no un sustituto
+   de una señal tapada: el aviso y la acción dicen lo mismo. */
 .todo-it .it-actions .it-reply.me-toca{color:var(--warn); font-weight:600; opacity:1}
 /* el 💬 de responder se ve siempre en «probar»… no: se ve como los demás, pero la MARCA de que
    ya hay conversación sí es permanente, porque es contenido, no una acción. */
@@ -1886,7 +1888,7 @@ function syncUI(mode, txt){
    reaparece) y si Recargar está activo. El descarte ✕ vive solo en memoria de la sesión.
    Demora asumida: la CDN de Pages puede servir la versión vieja hasta ~10 min aun con
    no-store (gobierna la caché del navegador, no la CDN); para pestañas de días, irrelevante. */
-const APP_VERSION = "0.58.0";
+const APP_VERSION = "0.58.1";
 let newVersionDetected = null;   // versión superior detectada; detiene futuras consultas
 let verDismissed = false;        // ✕: solo esta sesión — nunca persistido en disco
 let verCheckInflight = false;    // sin consultas concurrentes
@@ -6334,12 +6336,8 @@ function bodyTodo(w, el){
       // la fecha larga completa, pero la señal corta se ve sin tener que buscarla
       const am = it.created ? altaMeta(it.created, it.createdT) : null;
       const alta = am ? ` title="${esc(am.largo)}"` : "";
-      // 0.58.0 — la marca va ANTES del texto y su ranura se pinta siempre, con conversación o sin
-      // ella: es lo único que mantiene el texto de todas las filas empezando en la misma columna.
-      // Ver el bloque CSS de `.task-note-mark` para por qué se mudó desde el extremo derecho.
-      const hayHilo = nRep || it.note;
-      const marcaHtml = `<span class="task-note-mark${hayHilo ? (meToca ? " me-toca" : "") : " vacia"}"${hayHilo ? ` title="${esc(meToca ? "Respuesta del agente sin contestar (" + nRep + " en el hilo) — clic para leerla" : nRep ? nRep + " respuesta(s) — clic para leer y contestar" : it.note)}"` : ' aria-hidden="true"'}>${hayHilo ? (meToca ? "🤖" : "💬") + (nRep > 1 ? `<b>${nRep}</b>` : "") : ""}</span>`;
-      li.innerHTML = `<span class="it-drag" draggable="${reordenable}" title="${reordenable ? "Arrastrar para reordenar (o usa ↑ ↓)" : (view === "pend" ? "Con un orden automático no se reordena a mano: elige «↕ A mano»" : "En «Hechas» no se reordena")}">⋮⋮</span><input type="checkbox" ${it.done ? "checked" : ""}>${marcaHtml}<span class="t"${alta}>${linkifyEsc(it.t)}</span>`
+      li.innerHTML = `<span class="it-drag" draggable="${reordenable}" title="${reordenable ? "Arrastrar para reordenar (o usa ↑ ↓)" : (view === "pend" ? "Con un orden automático no se reordena a mano: elige «↕ A mano»" : "En «Hechas» no se reordena")}">⋮⋮</span><input type="checkbox" ${it.done ? "checked" : ""}><span class="t"${alta}>${linkifyEsc(it.t)}</span>`
+        + (nRep || it.note ? `<span class="task-note-mark${meToca ? " me-toca" : ""}" title="${esc(meToca ? "Respuesta del agente sin contestar (" + nRep + " en el hilo) — clic para leerla" : nRep ? nRep + " respuesta(s) — clic para leer y contestar" : it.note)}">${meToca ? "🤖" : "💬"}${nRep > 1 ? " " + nRep : ""}</span>` : "")
         + (am ? `<span class="alta" title="${esc(am.largo)}">${esc(am.corto)}</span>` : "")
         + (dm ? `<span class="due ${dm.cls}">${dm.label}</span>` : "")
         + `<span class="it-actions"><button class="it-color" title="Color"><span class="cdot"></span></button><button class="it-edit" title="Editar">✎</button><button class="it-reply${meToca ? " me-toca" : ""}" title="${meToca ? "Respuesta del agente sin contestar — clic para leerla y responder" : "Responder a esta tarea (se añade fechado, sin borrar lo anterior)"}">${meToca ? "🤖" : "💬"}</button><button class="it-up" title="Subir">↑</button><button class="it-down" title="Bajar">↓</button><button class="it-due" title="Fecha, nota y aviso">📅</button><button class="it-del" title="Borrar">✕</button></span>`;
@@ -6382,7 +6380,7 @@ function bodyTodo(w, el){
       li.querySelector(".it-due").addEventListener("click", e => { e.stopPropagation(); setDue(it, li); });
       // 0.48.2: responder tiene editor PROPIO. Ver hiloTarea/replyTo.
       li.querySelector(".it-reply").addEventListener("click", e => { e.stopPropagation(); replyTo(it, li); });
-      const marca = li.querySelector(".task-note-mark:not(.vacia)");
+      const marca = li.querySelector(".task-note-mark");
       if (marca) marca.addEventListener("click", e => { e.stopPropagation(); replyTo(it, li); });
       li.querySelector(".it-del").addEventListener("click", () => {
         const idx = w.data.items.indexOf(it);

@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.58.1] - 2026-08-09 — la marca de conversación se queda donde estaba, y ahora nadie la tapa
+
+Corrección de la versión anterior. En 0.58.0 moví la marca 💬/🤖 al principio de la fila para que
+los botones no pudieran alcanzarla. Funcionaba, pero **cambiaba un diseño que no había que cambiar**:
+el problema era una degradación de una versión anterior, no el sitio de la marca.
+
+- **La marca vuelve a su sitio de siempre**, tras el texto y delante de la fecha.
+- **Y ya no la tapa nadie, en ninguna longitud de tarea.** El hueco de los botones sale de donde
+  siempre debió salir: la **columna de la fecha**, que ahora reserva ancho suficiente para que la
+  banda quepa entera sin llegar hasta la marca. Antes reservaba 74 px y la banda mide unos 122, así
+  que en una tarea de **una sola línea sin vencimiento** —el caso normal— se comía la marca; con
+  vencimiento sobraba sitio, y por eso el fallo parecía caprichoso.
+- **Deshecho el atajo que causó la degradación:** desde 0.56.0 la marca se ocultaba al pasar el
+  ratón, y eso la escondía también en tareas de varias líneas, donde funcionaba bien desde 0.51.0.
+- La reserva está atada a un test que **hace la cuenta** y a otro que **cuenta los botones** de la
+  banda: si alguien le añade uno, la suite avisa antes de que la marca vuelva a quedar debajo.
+
 ## [0.58.0] - 2026-08-09 — la marca de conversación se muda, y el menú se queda con un solo buscador
 
 Cuatro cosas que estorbaban a diario, y la primera llevaba tres versiones sin arreglarse del todo.

@@ -2724,16 +2724,19 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
       throw new Error(`--todo-acts=${acts}px: es un margen muerto en TODAS las filas; el sitio de la banda lo pone la columna de fecha`);
     // 0.54.0: el hueco que la banda necesita sale de la columna de fecha, que tiene ancho mínimo
     // propio y va alineada a la derecha — se lee como orden, no como un margen al final.
-    if (!/\.todo-it \.alta\{[^}]*min-width:\d+px/.test(html) || !/\.todo-it \.alta\{[^}]*text-align:right/.test(html))
+    if (!/\.todo-it \.alta\{[^}]*min-width:var\(--todo-fecha\)/.test(html) || !/\.todo-it \.alta\{[^}]*text-align:right/.test(html))
       throw new Error('la columna de fecha necesita ancho mínimo y alineación derecha, o el hueco vuelve a leerse como margen muerto');
-    // 0.58.0 — LA MARCA 💬/🤖 YA NO CEDE, PORQUE YA NO COMPARTE RANURA CON LA BANDA. 0.56.0 la
-    // metió en esta misma regla y fue peor: al pasar el ratón desaparecía siempre, incluso en
-    // tareas de varias líneas donde la banda (abajo) ni la rozaba. Tres versiones arreglando el
-    // solape cuando el defecto era la vecindad. Este test fija la mudanza, no el maquillaje.
+    // 0.58.1 — LA MARCA 💬/🤖 NO SE OCULTA JAMÁS, y el hueco que la salva es ARITMÉTICA, no una
+    // regla de visibilidad. 0.56.0 la metió en la cesión y con eso la escondió también en tareas de
+    // varias líneas, donde llevaba funcionando desde 0.51.0: eso fue la degradación que él reportó.
     if (!/\.todo-it:hover \.alta,\.todo-it:hover \.due\{visibility:hidden\}/.test(html))
       throw new Error('la fecha y el vencimiento deben ceder su sitio a la banda al pasar el ratón');
     if (/\.todo-it:hover[^{]*\.task-note-mark[^{]*\{[^}]*(visibility:hidden|display:none|opacity:0)/.test(html))
-      throw new Error('la marca 💬/🤖 NO puede ocultarse con el hover: es la única señal de que el agente te dejó algo (0.56.0 lo intentó y fue el fallo)');
+      throw new Error('la marca 💬/🤖 NO puede ocultarse con el hover: es la única señal de que el agente te dejó algo (0.56.0 lo intentó y fue la degradación)');
+    // Y sigue DONDE ESTABA: tras el texto, delante de la fecha. 0.58.0 la mudó al principio de la
+    // fila y él lo rechazó — «no quiero que me cambies el diseño, me gustaba así».
+    if (!/<span class="t"\$\{alta\}>\$\{linkifyEsc\(it\.t\)\}<\/span>`\s*\+ \(nRep \|\| it\.note \?/.test(src))
+      throw new Error('la marca 💬/🤖 va TRAS el texto y antes de la fecha: el sitio es el que había, lo que cambia es que nadie la alcance');
     if (/\.todo-it:hover \.alta[^{]*\{[^}]*display:none/.test(html))
       throw new Error('ceder con display colapsa el hueco y devuelve el salto: tiene que ser visibility');
     if (!/\.todo-it \.alta\{[^}]*margin-left:auto/.test(html))
@@ -2741,20 +2744,27 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
     const actsRule = cssOf('.todo-it .it-actions');
     if (!/position:absolute/.test(actsRule))
       throw new Error('el hueco reservado no sustituye a que la banda flote: si vuelve al flujo, vuelve el salto');
-    // 0.58.0 (2/2) — LA GEOMETRÍA es lo que garantiza que no se tapen, no una regla de hover: la
-    // banda se ancla al borde DERECHO y la marca vive antes del texto. Si alguien mueve una de las
-    // dos, el test cae aquí y no dentro de tres versiones con otra parte de fallo suya.
+    /* 0.58.1 (2/2) — LA ARITMÉTICA DEL HUECO, que es la garantía de verdad. Medido desde el borde
+       derecho del `li`: la banda ocupa [`right`, `right`+ancho]; la marca queda a
+       `padding-right` + `--todo-fecha` + `gap` de ese borde. Para que no la alcance:
+             --todo-fecha  ≥  anchoBanda − right − padding-right − gap
+       Con 7 botones la banda mide ~122 px → 122 − 4 − 20 − 9 = 89, y se pide margen porque el emoji
+       no mide igual en todas las plataformas. Con 74 px (lo que había hasta 0.58.1) NO se cumplía,
+       y por eso en tareas de una línea sin vencimiento la banda se comía la marca.
+       El test cuenta los BOTONES: si alguien añade uno, la banda crece y esto tiene que revisarse
+       a mano. Es la única forma de que el número no se quede obsoleto en silencio. */
+    const N_BOTONES = (src.match(/<span class="it-actions">[\s\S]*?<\/span>`/)[0].match(/<button /g) || []).length;
+    if (N_BOTONES !== 7)
+      throw new Error(`la banda tiene ${N_BOTONES} botones y --todo-fecha se calculó para 7: vuelve a medir el ancho de la banda y sube la reserva antes de tocar esto`);
+    const fecha = parseInt((html.match(/--todo-fecha:\s*(\d+)px/) || [])[1], 10);
+    const right = parseInt((actsRule.match(/right:(\d+)px/) || [])[1], 10);
+    const padD = parseInt((html.match(/--todo-acts:\s*(\d+)px/) || [])[1], 10);
+    const gap = parseInt((cssOf('.todo-it').match(/gap:(\d+)px/) || [])[1], 10);
+    const ANCHO_BANDA = 122;   // 7 botones + huecos + relleno, medido en 0.58.1
+    if (!(fecha >= ANCHO_BANDA - right - padD - gap + 10))
+      throw new Error(`--todo-fecha=${fecha}px no reserva bastante: con la banda en ${ANCHO_BANDA}px y right=${right} padding=${padD} gap=${gap}, la marca 💬/🤖 vuelve a quedar debajo en tareas de una línea`);
     if (!/right:\d+px/.test(actsRule))
-      throw new Error('la banda se ancla al borde derecho: es lo que hace inalcanzable a la marca del principio de la fila');
-    if (!/<input type="checkbox" \$\{it\.done \? "checked" : ""\}>\$\{marcaHtml\}<span class="t"/.test(src))
-      throw new Error('la marca 💬/🤖 va entre la casilla y el texto: si vuelve al extremo derecho, vuelve a compartir ranura con la banda');
-    const markRule = cssOf('.todo-it .task-note-mark');
-    if (!/width:\d+px/.test(markRule) || !/flex-shrink:0/.test(markRule))
-      throw new Error('la ranura de la marca necesita ancho fijo, o el texto de cada fila empieza en una columna distinta');
-    if (!/\.todo-it \.task-note-mark\.vacia\{visibility:hidden/.test(html))
-      throw new Error('la ranura vacía conserva el hueco (visibility), nunca lo colapsa: si no, las filas sin conversación desalinean el texto');
-    if (!/querySelector\(["'`]\.task-note-mark:not\(\.vacia\)["'`]\)/.test(src))
-      throw new Error('la ranura vacía no es clicable: se pinta siempre, pero solo abre hilo si hay algo que leer');
+      throw new Error('la banda se ancla al borde derecho: toda la aritmética de arriba parte de ahí');
 
     // (3) EL EDITOR DE CONVERSACIÓN OCUPA LA FILA ENTERA. Se cuelga del `li`, que es flex con wrap:
     // sin `flex:1 0 100%` entra como hermano del texto y lo estruja en una columna estrecha.
