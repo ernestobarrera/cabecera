@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.65.0] - 2026-08-09 — el contador cuenta los robots que se ven
+
+- **Los contadores `· 🤖 n` de Pendientes y Hechas cuentan ahora todos los robots**, ámbar y grises.
+  Desde 0.64.0 la fila pintaba robot en dos casos y los contadores seguían contando solo uno, así
+  que dabas por vista una tarea con robot y en «Hechas» no aparecía nada. Un índice que esconde
+  parte de lo que se ve.
+- **La urgencia pasa a ser el color del contador, no su existencia:** en ámbar si alguno de esos
+  robots te pide algo, apagado si todos solo informan. Así sabes cuántos hay sin que te reclamen.
+- **El filtro devuelve exactamente lo que cuenta el número que lo abre.** Era el contrato de 0.59.0
+  y se había roto al añadir el robot gris.
+- Es el tercer sitio por el que salía el mismo defecto (0.62.0, 0.63.0 y este). La familia entera
+  cuelga ya de una sola función, con test que lo fija.
+
 ## [0.64.0] - 2026-08-09 — el robot vuelve, apagado: contestar tiene que notarse
 
 - **Cuando el agente te contesta algo informativo, la tarea muestra 🤖 gris.** En 0.62.0 caía en el

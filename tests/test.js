@@ -2624,6 +2624,7 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
 
     // (2) El aviso de «Hechas» se DERIVA; no existe ningún campo de «visto» que mantener.
     //     0.63.0 — y se deriva de la MISMA regla que la fila (`esperaRespuestaSuya`) más «cerrada».
+    eval('globalThis.hayRobot = ' + pickFn('hayRobot', 'it'));
     eval('globalThis.esperaRespuestaSuya = ' + pickFn('esperaRespuestaSuya', 'it'));
     eval('globalThis.agenteTrasCierre = ' + pickFn('agenteTrasCierre', 'it'));
     const base = { done: true, doneAt: 1000 };
@@ -2635,8 +2636,23 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
        «¿la cerraste sin contestar lo que te pedí?» y la fecha no pinta nada. */
     if (agenteTrasCierre({ ...base, replies: [{ at: 500, by: 'agente' }] }) !== true)
       throw new Error('cerrar sin contestar tiene que avisar: es justo lo que el contador se comía');
-    if (agenteTrasCierre({ ...base, replies: [{ at: 500, by: 'agente', info: 1 }] }) !== false)
-      throw new Error('lo informativo no reclama nada tampoco en Hechas (0.62.0)');
+    /* 0.65.0 — CAMBIA DE SIGNO otra vez, y es parte suya: «acabo de dar por vista esta tarea y en
+       hechas no aparece que hay un robot». Desde 0.64.0 la FILA pinta robot también cuando el
+       agente solo informa, y el contador seguía contando solo los ámbar: un índice que esconde
+       parte de lo que se ve. El contador CUENTA robots; la urgencia la dice su COLOR. */
+    if (agenteTrasCierre({ ...base, replies: [{ at: 500, by: 'agente', info: 1 }] }) !== true)
+      throw new Error('el contador cuenta los robots que se ven: si esconde los grises, miente');
+    if (agenteTrasCierre({ ...base, replies: [{ at: 500, by: 'yo' }] }) !== false)
+      throw new Error('si habló él el último no hay robot que contar');
+    // el color sale de si ALGUNO pide algo, y eso sí distingue info
+    if (esperaRespuestaSuya({ replies: [{ at: 1, by: 'agente', info: 1 }] }) !== false)
+      throw new Error('la urgencia sí distingue lo informativo: es lo que da el color');
+    if (!/const pendBot = w\.data\.items\.filter\(i => !i\.done && hayRobot\(i\)\)\.length;/.test(src))
+      throw new Error('el contador de Pendientes debe contar robots, no urgencias');
+    if (!/const casaBot = i => !soloBot \|\| hayRobot\(i\);/.test(src))
+      throw new Error('el filtro debe devolver EXACTAMENTE lo que cuenta su contador (contrato 0.59.0)');
+    if (!/\.todo-bar \.tog-aviso\.calmo\{/.test(html))
+      throw new Error('sin ningún ámbar dentro, el contador no puede pintarse como aviso');
     if (/doneAt/.test(pickFn('agenteTrasCierre', 'it')))
       throw new Error('el aviso de Hechas ya no mira la fecha de cierre: si vuelve, vuelve el fallo');
     if (agenteTrasCierre({ ...base, replies: [{ at: 2000, by: 'agente' }, { at: 3000, by: 'yo' }] }) !== false)
@@ -2650,8 +2666,11 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
     if (/visto|leido|leído|seen/i.test(pickFn('agenteTrasCierre', 'it')))
       throw new Error('el aviso no puede guardar un «visto»: se deriva del orden, como el 🤖');
     // una sola fuente en todo el producto: si esto se separa, la fila y el contador vuelven a mentir
-    if (!/return !!\(it && it\.done && esperaRespuestaSuya\(it\)\);/.test(src))
-      throw new Error('el aviso de Hechas debe reusar esperaRespuestaSuya, no reimplementar la regla');
+    // 0.65.0 — la base común pasa a ser `hayRobot`; `esperaRespuestaSuya` es esa base más «pide algo»
+    if (!/return !!\(it && it\.done && hayRobot\(it\)\);/.test(src))
+      throw new Error('el aviso de Hechas debe reusar hayRobot, no reimplementar la regla');
+    if (!/return hayRobot\(it\) && !it\.replies\[it\.replies\.length - 1\]\.info;/.test(src))
+      throw new Error('la urgencia debe derivarse de la misma base, o las tres señales pueden divergir');
     if (!/const avisoN = w\.data\.items\.filter\(agenteTrasCierre\)\.length/.test(src))
       throw new Error('el contador de «Hechas» debe derivarse de agenteTrasCierre');
     // y NO reabre la tarea: cerrar es del usuario (regla suya, 06/08)
@@ -2863,9 +2882,13 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
     if (!/function esperaRespuestaSuya\(it\)/.test(src))
       throw new Error('el 🤖 de Pendientes debe derivarse igual que el de cada fila, no contarse aparte');
     // superviviente de la prueba de mutación: se podía definir la función y NO usarla para contar,
-    // dejando el aviso de Pendientes clavado en cero sin que nada se quejara
-    if (!/const pendBot = w\.data\.items\.filter\(i => !i\.done && esperaRespuestaSuya\(i\)\)\.length/.test(src))
-      throw new Error('el contador de Pendientes debe USAR esperaRespuestaSuya sobre las tareas vivas');
+    // dejando el aviso de Pendientes clavado en cero sin que nada se quejara.
+    // 0.65.0 — el contador cuenta ROBOTS (`hayRobot`), los mismos que se ven en las filas; la
+    // urgencia pasó a ser el COLOR, y de ahí sale `pendUrge` con `esperaRespuestaSuya`.
+    if (!/const pendBot = w\.data\.items\.filter\(i => !i\.done && hayRobot\(i\)\)\.length/.test(src))
+      throw new Error('el contador de Pendientes debe USAR hayRobot sobre las tareas vivas');
+    if (!/const pendUrge = w\.data\.items\.some\(i => !i\.done && esperaRespuestaSuya\(i\)\);/.test(src))
+      throw new Error('el color del contador debe derivarse de si alguno pide algo');
     if (/it\.leido|lastRead|leidoAt/.test(src))
       throw new Error('I4: el turno se deriva del orden, nunca se guarda un «leído»');
     const pintar = (src.match(/function paint\(\)\{[\s\S]*?\n    let list, vacio;/) || [''])[0];
@@ -3302,6 +3325,7 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
     // cierra y contesta en la misma escritura. Es el caso que más importa: el único en el que la
     // respuesta llegó sin que él la viera.
     eval('globalThis.agenteTrasCierre = ' + pickFn('agenteTrasCierre', 'it'));
+    eval('globalThis.hayRobot = ' + pickFn('hayRobot', 'it'));
     eval('globalThis.esperaRespuestaSuya = ' + pickFn('esperaRespuestaSuya', 'it'));
     const rep = (by, at) => ({ by, at, t: 'x' });
     const T = 1000;
@@ -3326,10 +3350,16 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
     // lo que sale al pulsarlo se calculen con criterios distintos: sería un filtro que miente sobre
     // su propio recuento, y el fallo solo se vería contando a mano.
     const todoFn2 = src.match(/function bodyTodo\(w, el\)\{[\s\S]*?\n\}\n/)[0];
+    // 0.65.0 — la condición se unifica en `hayRobot`: los dos recuentos y el filtro cuentan y
+    // muestran lo mismo, que es lo que el contrato pedía desde 0.59.0 y se rompió al añadir el
+    // robot gris en 0.64.0. `agenteTrasCierre` es `done && hayRobot`, así que el criterio no cambia
+    // por vista: lo hace la lista sobre la que se aplica.
     const casaBot = todoFn2.match(/const casaBot = [\s\S]*?;\n/)[0];
-    if (!/esperaRespuestaSuya\(i\)/.test(casaBot) || !/agenteTrasCierre\(i\)/.test(casaBot))
-      throw new Error('el filtro 🤖 debe usar las MISMAS funciones que pintan los dos recuentos, o el número y la lista pueden divergir');
-    if (!/const pendBot = w\.data\.items\.filter\(i => !i\.done && esperaRespuestaSuya\(i\)\)/.test(todoFn2)
+    if (!/hayRobot\(i\)/.test(casaBot))
+      throw new Error('el filtro 🤖 debe usar la MISMA condición que pinta los dos recuentos, o el número y la lista pueden divergir');
+    if (/esperaRespuestaSuya\(i\)/.test(casaBot))
+      throw new Error('el filtro no puede esconder los robots grises: el contador los cuenta');
+    if (!/const pendBot = w\.data\.items\.filter\(i => !i\.done && hayRobot\(i\)\)/.test(todoFn2)
         || !/const avisoN = w\.data\.items\.filter\(agenteTrasCierre\)/.test(todoFn2))
       throw new Error('los recuentos deben salir de esas mismas funciones');
     if (!/data-bot="\$\{v\}"/.test(todoFn2))
@@ -3472,6 +3502,7 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
      Parte suya del 09/08: un 🤖 que también se enciende para decir «recibido» obliga a abrir y no
      devuelve nada, y un aviso que suele venir vacío se aprende a ignorar entero. */
   {
+    eval('globalThis.hayRobot = ' + pickFn('hayRobot', 'it'));
     eval('globalThis.esperaRespuestaSuya = ' + pickFn('esperaRespuestaSuya', 'it'));
     const rAgente = t => ({ at: 1000, by: 'agente', t });
     // pide respuesta (por omisión) → ámbar

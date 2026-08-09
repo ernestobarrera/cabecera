@@ -548,6 +548,9 @@ ul.plain{list-style:none}
    0.59.0 — y además LLEVA a ellas: el recuento es el filtro. Se subraya al pasar el ratón para que
    se lea como pulsable sin añadir un botón más a una barra que ya tiene cuatro cosas. */
 .todo-bar .tog-aviso{color:var(--warn); font-weight:600; margin-left:2px; cursor:pointer; border-radius:6px; padding:0 3px}
+/* 0.65.0 — el contador CUENTA robots (los mismos que se ven en las filas) y su COLOR dice si alguno
+   de ellos te pide algo. Sin ningún ámbar dentro, es un localizador tranquilo, no un aviso. */
+.todo-bar .tog-aviso.calmo{color:var(--text-dim); font-weight:500}
 .todo-bar .tog-aviso:hover{text-decoration:underline}
 .todo-bar .tog-aviso:focus-visible{outline:2px solid var(--accent); outline-offset:1px}
 .todo-bar .tog-aviso.on{background:var(--warn); color:#1b1205}
@@ -1937,7 +1940,7 @@ function syncUI(mode, txt){
    reaparece) y si Recargar está activo. El descarte ✕ vive solo en memoria de la sesión.
    Demora asumida: la CDN de Pages puede servir la versión vieja hasta ~10 min aun con
    no-store (gobierna la caché del navegador, no la CDN); para pestañas de días, irrelevante. */
-const APP_VERSION = "0.64.0";
+const APP_VERSION = "0.65.0";
 let newVersionDetected = null;   // versión superior detectada; detiene futuras consultas
 let verDismissed = false;        // ✕: solo esta sesión — nunca persistido en disco
 let verCheckInflight = false;    // sin consultas concurrentes
@@ -5982,7 +5985,7 @@ function wireDesc(el, w, onToggle){
    Medido antes de tocar (R42): en su archivo el contador pasa de 0 a 2 en la bandeja y de 0 a 4 en
    «probar». No hay avalancha, que era el riesgo de quitar el corte por fecha. */
 function agenteTrasCierre(it){
-  return !!(it && it.done && esperaRespuestaSuya(it));
+  return !!(it && it.done && hayRobot(it));
 }
 /* 0.52.0 — ¿esta tarea VIVA tiene la última palabra del agente? Es la misma derivación por orden
    que pinta el 🤖 de cada fila (I4: nunca se guarda un «leído»), sacada a función para poder
@@ -6007,9 +6010,20 @@ function agenteTrasCierre(it){
    —un aviso de más antes que esconder algo que él nunca llegaría a ver—. Solo se apaga lo que un
    agente marque explícitamente como informativo a partir de ahora. */
 function esperaRespuestaSuya(it){
+  return hayRobot(it) && !it.replies[it.replies.length - 1].info;
+}
+/* 0.65.0 — ¿la última palabra es del agente? Sin más matices: es EXACTAMENTE lo que hace aparecer
+   un 🤖 en la fila, ámbar o gris. Parte suya, y es la tercera vez que el mismo error vuelve por
+   otro sitio: «acabo de dar por vista esta tarea y en hechas no aparece que hay un robot sin
+   contestar; el robot no se contabiliza junto a la etiqueta de hechas».
+   Lo había reintroducido yo en 0.64.0: la FILA pasó a pintar robot en dos casos y los CONTADORES
+   siguieron contando solo uno. Misma clase de defecto que cerraron 0.62.0 y 0.63.0.
+   REGLA, ahora explícita: **el contador cuenta robots, los mismos que se ven**; la urgencia la dice
+   el COLOR del contador (ámbar si alguno pide algo, apagado si solo informan), no su existencia.
+   Un contador que esconde parte de lo que se ve es un índice que miente. */
+function hayRobot(it){
   if (!it || !Array.isArray(it.replies) || !it.replies.length) return false;
-  const u = it.replies[it.replies.length - 1];
-  return !!(u && u.by === "agente" && !u.info);
+  return it.replies[it.replies.length - 1].by === "agente";
 }
 
 /* 0.53.0 — ORDENACIÓN de las tareas pendientes.
@@ -6382,7 +6396,11 @@ function bodyTodo(w, el){
     // El 🤖 va en las DOS: en Hechas es lo que llegó tras cerrar; en Pendientes, lo que espera
     // respuesta tuya. Antes solo existía el de Hechas y por eso «veía un robot y no lo encontraba».
     const pendN = w.data.items.filter(i => !i.done).length;
-    const pendBot = w.data.items.filter(i => !i.done && esperaRespuestaSuya(i)).length;
+    // 0.65.0 — cuenta los robots que SE VEN (ámbar y gris). El color del contador dice si alguno
+    // de ellos te pide algo; el número, cuántos hay. Antes contaba solo los ámbar y escondía el resto.
+    const pendBot = w.data.items.filter(i => !i.done && hayRobot(i)).length;
+    const pendUrge = w.data.items.some(i => !i.done && esperaRespuestaSuya(i));
+    const doneUrge = w.data.items.some(i => i.done && esperaRespuestaSuya(i));
     /* 0.59.0 — EL CONTADOR 🤖 ES EL BOTÓN QUE LLEVA A ESAS TAREAS. Parte suya del 09/08: «cuando
        quiero verlas, tengo que buscar en muchas pantallas. ¿No se podría pulsar en el robot de los
        contadores si quiero filtrar solo por esas?». Sí, y es lo canónico: un recuento que te dice
@@ -6391,12 +6409,12 @@ function bodyTodo(w, el){
        llegar a las ocho respuestas de «Hechas» es un clic y no tres.
        Va en `<span>` dentro del `<button>` de la pestaña —un botón no puede anidar otro— y para en
        seco la propagación, para que pulsar el número no se lea como pulsar la pestaña. */
-    const bot = (n, t, v) => n ? ` <span class="tog-aviso${ui.soloBot && ui.view === v ? " on" : ""}" role="button" tabindex="0" data-bot="${v}" title="${t}">· 🤖 ${n}</span>` : "";
+    const bot = (n, t, v, urge) => n ? ` <span class="tog-aviso${urge ? "" : " calmo"}${ui.soloBot && ui.view === v ? " on" : ""}" role="button" tabindex="0" data-bot="${v}" title="${t}">· 🤖 ${n}</span>` : "";
     toggle.innerHTML =
       `<button class="tab${ui.view === "pend" ? " on" : ""}" data-v="pend" type="button">📋 Pendientes (${pendN})`
-      + bot(pendBot, `${pendBot} tarea(s) en las que el agente te pide algo y no lo has contestado — clic para ver solo esas`, "pend") + `</button>`
+      + bot(pendBot, `${pendBot} tarea(s) con respuesta del agente${pendUrge ? ", alguna esperándote" : " — solo te informan"} — clic para ver solo esas`, "pend", pendUrge) + `</button>`
       + `<button class="tab${ui.view === "done" ? " on" : ""}" data-v="done" type="button">🗂️ Hechas (${doneN})`
-      + bot(avisoN, `${avisoN} tarea(s) cerrada(s) con una respuesta que llegó después — clic para ver solo esas`, "done") + `</button>`;
+      + bot(avisoN, `${avisoN} tarea(s) cerrada(s) con la última palabra del agente${doneUrge ? ", alguna pidiéndote algo" : ""} — clic para ver solo esas`, "done", doneUrge) + `</button>`;
     toggle.querySelectorAll(".tab").forEach(b => b.addEventListener("click", () => {
       if (ui.view === b.dataset.v) return;
       ui.view = b.dataset.v; ui.q = ""; search.value = ""; ui.soloBot = false; setPage(0); paint();
@@ -6435,9 +6453,9 @@ function bodyTodo(w, el){
     // «te espera respuesta»; en Hechas, «llegó algo después de cerrarla». Buscando vale la unión:
     // el sentido de cada tarea lo da su propio estado, no la pestaña.
     const soloBot = ui.soloBot;
-    const casaBot = i => !soloBot
-      || (buscando ? (i.done ? agenteTrasCierre(i) : esperaRespuestaSuya(i))
-                   : (ui.view === "pend" ? esperaRespuestaSuya(i) : agenteTrasCierre(i)));
+    // 0.65.0 — una sola condición: hay robot. El filtro tiene que devolver EXACTAMENTE lo que dice
+    // el contador que lo abre (contrato de 0.59.0), y desde 0.64.0 el robot también sale en gris.
+    const casaBot = i => !soloBot || hayRobot(i);
     // se avisa SIEMPRE de que hay un filtro puesto, aunque sí haya resultados: un filtro invisible
     // que esconde tareas es peor que no tenerlo (misma razón que la barra de filtro por etiqueta)
     renderFiltro(soloBot);
@@ -6467,11 +6485,11 @@ function bodyTodo(w, el){
       grupos = null;
       if (ui.view === "pend"){
         list = pendientes();
-        vacio = soloBot ? `<div class="empty">Ninguna pendiente en la que el agente te pida algo.</div>`
+        vacio = soloBot ? `<div class="empty">Ninguna pendiente con respuesta del agente.</div>`
                         : `<div class="empty">Sin tareas pendientes.</div>`;
       } else {
         list = hechas();
-        vacio = `<div class="empty">${soloBot ? "Ninguna cerrada con respuesta posterior." : "Aún no has completado tareas."}</div>`;
+        vacio = `<div class="empty">${soloBot ? "Ninguna cerrada con la última palabra del agente." : "Aún no has completado tareas."}</div>`;
       }
     }
     if (!list.length){ ul.innerHTML = vacio; setPage(0); renderPager(1, 0); return; }
@@ -6497,7 +6515,7 @@ function bodyTodo(w, el){
     if (!on){ if (old) old.remove(); return; }
     const box = old || document.createElement("div");
     box.className = "todo-filtro";
-    box.innerHTML = `<span>🤖 Solo aquellas en las que el agente te pide algo</span><button class="mini quitar" type="button">Quitar filtro</button>`;
+    box.innerHTML = `<span>🤖 Solo las que tienen respuesta del agente sin contestar</span><button class="mini quitar" type="button">Quitar filtro</button>`;
     if (!old) bar.appendChild(box);
     box.querySelector(".quitar").addEventListener("click", () => { ui.soloBot = false; setPage(0); paint(); });
   }
