@@ -2726,11 +2726,14 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
     // propio y va alineada a la derecha — se lee como orden, no como un margen al final.
     if (!/\.todo-it \.alta\{[^}]*min-width:\d+px/.test(html) || !/\.todo-it \.alta\{[^}]*text-align:right/.test(html))
       throw new Error('la columna de fecha necesita ancho mínimo y alineación derecha, o el hueco vuelve a leerse como margen muerto');
-    // 0.56.0 — y la MARCA 💬/🤖 cede con ellos. Solo cedían `.alta` y `.due`, pero la marca va a su
-    // izquierda y la banda es más ancha que las dos juntas: en una tarea de una línea la alcanzaba
-    // igual (parte de fallo suya, 07/08). No se pierde señal porque `it-reply` la asume en ámbar.
-    if (!/\.todo-it:hover \.alta,\.todo-it:hover \.due,\.todo-it:hover \.task-note-mark\{visibility:hidden\}/.test(html))
-      throw new Error('la fecha, el vencimiento y la marca 💬/🤖 deben ceder su sitio a la banda al pasar el ratón');
+    // 0.58.0 — LA MARCA 💬/🤖 YA NO CEDE, PORQUE YA NO COMPARTE RANURA CON LA BANDA. 0.56.0 la
+    // metió en esta misma regla y fue peor: al pasar el ratón desaparecía siempre, incluso en
+    // tareas de varias líneas donde la banda (abajo) ni la rozaba. Tres versiones arreglando el
+    // solape cuando el defecto era la vecindad. Este test fija la mudanza, no el maquillaje.
+    if (!/\.todo-it:hover \.alta,\.todo-it:hover \.due\{visibility:hidden\}/.test(html))
+      throw new Error('la fecha y el vencimiento deben ceder su sitio a la banda al pasar el ratón');
+    if (/\.todo-it:hover[^{]*\.task-note-mark[^{]*\{[^}]*(visibility:hidden|display:none|opacity:0)/.test(html))
+      throw new Error('la marca 💬/🤖 NO puede ocultarse con el hover: es la única señal de que el agente te dejó algo (0.56.0 lo intentó y fue el fallo)');
     if (/\.todo-it:hover \.alta[^{]*\{[^}]*display:none/.test(html))
       throw new Error('ceder con display colapsa el hueco y devuelve el salto: tiene que ser visibility');
     if (!/\.todo-it \.alta\{[^}]*margin-left:auto/.test(html))
@@ -2738,6 +2741,20 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
     const actsRule = cssOf('.todo-it .it-actions');
     if (!/position:absolute/.test(actsRule))
       throw new Error('el hueco reservado no sustituye a que la banda flote: si vuelve al flujo, vuelve el salto');
+    // 0.58.0 (2/2) — LA GEOMETRÍA es lo que garantiza que no se tapen, no una regla de hover: la
+    // banda se ancla al borde DERECHO y la marca vive antes del texto. Si alguien mueve una de las
+    // dos, el test cae aquí y no dentro de tres versiones con otra parte de fallo suya.
+    if (!/right:\d+px/.test(actsRule))
+      throw new Error('la banda se ancla al borde derecho: es lo que hace inalcanzable a la marca del principio de la fila');
+    if (!/<input type="checkbox" \$\{it\.done \? "checked" : ""\}>\$\{marcaHtml\}<span class="t"/.test(src))
+      throw new Error('la marca 💬/🤖 va entre la casilla y el texto: si vuelve al extremo derecho, vuelve a compartir ranura con la banda');
+    const markRule = cssOf('.todo-it .task-note-mark');
+    if (!/width:\d+px/.test(markRule) || !/flex-shrink:0/.test(markRule))
+      throw new Error('la ranura de la marca necesita ancho fijo, o el texto de cada fila empieza en una columna distinta');
+    if (!/\.todo-it \.task-note-mark\.vacia\{visibility:hidden/.test(html))
+      throw new Error('la ranura vacía conserva el hueco (visibility), nunca lo colapsa: si no, las filas sin conversación desalinean el texto');
+    if (!/querySelector\(["'`]\.task-note-mark:not\(\.vacia\)["'`]\)/.test(src))
+      throw new Error('la ranura vacía no es clicable: se pinta siempre, pero solo abre hilo si hay algo que leer');
 
     // (3) EL EDITOR DE CONVERSACIÓN OCUPA LA FILA ENTERA. Se cuelga del `li`, que es flex con wrap:
     // sin `flex:1 0 100%` entra como hermano del texto y lo estruja en una columna estrecha.
@@ -3048,6 +3065,7 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
 
     // (3) LOS DOS BUSCADORES DEL MENÚ ENTIENDEN LO MISMO. La caja de arriba es la que tiene el
     // foco al abrir: si no conoce los sinónimos, «vacaciones» no encuentra Permisos.
+    // 0.58.0: ya no son dos (ver su bloque), pero la condición sigue valiendo para la que queda.
     const pe = src.match(/function paletteEntries\(\)\{[\s\S]*?\n\}/)[0];
     if (!/t\.busca/.test(pe))
       throw new Error('la paleta debe mirar los mismos sinónimos que el filtro de tipos: es la caja que tiene el foco');
@@ -3136,6 +3154,55 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
     if (/createWritable|removeEntry/.test(ra))
       throw new Error('recuperar no puede modificar ni borrar el lote: volvería a ser un archivo mutable multiequipo');
     console.log('OK 0.57.0 (papelera por peso, fusión sin resurrección, lotes fríos inmutables y reducción transaccional)');
+  }
+
+  // --- 0.58.0: un solo buscador en Inicio, y el tipo que casa no se cae ------------------------
+  {
+    // (1) UNA SOLA CAJA. Había dos casi idénticas en el mismo panel y él lo dijo con todas las
+    // letras: «dos buscadores tan parecidos y mutuamente superpuestos no es muy claro».
+    if (/id="wfind"/.test(html))
+      throw new Error('el segundo buscador del menú se retiró en 0.58.0: dos cajas casi idénticas en el mismo panel es el defecto, no la solución');
+    const pt2 = src.match(/function pintarTipos\(\)\{[\s\S]*?\n\}/)[0];
+    if (!/#menu-search/.test(pt2))
+      throw new Error('la rejilla de tipos la filtra la caja única de arriba: si lee otra, vuelven a ser dos buscadores');
+    if (!/\$\("#menu-search"\)\.addEventListener\("input", e => \{ renderResults\(e\.target\.value\); pintarTipos\(\); \}\)/.test(src))
+      throw new Error('la caja única tiene que alimentar las DOS zonas del panel, o una de ellas se queda muerta');
+    // mientras lo tecleado parsea como captura, la rejilla NO se filtra: estás escribiendo
+    // contenido, no buscando un tipo, y «Ningún tipo coincide» debajo es ruido puro.
+    if (!/parseCapture/.test(pt2))
+      throw new Error('escribir «t llamar a Juan» no puede vaciar la rejilla de tipos: eso es captura, no búsqueda');
+
+    // (2) EL TIPO QUE CASA NO SE CAE POR EL CORTE. Esto es lo que 0.56.0 dio por hecho y no era
+    // cierto: la entrada existía, casaba, y quedaba fuera de los 10. Prueba FUNCIONAL sobre la
+    // función pura, no comprobación de que los sinónimos «están consultados» (R37).
+    eval('globalThis.ordenarHits = ' + pickFn('ordenarHits', 'casan, terms, tope'));
+    const ruido = Array.from({ length: 40 }, (_, i) => ({ label: 'nota con vacaciones ' + i, tipo: false }));
+    const permisos = { label: 'Añadir Permisos', tipo: true };
+    const r = ordenarHits(ruido.concat([permisos]), ['vacaciones'], 10);
+    if (!r.some(x => x.label === 'Añadir Permisos'))
+      throw new Error('«vacaciones» con 40 coincidencias de contenido debe seguir ofreciendo Permisos: ese era el fallo original');
+    if (r.length > 10)
+      throw new Error('el carril de tipos no puede alargar la lista: sale del cupo del contenido, no encima de él');
+    // y sin tipos que casen, el contenido recupera el cupo entero
+    if (ordenarHits(ruido, ['vacaciones'], 10).length !== 10)
+      throw new Error('sin tipos que casen, el contenido usa las 10 plazas: el carril se reserva solo si hay quien lo ocupe');
+
+    // (3) LA LISTA DE RESULTADOS NO SE COME LA REJILLA. `#menu-widgets` es flex:1 con base 0, así
+    // que sin tope propio diez resultados dejaban «Añadir widget» en una franja (parte de fallo
+    // suya del 07/08). En la paleta no hay rejilla debajo y el tope sobra.
+    if (!/#menu-results\{[^}]*max-height:\d+vh/.test(html))
+      throw new Error('la lista de resultados necesita tope propio, o aplasta la rejilla de tipos del menú Inicio');
+    if (!/#menu\.palette #menu-results\{max-height:none\}/.test(html))
+      throw new Error('en la paleta el tope sobra: allí la lista ES el panel entero');
+
+    // (4) CTRL+ENTER GUARDA EN EL EDITOR DE FECHA Y NOTA. Estaba anunciado en la tabla ATAJOS
+    // desde 0.55.0 y no implementado aquí; su parte de fallo la escribió dentro de este editor.
+    const sd = src.match(/const setDue = \(it, li\) => \{[\s\S]*?\n  \};/)[0];
+    if (!/e\.key === "Enter" && \(e\.ctrlKey \|\| e\.metaKey\)[\s\S]{0,80}commit\(\)/.test(sd))
+      throw new Error('Ctrl+Enter está anunciado como «guardar sin soltar el teclado»: si no guarda aquí, la tabla de atajos deja de ser fiable');
+    if (!/Ctrl\+Enter para guardar/.test(sd))
+      throw new Error('R27: el atajo se muestra junto a la función, en el propio campo donde se usa');
+    console.log('OK 0.58.0 (un solo buscador, el tipo que casa sobrevive al corte, la rejilla no se aplasta y Ctrl+Enter guarda)');
   }
 
   console.log('\nTODO EN VERDE');

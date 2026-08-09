@@ -1,5 +1,33 @@
 # Changelog
 
+## [0.58.0] - 2026-08-09 — la marca de conversación se muda, y el menú se queda con un solo buscador
+
+Cuatro cosas que estorbaban a diario, y la primera llevaba tres versiones sin arreglarse del todo.
+
+- **La marca 💬/🤖 de una tarea ya no desaparece nunca.** Vivía al final de la fila, que es
+  justo donde flotan los botones al pasar el ratón, así que cada intento de que no se tapara
+  acababa escondiéndola: primero la tapaban los botones, después se ocultaba sola. Y en una tarea
+  de varias líneas desaparecía **sin que nada la tapara siquiera**. La causa no era el ancho de los
+  botones, era la vecindad: mientras compartieran el mismo extremo, cada arreglo movía el problema
+  de sitio. Ahora la marca vive **al principio de la fila, entre la casilla y el texto**, donde los
+  botones —anclados al borde derecho— no pueden alcanzarla en ninguna geometría. De paso, las
+  marcas quedan en columna y se ve de un vistazo qué tareas tienen respuesta esperándote. La fecha
+  y el vencimiento sí siguen cediendo su sitio: son datos, no avisos.
+- **El menú Inicio se queda con un solo buscador.** Había dos cajas casi iguales en el mismo panel
+  —«Buscar en todo» arriba y «Filtrar tipos…» dentro de «Añadir widget»— que respondían distinto a
+  lo mismo. La de arriba ahora filtra las dos zonas: los resultados y la rejilla de tipos. Mientras
+  escribes una captura (`t llamar a Juan`, `v 12-16/8`) la rejilla se queda quieta, porque ahí
+  estás escribiendo contenido, no buscando un tipo.
+- **Y encuentra de verdad lo que dice encontrar.** Buscar «vacaciones» seguía sin ofrecer
+  **Permisos**: la coincidencia existía, pero se caía por el corte de diez resultados, porque el
+  contenido que también dice «vacaciones» iba delante. Ahora los tipos de widget tienen plaza
+  reservada al final de la lista y el contenido cede sitio antes que ellos.
+- **La lista de resultados ya no aplasta la rejilla de widgets.** Con el menú Inicio abierto y algo
+  escrito, los resultados crecían hasta dejar «Añadir widget» reducido a una franja. Cada zona
+  tiene ahora su tope y su propio desplazamiento.
+- **<kbd>Ctrl</kbd>+<kbd>Enter</kbd> guarda en el editor de fecha y nota de una tarea.** Estaba
+  anunciado en la lista de atajos y ahí no funcionaba, que es la peor combinación posible.
+
 ## [0.57.0] - 2026-08-07 — la papelera deja de pesar, sin dejar de ser una papelera
 
 Un tercio del archivo de datos que tus equipos releen continuamente era papelera: 346 KB de widgets
