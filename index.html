@@ -1937,7 +1937,7 @@ function syncUI(mode, txt){
    reaparece) y si Recargar está activo. El descarte ✕ vive solo en memoria de la sesión.
    Demora asumida: la CDN de Pages puede servir la versión vieja hasta ~10 min aun con
    no-store (gobierna la caché del navegador, no la CDN); para pestañas de días, irrelevante. */
-const APP_VERSION = "0.63.0";
+const APP_VERSION = "0.64.0";
 let newVersionDetected = null;   // versión superior detectada; detiene futuras consultas
 let verDismissed = false;        // ✕: solo esta sesión — nunca persistido en disco
 let verCheckInflight = false;    // sin consultas concurrentes
@@ -6535,7 +6535,18 @@ function bodyTodo(w, el){
       // la pestaña y el filtro tienen que decir SIEMPRE lo mismo, y con la regla escrita dos veces
       // era cuestión de tiempo que discreparan.
       const meToca = esperaRespuestaSuya(it);
-      // hay conversación del agente, pero solo informa: 💬 gris, no reclama nada
+      /* 0.64.0 — el agente habló el último pero solo informa: 🤖 APAGADO (gris), no 💬.
+         Parte suya a los diez minutos de publicar 0.62.0, y era un fallo de diseño mío: «el robot no
+         me ha aparecido y acabas de escribir un comentario; no me entero de que has contestado, y
+         yo te he dado un vale, que sí conocía antes por la desaparición del robot».
+         Al quitarle al ámbar el significado de «te toca» le quité también el de «hay algo nuevo», y
+         son DOS cosas. Peor: lo informativo caía en el mismo 💬 que una conversación donde habló él,
+         así que una respuesta nueva no producía NINGÚN cambio en la fila — cero delta.
+         El robot es el acuse de recibo, y su color es la urgencia. Tres estados, no dos:
+           · última del agente y PIDE algo  → 🤖 ámbar   (no avanza sin ti)
+           · última del agente e INFORMA    → 🤖 gris    (te contesté; léelo cuando quieras)
+           · última suya                    → 💬 gris    (hablaste tú; no hay nada nuevo)
+         Sigue todo derivado del orden y de lo que declara la entrada: ningún «leído» (I4). */
       const soloInforma = !meToca && nRep && it.replies[nRep - 1].by === "agente";
       // la fecha de alta va TAMBIÉN en la fila desde 0.49.0 (ver altaMeta): el tooltip sigue dando
       // la fecha larga completa, pero la señal corta se ve sin tener que buscarla
@@ -6546,10 +6557,10 @@ function bodyTodo(w, el){
         // pierde ni un píxel de texto por una señal que no le toca (R43)
         + (it.pin ? `<span class="pin-mark" title="Anclada arriba">📌</span>` : "")
         + `<span class="t"${alta}>${linkifyEsc(it.t)}</span>`
-        + (nRep || it.note ? `<span class="task-note-mark${meToca ? " me-toca" : ""}" title="${esc(meToca ? "El agente te pide algo y no lo has contestado (" + nRep + " en el hilo) — clic para leerlo" : soloInforma ? "El agente te informa, no espera respuesta (" + nRep + " en el hilo) — léelo cuando quieras" : nRep ? nRep + " respuesta(s) — clic para leer y contestar" : it.note)}">${meToca ? "🤖" : "💬"}${nRep > 1 ? " " + nRep : ""}</span>` : "")
+        + (nRep || it.note ? `<span class="task-note-mark${meToca ? " me-toca" : ""}" title="${esc(meToca ? "El agente te pide algo y no lo has contestado (" + nRep + " en el hilo) — clic para leerlo" : soloInforma ? "El agente te ha contestado y no espera respuesta (" + nRep + " en el hilo) — léelo cuando quieras" : nRep ? nRep + " respuesta(s) — clic para leer y contestar" : it.note)}">${meToca || soloInforma ? "🤖" : "💬"}${nRep > 1 ? " " + nRep : ""}</span>` : "")
         + (am ? `<span class="alta" title="${esc(am.largo)}">${esc(am.corto)}</span>` : "")
         + (dm ? `<span class="due ${dm.cls}">${dm.label}</span>` : "")
-        + bandaAccionesHtml(meToca, !!it.pin);
+        + bandaAccionesHtml(meToca, !!it.pin, soloInforma);
       const drag = li.querySelector(".it-drag");
       /* 0.61.0 — no se arrastra ENTRE grupos de anclaje. Soltar una sin anclar encima de una anclada
          movería el array de verdad y el siguiente repintado la devolvería abajo: exactamente el
@@ -8947,8 +8958,8 @@ function paletteEntries(){
 /* La banda de acciones de una tarea, en UN solo sitio: la pinta `pintar` y la MIDE `medirBanda`.
    Estaban duplicadas y eso es justo lo que no puede pasar aquí, porque el ancho medido es el que
    decide cuánto hueco se le reserva: dos copias que se separen dan una reserva que miente. */
-function bandaAccionesHtml(meToca, anclada){
-  return `<span class="it-actions"><button class="it-color" title="Color"><span class="cdot"></span></button><button class="it-edit" title="Editar">✎</button><button class="it-reply${meToca ? " me-toca" : ""}" title="${meToca ? "El agente te pide algo y no lo has contestado — clic para leerlo y responder" : "Responder a esta tarea (se añade fechado, sin borrar lo anterior)"}">${meToca ? "🤖" : "💬"}</button><button class="it-pin${anclada ? " on" : ""}" title="${anclada ? "Desanclar: vuelve a su sitio en el orden" : "Anclar arriba: se queda la primera con cualquier orden"}">📌</button><button class="it-up" title="Subir">↑</button><button class="it-down" title="Bajar">↓</button><button class="it-due" title="Fecha, nota y aviso">📅</button><button class="it-del" title="Borrar">✕</button></span>`;
+function bandaAccionesHtml(meToca, anclada, soloInforma){
+  return `<span class="it-actions"><button class="it-color" title="Color"><span class="cdot"></span></button><button class="it-edit" title="Editar">✎</button><button class="it-reply${meToca ? " me-toca" : ""}" title="${meToca ? "El agente te pide algo y no lo has contestado — clic para leerlo y responder" : soloInforma ? "El agente te ha contestado y no espera respuesta — clic para leerlo" : "Responder a esta tarea (se añade fechado, sin borrar lo anterior)"}">${meToca || soloInforma ? "🤖" : "💬"}</button><button class="it-pin${anclada ? " on" : ""}" title="${anclada ? "Desanclar: vuelve a su sitio en el orden" : "Anclar arriba: se queda la primera con cualquier orden"}">📌</button><button class="it-up" title="Subir">↑</button><button class="it-down" title="Bajar">↓</button><button class="it-due" title="Fecha, nota y aviso">📅</button><button class="it-del" title="Borrar">✕</button></span>`;
 }
 
 /* 0.58.2 — EL HUECO DE LA BANDA SE MIDE, NO SE ESTIMA. En 0.58.1 puse 104 px a ojo, calculados

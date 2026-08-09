@@ -2382,8 +2382,19 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
       throw new Error('turno: «te toca» debe deducirse de la conversación, no guardarse en un campo del ítem');
     if (/\bit\.(pendiente|unread|leido|visto)\b/.test(src))
       throw new Error('turno: no puede existir un campo de «sin leer» — se deriva, o acabará mintiendo');
-    if (!/meToca \? "🤖" : "💬"/.test(src))
-      throw new Error('turno: la tarea con respuesta del agente sin contestar tiene que verse distinta');
+    /* 0.64.0 — el robot es el ACUSE DE RECIBO y el color es la urgencia. Parte suya diez minutos
+       después de 0.62.0: al quitarle al ámbar el «te toca» le quité también el «hay algo nuevo», y
+       lo informativo caía en el mismo 💬 que una conversación donde había hablado él — cero delta en
+       la fila cuando el agente contestaba. Tres estados, y el test los fija los tres. */
+    if (!/meToca \|\| soloInforma \? "🤖" : "💬"/.test(src))
+      throw new Error('el robot debe salir TAMBIÉN cuando el agente solo informa: si no, contestar no se nota');
+    if (/meToca \? "🤖" : "💬"/.test(src))
+      throw new Error('quedó el render de dos estados: lo informativo volvería a ser invisible');
+    if (!/const soloInforma = !meToca && nRep && it\.replies\[nRep - 1\]\.by === "agente";/.test(src))
+      throw new Error('«solo informa» se deriva del orden, no de un campo guardado');
+    // la urgencia la da la CLASE, y esa solo la pone el ámbar: un robot gris no puede llevarla
+    if (!/task-note-mark\$\{meToca \? " me-toca" : ""\}/.test(src))
+      throw new Error('el robot gris no puede llevar la clase de urgencia: sería otro ámbar');
     // editar una entrada del agente no puede borrar su autoría en silencio
     if (!/it\.replies\[i\]\.by === "agente"\) toast\(/.test(rp))
       throw new Error('turno: editar lo que dijo el agente debe avisar de que seguirá figurando como suyo');
@@ -2532,7 +2543,7 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
     const pintarFn = src.match(/function pintar\(list\)\{[\s\S]*?\n  \}/)[0];
     // 0.58.2: el markup de la banda salió de `pintar` a `bandaAccionesHtml` (una sola fuente,
     // porque también se mide); la comprobación se hace allí, que es donde está ahora la verdad.
-    const bandaFn = src.match(/function bandaAccionesHtml\(meToca, anclada\)\{[\s\S]*?\n\}/)[0];
+    const bandaFn = src.match(/function bandaAccionesHtml\(meToca, anclada, soloInforma\)\{[\s\S]*?\n\}/)[0];
     if (!bandaFn.includes('it-reply${meToca ? " me-toca" : ""}'))
       throw new Error('el botón de responder debe heredar «me toca»: si no, el hover tapa el 🤖 y la señal desaparece al ir a por ella');
     if (!/\.it-actions \.it-reply\.me-toca\{[^}]*var\(--warn\)/.test(html))

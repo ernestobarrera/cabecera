@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.64.0] - 2026-08-09 — el robot vuelve, apagado: contestar tiene que notarse
+
+- **Cuando el agente te contesta algo informativo, la tarea muestra 🤖 gris.** En 0.62.0 caía en el
+  mismo 💬 que una conversación en la que habías hablado tú el último, así que una respuesta nueva
+  **no cambiaba nada en la fila**: no había forma de enterarse de que el agente había escrito.
+- **Tres estados, y cada uno dice una cosa:** `🤖 ámbar` = te pide algo, no avanza sin ti ·
+  `🤖 gris` = te ha contestado y no espera nada, léelo cuando quieras · `💬 gris` = hablaste tú el
+  último, no hay nada nuevo.
+- El robot recupera además su papel de **acuse de recibo**: al responder pasa a 💬 y así confirmas
+  que tu «Vale» ha entrado, que es cómo lo venías usando.
+- Sigue sin guardarse ningún «leído»: los tres estados salen del orden de la conversación y de lo
+  que declara cada entrada.
+
 ## [0.63.0] - 2026-08-09 — el contador de «Hechas» cuenta lo que cerraste sin contestar
 
 - **Cerrar una tarea sin contestar lo último del agente ya cuenta en `🗂️ Hechas · 🤖 n`.** Antes el
