@@ -1937,7 +1937,7 @@ function syncUI(mode, txt){
    reaparece) y si Recargar está activo. El descarte ✕ vive solo en memoria de la sesión.
    Demora asumida: la CDN de Pages puede servir la versión vieja hasta ~10 min aun con
    no-store (gobierna la caché del navegador, no la CDN); para pestañas de días, irrelevante. */
-const APP_VERSION = "0.61.0";
+const APP_VERSION = "0.62.0";
 let newVersionDetected = null;   // versión superior detectada; detiene futuras consultas
 let verDismissed = false;        // ✕: solo esta sesión — nunca persistido en disco
 let verCheckInflight = false;    // sin consultas concurrentes
@@ -5977,10 +5977,29 @@ function agenteTrasCierre(it){
 /* 0.52.0 — ¿esta tarea VIVA tiene la última palabra del agente? Es la misma derivación por orden
    que pinta el 🤖 de cada fila (I4: nunca se guarda un «leído»), sacada a función para poder
    contarlas en la pestaña. Existía el contador de «Hechas» y no el de «Pendientes», y por eso
-   Ernesto veía un robot en el recuento y no daba con la tarea: estaba en otra vista. */
+   Ernesto veía un robot en el recuento y no daba con la tarea: estaba en otra vista.
+
+   0.62.0 — «HABLÉ YO EL ÚLTIMO» NO ES «TE PIDO ALGO», y hasta hoy el ámbar mezclaba las dos.
+   Parte suya del 09/08: «la contestación tuya con 🤖 no la entendí como un ok, si es solo encolar
+   me obliga a clicar y leer; si no hay nada, es poco ux». Tiene razón y el daño es conocido: un
+   aviso que la mitad de las veces viene vacío se aprende a ignorar entero, y entonces el que sí
+   traía algo tampoco se abre. Es la misma fatiga de avisos por la que él descartó el semáforo.
+   Ahora la entrada del agente declara si necesita respuesta, y el ámbar se enciende SOLO en ese
+   caso; lo informativo se queda en 💬 gris y puede no leerse nunca (como el silencio en «probar»).
+
+   POR QUÉ ESTO NO ES UN «LEÍDO» (I4 intacta): `info` lo escribe el AUTOR al escribir la entrada y
+   no cambia nunca después. No hay nada que se pueda quedar desfasado entre sus dos equipos ni
+   entre agentes que no se hablan, que es lo que I4 prohíbe. El turno se sigue deduciendo del
+   ORDEN; `info` solo decide el COLOR.
+   Y no enseña al producto ninguna convención de texto: se descartó derivarlo de los prefijos
+   «❓ / ▶ / ✅» de su superficie, que es justo lo que la poda de 0.53.0 sacó de aquí.
+   AUSENTE = ÁMBAR, a propósito: lo viejo no se apaga solo. Mismo criterio que `agenteTrasCierre`
+   —un aviso de más antes que esconder algo que él nunca llegaría a ver—. Solo se apaga lo que un
+   agente marque explícitamente como informativo a partir de ahora. */
 function esperaRespuestaSuya(it){
   if (!it || !Array.isArray(it.replies) || !it.replies.length) return false;
-  return it.replies[it.replies.length - 1].by === "agente";
+  const u = it.replies[it.replies.length - 1];
+  return !!(u && u.by === "agente" && !u.info);
 }
 
 /* 0.53.0 — ORDENACIÓN de las tareas pendientes.
@@ -6365,7 +6384,7 @@ function bodyTodo(w, el){
     const bot = (n, t, v) => n ? ` <span class="tog-aviso${ui.soloBot && ui.view === v ? " on" : ""}" role="button" tabindex="0" data-bot="${v}" title="${t}">· 🤖 ${n}</span>` : "";
     toggle.innerHTML =
       `<button class="tab${ui.view === "pend" ? " on" : ""}" data-v="pend" type="button">📋 Pendientes (${pendN})`
-      + bot(pendBot, `${pendBot} tarea(s) pendiente(s) con una respuesta del agente sin contestar — clic para ver solo esas`, "pend") + `</button>`
+      + bot(pendBot, `${pendBot} tarea(s) en las que el agente te pide algo y no lo has contestado — clic para ver solo esas`, "pend") + `</button>`
       + `<button class="tab${ui.view === "done" ? " on" : ""}" data-v="done" type="button">🗂️ Hechas (${doneN})`
       + bot(avisoN, `${avisoN} tarea(s) cerrada(s) con una respuesta que llegó después — clic para ver solo esas`, "done") + `</button>`;
     toggle.querySelectorAll(".tab").forEach(b => b.addEventListener("click", () => {
@@ -6438,7 +6457,7 @@ function bodyTodo(w, el){
       grupos = null;
       if (ui.view === "pend"){
         list = pendientes();
-        vacio = soloBot ? `<div class="empty">Ninguna pendiente con respuesta del agente sin contestar.</div>`
+        vacio = soloBot ? `<div class="empty">Ninguna pendiente en la que el agente te pida algo.</div>`
                         : `<div class="empty">Sin tareas pendientes.</div>`;
       } else {
         list = hechas();
@@ -6468,7 +6487,7 @@ function bodyTodo(w, el){
     if (!on){ if (old) old.remove(); return; }
     const box = old || document.createElement("div");
     box.className = "todo-filtro";
-    box.innerHTML = `<span>🤖 Solo las que tienen respuesta del agente</span><button class="mini quitar" type="button">Quitar filtro</button>`;
+    box.innerHTML = `<span>🤖 Solo aquellas en las que el agente te pide algo</span><button class="mini quitar" type="button">Quitar filtro</button>`;
     if (!old) bar.appendChild(box);
     box.querySelector(".quitar").addEventListener("click", () => { ui.soloBot = false; setPage(0); paint(); });
   }
@@ -6501,10 +6520,13 @@ function bodyTodo(w, el){
       if (taskColor) li.style.setProperty("--task-color", taskColor);
       const dm = dueMeta(it);
       const nRep = Array.isArray(it.replies) ? it.replies.length : 0;
-      // «te toca» se DERIVA de quién habló el último: si fue el agente, hay algo sin contestar.
-      // Cero campos nuevos y cero forma de que se desincronice (misma regla que los carriles).
-      const ultima = nRep ? it.replies[nRep - 1] : null;
-      const meToca = !!(ultima && ultima.by === "agente");
+      // «te toca» se DERIVA del orden Y de si esa entrada pide respuesta (ver esperaRespuestaSuya).
+      // 0.62.0 — se llama a la función en vez de repetir aquí la condición: la fila, el contador de
+      // la pestaña y el filtro tienen que decir SIEMPRE lo mismo, y con la regla escrita dos veces
+      // era cuestión de tiempo que discreparan.
+      const meToca = esperaRespuestaSuya(it);
+      // hay conversación del agente, pero solo informa: 💬 gris, no reclama nada
+      const soloInforma = !meToca && nRep && it.replies[nRep - 1].by === "agente";
       // la fecha de alta va TAMBIÉN en la fila desde 0.49.0 (ver altaMeta): el tooltip sigue dando
       // la fecha larga completa, pero la señal corta se ve sin tener que buscarla
       const am = it.created ? altaMeta(it.created, it.createdT) : null;
@@ -6514,7 +6536,7 @@ function bodyTodo(w, el){
         // pierde ni un píxel de texto por una señal que no le toca (R43)
         + (it.pin ? `<span class="pin-mark" title="Anclada arriba">📌</span>` : "")
         + `<span class="t"${alta}>${linkifyEsc(it.t)}</span>`
-        + (nRep || it.note ? `<span class="task-note-mark${meToca ? " me-toca" : ""}" title="${esc(meToca ? "Respuesta del agente sin contestar (" + nRep + " en el hilo) — clic para leerla" : nRep ? nRep + " respuesta(s) — clic para leer y contestar" : it.note)}">${meToca ? "🤖" : "💬"}${nRep > 1 ? " " + nRep : ""}</span>` : "")
+        + (nRep || it.note ? `<span class="task-note-mark${meToca ? " me-toca" : ""}" title="${esc(meToca ? "El agente te pide algo y no lo has contestado (" + nRep + " en el hilo) — clic para leerlo" : soloInforma ? "El agente te informa, no espera respuesta (" + nRep + " en el hilo) — léelo cuando quieras" : nRep ? nRep + " respuesta(s) — clic para leer y contestar" : it.note)}">${meToca ? "🤖" : "💬"}${nRep > 1 ? " " + nRep : ""}</span>` : "")
         + (am ? `<span class="alta" title="${esc(am.largo)}">${esc(am.corto)}</span>` : "")
         + (dm ? `<span class="due ${dm.cls}">${dm.label}</span>` : "")
         + bandaAccionesHtml(meToca, !!it.pin);
@@ -8916,7 +8938,7 @@ function paletteEntries(){
    Estaban duplicadas y eso es justo lo que no puede pasar aquí, porque el ancho medido es el que
    decide cuánto hueco se le reserva: dos copias que se separen dan una reserva que miente. */
 function bandaAccionesHtml(meToca, anclada){
-  return `<span class="it-actions"><button class="it-color" title="Color"><span class="cdot"></span></button><button class="it-edit" title="Editar">✎</button><button class="it-reply${meToca ? " me-toca" : ""}" title="${meToca ? "Respuesta del agente sin contestar — clic para leerla y responder" : "Responder a esta tarea (se añade fechado, sin borrar lo anterior)"}">${meToca ? "🤖" : "💬"}</button><button class="it-pin${anclada ? " on" : ""}" title="${anclada ? "Desanclar: vuelve a su sitio en el orden" : "Anclar arriba: se queda la primera con cualquier orden"}">📌</button><button class="it-up" title="Subir">↑</button><button class="it-down" title="Bajar">↓</button><button class="it-due" title="Fecha, nota y aviso">📅</button><button class="it-del" title="Borrar">✕</button></span>`;
+  return `<span class="it-actions"><button class="it-color" title="Color"><span class="cdot"></span></button><button class="it-edit" title="Editar">✎</button><button class="it-reply${meToca ? " me-toca" : ""}" title="${meToca ? "El agente te pide algo y no lo has contestado — clic para leerlo y responder" : "Responder a esta tarea (se añade fechado, sin borrar lo anterior)"}">${meToca ? "🤖" : "💬"}</button><button class="it-pin${anclada ? " on" : ""}" title="${anclada ? "Desanclar: vuelve a su sitio en el orden" : "Anclar arriba: se queda la primera con cualquier orden"}">📌</button><button class="it-up" title="Subir">↑</button><button class="it-down" title="Bajar">↓</button><button class="it-due" title="Fecha, nota y aviso">📅</button><button class="it-del" title="Borrar">✕</button></span>`;
 }
 
 /* 0.58.2 — EL HUECO DE LA BANDA SE MIDE, NO SE ESTIMA. En 0.58.1 puse 104 px a ojo, calculados

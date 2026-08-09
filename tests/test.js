@@ -2375,8 +2375,11 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
     if (!/toastAction\("Respuesta borrada\."/.test(rp))
       throw new Error('responder: borrar una respuesta debe poder deshacerse');
     // 0.48.4: el turno se DERIVA de quién habló el último. Nada que guardar, nada que desincronizar.
-    if (!/const meToca = !!\(ultima && ultima\.by === "agente"\)/.test(src))
-      throw new Error('turno: «te toca» debe deducirse del autor de la última entrada, no guardarse en un campo');
+    // 0.62.0: la derivación vive en `esperaRespuestaSuya` (fila, contador y filtro leen de ahí) y
+    // añade «¿esta entrada pide algo?». Sigue siendo derivada: `info` lo escribe el autor de la
+    // entrada y no cambia nunca — lo que I4 prohíbe es un estado del LECTOR, que es otra cosa.
+    if (!/const meToca = esperaRespuestaSuya\(it\);/.test(src))
+      throw new Error('turno: «te toca» debe deducirse de la conversación, no guardarse en un campo del ítem');
     if (/\bit\.(pendiente|unread|leido|visto)\b/.test(src))
       throw new Error('turno: no puede existir un campo de «sin leer» — se deriva, o acabará mintiendo');
     if (!/meToca \? "🤖" : "💬"/.test(src))
@@ -3435,6 +3438,44 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
       throw new Error('no se arrastra entre anclada y no anclada: el repintado desharía el gesto');
     delete globalThis.anclarPrimero;
     console.log('OK 0.61.0 (las ancladas arriba con cualquier criterio, sin tocar los comparadores ni el histórico)');
+  }
+
+  /* ── 0.62.0 — el ámbar solo cuando el agente PIDE algo ────────────────────────────
+     Parte suya del 09/08: un 🤖 que también se enciende para decir «recibido» obliga a abrir y no
+     devuelve nada, y un aviso que suele venir vacío se aprende a ignorar entero. */
+  {
+    eval('globalThis.esperaRespuestaSuya = ' + pickFn('esperaRespuestaSuya', 'it'));
+    const rAgente = t => ({ at: 1000, by: 'agente', t });
+    // pide respuesta (por omisión) → ámbar
+    if (esperaRespuestaSuya({ replies: [rAgente('¿A o B?')] }) !== true)
+      throw new Error('una entrada del agente que pide respuesta tiene que encender el ámbar');
+    // informativa → gris, aunque el agente sea el último que habló
+    if (esperaRespuestaSuya({ replies: [{ ...rAgente('encolado'), info: 1 }] }) !== false)
+      throw new Error('una entrada informativa NO puede reclamar turno: es justo el ruido que se quita');
+    // lo escrito antes de 0.62.0 no lleva campo y NO se apaga solo
+    if (esperaRespuestaSuya({ replies: [{ at: 1, by: 'agente', t: 'viejo' }] }) !== true)
+      throw new Error('sin campo = ámbar: apagar lo antiguo escond=ería lo que sí esperaba respuesta');
+    // el ORDEN sigue mandando: si habla él después, no hay turno del agente que valga
+    if (esperaRespuestaSuya({ replies: [rAgente('¿A o B?'), { at: 2000, by: 'yo', t: 'A' }] }) !== false)
+      throw new Error('el turno se deduce del orden: su respuesta cierra, la marque como la marque');
+    // solo la ÚLTIMA decide: una informativa detrás de una que pedía apaga el ámbar
+    if (esperaRespuestaSuya({ replies: [rAgente('¿A o B?'), { at: 2000, by: 'agente', t: 'ya está', info: 1 }] }) !== false)
+      throw new Error('manda la última entrada, no el historial');
+    if (esperaRespuestaSuya({ replies: [] }) !== false || esperaRespuestaSuya(null) !== false)
+      throw new Error('sin conversación no hay turno');
+    // I4: `info` es un atributo de la ENTRADA, no un «leído» del lector
+    if (/visto|leido|leído|seen/i.test(pickFn('esperaRespuestaSuya', 'it')))
+      throw new Error('I4: nada que huela a «leído» puede entrar en la derivación del turno');
+    // la fila, el contador y el filtro tienen que decir lo mismo: una sola fuente
+    if (!/const meToca = esperaRespuestaSuya\(it\);/.test(src))
+      throw new Error('la fila debe llamar a esperaRespuestaSuya, no repetir la condición');
+    if (/const meToca = !!\(ultima && ultima\.by === "agente"\)/.test(src))
+      throw new Error('quedó la derivación vieja duplicada en el pintado de la fila');
+    // el producto NO puede volver a aprender la convención de texto de su superficie (poda 0.53.0)
+    if (/function esperaRespuestaSuya[\s\S]{0,300}(❓|▶|✅)/.test(src))
+      throw new Error('poda 0.53.0: el turno no puede derivarse de los prefijos de su superficie');
+    delete globalThis.esperaRespuestaSuya;
+    console.log('OK 0.62.0 (el ámbar solo cuando el agente pide algo; lo informativo no reclama turno)');
   }
 
   console.log('\nTODO EN VERDE');

@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.62.0] - 2026-08-09 — el 🤖 solo se enciende cuando el agente te pide algo
+
+- **El ámbar deja de significar «habló el agente» y pasa a significar «te pide algo».** Hasta ahora
+  se encendía igual cuando había una decisión esperándote que cuando el agente solo decía
+  «recibido, encolado»: te cobraba un clic y una lectura para devolverte nada. Un aviso que la
+  mitad de las veces viene vacío se aprende a ignorar entero, y entonces el que sí traía algo
+  tampoco se abre.
+- **Dos señales con significados distintos:** 🤖 ámbar = el agente te pide algo y no lo has
+  contestado, no avanza sin ti. 💬 gris = hay conversación pero no te debe nada, léela cuando
+  quieras. El contador de la pestaña y el filtro cuentan lo mismo que pinta la fila.
+- **Ya no tienes que cerrar avisos.** A lo informativo no hace falta contestar: el silencio vale,
+  igual que en «probar». Con eso, un «Vale» vuelve a significar una sola cosa —aceptas—, en vez de
+  servir también para apagar un robot que no traía nada.
+- El turno **se sigue deduciendo del orden**, sin ningún «leído» guardado: quien escribe la entrada
+  declara si necesita respuesta, y eso ya no cambia nunca. Nada que pueda desincronizarse entre tus
+  dos equipos ni entre agentes.
+- Lo escrito antes de esta versión **no se apaga solo**: sin esa marca se sigue tratando como
+  ámbar, antes que esconder algo que sí esperaba respuesta.
+
 ## [0.61.0] - 2026-08-09 — anclar una tarea arriba
 
 - **Cada tarea tiene un botón 📌 en su barra de acciones.** Lo anclado va **siempre arriba**, con
