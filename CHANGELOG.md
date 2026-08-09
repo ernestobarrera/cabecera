@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.63.0] - 2026-08-09 — el contador de «Hechas» cuenta lo que cerraste sin contestar
+
+- **Cerrar una tarea sin contestar lo último del agente ya cuenta en `🗂️ Hechas · 🤖 n`.** Antes el
+  contador solo miraba lo que llegaba **después** de cerrarla, sobre la premisa de que lo anterior
+  «ya lo habías leído, por eso cerraste». Era falsa: la fila seguía pintando 🤖 y el contador decía
+  0, así que el aviso y el recuento se contradecían mirándose.
+- **Se cae la fecha de cierre de la ecuación.** La pregunta pasa a ser «¿la cerraste sin contestar
+  lo que te pedía?» y hay **una sola regla en todo el producto**: fila, contador de Pendientes,
+  contador de Hechas y los dos filtros salen de la misma función. Es el tercer parche del mismo
+  agujero (0.50.0, 0.59.0) y el primero que lo cierra entero en vez de por el borde.
+- El 🤖 de la fila **sigue viéndose en las cerradas**, como pedías: persiste como constancia de que
+  el mensaje se leyó, y ahora el contador acompaña en vez de desmentirlo.
+- Medido antes de tocar: en tu archivo el contador pasa de 0 a **2** en la bandeja y de 0 a **4** en
+  «probar». Lo informativo (0.62.0) no cuenta aquí tampoco.
+
 ## [0.62.0] - 2026-08-09 — el 🤖 solo se enciende cuando el agente te pide algo
 
 - **El ámbar deja de significar «habló el agente» y pasa a significar «te pide algo».** Hasta ahora

@@ -2612,12 +2612,22 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
       throw new Error('«Vale» debe quedar como entrada fechada del usuario, no como una marca de visto');
 
     // (2) El aviso de «Hechas» se DERIVA; no existe ningún campo de «visto» que mantener.
+    //     0.63.0 — y se deriva de la MISMA regla que la fila (`esperaRespuestaSuya`) más «cerrada».
+    eval('globalThis.esperaRespuestaSuya = ' + pickFn('esperaRespuestaSuya', 'it'));
     eval('globalThis.agenteTrasCierre = ' + pickFn('agenteTrasCierre', 'it'));
     const base = { done: true, doneAt: 1000 };
     if (agenteTrasCierre({ ...base, replies: [{ at: 2000, by: 'agente' }] }) !== true)
       throw new Error('una respuesta del agente posterior al cierre debe avisar');
-    if (agenteTrasCierre({ ...base, replies: [{ at: 500, by: 'agente' }] }) !== false)
-      throw new Error('lo dicho ANTES de cerrar ya lo vio al cerrar: no avisa');
+    /* 0.63.0 — ESTE CASO CAMBIA DE SIGNO, y es el parte de fallo suyo del 09/08: cerrar una tarea
+       sin contestar lo último del agente NO era «ya lo vio al cerrar». La fila seguía pintando 🤖 y
+       el contador no lo contaba: dos reglas distintas para la misma pregunta. Ahora la pregunta es
+       «¿la cerraste sin contestar lo que te pedí?» y la fecha no pinta nada. */
+    if (agenteTrasCierre({ ...base, replies: [{ at: 500, by: 'agente' }] }) !== true)
+      throw new Error('cerrar sin contestar tiene que avisar: es justo lo que el contador se comía');
+    if (agenteTrasCierre({ ...base, replies: [{ at: 500, by: 'agente', info: 1 }] }) !== false)
+      throw new Error('lo informativo no reclama nada tampoco en Hechas (0.62.0)');
+    if (/doneAt/.test(pickFn('agenteTrasCierre', 'it')))
+      throw new Error('el aviso de Hechas ya no mira la fecha de cierre: si vuelve, vuelve el fallo');
     if (agenteTrasCierre({ ...base, replies: [{ at: 2000, by: 'agente' }, { at: 3000, by: 'yo' }] }) !== false)
       throw new Error('si él habló el último, no hay nada que leer');
     if (agenteTrasCierre({ done: false, replies: [{ at: 2000, by: 'agente' }] }) !== false)
@@ -2627,7 +2637,10 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
     if (agenteTrasCierre({ done: true, replies: [] }) !== false || agenteTrasCierre(null) !== false)
       throw new Error('sin respuestas no hay aviso');
     if (/visto|leido|leído|seen/i.test(pickFn('agenteTrasCierre', 'it')))
-      throw new Error('el aviso no puede guardar un «visto»: se deriva del orden y la fecha, como el 🤖');
+      throw new Error('el aviso no puede guardar un «visto»: se deriva del orden, como el 🤖');
+    // una sola fuente en todo el producto: si esto se separa, la fila y el contador vuelven a mentir
+    if (!/return !!\(it && it\.done && esperaRespuestaSuya\(it\)\);/.test(src))
+      throw new Error('el aviso de Hechas debe reusar esperaRespuestaSuya, no reimplementar la regla');
     if (!/const avisoN = w\.data\.items\.filter\(agenteTrasCierre\)\.length/.test(src))
       throw new Error('el contador de «Hechas» debe derivarse de agenteTrasCierre');
     // y NO reabre la tarea: cerrar es del usuario (regla suya, 06/08)
@@ -3285,8 +3298,12 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
       throw new Error('el empate debe contar: es el caso normal, no el raro — el agente cierra y contesta en la MISMA escritura');
     if (!agenteTrasCierre({ done: true, doneAt: T, replies: [rep('agente', T + 1)] }))
       throw new Error('una respuesta posterior al cierre sigue contando');
-    if (agenteTrasCierre({ done: true, doneAt: T, replies: [rep('agente', T - 1)] }))
-      throw new Error('una respuesta ANTERIOR al cierre no cuenta: la leyó y por eso la cerró');
+    /* 0.63.0 — se retira la premisa «si es anterior al cierre, la leyó y por eso cerró». Era falsa
+       y él la desmintió el 09/08: cierra tareas sin contestar la última entrada del agente, y
+       entonces la fila pintaba 🤖 mientras el contador decía 0. El empate que arregló 0.59.0 era
+       el borde de este mismo agujero; ahora se cae la fecha entera y queda una sola regla. */
+    if (!agenteTrasCierre({ done: true, doneAt: T, replies: [rep('agente', T - 1)] }))
+      throw new Error('cerrar sin contestar SÍ cuenta: la fila ya lo señalaba y el contador no');
     if (agenteTrasCierre({ done: true, doneAt: T, replies: [rep('agente', T), rep('yo', T + 5)] }))
       throw new Error('si él contestó después, ya no hay nada que avisar');
     if (agenteTrasCierre({ done: false, replies: [rep('agente', T)] }))

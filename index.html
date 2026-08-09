@@ -1937,7 +1937,7 @@ function syncUI(mode, txt){
    reaparece) y si Recargar está activo. El descarte ✕ vive solo en memoria de la sesión.
    Demora asumida: la CDN de Pages puede servir la versión vieja hasta ~10 min aun con
    no-store (gobierna la caché del navegador, no la CDN); para pestañas de días, irrelevante. */
-const APP_VERSION = "0.62.0";
+const APP_VERSION = "0.63.0";
 let newVersionDetected = null;   // versión superior detectada; detiene futuras consultas
 let verDismissed = false;        // ✕: solo esta sesión — nunca persistido en disco
 let verCheckInflight = false;    // sin consultas concurrentes
@@ -5968,11 +5968,21 @@ function wireDesc(el, w, onToggle){
    cerradas tenían la última palabra del agente y el contador enseñaba 1. Las 8 que faltaban tenían
    `doneAt` EXACTAMENTE igual que la respuesta, porque cuando un agente cierra una tarea la cierra y
    contesta en la MISMA escritura (`cabecera-io`), y con `>` estricto eso nunca contaba.
-   Justo el caso que más importa: es el único en el que la respuesta llegó sin que él la viera. */
+   Justo el caso que más importa: es el único en el que la respuesta llegó sin que él la viera.
+
+   0.63.0 — LA FECHA SE CAE ENTERA: la pregunta buena no es «¿llegó después de cerrarla?» sino
+   «¿la cerraste sin contestar lo que te pedí?». Parte de fallo suya del 09/08: «si doy por hecha
+   una tarea sin darle a vale a su último comentario, cuando este era tuyo, el contador de robots
+   en hecha no se autoactualiza; no veo mal que el robot persista, pero el contador era el aviso».
+   Tenía razón y el defecto era de fondo: la FILA pintaba 🤖 y el CONTADOR no lo contaba, porque
+   cada uno usaba una regla distinta. Es el mismo fallo que 0.62.0 acababa de cerrar en Pendientes
+   —la regla escrita dos veces— y 0.59.0 ya lo había parcheado una vez por el borde del empate.
+   Ahora hay UNA regla en todo el producto: la última entrada es del agente y pide algo
+   (`esperaRespuestaSuya`); aquí solo se le añade que la tarea esté cerrada.
+   Medido antes de tocar (R42): en su archivo el contador pasa de 0 a 2 en la bandeja y de 0 a 4 en
+   «probar». No hay avalancha, que era el riesgo de quitar el corte por fecha. */
 function agenteTrasCierre(it){
-  if (!it || !it.done || !Array.isArray(it.replies) || !it.replies.length) return false;
-  const u = it.replies[it.replies.length - 1];
-  return !!(u && u.by === "agente" && (!it.doneAt || u.at >= it.doneAt));
+  return !!(it && it.done && esperaRespuestaSuya(it));
 }
 /* 0.52.0 — ¿esta tarea VIVA tiene la última palabra del agente? Es la misma derivación por orden
    que pinta el 🤖 de cada fila (I4: nunca se guarda un «leído»), sacada a función para poder
