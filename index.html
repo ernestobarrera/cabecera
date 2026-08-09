@@ -34,6 +34,9 @@
      sitio de la banda de acciones al pasar el ratón (ver el bloque de `.todo-it` y su aritmética).
      Subirlo si la banda gana botones; bajarlo vuelve a tapar la marca 💬/🤖 en tareas de una línea. */
   --todo-fecha: 104px;
+  /* separación de la banda respecto al borde derecho de la fila. Entra en la cuenta de arriba, así
+     que vive aquí y no suelta dentro de la regla: si se cambia allí, la cuenta deja de cuadrar. */
+  --todo-acts-right: 4px;
 }
 /* Contraste alto: la MISMA paleta con los grises menos grises. Sube bordes y texto atenuado, que
    es donde se pierde legibilidad con luz directa o en un proyector. No cambia acentos ni colores
@@ -448,8 +451,13 @@ ul.plain{list-style:none}
    ranura con las acciones es correcto para ellos. La marca no, porque es un aviso. */
 @media (any-hover:hover){
   .todo-it{padding-right:var(--todo-acts)}
-  .todo-it:hover .alta,.todo-it:hover .due{visibility:hidden}
+  /* 0.58.2 — SOLO en las filas de una línea (`marcarCortas` las etiqueta). En una tarea alta la
+     banda va abajo y estos datos arriba: no se estorban, y esconderlos era regalar información. */
+  .todo-it.una-linea:hover .alta,.todo-it.una-linea:hover .due{visibility:hidden}
 }
+/* en una tarea de varias líneas, la fecha se ancla ARRIBA, junto a la primera línea del texto y a
+   la altura del asa ⋮⋮ — centrada quedaba flotando a media altura, que es donde pasa la banda. */
+.todo-it .alta,.todo-it .due,.todo-it .task-note-mark{align-self:flex-start; margin-top:2px}
 .todo-it:hover{background:rgba(255,255,255,.04)}
 .todo-it.has-task-color{box-shadow:inset 3px 0 0 var(--task-color); padding-left:8px}
 .todo-it input[type=checkbox]{width:16px; height:16px; accent-color:var(--accent); cursor:pointer; flex-shrink:0}
@@ -558,7 +566,7 @@ ul.plain{list-style:none}
    Mientras se edita se oculta del todo (clase `editing`, puesta por `editItem`): esos botones no
    sirven de nada con el textarea abierto y su aparición por foco era la otra mitad del salto.
    En pantallas táctiles no hay hover, así que allí sigue en el flujo, debajo, como hasta ahora. */
-.todo-it .it-actions{display:none; position:absolute; right:4px; bottom:2px; z-index:2; align-items:center; gap:1px;
+.todo-it .it-actions{display:none; position:absolute; right:var(--todo-acts-right); bottom:2px; z-index:2; align-items:center; gap:1px;
   padding:1px 2px; border-radius:8px; background:rgba(24,28,37,.94); box-shadow:0 0 0 1px var(--border-soft)}
 /* 0.54.0 — la banda va apretada a propósito: cada píxel que ocupa es un píxel que hay que
    reservarle en TODAS las filas, las miles de veces que no la estás usando. */
@@ -1621,6 +1629,10 @@ function applyFont(){
     const w = state && (state.widgets || []).find(x => x.id === el.dataset.id);
     if (w) aplicaZoom(el, w);
   });
+  // la tipografía cambia el ancho de la banda de acciones (✎ ↑ ↓ ✕ no miden igual en Georgia que
+  // en Verdana), y de ese ancho sale el hueco que se le reserva. Se remide aquí y en ningún otro
+  // sitio: el zoom no hace falta, porque escala por igual la banda y el hueco.
+  ajustarReservaBanda();
 }
 // escala de interfaz: whitelist, como las pilas tipográficas — nunca un número libre del archivo
 const UI_ESCALAS = [100, 110, 125];
@@ -1888,7 +1900,7 @@ function syncUI(mode, txt){
    reaparece) y si Recargar está activo. El descarte ✕ vive solo en memoria de la sesión.
    Demora asumida: la CDN de Pages puede servir la versión vieja hasta ~10 min aun con
    no-store (gobierna la caché del navegador, no la CDN); para pestañas de días, irrelevante. */
-const APP_VERSION = "0.58.1";
+const APP_VERSION = "0.58.2";
 let newVersionDetected = null;   // versión superior detectada; detiene futuras consultas
 let verDismissed = false;        // ✕: solo esta sesión — nunca persistido en disco
 let verCheckInflight = false;    // sin consultas concurrentes
@@ -6340,7 +6352,7 @@ function bodyTodo(w, el){
         + (nRep || it.note ? `<span class="task-note-mark${meToca ? " me-toca" : ""}" title="${esc(meToca ? "Respuesta del agente sin contestar (" + nRep + " en el hilo) — clic para leerla" : nRep ? nRep + " respuesta(s) — clic para leer y contestar" : it.note)}">${meToca ? "🤖" : "💬"}${nRep > 1 ? " " + nRep : ""}</span>` : "")
         + (am ? `<span class="alta" title="${esc(am.largo)}">${esc(am.corto)}</span>` : "")
         + (dm ? `<span class="due ${dm.cls}">${dm.label}</span>` : "")
-        + `<span class="it-actions"><button class="it-color" title="Color"><span class="cdot"></span></button><button class="it-edit" title="Editar">✎</button><button class="it-reply${meToca ? " me-toca" : ""}" title="${meToca ? "Respuesta del agente sin contestar — clic para leerla y responder" : "Responder a esta tarea (se añade fechado, sin borrar lo anterior)"}">${meToca ? "🤖" : "💬"}</button><button class="it-up" title="Subir">↑</button><button class="it-down" title="Bajar">↓</button><button class="it-due" title="Fecha, nota y aviso">📅</button><button class="it-del" title="Borrar">✕</button></span>`;
+        + bandaAccionesHtml(meToca);
       const drag = li.querySelector(".it-drag");
       drag.addEventListener("dragstart", e => {
         if (!reordenable){ e.preventDefault(); return; }
@@ -6394,6 +6406,34 @@ function bodyTodo(w, el){
       });
       ul.appendChild(li);
     });
+    marcarCortas();
+  }
+  /* 0.58.2 — QUÉ FILAS SON DE UNA SOLA LÍNEA. La fecha y el vencimiento ceden su sitio a la banda
+     al pasar el ratón (0.51.0), y esa regla estaba puesta sobre TODAS las filas. Solo hace falta
+     en las de una línea: en una tarea alta la banda va abajo y la fecha arriba, así que no se
+     tocan y esconderla era una pérdida gratuita — parte de fallo suya, 09/08: «ahora desaparece
+     la fecha con el hover». Es el mismo error de método que 0.56.0 cometió con la marca 💬/🤖:
+     una regla ciega donde hacía falta una condición.
+     Se mide DESPUÉS de pintar y en un solo bloque de lecturas, para no encadenar reflows fila a
+     fila. En las de una línea la fecha sigue cediendo, y eso no tiene arreglo sin reservarle sitio
+     permanente a la banda — que es el páramo a la derecha de la hora que él ya rechazó en 0.51.0. */
+  function marcarCortas(){
+    const filas = [...ul.children];
+    if (!filas.length) return;
+    const primera = filas[0].querySelector(".t");
+    const lh = primera ? parseFloat(getComputedStyle(primera).lineHeight) || 19 : 19;
+    for (const li of filas){
+      const t = li.querySelector(".t");
+      li.classList.toggle("una-linea", !!t && t.offsetHeight < lh * 1.6);
+    }
+  }
+  // una tarea pasa de una línea a dos con solo estrechar la ventana: sin esto, la clasificación se
+  // quedaría congelada en la del último repintado. Se cuelga de `el.__ro`, que es la ranura que
+  // `renderBody` vacía antes de repintar — la casa ya tuvo un observador acumulándose por no usarla.
+  if (window.ResizeObserver){
+    const ro = new ResizeObserver(() => { if (!ul.isConnected){ ro.disconnect(); return; } marcarCortas(); });
+    ro.observe(ul);
+    el.__ro = ro;
   }
   /* Crece hasta que la lista quepa y devuelve cuántas tareas caben (0 = caben todas). Mide sobre
      el DOM real ya pintado —nada de estimar por altura media: una tarea de tres líneas ocupa el
@@ -8681,6 +8721,62 @@ function paletteEntries(){
   [["⚙","Ajustes generales","act-config"],["❓","Guía","act-ayuda"],["🧩","Packs","act-packs"],["🖼️","Fondo","act-wallpaper"],["📁","Sincronizar equipos","act-folder"],["🧭","Ordenar","act-arrange"],["🗑️","Papelera","act-trash"],["📦","Guardar, compartir o reutilizar","act-archivos"],["⬇️","Exportar copia","act-export"],["⬆️","Importar copia","act-import"],["📥","Abrir escritorio compartido","act-open-shared"],["♻️","Restaurar copia","act-restore"]]
     .forEach(([ic, label, id]) => add(ic, label, "acción", () => { closeMenu(); const b = $("#" + id); if (b) b.click(); }, label + " configuración"));
   return E;
+}
+
+/* La banda de acciones de una tarea, en UN solo sitio: la pinta `pintar` y la MIDE `medirBanda`.
+   Estaban duplicadas y eso es justo lo que no puede pasar aquí, porque el ancho medido es el que
+   decide cuánto hueco se le reserva: dos copias que se separen dan una reserva que miente. */
+function bandaAccionesHtml(meToca){
+  return `<span class="it-actions"><button class="it-color" title="Color"><span class="cdot"></span></button><button class="it-edit" title="Editar">✎</button><button class="it-reply${meToca ? " me-toca" : ""}" title="${meToca ? "Respuesta del agente sin contestar — clic para leerla y responder" : "Responder a esta tarea (se añade fechado, sin borrar lo anterior)"}">${meToca ? "🤖" : "💬"}</button><button class="it-up" title="Subir">↑</button><button class="it-down" title="Bajar">↓</button><button class="it-due" title="Fecha, nota y aviso">📅</button><button class="it-del" title="Borrar">✕</button></span>`;
+}
+
+/* 0.58.2 — EL HUECO DE LA BANDA SE MIDE, NO SE ESTIMA. En 0.58.1 puse 104 px a ojo, calculados
+   sobre un ancho de banda supuesto de ~122 px, y su respuesta fue inmediata: «no me gusta mucho
+   lo del aumento del padding, porque aumenta mucho las líneas de las tareas». Tenía razón en el
+   fondo — cada píxel de más ahí lo paga el texto de TODAS las filas, y estimar por arriba para ir
+   seguro es hacerle pagar mi incertidumbre.
+   Así que se mide de verdad, una vez, con su tipografía y su plataforma: se pinta una banda suelta
+   fuera de la vista, se lee su ancho y se calcula lo mínimo que hay que reservar para que no llegue
+   a la marca 💬/🤖 (ver la aritmética en el bloque de `.todo-it`). Si el emoji mide menos aquí, él
+   recupera texto; si mide más, no se le tapa la marca. El valor del CSS queda como suelo de
+   seguridad por si la medida no se puede hacer.
+   Se remide al cambiar el tamaño de letra, que es lo único que cambia el ancho de la banda. */
+const RESERVA_MIN = 74;   // lo que había antes de 0.58.1: por debajo, nunca
+const RESERVA_HOLGURA = 6;   // redondeos de subpíxel; no es margen «por si acaso»
+/* La cuenta, aparte del DOM para poder probarla: cuánto tiene que medir la columna de fecha para
+   que una banda de `ancho` no llegue a la marca 💬/🤖. Todo medido desde el borde derecho del `li`. */
+function reservaDeBanda(ancho, right, respiro, gap){
+  return Math.max(RESERVA_MIN, Math.ceil(ancho - right - respiro - gap + RESERVA_HOLGURA));
+}
+function medirBanda(){
+  const li = document.createElement("li");
+  li.className = "todo-it";
+  li.style.cssText = "position:fixed; left:-9999px; top:0; visibility:hidden; pointer-events:none";
+  li.innerHTML = bandaAccionesHtml(false);
+  document.body.appendChild(li);
+  const acts = li.querySelector(".it-actions");
+  acts.style.display = "flex";
+  acts.style.position = "static";
+  const ancho = Math.ceil(acts.getBoundingClientRect().width);
+  li.remove();
+  return ancho;
+}
+// `applyFont` corre en cada repintado entero, y medir fuerza un recálculo de diseño: se remide solo
+// cuando cambia algo que pueda cambiar el ancho. La firma NO se guarda si la medida falló, para que
+// el siguiente repintado lo vuelva a intentar.
+let reservaFirma = "";
+function ajustarReservaBanda(){
+  const firma = (appSettings().font || "system") + "|" + uiScale();
+  if (firma === reservaFirma) return;
+  let ancho = 0;
+  try { ancho = medirBanda(); } catch(e){ return; }
+  if (!(ancho > 0)) return;          // medida imposible (pestaña oculta): se deja el suelo del CSS
+  reservaFirma = firma;
+  const cs = getComputedStyle(document.documentElement);
+  const right = parseFloat(cs.getPropertyValue("--todo-acts-right")) || 4;
+  const respiro = parseFloat(cs.getPropertyValue("--todo-acts")) || 20;
+  const gap = 9;                     // el `gap` de `.todo-it`
+  document.documentElement.style.setProperty("--todo-fecha", reservaDeBanda(ancho, right, respiro, gap) + "px");
 }
 
 /* 0.58.0 — CARRIL RESERVADO para los tipos de widget, en función propia PARA PODER PROBARLA.

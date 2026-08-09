@@ -2526,7 +2526,10 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
     // AL PASAR EL RATÓN: eso sí devuelve el reflow. El hueco permanente de 0.51.0 es otra cosa y
     // tiene su propio test más abajo.
     const pintarFn = src.match(/function pintar\(list\)\{[\s\S]*?\n  \}/)[0];
-    if (!pintarFn.includes('it-reply${meToca ? " me-toca" : ""}'))
+    // 0.58.2: el markup de la banda salió de `pintar` a `bandaAccionesHtml` (una sola fuente,
+    // porque también se mide); la comprobación se hace allí, que es donde está ahora la verdad.
+    const bandaFn = src.match(/function bandaAccionesHtml\(meToca\)\{[\s\S]*?\n\}/)[0];
+    if (!bandaFn.includes('it-reply${meToca ? " me-toca" : ""}'))
       throw new Error('el botón de responder debe heredar «me toca»: si no, el hover tapa el 🤖 y la señal desaparece al ir a por ella');
     if (!/\.it-actions \.it-reply\.me-toca\{[^}]*var\(--warn\)/.test(html))
       throw new Error('el 🤖 del botón de responder debe verse en color de aviso, como la marca que sustituye');
@@ -2729,7 +2732,8 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
     // 0.58.1 — LA MARCA 💬/🤖 NO SE OCULTA JAMÁS, y el hueco que la salva es ARITMÉTICA, no una
     // regla de visibilidad. 0.56.0 la metió en la cesión y con eso la escondió también en tareas de
     // varias líneas, donde llevaba funcionando desde 0.51.0: eso fue la degradación que él reportó.
-    if (!/\.todo-it:hover \.alta,\.todo-it:hover \.due\{visibility:hidden\}/.test(html))
+    // 0.58.2: la cesión sobrevive, pero acotada a las filas de una línea (su bloque, más abajo).
+    if (!/:hover \.alta,[^{]*:hover \.due\{visibility:hidden\}/.test(html))
       throw new Error('la fecha y el vencimiento deben ceder su sitio a la banda al pasar el ratón');
     if (/\.todo-it:hover[^{]*\.task-note-mark[^{]*\{[^}]*(visibility:hidden|display:none|opacity:0)/.test(html))
       throw new Error('la marca 💬/🤖 NO puede ocultarse con el hover: es la única señal de que el agente te dejó algo (0.56.0 lo intentó y fue la degradación)');
@@ -2744,27 +2748,10 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
     const actsRule = cssOf('.todo-it .it-actions');
     if (!/position:absolute/.test(actsRule))
       throw new Error('el hueco reservado no sustituye a que la banda flote: si vuelve al flujo, vuelve el salto');
-    /* 0.58.1 (2/2) — LA ARITMÉTICA DEL HUECO, que es la garantía de verdad. Medido desde el borde
-       derecho del `li`: la banda ocupa [`right`, `right`+ancho]; la marca queda a
-       `padding-right` + `--todo-fecha` + `gap` de ese borde. Para que no la alcance:
-             --todo-fecha  ≥  anchoBanda − right − padding-right − gap
-       Con 7 botones la banda mide ~122 px → 122 − 4 − 20 − 9 = 89, y se pide margen porque el emoji
-       no mide igual en todas las plataformas. Con 74 px (lo que había hasta 0.58.1) NO se cumplía,
-       y por eso en tareas de una línea sin vencimiento la banda se comía la marca.
-       El test cuenta los BOTONES: si alguien añade uno, la banda crece y esto tiene que revisarse
-       a mano. Es la única forma de que el número no se quede obsoleto en silencio. */
-    const N_BOTONES = (src.match(/<span class="it-actions">[\s\S]*?<\/span>`/)[0].match(/<button /g) || []).length;
-    if (N_BOTONES !== 7)
-      throw new Error(`la banda tiene ${N_BOTONES} botones y --todo-fecha se calculó para 7: vuelve a medir el ancho de la banda y sube la reserva antes de tocar esto`);
-    const fecha = parseInt((html.match(/--todo-fecha:\s*(\d+)px/) || [])[1], 10);
-    const right = parseInt((actsRule.match(/right:(\d+)px/) || [])[1], 10);
-    const padD = parseInt((html.match(/--todo-acts:\s*(\d+)px/) || [])[1], 10);
-    const gap = parseInt((cssOf('.todo-it').match(/gap:(\d+)px/) || [])[1], 10);
-    const ANCHO_BANDA = 122;   // 7 botones + huecos + relleno, medido en 0.58.1
-    if (!(fecha >= ANCHO_BANDA - right - padD - gap + 10))
-      throw new Error(`--todo-fecha=${fecha}px no reserva bastante: con la banda en ${ANCHO_BANDA}px y right=${right} padding=${padD} gap=${gap}, la marca 💬/🤖 vuelve a quedar debajo en tareas de una línea`);
-    if (!/right:\d+px/.test(actsRule))
-      throw new Error('la banda se ancla al borde derecho: toda la aritmética de arriba parte de ahí');
+    // 0.58.2 — la banda se ancla al borde derecho POR VARIABLE, porque su distancia entra en la
+    // cuenta de la reserva: un `right` suelto dentro de la regla la deja mintiendo en silencio.
+    if (!/right:var\(--todo-acts-right\)/.test(actsRule))
+      throw new Error('la separación de la banda al borde entra en el cálculo de la reserva: tiene que ser la variable, no un número suelto');
 
     // (3) EL EDITOR DE CONVERSACIÓN OCUPA LA FILA ENTERA. Se cuelga del `li`, que es flex con wrap:
     // sin `flex:1 0 100%` entra como hermano del texto y lo estruja en una columna estrecha.
@@ -3213,6 +3200,61 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
     if (!/Ctrl\+Enter para guardar/.test(sd))
       throw new Error('R27: el atajo se muestra junto a la función, en el propio campo donde se usa');
     console.log('OK 0.58.0 (un solo buscador, el tipo que casa sobrevive al corte, la rejilla no se aplasta y Ctrl+Enter guarda)');
+  }
+
+  // --- 0.58.2: la fecha solo cede donde estorba, y el hueco se mide ----------------------------
+  {
+    // (1) LA CESIÓN ES CONDICIONAL. Ceder al pasar el ratón solo hace falta en filas de UNA línea:
+    // en una tarea alta la banda va abajo y la fecha arriba, y no se tocan. Aplicarlo a todas era
+    // regalar información — misma familia de error que 0.56.0 con la marca 💬/🤖.
+    if (!/\.todo-it\.una-linea:hover \.alta,\.todo-it\.una-linea:hover \.due\{visibility:hidden\}/.test(html))
+      throw new Error('la fecha solo cede en filas de UNA línea: una regla ciega la esconde también donde la banda ni la roza');
+    // (la regla `.todo-it:hover .alta{opacity:.9}` es otra cosa y se queda: realza, no esconde)
+    if (/\.todo-it:hover \.alta[^{]*\{[^}]*visibility:hidden/.test(html))
+      throw new Error('quedó la regla incondicional: es la que hacía desaparecer la fecha en tareas de varias líneas');
+    const mc = src.match(/function marcarCortas\(\)\{[\s\S]*?\n  \}/)[0];
+    if (!/classList\.toggle\("una-linea"/.test(mc) || !/offsetHeight/.test(mc))
+      throw new Error('«una línea» se MIDE sobre el DOM pintado: estimarlo por longitud de texto falla con cualquier ancho de ventana');
+    if (!/lineHeight/.test(mc))
+      throw new Error('el umbral sale del interlineado real, no de un número fijo: con otro tamaño de letra un fijo clasifica mal');
+    // una tarea pasa de una a dos líneas solo con estrechar la ventana: sin observador, la
+    // clasificación se congela hasta el siguiente repintado.
+    if (!/ResizeObserver\(\(\) => \{ if \(!ul\.isConnected\)\{ ro\.disconnect\(\); return; \} marcarCortas\(\); \}\)/.test(src))
+      throw new Error('la clasificación tiene que rehacerse al cambiar el ancho, y el observador debe soltarse cuando la lista desaparece');
+    // y se cuelga de la ranura que `renderBody` vacía: es la que impide que se acumulen
+    if (!/ro\.observe\(ul\);\s*\n\s*el\.__ro = ro;/.test(src))
+      throw new Error('el observador va en `el.__ro`: fuera de esa ranura, `renderBody` no lo retira y se acumula uno por repintado');
+
+    // (2) EL HUECO SE MIDE, NO SE ESTIMA. En 0.58.1 puse 104 px a ojo y él lo notó enseguida:
+    // «aumenta mucho las líneas de las tareas». Cada píxel de más lo paga el texto de TODAS las
+    // filas, así que estimar por arriba «para ir seguro» es cobrárselo a él.
+    eval('globalThis.RESERVA_MIN = ' + (src.match(/const RESERVA_MIN = (\d+)/) || [])[1]);
+    eval('globalThis.RESERVA_HOLGURA = ' + (src.match(/const RESERVA_HOLGURA = (\d+)/) || [])[1]);
+    eval('globalThis.reservaDeBanda = ' + pickFn('reservaDeBanda', 'ancho, right, respiro, gap'));
+    if (reservaDeBanda(122, 4, 20, 9) !== 95)
+      throw new Error('la cuenta de la reserva no es la del bloque de `.todo-it`: reserva = ancho − right − respiro − gap + holgura');
+    if (reservaDeBanda(60, 4, 20, 9) !== RESERVA_MIN)
+      throw new Error('con una banda estrecha la reserva no puede bajar del suelo: por debajo se estrecha la columna de fecha sin ganar nada');
+    if (reservaDeBanda(200, 4, 20, 9) <= reservaDeBanda(122, 4, 20, 9))
+      throw new Error('si la banda crece, la reserva tiene que crecer con ella: es lo que sustituye al recuento manual de botones');
+    // la banda se pinta y se mide desde el MISMO sitio: dos copias que se separen dan una reserva
+    // que miente, y el fallo sería invisible hasta que él viera la marca tapada otra vez.
+    if ((src.match(/bandaAccionesHtml\(/g) || []).length < 3)
+      throw new Error('`bandaAccionesHtml` debe ser la única fuente del markup: la usan pintar y medirBanda');
+    if (/<span class="it-actions">/.test(src.replace(/function bandaAccionesHtml[\s\S]*?\n\}/, '')))
+      throw new Error('hay markup de la banda fuera de `bandaAccionesHtml`: si se separan, lo medido deja de ser lo pintado');
+    const mb = src.match(/function medirBanda\(\)\{[\s\S]*?\n\}/)[0];
+    if (!/li\.remove\(\)/.test(mb))
+      throw new Error('el nodo de medida se retira siempre: si no, cada remedida deja basura en el documento');
+    if (!/getBoundingClientRect/.test(mb))
+      throw new Error('hay que medir el ancho real, no calcularlo desde el CSS: el emoji no mide igual en cada plataforma');
+    // medir fuerza un recálculo de diseño y `applyFont` corre en cada repintado entero
+    const ar = src.match(/function ajustarReservaBanda\(\)\{[\s\S]*?\n\}/)[0];
+    if (!/if \(firma === reservaFirma\) return/.test(ar))
+      throw new Error('remedir en cada repintado fuerza un reflow por repintado: solo se remide si cambia lo que cambia el ancho');
+    if (ar.indexOf('reservaFirma =') < ar.indexOf('if (!(ancho > 0)) return'))
+      throw new Error('la firma no puede guardarse antes de saber que la medida valió: si falla, hay que reintentarlo');
+    console.log('OK 0.58.2 (la fecha cede solo en filas de una línea y el hueco de la banda se mide)');
   }
 
   console.log('\nTODO EN VERDE');

@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.58.2] - 2026-08-09 — la fecha solo se aparta donde estorba, y el hueco se mide
+
+- **La fecha y el vencimiento ya no desaparecen al pasar el ratón por una tarea de varias líneas.**
+  Ahí los botones van abajo y la fecha arriba: no se estorban, y esconderla era regalar información
+  por una regla que no miraba si hacía falta. En las tareas de **una sola línea** sigue cediendo,
+  porque en una fila de esa altura no caben las dos cosas — lo único que lo evitaría es reservar
+  sitio permanente a los botones, y eso deja un páramo a la derecha de la hora en todas las filas.
+- **El hueco que se reserva a los botones ahora se mide, no se estima.** En 0.58.1 puse 104 px
+  calculados a ojo, y cada píxel de más ahí lo paga el texto de todas las tareas: se estrechan y
+  ocupan más líneas. Ahora se mide la barra de verdad, una vez, con tu tipografía y tu pantalla, y
+  se reserva **lo mínimo** que hace falta para que no tape la marca 💬/🤖. Si tu navegador dibuja
+  los iconos más estrechos, recuperas ese ancho para el texto.
+- Como efecto de lo anterior, la clasificación «esta fila es de una línea» se rehace al **estrechar
+  la ventana**, no solo al repintar la lista.
+
 ## [0.58.1] - 2026-08-09 — la marca de conversación se queda donde estaba, y ahora nadie la tapa
 
 Corrección de la versión anterior. En 0.58.0 moví la marca 💬/🤖 al principio de la fila para que
