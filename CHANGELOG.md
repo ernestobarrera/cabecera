@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.61.0] - 2026-08-09 — anclar una tarea arriba
+
+- **Cada tarea tiene un botón 📌 en su barra de acciones.** Lo anclado va **siempre arriba**, con
+  cualquier criterio de orden —a mano, por fecha de alta, por vencimiento— y dentro de cada grupo
+  se respeta el criterio que hayas elegido. Una tarea anclada se ve como tal sin pasar el ratón: un
+  📌 delante del texto y un filete en el borde izquierdo.
+- Solo ordena en **Pendientes**. «Hechas» es un histórico cronológico y flotar cosas ahí mentiría
+  sobre cuándo las cerraste; la marca 📌 sí se sigue viendo.
+- **No se arrastra entre una anclada y una sin anclar**, y **↑ ↓ saltan al vecino que se ve**: antes,
+  con la lista filtrada o paginada, la flecha podía mover el dato sin mover nada en pantalla.
+- Nota: la barra de acciones gana un botón, así que reserva unos píxeles más a la derecha de cada
+  fila. Se mide sola (desde 0.58.2), pero si lo notas, el siguiente recorte natural son ↑ ↓, que
+  hacen lo mismo que el asa ⋮⋮.
+
 ## [0.60.0] - 2026-08-09 — buscar mira en las dos listas y las separa
 
 - **El buscador de una lista de tareas busca ahora en pendientes y en hechas a la vez**, y presenta

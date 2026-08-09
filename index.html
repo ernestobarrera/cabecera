@@ -564,6 +564,13 @@ ul.plain{list-style:none}
   background:rgba(255,255,255,.04); border:1px dashed var(--border-soft); border-radius:9px; padding:4px 9px}
 .todo-filtro span{flex:1; min-width:0}
 .todo-filtro .quitar{padding:1px 8px; line-height:1.4}
+/* 0.61.0 — una tarea ANCLADA. La marca 📌 solo la pagan las filas ancladas (una fila normal no
+   pierde texto por una señal que no le toca) y el filete de la izquierda la separa del grupo de
+   abajo sin añadir una cabecera que ocupe una fila entera. */
+.todo-it .pin-mark{font-size:10.5px; flex-shrink:0; opacity:.85}
+.todo-it.anclada{box-shadow:inset 2px 0 0 var(--warn)}
+.todo-it .it-actions .it-pin{opacity:.55}
+.todo-it .it-actions .it-pin.on{opacity:1; color:var(--warn)}
 .todo-it .task-note-mark{font-size:11px; color:var(--text-dim); cursor:pointer; flex-shrink:0}
 .todo-it .task-note-mark:hover{color:var(--accent)}
 /* el 🤖 sin contestar no puede pasar desapercibido: es la única señal de que el agente te dejó
@@ -1930,7 +1937,7 @@ function syncUI(mode, txt){
    reaparece) y si Recargar está activo. El descarte ✕ vive solo en memoria de la sesión.
    Demora asumida: la CDN de Pages puede servir la versión vieja hasta ~10 min aun con
    no-store (gobierna la caché del navegador, no la CDN); para pestañas de días, irrelevante. */
-const APP_VERSION = "0.60.0";
+const APP_VERSION = "0.61.0";
 let newVersionDetected = null;   // versión superior detectada; detiene futuras consultas
 let verDismissed = false;        // ✕: solo esta sesión — nunca persistido en disco
 let verCheckInflight = false;    // sin consultas concurrentes
@@ -6289,9 +6296,21 @@ function bodyTodo(w, el){
     input.addEventListener("blur", commit);
     input.focus(); input.select();
   };
+  /* ↑ y ↓ intercambian con el vecino QUE SE VE, no con el de al lado en el array. Nacen de la misma
+     razón que la restricción de arrastre de 0.61.0: el array mezcla pendientes con hechas y, desde
+     hoy, ancladas con no ancladas, así que el vecino de índice puede no estar en la lista que tienes
+     delante — y entonces pulsar ↑ movía el dato sin mover nada en pantalla. Se salta hasta el
+     primero del MISMO grupo (mismo `done`, mismo `pin`). */
   const moveItem = (it, dir) => {
-    const idx = w.data.items.indexOf(it), ni = idx + dir;
-    if (idx < 0 || ni < 0 || ni >= w.data.items.length) return;
+    const idx = w.data.items.indexOf(it);
+    if (idx < 0) return;
+    let ni = idx + dir;
+    while (ni >= 0 && ni < w.data.items.length){
+      const otra = w.data.items[ni];
+      if (!!otra.done === !!it.done && !!otra.pin === !!it.pin) break;
+      ni += dir;
+    }
+    if (ni < 0 || ni >= w.data.items.length) return;
     [w.data.items[idx], w.data.items[ni]] = [w.data.items[ni], w.data.items[idx]];
     paint(); markDirty();
   };
@@ -6399,7 +6418,14 @@ function bodyTodo(w, el){
     // `slice` implícito: `filter` ya devuelve un array nuevo, así que ordenar aquí NO toca
     // `w.data.items`. Es una vista, no una reescritura: cambiar de criterio y volver a «A mano»
     // devuelve exactamente el orden que tú pusiste arrastrando.
-    const pendientes = () => { const l = w.data.items.filter(i => !i.done && casaBot(i) && casaQ(i)); if (cmpPend) l.sort(cmpPend); return l; };
+    /* 0.61.0 — LAS ANCLADAS VAN ARRIBA CON CUALQUIER CRITERIO, y por eso la partición va DESPUÉS de
+       ordenar y no dentro del comparador: metida en el `cmp` habría que acordarse de ponerla en los
+       cuatro y en el que venga. Es estable (`filter` conserva el orden), así que dentro de cada
+       grupo manda el criterio elegido, incluido «a mano».
+       Solo en Pendientes: «Hechas» es un histórico cronológico y flotar cosas ahí sería mentir sobre
+       cuándo las cerraste. La marca 📌 sí se sigue viendo allí. */
+    const anclarPrimero = l => l.filter(i => i.pin).concat(l.filter(i => !i.pin));
+    const pendientes = () => { const l = w.data.items.filter(i => !i.done && casaBot(i) && casaQ(i)); if (cmpPend) l.sort(cmpPend); return anclarPrimero(l); };
     const hechas = () => w.data.items.filter(i => i.done && casaBot(i) && casaQ(i)).sort((a, b) => (b.doneAt || 0) - (a.doneAt || 0));
     let list, vacio;
     if (buscando){
@@ -6471,7 +6497,7 @@ function bodyTodo(w, el){
       }
       const li = document.createElement("li");
       const taskColor = TASK_COLORS[it.color] || "";
-      li.className = "todo-it" + (it.done ? " done" : "") + (taskColor ? " has-task-color" : "");
+      li.className = "todo-it" + (it.done ? " done" : "") + (taskColor ? " has-task-color" : "") + (it.pin ? " anclada" : "");
       if (taskColor) li.style.setProperty("--task-color", taskColor);
       const dm = dueMeta(it);
       const nRep = Array.isArray(it.replies) ? it.replies.length : 0;
@@ -6483,12 +6509,21 @@ function bodyTodo(w, el){
       // la fecha larga completa, pero la señal corta se ve sin tener que buscarla
       const am = it.created ? altaMeta(it.created, it.createdT) : null;
       const alta = am ? ` title="${esc(am.largo)}"` : "";
-      li.innerHTML = `<span class="it-drag" draggable="${reordenable}" title="${reordenable ? "Arrastrar para reordenar (o usa ↑ ↓)" : (ui.view === "pend" ? "Con un orden automático no se reordena a mano: elige «↕ A mano»" : "En «Hechas» no se reordena")}">⋮⋮</span><input type="checkbox" ${it.done ? "checked" : ""}><span class="t"${alta}>${linkifyEsc(it.t)}</span>`
+      li.innerHTML = `<span class="it-drag" draggable="${reordenable}" title="${reordenable ? "Arrastrar para reordenar (o usa ↑ ↓)" : (ui.view === "pend" ? "Con un orden automático no se reordena a mano: elige «↕ A mano»" : "En «Hechas» no se reordena")}">⋮⋮</span><input type="checkbox" ${it.done ? "checked" : ""}>`
+        // la marca de anclada se ve SIEMPRE, y solo la pagan las filas ancladas: una fila normal no
+        // pierde ni un píxel de texto por una señal que no le toca (R43)
+        + (it.pin ? `<span class="pin-mark" title="Anclada arriba">📌</span>` : "")
+        + `<span class="t"${alta}>${linkifyEsc(it.t)}</span>`
         + (nRep || it.note ? `<span class="task-note-mark${meToca ? " me-toca" : ""}" title="${esc(meToca ? "Respuesta del agente sin contestar (" + nRep + " en el hilo) — clic para leerla" : nRep ? nRep + " respuesta(s) — clic para leer y contestar" : it.note)}">${meToca ? "🤖" : "💬"}${nRep > 1 ? " " + nRep : ""}</span>` : "")
         + (am ? `<span class="alta" title="${esc(am.largo)}">${esc(am.corto)}</span>` : "")
         + (dm ? `<span class="due ${dm.cls}">${dm.label}</span>` : "")
-        + bandaAccionesHtml(meToca);
+        + bandaAccionesHtml(meToca, !!it.pin);
       const drag = li.querySelector(".it-drag");
+      /* 0.61.0 — no se arrastra ENTRE grupos de anclaje. Soltar una sin anclar encima de una anclada
+         movería el array de verdad y el siguiente repintado la devolvería abajo: exactamente el
+         «prometer algo que no ocurre» que 0.53.0 cerró para el orden automático. Dentro del mismo
+         grupo el arrastre funciona igual que siempre. */
+      const mismoGrupo = otra => !!dragItem && !!dragItem.pin === !!otra.pin;
       drag.addEventListener("dragstart", e => {
         if (!reordenable){ e.preventDefault(); return; }
         dragItem = it;
@@ -6496,7 +6531,7 @@ function bodyTodo(w, el){
         e.dataTransfer.setData("text/plain", it.t || "tarea");
       });
       li.addEventListener("dragover", e => {
-        if (!dragItem || !reordenable) return;
+        if (!dragItem || !reordenable || !mismoGrupo(it)) return;
         e.preventDefault();
         const after = e.clientY > li.getBoundingClientRect().top + li.offsetHeight / 2;
         li.classList.toggle("drag-over", dragItem !== it);
@@ -6504,7 +6539,7 @@ function bodyTodo(w, el){
       });
       li.addEventListener("dragleave", () => li.classList.remove("drag-over", "drop-after"));
       li.addEventListener("drop", e => {
-        if (!dragItem || !reordenable) return;
+        if (!dragItem || !reordenable || !mismoGrupo(it)) return;
         e.preventDefault();
         const after = e.clientY > li.getBoundingClientRect().top + li.offsetHeight / 2;
         li.classList.remove("drag-over", "drop-after");
@@ -6522,6 +6557,17 @@ function bodyTodo(w, el){
       li.querySelector(".t").addEventListener("dblclick", () => editItem(it, li));
       li.querySelector(".it-color").addEventListener("click", e => { e.stopPropagation(); editTaskColor(it, li); });
       li.querySelector(".it-edit").addEventListener("click", e => { e.stopPropagation(); editItem(it, li); });
+      /* 0.61.0 — ANCLAR. Su decisión de hoy entre tres opciones para «las encoladas arriba»: la
+         genérica. El producto NO aprende su convención «▶ En cola ·» —la poda de 0.53.0 se mantiene
+         y su test también—; aprende un concepto que tiene cualquier gestor de tareas, y quien decide
+         qué está encolado es él. `pin` ausente es lo normal: se borra en vez de guardarse en false,
+         para no engordar el archivo con el valor por omisión. */
+      li.querySelector(".it-pin").addEventListener("click", e => {
+        e.stopPropagation();
+        if (it.pin) delete it.pin; else it.pin = true;
+        setPage(0);   // lo que acabas de anclar está arriba, y arriba es la página 1
+        paint(); markDirty();
+      });
       li.querySelector(".it-up").addEventListener("click", e => { e.stopPropagation(); if (!reordenable){ toast("Con un orden automático no se reordena a mano: elige «↕ A mano»"); return; } moveItem(it, -1); });
       li.querySelector(".it-down").addEventListener("click", e => { e.stopPropagation(); if (!reordenable){ toast("Con un orden automático no se reordena a mano: elige «↕ A mano»"); return; } moveItem(it, 1); });
       li.querySelector(".it-due").addEventListener("click", e => { e.stopPropagation(); setDue(it, li); });
@@ -8869,8 +8915,8 @@ function paletteEntries(){
 /* La banda de acciones de una tarea, en UN solo sitio: la pinta `pintar` y la MIDE `medirBanda`.
    Estaban duplicadas y eso es justo lo que no puede pasar aquí, porque el ancho medido es el que
    decide cuánto hueco se le reserva: dos copias que se separen dan una reserva que miente. */
-function bandaAccionesHtml(meToca){
-  return `<span class="it-actions"><button class="it-color" title="Color"><span class="cdot"></span></button><button class="it-edit" title="Editar">✎</button><button class="it-reply${meToca ? " me-toca" : ""}" title="${meToca ? "Respuesta del agente sin contestar — clic para leerla y responder" : "Responder a esta tarea (se añade fechado, sin borrar lo anterior)"}">${meToca ? "🤖" : "💬"}</button><button class="it-up" title="Subir">↑</button><button class="it-down" title="Bajar">↓</button><button class="it-due" title="Fecha, nota y aviso">📅</button><button class="it-del" title="Borrar">✕</button></span>`;
+function bandaAccionesHtml(meToca, anclada){
+  return `<span class="it-actions"><button class="it-color" title="Color"><span class="cdot"></span></button><button class="it-edit" title="Editar">✎</button><button class="it-reply${meToca ? " me-toca" : ""}" title="${meToca ? "Respuesta del agente sin contestar — clic para leerla y responder" : "Responder a esta tarea (se añade fechado, sin borrar lo anterior)"}">${meToca ? "🤖" : "💬"}</button><button class="it-pin${anclada ? " on" : ""}" title="${anclada ? "Desanclar: vuelve a su sitio en el orden" : "Anclar arriba: se queda la primera con cualquier orden"}">📌</button><button class="it-up" title="Subir">↑</button><button class="it-down" title="Bajar">↓</button><button class="it-due" title="Fecha, nota y aviso">📅</button><button class="it-del" title="Borrar">✕</button></span>`;
 }
 
 /* 0.58.2 — EL HUECO DE LA BANDA SE MIDE, NO SE ESTIMA. En 0.58.1 puse 104 px a ojo, calculados

@@ -1478,7 +1478,8 @@ console.log('OK enlaces arrastrables (guardián de documento + asa presente)');
   if (!src.match(/it-drag" draggable="\$\{reordenable\}/)) throw new Error('regresión: el asa de tareas perdió su condición de arrastre');
   if (!src.match(/const reordenable = ui\.view === "pend" && sortDe\(w\) === "manual"/))
     throw new Error('reordenable debe exigir vista de Pendientes Y orden manual');
-  for (const g of ['if (!reordenable){ e.preventDefault(); return; }', 'if (!dragItem || !reordenable) return;'])
+  // 0.61.0: los dos manejadores exigen además el MISMO grupo de anclaje (ver su bloque)
+  for (const g of ['if (!reordenable){ e.preventDefault(); return; }', 'if (!dragItem || !reordenable || !mismoGrupo(it)) return;'])
     if (!src.includes(g)) throw new Error('el arrastre debe estar cerrado también en los manejadores, no solo en el atributo: ' + g);
   // superviviente potencial: dejar ↑↓ activos con orden automático movería el array por debajo
   // sin que la lista lo reflejara — el peor caso, porque el dato cambia y no se ve
@@ -2528,7 +2529,7 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
     const pintarFn = src.match(/function pintar\(list\)\{[\s\S]*?\n  \}/)[0];
     // 0.58.2: el markup de la banda salió de `pintar` a `bandaAccionesHtml` (una sola fuente,
     // porque también se mide); la comprobación se hace allí, que es donde está ahora la verdad.
-    const bandaFn = src.match(/function bandaAccionesHtml\(meToca\)\{[\s\S]*?\n\}/)[0];
+    const bandaFn = src.match(/function bandaAccionesHtml\(meToca, anclada\)\{[\s\S]*?\n\}/)[0];
     if (!bandaFn.includes('it-reply${meToca ? " me-toca" : ""}'))
       throw new Error('el botón de responder debe heredar «me toca»: si no, el hover tapa el 🤖 y la señal desaparece al ir a por ella');
     if (!/\.it-actions \.it-reply\.me-toca\{[^}]*var\(--warn\)/.test(html))
@@ -3387,6 +3388,53 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
     if (!/const reordenable = ui\.view === "pend" && sortDe\(w\) === "manual" && !grupos;/.test(todoFn3))
       throw new Error('buscando no se reordena: «arriba» no significa nada en una lista que mezcla los dos estados');
     console.log('OK 0.60.0 (buscar cruza las dos vistas, las separa con su recuento y no descuadra la paginación)');
+  }
+
+  // --- 0.61.0: anclar tareas arriba -----------------------------------------------------------
+  {
+    // Decisión suya del 09/08 entre tres lecturas de «ordenación con las encoladas arriba»: la
+    // genérica. El producto NO aprende su convención «▶ En cola ·» — la poda de 0.53.0 sigue viva y
+    // su test también, arriba en el bloque de ordenación.
+    const todoFn4 = src.match(/function bodyTodo\(w, el\)\{[\s\S]*?\n\}\n/)[0];
+    const ap = todoFn4.match(/const anclarPrimero = [^\n]*/)[0];
+    eval('globalThis.anclarPrimero = ' + ap.replace('const anclarPrimero = ', '').replace(/;$/, ''));
+    const A = { t: 'a', pin: true }, B = { t: 'b' }, C = { t: 'c', pin: true }, D = { t: 'd' };
+    const r = anclarPrimero([B, A, D, C]).map(x => x.t).join('');
+    if (r !== 'acbd')
+      throw new Error('las ancladas van arriba y DENTRO de cada grupo se conserva el orden que traía: ' + r);
+    if (anclarPrimero([B, D]).map(x => x.t).join('') !== 'bd')
+      throw new Error('sin ninguna anclada, la lista no puede cambiar de orden');
+    if (anclarPrimero([]).length) throw new Error('lista vacía');
+    // superviviente de la mutación: se puede meter el anclaje DENTRO de cada comparador y funcionar,
+    // hasta que alguien añada un quinto criterio y se olvide. Va fuera, una sola vez, después de
+    // ordenar, y por eso vale también para «a mano» (que no tiene comparador).
+    if (!/if \(cmpPend\) l\.sort\(cmpPend\); return anclarPrimero\(l\)/.test(todoFn4))
+      throw new Error('el anclaje se aplica DESPUÉS de ordenar y fuera del comparador: si no, cada criterio nuevo tiene que acordarse');
+    const SORTS2 = src.match(/const TODO_SORTS = \{[\s\S]*?\n\};/)[0];
+    if (/pin/.test(SORTS2)) throw new Error('los comparadores no saben del anclaje: es una capa encima, no un criterio');
+    // «Hechas» es un histórico cronológico: flotar cosas ahí mentiría sobre cuándo las cerraste
+    if (/anclarPrimero/.test(todoFn4.match(/const hechas = [^\n]*/)[0]))
+      throw new Error('el anclaje no ordena el histórico de «Hechas»');
+    // el dato: ausente por omisión, no `false` guardado
+    if (!/if \(it\.pin\) delete it\.pin; else it\.pin = true;/.test(todoFn4))
+      throw new Error('desanclar BORRA la clave: guardar `pin:false` engorda el archivo con el valor por omisión');
+    if (!/setPage\(0\);   \/\/ lo que acabas de anclar/.test(todoFn4))
+      throw new Error('anclar debe llevarte a la página 1: si no, anclas algo y no lo ves');
+    // la señal se ve sin pasar el ratón, y solo la pagan las filas ancladas
+    const pintarFn4 = todoFn4.match(/function pintar\(list\)\{[\s\S]*?\n  \}/)[0];
+    if (!/it\.pin \? `<span class="pin-mark"/.test(pintarFn4))
+      throw new Error('una tarea anclada tiene que verse anclada sin pasar el ratón');
+    if (/pin-mark[\s\S]{0,120}opacity:0/.test(html))
+      throw new Error('la marca de anclada no puede depender del hover');
+    if (!/\.todo-it\.anclada\{/.test(html)) throw new Error('falta el distintivo de fila anclada');
+    // ↑ ↓ y arrastre: mover algo entre grupos movería el array sin mover la lista
+    const mi = todoFn4.match(/const moveItem = \(it, dir\) => \{[\s\S]*?\n  \};/)[0];
+    if (!/!!otra\.done === !!it\.done && !!otra\.pin === !!it\.pin/.test(mi))
+      throw new Error('↑ ↓ deben saltar al vecino que SE VE: el de al lado en el array puede no estar en esta lista');
+    if (!/const mismoGrupo = otra => !!dragItem && !!dragItem\.pin === !!otra\.pin;/.test(todoFn4))
+      throw new Error('no se arrastra entre anclada y no anclada: el repintado desharía el gesto');
+    delete globalThis.anclarPrimero;
+    console.log('OK 0.61.0 (las ancladas arriba con cualquier criterio, sin tocar los comparadores ni el histórico)');
   }
 
   console.log('\nTODO EN VERDE');
