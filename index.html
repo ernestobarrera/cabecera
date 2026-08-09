@@ -314,6 +314,16 @@ body{font-family:var(--font); color:var(--text); background:#10131a}
    rejilla debajo, así que allí el tope sobra. */
 #menu-results{overflow:auto; padding:0 12px 6px; display:none; flex:0 1 auto; max-height:34vh}
 #menu.palette #menu-results{max-height:none}
+/* 0.59.0 — QUIÉN CEDE SITIO CUANDO NO CABE TODO. Parte de fallo suya del 09/08: «cuando busco y
+   aparecen widgets se cortan por el epígrafe configuración». El tope de 0.58.0 impidió que los
+   resultados se comieran la rejilla, pero dejó fuera al TERCER inquilino: `#menu-actions` son doce
+   botones que envuelven en cuatro filas y, sin `min-height:0`, un elemento flex no puede encogerse
+   por debajo de su contenido. Así que los ~200 px de «Configuración» eran intocables y el único
+   que cedía era `#menu-widgets` (`flex:1`, base 0), que quedaba en una franja: las tarjetas se
+   veían cortadas justo por encima del epígrafe.
+   La prioridad ahora es explícita y en este orden: la rejilla tiene SUELO (`--menu-tipos-min`,
+   medido, no estimado, ver `ajustarSueloTipos`), los resultados y las acciones ceden y hacen
+   scroll en lo suyo. */
 #menu-results.has{display:block}
 .res-item{display:flex; align-items:center; gap:10px; padding:7px 9px; border-radius:9px; cursor:pointer; font-size:13.5px}
 .res-hint{display:flex; align-items:center; gap:10px; padding:7px 9px; margin-bottom:4px; border-radius:9px; font-size:12.5px;
@@ -326,7 +336,9 @@ body{font-family:var(--font); color:var(--text); background:#10131a}
 .res-item .res-ic{width:22px; text-align:center; flex-shrink:0}
 .res-item .res-lb{flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
 .res-item .u{color:var(--text-dim); font-size:11.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:45%; text-align:right; flex-shrink:0}
-#menu-widgets{padding:6px 12px 12px; overflow:auto; min-height:0; flex:1}
+#menu-widgets{padding:6px 12px 12px; overflow:auto; flex:1 1 auto; min-height:var(--menu-tipos-min, 158px)}
+/* en la paleta no hay rejilla ni acciones: el suelo estorbaría */
+#menu.palette #menu-widgets{min-height:0}
 #menu-widgets h4, #menu-actions h4{font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--text-dim); margin:8px 2px 8px}
 #wcats{display:flex; flex-wrap:wrap; gap:5px; margin-bottom:9px}
 .wcat{font-size:11.5px; padding:3px 9px; border-radius:999px; border:1px solid var(--border-soft);
@@ -341,7 +353,7 @@ body{font-family:var(--font); color:var(--text); background:#10131a}
   border:1px solid var(--border-soft); background:rgba(255,255,255,.03); cursor:pointer; font-size:12.5px; color:var(--text)}
 .wcard:hover{background:var(--accent-soft); border-color:var(--accent)}
 .wcard .ico{font-size:22px}
-#menu-actions{padding:0 12px 14px; display:flex; gap:8px; flex-wrap:wrap}
+#menu-actions{padding:0 12px 14px; display:flex; gap:8px; flex-wrap:wrap; flex:0 1 auto; min-height:0; overflow:auto; align-content:flex-start}
 .act{padding:7px 11px; border-radius:9px; border:1px solid var(--border-soft); background:rgba(255,255,255,.04);
   color:var(--text-dim); cursor:pointer; font-size:12.5px; font-family:var(--font)}
 .act:hover{color:var(--text); background:rgba(255,255,255,.09)}
@@ -532,8 +544,20 @@ ul.plain{list-style:none}
 /* «👍 Vale»: responder de un clic. No es una acción menor disfrazada de atajo — deja una entrada
    fechada igual que cualquier otra, que es justo lo que un check no dejaría. */
 .rp-actions .ok{border-color:rgba(90,169,247,.35)}
-/* aviso de «Hechas»: hay respuestas que llegaron después de cerrar. Informa, no reclama. */
-.todo-bar .tog-aviso{color:var(--warn); font-weight:600; margin-left:2px}
+/* aviso de «Hechas»: hay respuestas que llegaron después de cerrar. Informa, no reclama.
+   0.59.0 — y además LLEVA a ellas: el recuento es el filtro. Se subraya al pasar el ratón para que
+   se lea como pulsable sin añadir un botón más a una barra que ya tiene cuatro cosas. */
+.todo-bar .tog-aviso{color:var(--warn); font-weight:600; margin-left:2px; cursor:pointer; border-radius:6px; padding:0 3px}
+.todo-bar .tog-aviso:hover{text-decoration:underline}
+.todo-bar .tog-aviso:focus-visible{outline:2px solid var(--accent); outline-offset:1px}
+.todo-bar .tog-aviso.on{background:var(--warn); color:#1b1205}
+.todo-bar .tog-aviso.on:hover{text-decoration:none}
+/* el filtro 🤖 puesto se ve SIEMPRE, en su propia línea de la barra: un filtro que esconde tareas
+   sin decirlo es la trampa que ya se evitó con el filtro por etiqueta */
+.todo-filtro{flex-basis:100%; display:flex; align-items:center; gap:8px; font-size:11.5px; color:var(--text-dim);
+  background:rgba(255,255,255,.04); border:1px dashed var(--border-soft); border-radius:9px; padding:4px 9px}
+.todo-filtro span{flex:1; min-width:0}
+.todo-filtro .quitar{padding:1px 8px; line-height:1.4}
 .todo-it .task-note-mark{font-size:11px; color:var(--text-dim); cursor:pointer; flex-shrink:0}
 .todo-it .task-note-mark:hover{color:var(--accent)}
 /* el 🤖 sin contestar no puede pasar desapercibido: es la única señal de que el agente te dejó
@@ -1900,7 +1924,7 @@ function syncUI(mode, txt){
    reaparece) y si Recargar está activo. El descarte ✕ vive solo en memoria de la sesión.
    Demora asumida: la CDN de Pages puede servir la versión vieja hasta ~10 min aun con
    no-store (gobierna la caché del navegador, no la CDN); para pestañas de días, irrelevante. */
-const APP_VERSION = "0.58.2";
+const APP_VERSION = "0.59.0";
 let newVersionDetected = null;   // versión superior detectada; detiene futuras consultas
 let verDismissed = false;        // ✕: solo esta sesión — nunca persistido en disco
 let verCheckInflight = false;    // sin consultas concurrentes
@@ -5867,8 +5891,25 @@ function offerTaskToNote(w, it, repaint){
    segundos: con 150 tareas, volver a empezar el recorrido cada vez que abrías un tooltip.
    Vive en MEMORIA y por `widgetId`, nunca en datos.json — es estado de presentación, la misma
    línea que ya se fijó para la ordenación de las tablas: si se persistiera, viajaría entre equipos
-   y habría que sanearlo, fusionarlo y limpiar huérfanos para no ganar nada. */
-const todoPage = new Map();
+   y habría que sanearlo, fusionarlo y limpiar huérfanos para no ganar nada.
+
+   0.59.0 — LA PÁGINA NO ERA LA ÚNICA. Se arregló la página en 0.49.0, el borrador en 0.51.0 y el
+   historial de la calculadora en 0.56.0, siempre igual: un `let` dentro del closure que `renderBody`
+   se llevaba por delante cada pocos segundos. En la lista de tareas quedaban DOS más —la pestaña en
+   la que estás y lo que habías escrito en la lupa—, así que abrir «Hechas», buscar algo y esperar a
+   que llegara un guardado te devolvía a «Pendientes» con la caja vacía. Eso es la mitad de su
+   «cuando quiero verlas, tengo que buscar en muchas pantallas» del 09/08.
+   A la tercera vez, el defecto no es el estado que se está arreglando (R40): es que cada estado se
+   guardaba por su cuenta. Aquí hay UNA entrada por widget con todo lo de presentación dentro, así
+   que añadir un estado nuevo ya no puede olvidarse de sobrevivir. Sigue en memoria y sigue sin
+   tocar datos.json, por la misma razón de siempre (I7). */
+const todoUI = new Map();
+const TODO_UI0 = { page: 0, view: "pend", q: "", soloBot: false };
+const todoUiDe = id => {
+  let u = todoUI.get(id);
+  if (!u){ u = { ...TODO_UI0 }; todoUI.set(id, u); }
+  return u;
+};
 
 /* 0.51.0 — el TEXTO A MEDIO ESCRIBIR de la caja «Nueva tarea…», conservado entre repintados.
    Mismo problema que `todoPage` y mucho peor consecuencia: `renderBody` reconstruye el cuerpo con
@@ -5908,11 +5949,17 @@ function wireDesc(el, w, onToggle){
    reabrir: se cuenta y se enseña en la puerta de «Hechas», donde no exige acción ninguna.
    Derivado del ORDEN y de la fecha, sin ningún campo de «visto» — mismo invariante que el 🤖.
    Si la tarea es vieja y no guardó `doneAt`, se cuenta igual: preferimos un aviso de más que
-   esconder una respuesta que el usuario nunca llegaría a ver. */
+   esconder una respuesta que el usuario nunca llegaría a ver.
+   0.59.0 — EL EMPATE CUENTA, y era el caso normal, no el raro. Parte de fallo suya del 09/08: «el
+   contador de hechas dice 1 con respuesta tuya y son mas». Medido sobre su archivo: 9 tareas
+   cerradas tenían la última palabra del agente y el contador enseñaba 1. Las 8 que faltaban tenían
+   `doneAt` EXACTAMENTE igual que la respuesta, porque cuando un agente cierra una tarea la cierra y
+   contesta en la MISMA escritura (`cabecera-io`), y con `>` estricto eso nunca contaba.
+   Justo el caso que más importa: es el único en el que la respuesta llegó sin que él la viera. */
 function agenteTrasCierre(it){
   if (!it || !it.done || !Array.isArray(it.replies) || !it.replies.length) return false;
   const u = it.replies[it.replies.length - 1];
-  return !!(u && u.by === "agente" && (!it.doneAt || u.at > it.doneAt));
+  return !!(u && u.by === "agente" && (!it.doneAt || u.at >= it.doneAt));
 }
 /* 0.52.0 — ¿esta tarea VIVA tiene la última palabra del agente? Es la misma derivación por orden
    que pinta el 🤖 de cada fila (I4: nunca se guarda un «leído»), sacada a función para poder
@@ -5989,11 +6036,12 @@ function bodyTodo(w, el){
   const toggle = el.querySelector(".todo-toggle"), search = el.querySelector(".todo-search");
   const orden = el.querySelector(".todo-sort");
   const bar = el.querySelector(".todo-bar");
-  let view = "pend";   // "pend" (pendientes) | "done" (histórico de hechas)
   // 0.44.0: página visible cuando las tareas no caben ni creciendo el widget.
-  // 0.49.0: se recupera de `todoPage` para sobrevivir al repintado (ver la nota de arriba).
-  let page = todoPage.get(w.id) || 0;
-  const setPage = p => { page = p; todoPage.set(w.id, p); };
+  // 0.49.0/0.59.0: pestaña, lupa, filtro 🤖 y página viven en `todoUI` para sobrevivir al
+  // repintado (ver la nota de arriba). `ui` es la MISMA referencia entre repintados: escribir en
+  // ella ya es conservarla, no hay que acordarse de guardar.
+  const ui = todoUiDe(w.id);
+  const setPage = p => { ui.page = p; };
   let dragItem = null;
 
   // 0.51.0 — el borrador sobrevive al repintado (ver la nota de `todoDraft`). Se restaura ANTES de
@@ -6008,7 +6056,8 @@ function bodyTodo(w, el){
     const t = inp.value.trim(); if (!t) return;
     const it = { t, done: false, created: todayIso(), createdT: horaCorta() };
     w.data.items.push(it); inp.value = ""; todoDraft.delete(w.id);
-    view = "pend"; paint(); markDirty();
+    // una tarea recién creada no tiene conversación: con el filtro 🤖 puesto no se vería ninguna
+    ui.view = "pend"; ui.soloBot = false; paint(); markDirty();
     offerTaskToNote(w, it, paint);   // pegar aquí una conversación entera tiene arreglo de un clic
   };
   el.querySelector(".todo-add .mini").addEventListener("click", add);
@@ -6017,14 +6066,16 @@ function bodyTodo(w, el){
   // sentido dentro de la MISMA lista; entre listas distintas sería memoria de otra cosa.
   // 0.52.0: el cambio de vista lo cablea `paint()` en cada pestaña, porque los botones se
   // repintan con sus recuentos; aquí ya no queda nada que escuchar.
-  search.addEventListener("input", () => { setPage(0); paint(); });
+  // 0.59.0: lo tecleado se guarda en `ui.q` y se repone al reconstruir el cuerpo.
+  search.value = ui.q;
+  search.addEventListener("input", () => { ui.q = search.value; setPage(0); paint(); });
   // el criterio es una preferencia tuya de esa lista, no estado de sesión: vive en `w.data.sort`
   // y viaja entre equipos, igual que `w.data.view` del Markdown
   orden.addEventListener("change", () => { w.data.sort = orden.value; setPage(0); paint(); markDirty(); });
   // marcador o enlace soltado sobre la lista → una tarea por enlace (la URL queda clicable)
   wireLinkCapture(el, links => {
     for (const l of links) w.data.items.push({ t: linkCaptureText(l), done: false, created: todayIso(), createdT: horaCorta() });
-    view = "pend";
+    ui.view = "pend"; ui.soloBot = false;
     toast(links.length === 1 ? "Tarea creada desde el enlace" : links.length + " tareas creadas desde los enlaces");
     paint(); markDirty();
   });
@@ -6274,43 +6325,70 @@ function bodyTodo(w, el){
     // respuesta tuya. Antes solo existía el de Hechas y por eso «veía un robot y no lo encontraba».
     const pendN = w.data.items.filter(i => !i.done).length;
     const pendBot = w.data.items.filter(i => !i.done && esperaRespuestaSuya(i)).length;
-    const bot = (n, t) => n ? ` <span class="tog-aviso" title="${t}">· 🤖 ${n}</span>` : "";
+    /* 0.59.0 — EL CONTADOR 🤖 ES EL BOTÓN QUE LLEVA A ESAS TAREAS. Parte suya del 09/08: «cuando
+       quiero verlas, tengo que buscar en muchas pantallas. ¿No se podría pulsar en el robot de los
+       contadores si quiero filtrar solo por esas?». Sí, y es lo canónico: un recuento que te dice
+       que hay ocho y te deja recorrer catorce páginas para encontrarlas está a medio hacer.
+       Pulsar el 🤖 de la OTRA pestaña cambia de pestaña y filtra de una vez: desde Pendientes,
+       llegar a las ocho respuestas de «Hechas» es un clic y no tres.
+       Va en `<span>` dentro del `<button>` de la pestaña —un botón no puede anidar otro— y para en
+       seco la propagación, para que pulsar el número no se lea como pulsar la pestaña. */
+    const bot = (n, t, v) => n ? ` <span class="tog-aviso${ui.soloBot && ui.view === v ? " on" : ""}" role="button" tabindex="0" data-bot="${v}" title="${t}">· 🤖 ${n}</span>` : "";
     toggle.innerHTML =
-      `<button class="tab${view === "pend" ? " on" : ""}" data-v="pend" type="button">📋 Pendientes (${pendN})`
-      + bot(pendBot, `${pendBot} tarea(s) pendiente(s) con una respuesta del agente sin contestar`) + `</button>`
-      + `<button class="tab${view === "done" ? " on" : ""}" data-v="done" type="button">🗂️ Hechas (${doneN})`
-      + bot(avisoN, `${avisoN} tarea(s) cerrada(s) con una respuesta que llegó después: entra y léelas`) + `</button>`;
+      `<button class="tab${ui.view === "pend" ? " on" : ""}" data-v="pend" type="button">📋 Pendientes (${pendN})`
+      + bot(pendBot, `${pendBot} tarea(s) pendiente(s) con una respuesta del agente sin contestar — clic para ver solo esas`, "pend") + `</button>`
+      + `<button class="tab${ui.view === "done" ? " on" : ""}" data-v="done" type="button">🗂️ Hechas (${doneN})`
+      + bot(avisoN, `${avisoN} tarea(s) cerrada(s) con una respuesta que llegó después — clic para ver solo esas`, "done") + `</button>`;
     toggle.querySelectorAll(".tab").forEach(b => b.addEventListener("click", () => {
-      if (view === b.dataset.v) return;
-      view = b.dataset.v; search.value = ""; setPage(0); paint();
+      if (ui.view === b.dataset.v) return;
+      ui.view = b.dataset.v; ui.q = ""; search.value = ""; ui.soloBot = false; setPage(0); paint();
     }));
+    const pulsarBot = e => {
+      e.stopPropagation();       // el 🤖 vive dentro del botón de la pestaña: no puede heredar su clic
+      const v = e.currentTarget.dataset.bot;
+      // en la pestaña donde ya estás alterna; en la otra, te lleva allí CON el filtro puesto
+      ui.soloBot = ui.view === v ? !ui.soloBot : true;
+      ui.view = v; ui.q = ""; search.value = ""; setPage(0); paint();
+    };
+    toggle.querySelectorAll(".tog-aviso").forEach(s => {
+      s.addEventListener("click", pulsarBot);
+      s.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " "){ e.preventDefault(); pulsarBot(e); } });
+    });
     // 0.52.0 — la lupa vale en las DOS vistas. Con 168 ítems, «buscar solo en hechas» era la mitad
     // de lo útil: lo que más se busca es una tarea viva que se ha ido a la página 7.
-    search.placeholder = view === "pend" ? "Buscar en pendientes…" : "Buscar en hechas…";
+    search.placeholder = ui.view === "pend" ? "Buscar en pendientes…" : "Buscar en hechas…";
 
     // 0.53.0 — el selector solo tiene sentido en Pendientes: «Hechas» se ordena siempre por cuándo
     // las cerraste, que es lo único que se busca en un histórico.
     const sk = sortDe(w);
-    orden.style.display = view === "pend" ? "" : "none";
+    orden.style.display = ui.view === "pend" ? "" : "none";
     orden.innerHTML = Object.entries(TODO_SORTS)
       .map(([k, v]) => `<option value="${k}"${k === sk ? " selected" : ""}>${v.etiqueta}</option>`).join("");
 
+    // el filtro 🤖 es de la vista en la que estás, y en cada una significa lo suyo: en Pendientes,
+    // «te espera respuesta»; en Hechas, «llegó algo después de cerrarla»
+    const soloBot = ui.soloBot;
+    const casaBot = i => !soloBot || (ui.view === "pend" ? esperaRespuestaSuya(i) : agenteTrasCierre(i));
+    // se avisa SIEMPRE de que hay un filtro puesto, aunque sí haya resultados: un filtro invisible
+    // que esconde tareas es peor que no tenerlo (misma razón que la barra de filtro por etiqueta)
+    renderFiltro(soloBot);
     let list, vacio;
-    if (view === "pend"){
+    if (ui.view === "pend"){
       const q = search.value.trim().toLowerCase();
-      list = w.data.items.filter(i => !i.done && (!q || i.t.toLowerCase().includes(q)));
+      list = w.data.items.filter(i => !i.done && casaBot(i) && (!q || i.t.toLowerCase().includes(q)));
       // `slice` implícito: `filter` ya devuelve un array nuevo, así que ordenar aquí NO toca
       // `w.data.items`. Es una vista, no una reescritura: cambiar de criterio y volver a «A mano»
       // devuelve exactamente el orden que tú pusiste arrastrando.
       const cmp = TODO_SORTS[sk].cmp;
       if (cmp) list.sort(cmp);
       vacio = q ? `<div class="empty">Ninguna tarea pendiente con «${esc(search.value.trim())}».</div>`
+                : soloBot ? `<div class="empty">Ninguna pendiente con respuesta del agente sin contestar.</div>`
                 : `<div class="empty">Sin tareas pendientes.</div>`;
     } else {
       const q = search.value.trim().toLowerCase();
-      list = w.data.items.filter(i => i.done && (!q || i.t.toLowerCase().includes(q)))
+      list = w.data.items.filter(i => i.done && casaBot(i) && (!q || i.t.toLowerCase().includes(q)))
         .sort((a, b) => (b.doneAt || 0) - (a.doneAt || 0));
-      vacio = `<div class="empty">${q ? "Nada coincide." : "Aún no has completado tareas."}</div>`;
+      vacio = `<div class="empty">${q ? "Nada coincide." : soloBot ? "Ninguna cerrada con respuesta posterior." : "Aún no has completado tareas."}</div>`;
     }
     if (!list.length){ ul.innerHTML = vacio; setPage(0); renderPager(1, 0); return; }
 
@@ -6323,16 +6401,28 @@ function bodyTodo(w, el){
     const pages = per ? Math.ceil(list.length / per) : 1;
     // el clamp también se recuerda: si borras tareas y la última página desaparece, la posición
     // que se conserva es la corregida, no la que ya no existe
-    setPage(Math.max(0, Math.min(page, pages - 1)));
-    if (pages > 1) pintar(list.slice(page * per, page * per + per));
+    setPage(Math.max(0, Math.min(ui.page, pages - 1)));
+    if (pages > 1) pintar(list.slice(ui.page * per, ui.page * per + per));
     renderPager(pages, list.length);
+  }
+  /* 0.59.0 — la barra del filtro 🤖 vive en `.todo-bar`, NO dentro de la lista: `pintar` vacía la
+     lista en cada repintado y un aviso metido ahí desaparecería justo cuando hay resultados que
+     avisar. Mismo sitio y mismo patrón que el paginador. */
+  function renderFiltro(on){
+    const old = el.querySelector(".todo-filtro");
+    if (!on){ if (old) old.remove(); return; }
+    const box = old || document.createElement("div");
+    box.className = "todo-filtro";
+    box.innerHTML = `<span>🤖 Solo las que tienen respuesta del agente</span><button class="mini quitar" type="button">Quitar filtro</button>`;
+    if (!old) bar.appendChild(box);
+    box.querySelector(".quitar").addEventListener("click", () => { ui.soloBot = false; setPage(0); paint(); });
   }
   function pintar(list){
     ul.innerHTML = "";
     // 0.53.0 — reordenar a mano solo tiene sentido si el orden ES el manual. Con un criterio
     // automático, mover una tarea arriba no la deja arriba: el siguiente repintado la devuelve a
     // su sitio. Dejar el gesto disponible sería prometer algo que no ocurre.
-    const reordenable = view === "pend" && sortDe(w) === "manual";
+    const reordenable = ui.view === "pend" && sortDe(w) === "manual";
     list.forEach(it => {
       const li = document.createElement("li");
       const taskColor = TASK_COLORS[it.color] || "";
@@ -6348,7 +6438,7 @@ function bodyTodo(w, el){
       // la fecha larga completa, pero la señal corta se ve sin tener que buscarla
       const am = it.created ? altaMeta(it.created, it.createdT) : null;
       const alta = am ? ` title="${esc(am.largo)}"` : "";
-      li.innerHTML = `<span class="it-drag" draggable="${reordenable}" title="${reordenable ? "Arrastrar para reordenar (o usa ↑ ↓)" : (view === "pend" ? "Con un orden automático no se reordena a mano: elige «↕ A mano»" : "En «Hechas» no se reordena")}">⋮⋮</span><input type="checkbox" ${it.done ? "checked" : ""}><span class="t"${alta}>${linkifyEsc(it.t)}</span>`
+      li.innerHTML = `<span class="it-drag" draggable="${reordenable}" title="${reordenable ? "Arrastrar para reordenar (o usa ↑ ↓)" : (ui.view === "pend" ? "Con un orden automático no se reordena a mano: elige «↕ A mano»" : "En «Hechas» no se reordena")}">⋮⋮</span><input type="checkbox" ${it.done ? "checked" : ""}><span class="t"${alta}>${linkifyEsc(it.t)}</span>`
         + (nRep || it.note ? `<span class="task-note-mark${meToca ? " me-toca" : ""}" title="${esc(meToca ? "Respuesta del agente sin contestar (" + nRep + " en el hilo) — clic para leerla" : nRep ? nRep + " respuesta(s) — clic para leer y contestar" : it.note)}">${meToca ? "🤖" : "💬"}${nRep > 1 ? " " + nRep : ""}</span>` : "")
         + (am ? `<span class="alta" title="${esc(am.largo)}">${esc(am.corto)}</span>` : "")
         + (dm ? `<span class="due ${dm.cls}">${dm.label}</span>` : "")
@@ -6440,7 +6530,7 @@ function bodyTodo(w, el){
      triple— y solo crece, nunca encoge solo (encoger es «Ordenar», gesto suyo). */
   function growAndCount(total){
     if (isMobile() || w.max || w.collapsed || !el.isConnected) return 0;
-    if (view === "pend") growWidgetToContent(w, el);   // el histórico de «Hechas» no agranda la ventana
+    if (ui.view === "pend") growWidgetToContent(w, el);   // el histórico de «Hechas» no agranda la ventana
     const lis = [...ul.children].filter(n => n.tagName === "LI");
     if (!lis.length) return 0;
     const limite = el.getBoundingClientRect().bottom;
@@ -6454,13 +6544,14 @@ function bodyTodo(w, el){
     if (pages <= 1){ if (old) old.remove(); return; }
     const nav = old || document.createElement("div");
     nav.className = "todo-pager";
-    nav.innerHTML = `<button class="mini prev" title="Tareas anteriores"${page === 0 ? " disabled" : ""}>‹</button>`
-      + `<span class="pg">${page + 1} / ${pages}</span>`
-      + `<button class="mini next" title="Tareas siguientes"${page >= pages - 1 ? " disabled" : ""}>›</button>`
-      + `<span class="pg dim">${total} pendientes</span>`;
+    nav.innerHTML = `<button class="mini prev" title="Tareas anteriores"${ui.page === 0 ? " disabled" : ""}>‹</button>`
+      + `<span class="pg">${ui.page + 1} / ${pages}</span>`
+      + `<button class="mini next" title="Tareas siguientes"${ui.page >= pages - 1 ? " disabled" : ""}>›</button>`
+      // 0.59.0 — decía «pendientes» también en «Hechas», donde el número es de las cerradas
+      + `<span class="pg dim">${total} ${ui.view === "pend" ? "pendientes" : "hechas"}</span>`;
     if (!old) bar.appendChild(nav);
-    nav.querySelector(".prev").addEventListener("click", () => { setPage(page - 1); paint(); });
-    nav.querySelector(".next").addEventListener("click", () => { setPage(page + 1); paint(); });
+    nav.querySelector(".prev").addEventListener("click", () => { setPage(ui.page - 1); paint(); });
+    nav.querySelector(".next").addEventListener("click", () => { setPage(ui.page + 1); paint(); });
   }
   paint();
 }
@@ -8914,6 +9005,36 @@ function pintarTipos(){
   grid.querySelectorAll(".wcard").forEach(c =>
     c.addEventListener("click", () => { addWidget(c.dataset.add); closeMenu(); }));
   vacio.style.display = visibles.length ? "none" : "";
+  ajustarSueloTipos();
+}
+
+/* 0.59.0 — EL SUELO DE LA REJILLA SE MIDE, igual que el hueco de la banda en 0.58.2 y por la misma
+   razón: un número puesto a ojo se lo paga otra cosa. Aquí lo pagaría «Configuración», que se
+   quedaría sin sitio en pantallas bajas por un suelo inventado demasiado alto.
+   Lo que la rejilla necesita para ser útil es exactamente esto: su epígrafe, la fila de categorías
+   y UNA fila entera de tarjetas. Menos que eso es lo que él vio cortado. Se mide sobre lo que ya
+   está pintado, así que respeta su tipografía, su zoom de interfaz y su idioma.
+   El tope al 45 % de la altura del menú es el freno duro: en una pantalla baja, un suelo que no
+   deja hueco a nadie más solo mueve el recorte de sitio. */
+function sueloTipos(hCab, hCats, hFila, padding, alturaMenu){
+  const pide = Math.ceil(hCab + hCats + hFila + padding);
+  const techo = Math.max(120, Math.floor(alturaMenu * 0.45));
+  return Math.max(0, Math.min(pide, techo));
+}
+function ajustarSueloTipos(){
+  const menu = $("#menu"), zona = $("#menu-widgets"), cats = $("#wcats");
+  if (!menu || !zona || !cats || !menu.classList.contains("open")) return;
+  const h4 = zona.querySelector("h4"), card = zona.querySelector(".wcard");
+  const alto = n => (n ? Math.ceil(n.getBoundingClientRect().height) : 0);
+  const hCab = h4 ? alto(h4) + 16 : 0;                 // sus dos márgenes de 8
+  const hFila = alto(card) || 70;                       // sin tarjetas (filtro sin resultados) el valor de una
+  if (!hFila) return;                                   // pestaña oculta: se deja el suelo del CSS
+  const cs = getComputedStyle(zona);
+  const padding = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
+  // el techo se calcula sobre el ALTO MÁXIMO del panel, no sobre el que tiene ahora: su alto actual
+  // depende del suelo que estamos fijando, y eso sería una pescadilla que se muerde la cola
+  const tope = parseFloat(getComputedStyle(menu).maxHeight) || Math.round(innerHeight * 0.7);
+  menu.style.setProperty("--menu-tipos-min", sueloTipos(hCab, alto(cats) + 9, hFila, padding, tope) + "px");
 }
 
 function openMenu(mode = "start", point = null){

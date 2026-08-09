@@ -1,4 +1,4 @@
-// Tests de Cabecera — sin dependencias. Ejecutar:  node tests/test.js
+﻿// Tests de Cabecera — sin dependencias. Ejecutar:  node tests/test.js
 // Valida: sintaxis del script inline, seguridad de mdToHtml (XSS) y
 // saneamiento de packs no confiables en normalizePack.
 
@@ -1476,7 +1476,7 @@ console.log('OK enlaces arrastrables (guardián de documento + asa presente)');
   // criterio automático, mover algo a mano no lo deja movido —el siguiente repintado lo devuelve
   // a su sitio—, así que ofrecer el gesto sería prometer algo que no ocurre.
   if (!src.match(/it-drag" draggable="\$\{reordenable\}/)) throw new Error('regresión: el asa de tareas perdió su condición de arrastre');
-  if (!src.match(/const reordenable = view === "pend" && sortDe\(w\) === "manual"/))
+  if (!src.match(/const reordenable = ui\.view === "pend" && sortDe\(w\) === "manual"/))
     throw new Error('reordenable debe exigir vista de Pendientes Y orden manual');
   for (const g of ['if (!reordenable){ e.preventDefault(); return; }', 'if (!dragItem || !reordenable) return;'])
     if (!src.includes(g)) throw new Error('el arrastre debe estar cerrado también en los manejadores, no solo en el atributo: ' + g);
@@ -2536,31 +2536,40 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
     if (/\.todo-it:hover\{[^}]*padding-right/.test(html))
       throw new Error('reservar hueco a la banda al pasar el ratón reintroduce el reflow de la fila: se descartó a propósito');
 
-    // (2) La página visible sobrevive al repintado. `renderBody` reconstruye el cuerpo en cada
-    // guardado; con `page` solo en el closure, 150 tareas volvían a la página 1 cada pocos segundos.
+    // (2) El estado de presentación sobrevive al repintado. `renderBody` reconstruye el cuerpo en
+    // cada guardado; con `page` solo en el closure, 150 tareas volvían a la página 1 cada pocos
+    // segundos. 0.59.0: la página no era la única — la pestaña y la lupa se perdían igual, y por eso
+    // ahora hay UNA entrada por widget (`todoUI`) en vez de un `let` por estado.
     const todoFn = src.match(/function bodyTodo\(w, el\)\{[\s\S]*?\n\}\n/)[0];
-    if (!/const todoPage = new Map\(\)/.test(src))
-      throw new Error('la página visible debe conservarse fuera del closure de bodyTodo');
-    if (!/let page = todoPage\.get\(w\.id\) \|\| 0/.test(todoFn))
-      throw new Error('bodyTodo debe recuperar la página guardada, no empezar siempre en 0');
-    const sueltas = todoFn.split('\n').filter(l =>
-      /(?:^|[^.\w])page\s*(=[^=]|\+\+|--)/.test(l) && !/let page = todoPage/.test(l) && !/const setPage/.test(l));
-    if (sueltas.length)
-      throw new Error('la página debe cambiarse SIEMPRE por setPage o no sobrevive al repintado: ' + sueltas[0].trim());
+    if (!/const todoUI = new Map\(\)/.test(src))
+      throw new Error('el estado de presentación de la lista debe conservarse fuera del closure de bodyTodo');
+    if (!/const ui = todoUiDe\(w\.id\)/.test(todoFn))
+      throw new Error('bodyTodo debe recuperar su estado guardado, no empezar siempre de cero');
+    for (const k of ['page', 'view', 'q', 'soloBot'])
+      if (!new RegExp('\\b' + k + '\\s*:').test(src.match(/const TODO_UI0 = \{[^}]*\}/)[0]))
+        throw new Error('TODO_UI0 debe declarar «' + k + '»: lo que no está aquí no sobrevive al repintado');
+    // ningún `let` local puede volver a sombrear lo que ahora vive en `ui` — es la regresión que
+    // devolvería el fallo entero, y en 0.49.0/0.51.0/0.56.0 se repitió tres veces
+    for (const k of ['page', 'view'])
+      if (new RegExp('\\blet ' + k + '\\b').test(todoFn))
+        throw new Error('«' + k + '» vuelve a ser un let del closure: se pierde en cada repintado');
     const setPageFn = todoFn.match(/const setPage = p => \{[^}]*\};/)[0];
     // superviviente de la prueba de mutación: se puede canalizar TODO por setPage y que setPage no
     // guarde nada — la posición se perdería igual y ningún otro test lo notaba
-    if (!/todoPage\.set\(w\.id, p\)/.test(setPageFn))
-      throw new Error('setPage debe escribir en todoPage: si no, canalizarlo todo por él no sirve de nada');
+    if (!/ui\.page = p/.test(setPageFn))
+      throw new Error('setPage debe escribir en el estado conservado: si no, canalizarlo todo por él no sirve de nada');
     if (/markDirty|saveNow/.test(setPageFn))
       throw new Error('cambiar de página no puede ensuciar el archivo: es estado de presentación, no contenido');
-    if (/todoPage/.test(src.match(/function serialize[\s\S]*?\n\}/)?.[0] || ''))
-      throw new Error('la página visible no puede persistirse: viajaría entre equipos y habría que sanearla y fusionarla');
+    if (/todoUI/.test(src.match(/function serialize[\s\S]*?\n\}/)?.[0] || ''))
+      throw new Error('el estado de presentación no puede persistirse: viajaría entre equipos y habría que sanearlo y fusionarlo');
+    // la lupa se REPONE al reconstruir el cuerpo; sin esto, `ui.q` se guardaría y no se usaría
+    if (!/search\.value = ui\.q;/.test(todoFn))
+      throw new Error('lo tecleado en la lupa debe reponerse al repintar, no solo guardarse');
     // cambiar de lista (pendientes ↔ hechas, o filtrar) empieza por la primera: conservar la
     // posición solo tiene sentido dentro de la MISMA lista
-    if (!/search\.value = ""; setPage\(0\); paint\(\)/.test(todoFn))
-      throw new Error('cambiar de vista debe volver a la primera página');
-    if (!/search\.addEventListener\("input", \(\) => \{ setPage\(0\); paint\(\); \}\)/.test(todoFn))
+    if (!/ui\.q = ""; search\.value = ""; ui\.soloBot = false; setPage\(0\); paint\(\)/.test(todoFn))
+      throw new Error('cambiar de vista debe volver a la primera página y limpiar lupa y filtro');
+    if (!/search\.addEventListener\("input", \(\) => \{ ui\.q = search\.value; setPage\(0\); paint\(\); \}\)/.test(todoFn))
       throw new Error('filtrar en hechas debe volver a la primera página');
 
     // (3) La etiqueta de alta, visible en la fila. Convención de bandeja de correo: de hoy la
@@ -3255,6 +3264,84 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
     if (ar.indexOf('reservaFirma =') < ar.indexOf('if (!(ancho > 0)) return'))
       throw new Error('la firma no puede guardarse antes de saber que la medida valió: si falla, hay que reintentarlo');
     console.log('OK 0.58.2 (la fecha cede solo en filas de una línea y el hueco de la banda se mide)');
+  }
+
+  // --- 0.59.0: el contador dice la verdad, lleva a las tareas y la rejilla no se aplasta -------
+  {
+    // (1) EL EMPATE CUENTA. Parte suya del 09/08: «el contador de hechas dice 1 con respuesta tuya
+    // y son mas». Medido sobre su archivo: 9 cerradas con la última palabra del agente, contador a
+    // 1. Las 8 que faltaban tenían `doneAt` EXACTAMENTE igual que la respuesta, porque un agente
+    // cierra y contesta en la misma escritura. Es el caso que más importa: el único en el que la
+    // respuesta llegó sin que él la viera.
+    eval('globalThis.agenteTrasCierre = ' + pickFn('agenteTrasCierre', 'it'));
+    eval('globalThis.esperaRespuestaSuya = ' + pickFn('esperaRespuestaSuya', 'it'));
+    const rep = (by, at) => ({ by, at, t: 'x' });
+    const T = 1000;
+    if (!agenteTrasCierre({ done: true, doneAt: T, replies: [rep('agente', T)] }))
+      throw new Error('el empate debe contar: es el caso normal, no el raro — el agente cierra y contesta en la MISMA escritura');
+    if (!agenteTrasCierre({ done: true, doneAt: T, replies: [rep('agente', T + 1)] }))
+      throw new Error('una respuesta posterior al cierre sigue contando');
+    if (agenteTrasCierre({ done: true, doneAt: T, replies: [rep('agente', T - 1)] }))
+      throw new Error('una respuesta ANTERIOR al cierre no cuenta: la leyó y por eso la cerró');
+    if (agenteTrasCierre({ done: true, doneAt: T, replies: [rep('agente', T), rep('yo', T + 5)] }))
+      throw new Error('si él contestó después, ya no hay nada que avisar');
+    if (agenteTrasCierre({ done: false, replies: [rep('agente', T)] }))
+      throw new Error('una tarea VIVA no es asunto de este contador: esa es la señal 🤖 de la fila');
+    if (!agenteTrasCierre({ done: true, replies: [rep('agente', T)] }))
+      throw new Error('sin doneAt (tareas viejas) se avisa igual: un aviso de más es mejor que una respuesta que nunca verá');
+
+    // (2) EL RECUENTO ES EL BOTÓN QUE LLEVA A ESAS TAREAS. Lo que no puede pasar es que el número y
+    // lo que sale al pulsarlo se calculen con criterios distintos: sería un filtro que miente sobre
+    // su propio recuento, y el fallo solo se vería contando a mano.
+    const todoFn2 = src.match(/function bodyTodo\(w, el\)\{[\s\S]*?\n\}\n/)[0];
+    const casaBot = todoFn2.match(/const casaBot = [^\n]*/)[0];
+    if (!/esperaRespuestaSuya\(i\)/.test(casaBot) || !/agenteTrasCierre\(i\)/.test(casaBot))
+      throw new Error('el filtro 🤖 debe usar las MISMAS funciones que pintan los dos recuentos, o el número y la lista pueden divergir');
+    if (!/const pendBot = w\.data\.items\.filter\(i => !i\.done && esperaRespuestaSuya\(i\)\)/.test(todoFn2)
+        || !/const avisoN = w\.data\.items\.filter\(agenteTrasCierre\)/.test(todoFn2))
+      throw new Error('los recuentos deben salir de esas mismas funciones');
+    if (!/data-bot="\$\{v\}"/.test(todoFn2))
+      throw new Error('el contador 🤖 debe ser pulsable: es la mitad de su petición del 09/08 («tengo que buscar en muchas pantallas»)');
+    // superviviente de la mutación: el 🤖 vive DENTRO del botón de la pestaña; sin parar la
+    // propagación, pulsarlo se leería como pulsar la pestaña y el filtro se quitaría solo
+    if (!/const pulsarBot = e => \{\s*\n\s*e\.stopPropagation\(\)/.test(todoFn2))
+      throw new Error('pulsar el 🤖 no puede propagarse a la pestaña que lo contiene: el filtro se quitaría en el mismo clic');
+    if (!/ui\.soloBot = ui\.view === v \? !ui\.soloBot : true/.test(todoFn2))
+      throw new Error('el 🤖 de la OTRA pestaña debe llevar allí CON el filtro puesto, no solo cambiar de pestaña');
+    // un filtro que esconde tareas sin decirlo es la trampa que ya se evitó con el de etiquetas
+    if (!/function renderFiltro\(on\)\{/.test(todoFn2) || !/renderFiltro\(soloBot\)/.test(todoFn2))
+      throw new Error('con el filtro puesto tiene que verse que lo está, y con qué quitarlo');
+    if (!/if \(!old\) bar\.appendChild\(box\)/.test(todoFn2))
+      throw new Error('el aviso del filtro va en la barra, no dentro de la lista: `pintar` vacía la lista en cada repintado');
+    if (!/\.todo-filtro\{/.test(html)) throw new Error('falta el estilo del aviso de filtro');
+
+    // (3) LA REJILLA DE TIPOS TIENE SUELO Y SE MIDE. Parte suya del 09/08: «cuando busco y aparecen
+    // widgets se cortan por el epígrafe configuración». `#menu-actions` no podía encogerse (sin
+    // `min-height:0`, un flex-item no baja de su contenido) y el único que cedía era la rejilla.
+    eval('globalThis.sueloTipos = ' + pickFn('sueloTipos', 'hCab, hCats, hFila, padding, alturaMenu'));
+    if (sueloTipos(30, 58, 70, 18, 760) !== 176)
+      throw new Error('el suelo es epígrafe + categorías + UNA fila de tarjetas + el padding de la zona');
+    if (sueloTipos(30, 58, 70, 18, 300) > 300 * 0.45 + 1)
+      throw new Error('en una pantalla baja el suelo no puede comerse el panel: solo movería el recorte de sitio');
+    if (sueloTipos(30, 58, 200, 18, 200) < 120)
+      throw new Error('el techo tiene a su vez un mínimo: por debajo no cabe ni una tarjeta');
+    if (!/#menu-actions\{[^}]*min-height:0/.test(html))
+      throw new Error('sin min-height:0 «Configuración» no puede encogerse y se come la rejilla: es la causa exacta del fallo');
+    if (!/#menu-actions\{[^}]*overflow:auto/.test(html))
+      throw new Error('si «Configuración» encoge, sus botones tienen que seguir alcanzables por scroll');
+    if (!/#menu-widgets\{[^}]*min-height:var\(--menu-tipos-min/.test(html))
+      throw new Error('la rejilla necesita suelo propio, o vuelve a ser la única que cede');
+    if (!/#menu\.palette #menu-widgets\{min-height:0\}/.test(html))
+      throw new Error('en la paleta no hay rejilla: el suelo la estorbaría');
+    const st = src.match(/function ajustarSueloTipos\(\)\{[\s\S]*?\n\}/)[0];
+    if (!/getBoundingClientRect/.test(st))
+      throw new Error('el suelo se MIDE sobre lo pintado (R42): a ojo lo paga «Configuración» en pantallas bajas');
+    if (!/getComputedStyle\(menu\)\.maxHeight/.test(st))
+      throw new Error('el techo debe salir del alto MÁXIMO del panel, no del que tiene ahora: su alto depende del suelo que fijamos');
+    if (!/ajustarSueloTipos\(\);/.test(src.match(/function pintarTipos\(\)\{[\s\S]*?\n\}/)[0]))
+      throw new Error('hay que remedir cuando la rejilla cambia: filtrar cambia las filas de categorías');
+    ['agenteTrasCierre', 'esperaRespuestaSuya', 'sueloTipos'].forEach(k => { delete globalThis[k]; });
+    console.log('OK 0.59.0 (el empate cuenta, el recuento lleva a sus tareas y la rejilla no se aplasta)');
   }
 
   console.log('\nTODO EN VERDE');

@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.59.0] - 2026-08-09 — el contador dice la verdad y lleva a las tareas
+
+- **El aviso 🤖 de «Hechas» contaba mal, y contaba de menos.** Solo avisaba de las respuestas
+  llegadas *estrictamente después* de cerrar la tarea; pero cuando un agente cierra una tarea la
+  cierra y contesta en la misma escritura, con el mismo instante, y ese caso —el más frecuente y el
+  único en el que la respuesta llega sin que la hayas visto— no contaba. En una lista real de 181
+  tareas, el aviso decía **1** cuando había **9**.
+- **Los recuentos 🤖 son ahora el botón que lleva a esas tareas.** Pulsa el de cualquiera de las dos
+  pestañas y la lista se queda solo con ellas; el de la pestaña en la que no estás te lleva allí ya
+  filtrado. Mientras el filtro está puesto se ve en la barra, con un botón para quitarlo: un filtro
+  que esconde tareas sin decirlo es peor que no tenerlo.
+- **La pestaña y la búsqueda ya no se pierden solas.** Abrir «Hechas», buscar algo y esperar unos
+  segundos te devolvía a «Pendientes» con la caja vacía, porque cada guardado reconstruye la lista.
+  La página ya sobrevivía desde 0.49.0 y el borrador desde 0.51.0; ahora todo el estado de la vista
+  vive en el mismo sitio, así que el próximo que se añada tampoco podrá olvidarse de sobrevivir.
+- **El menú Inicio ya no recorta las tarjetas contra el epígrafe «Configuración».** Ese bloque no
+  podía encogerse, así que al aparecer resultados de búsqueda el único que cedía sitio era la
+  rejilla de tipos. Ahora la rejilla tiene un mínimo garantizado —**medido** sobre tu tipografía y tu
+  pantalla, no estimado— y son los resultados y la configuración los que ceden y se desplazan.
+- El contador de la paginación decía «pendientes» también en «Hechas».
+
 ## [0.58.2] - 2026-08-09 — la fecha solo se aparta donde estorba, y el hueco se mide
 
 - **La fecha y el vencimiento ya no desaparecen al pasar el ratón por una tarea de varias líneas.**
