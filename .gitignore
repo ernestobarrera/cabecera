@@ -1,1 +1,4 @@
 _privado/
+
+# artefactos de sondeo de hooks (Codex), no son del proyecto
+.codex-hook-probe/
