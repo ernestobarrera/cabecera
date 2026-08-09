@@ -2919,7 +2919,7 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
     const SORTS = src.match(/const TODO_SORTS = \{[\s\S]*?\n\};/)[0];
     if (/En cola|▶/.test(SORTS)) throw new Error('la ordenación no puede conocer los prefijos de la superficie: es workflow, no producto');
     if (!/manual:\s*\{[^}]*cmp: null/.test(SORTS)) throw new Error('«a mano» debe ser un criterio sin comparador, y el que manda por defecto');
-    if (!/list\.sort\(cmp\)/.test(src) || !/if \(cmp\) list\.sort/.test(src))
+    if (!/const l = w\.data\.items\.filter\([^\n]*\); if \(cmpPend\) l\.sort\(cmpPend\)/.test(src))
       throw new Error('ordenar sobre la lista FILTRADA (copia), nunca sobre w.data.items: volver a «A mano» debe devolver tu orden');
     const paintFn = src.match(/function paint\(\)\{[\s\S]*?\n    let list, vacio;/)[0];
     if (/w\.data\.items\.sort/.test(paintFn)) throw new Error('reordenar el array real destruye el orden manual del usuario');
@@ -3294,7 +3294,7 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
     // lo que sale al pulsarlo se calculen con criterios distintos: sería un filtro que miente sobre
     // su propio recuento, y el fallo solo se vería contando a mano.
     const todoFn2 = src.match(/function bodyTodo\(w, el\)\{[\s\S]*?\n\}\n/)[0];
-    const casaBot = todoFn2.match(/const casaBot = [^\n]*/)[0];
+    const casaBot = todoFn2.match(/const casaBot = [\s\S]*?;\n/)[0];
     if (!/esperaRespuestaSuya\(i\)/.test(casaBot) || !/agenteTrasCierre\(i\)/.test(casaBot))
       throw new Error('el filtro 🤖 debe usar las MISMAS funciones que pintan los dos recuentos, o el número y la lista pueden divergir');
     if (!/const pendBot = w\.data\.items\.filter\(i => !i\.done && esperaRespuestaSuya\(i\)\)/.test(todoFn2)
@@ -3342,6 +3342,51 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
       throw new Error('hay que remedir cuando la rejilla cambia: filtrar cambia las filas de categorías');
     ['agenteTrasCierre', 'esperaRespuestaSuya', 'sueloTipos'].forEach(k => { delete globalThis[k]; });
     console.log('OK 0.59.0 (el empate cuenta, el recuento lleva a sus tareas y la rejilla no se aplasta)');
+  }
+
+  // --- 0.60.0: buscar cruza las dos vistas y las separa, como en Microsoft --------------------
+  {
+    // Sus palabras del 07/08: «es preferible que buscar busque en todas y las separe, con su formato
+    // tachado para las hechas que quedan al final con su subtítulo, de las primeras no tachadas con
+    // su subtítulo, como en microsoft». Buscar y navegar son cosas distintas: navegando importa la
+    // pestaña, buscando importa dónde ESTÁ lo que buscas, que es justo lo que no sabes.
+    const todoFn3 = src.match(/function bodyTodo\(w, el\)\{[\s\S]*?\n\}\n/)[0];
+    if (!/const buscando = !!search\.value\.trim\(\);/.test(todoFn3))
+      throw new Error('buscar tiene que ser un modo distinto de navegar por pestañas, no un filtro de la pestaña');
+    if (!/list = gp\.concat\(gh\);/.test(todoFn3))
+      throw new Error('las hechas van DETRÁS de las pendientes en los resultados: lo cerrado es contexto, no trabajo');
+    if (!/grupos = \{ pend: gp\.length, done: gh\.length \};/.test(todoFn3))
+      throw new Error('cada grupo lleva su recuento, y es el del grupo entero, no el de la página');
+    // superviviente de la mutación: se puede agrupar y que el subtítulo salga UNA vez, con lo que
+    // la página 2 en adelante queda huérfana y no dice de qué grupo es
+    const pintarFn3 = todoFn3.match(/function pintar\(list\)\{[\s\S]*?\n  \}/)[0];
+    if (!/if \(g !== grupoActual\)\{ grupoActual = g; ul\.appendChild\(cabecera\(g\)\); \}/.test(pintarFn3))
+      throw new Error('el subtítulo se repite al empezar cada página: `pintar` recibe ya la rebanada');
+    if (!/let grupoActual = null;/.test(pintarFn3))
+      throw new Error('el grupo actual se reinicia en cada pintado, o la segunda página no imprime su subtítulo');
+    if (!/\.todo-list \.todo-grupo\{/.test(html)) throw new Error('falta el estilo del subtítulo de grupo');
+    // se mira la ÚLTIMA declaración de la regla, no la primera: una segunda `position` la anula y
+    // un test que solo buscara «sticky» seguiría en verde con el subtítulo ya suelto
+    const reglaGrupo = html.match(/\.todo-list \.todo-grupo\{([^}]*)\}/)[1];
+    const posiciones = reglaGrupo.match(/position:\s*[\w-]+/g) || [];
+    if (!posiciones.length || !/sticky$/.test(posiciones[posiciones.length - 1]))
+      throw new Error('el subtítulo se queda a la vista al desplazar: si no, con veinte resultados no sabes en qué grupo estás');
+    // las hechas ya se pintan tachadas por la clase `done` de siempre — se comprueba que sigue
+    if (!/li\.className = "todo-it" \+ \(it\.done \? " done" : ""\)/.test(pintarFn3))
+      throw new Error('las hechas de los resultados tienen que verse tachadas: es la mitad de lo que pidió');
+    if (!/\.todo-it\.done[\s\S]{0,200}line-through/.test(html))
+      throw new Error('la clase `done` debe seguir tachando');
+    // el paginador cuenta tareas, no subtítulos: si contara los subtítulos, la cuenta de páginas
+    // dejaría de casar con la lista que se rebana y la última página saldría corta o vacía
+    const gc = todoFn3.match(/function growAndCount\(total\)\{[\s\S]*?\n  \}/)[0];
+    if (!/if \(li\.classList\.contains\("todo-it"\)\) caben\+\+;/.test(gc))
+      throw new Error('los subtítulos ocupan sitio pero no son tareas: contarlos descuadra la paginación');
+    if (!/if \(li\.getBoundingClientRect\(\)\.bottom > limite \+ 1\) break;/.test(gc))
+      throw new Error('hay que recorrerlos igualmente para saber dónde acaba lo que cabe');
+    // arrastrar en una lista que mezcla pendientes y hechas no significa nada en el array real
+    if (!/const reordenable = ui\.view === "pend" && sortDe\(w\) === "manual" && !grupos;/.test(todoFn3))
+      throw new Error('buscando no se reordena: «arriba» no significa nada en una lista que mezcla los dos estados');
+    console.log('OK 0.60.0 (buscar cruza las dos vistas, las separa con su recuento y no descuadra la paginación)');
   }
 
   console.log('\nTODO EN VERDE');

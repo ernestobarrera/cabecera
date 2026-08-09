@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.60.0] - 2026-08-09 — buscar mira en las dos listas y las separa
+
+- **El buscador de una lista de tareas busca ahora en pendientes y en hechas a la vez**, y presenta
+  los resultados **agrupados**: primero las pendientes bajo su subtítulo, y detrás las hechas,
+  tachadas, bajo el suyo. Cada subtítulo lleva su recuento y se queda a la vista mientras te
+  desplazas. Antes buscaba solo en la pestaña en la que estuvieras, lo que obligaba a buscar dos
+  veces y a acertar a la primera: buscar y navegar son cosas distintas — navegando importa la
+  pestaña, buscando importa dónde está lo que buscas, que es justo lo que no sabes.
+- El desplegable de orden sigue rigiendo, pero solo sobre el grupo de pendientes; las hechas van
+  siempre por cuándo las cerraste. Mientras buscas no se puede arrastrar para reordenar: en una
+  lista que mezcla los dos estados, «arriba» no significa nada.
+- La paginación cuenta tareas, no subtítulos, y el subtítulo se repite al empezar cada página.
+
 ## [0.59.0] - 2026-08-09 — el contador dice la verdad y lleva a las tareas
 
 - **El aviso 🤖 de «Hechas» contaba mal, y contaba de menos.** Solo avisaba de las respuestas

@@ -554,6 +554,12 @@ ul.plain{list-style:none}
 .todo-bar .tog-aviso.on:hover{text-decoration:none}
 /* el filtro 🤖 puesto se ve SIEMPRE, en su propia línea de la barra: un filtro que esconde tareas
    sin decirlo es la trampa que ya se evitó con el filtro por etiqueta */
+/* 0.60.0 — subtítulo de grupo al buscar. Discreto y pegajoso: con veinte resultados repartidos
+   entre pendientes y hechas, saber en qué grupo estás no puede depender de recordar dónde empezó. */
+.todo-list .todo-grupo{list-style:none; position:sticky; top:0; z-index:1; padding:4px 2px 3px; margin:2px 0 1px;
+  font-size:10.5px; text-transform:uppercase; letter-spacing:.07em; color:var(--text-dim);
+  background:var(--glass, rgba(20,24,32,.92)); backdrop-filter:blur(6px); border-bottom:1px solid var(--border-soft)}
+.todo-list .todo-grupo:first-child{margin-top:0}
 .todo-filtro{flex-basis:100%; display:flex; align-items:center; gap:8px; font-size:11.5px; color:var(--text-dim);
   background:rgba(255,255,255,.04); border:1px dashed var(--border-soft); border-radius:9px; padding:4px 9px}
 .todo-filtro span{flex:1; min-width:0}
@@ -1924,7 +1930,7 @@ function syncUI(mode, txt){
    reaparece) y si Recargar está activo. El descarte ✕ vive solo en memoria de la sesión.
    Demora asumida: la CDN de Pages puede servir la versión vieja hasta ~10 min aun con
    no-store (gobierna la caché del navegador, no la CDN); para pestañas de días, irrelevante. */
-const APP_VERSION = "0.59.0";
+const APP_VERSION = "0.60.0";
 let newVersionDetected = null;   // versión superior detectada; detiene futuras consultas
 let verDismissed = false;        // ✕: solo esta sesión — nunca persistido en disco
 let verCheckInflight = false;    // sin consultas concurrentes
@@ -6043,6 +6049,10 @@ function bodyTodo(w, el){
   const ui = todoUiDe(w.id);
   const setPage = p => { ui.page = p; };
   let dragItem = null;
+  // 0.60.0 — buscando, la lista va agrupada: `{pend, done}` con el tamaño de cada grupo, o `null`
+  // si no. Lo fija `paint` en cada pasada y lo leen `pintar` (subtítulos) y el paginador; no es
+  // estado que sobreviva a nada, se deriva de si hay texto en la lupa.
+  let grupos = null;
 
   // 0.51.0 — el borrador sobrevive al repintado (ver la nota de `todoDraft`). Se restaura ANTES de
   // cablear el listener para que reponerlo no cuente como escritura del usuario.
@@ -6354,41 +6364,60 @@ function bodyTodo(w, el){
       s.addEventListener("click", pulsarBot);
       s.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " "){ e.preventDefault(); pulsarBot(e); } });
     });
-    // 0.52.0 — la lupa vale en las DOS vistas. Con 168 ítems, «buscar solo en hechas» era la mitad
-    // de lo útil: lo que más se busca es una tarea viva que se ha ido a la página 7.
-    search.placeholder = ui.view === "pend" ? "Buscar en pendientes…" : "Buscar en hechas…";
+    /* 0.52.0 — la lupa vale en las DOS vistas. Con 168 ítems, «buscar solo en hechas» era la mitad
+       de lo útil: lo que más se busca es una tarea viva que se ha ido a la página 7.
+       0.60.0 — Y BUSCA EN LAS DOS A LA VEZ. Sus palabras del 07/08: «es preferible que buscar busque
+       en todas y las separe, con su formato tachado para las hechas que quedan al final con su
+       subtítulo, de las primeras no tachadas con su subtítulo, como en Microsoft». Tiene razón y el
+       motivo es que buscar y navegar son cosas distintas: cuando navegas te importa en qué pestaña
+       estás, y cuando buscas te importa dónde ESTÁ lo que buscas, que es lo que no sabes. Buscar en
+       una pestaña obligaba a buscar dos veces y a acertar la primera. */
+    const buscando = !!search.value.trim();
+    search.placeholder = ui.view === "pend" ? "Buscar (en las dos)…" : "Buscar (en las dos)…";
 
     // 0.53.0 — el selector solo tiene sentido en Pendientes: «Hechas» se ordena siempre por cuándo
-    // las cerraste, que es lo único que se busca en un histórico.
+    // las cerraste, que es lo único que se busca en un histórico. Buscando sigue rigiendo, pero solo
+    // sobre el grupo de pendientes.
     const sk = sortDe(w);
-    orden.style.display = ui.view === "pend" ? "" : "none";
+    orden.style.display = ui.view === "pend" || buscando ? "" : "none";
     orden.innerHTML = Object.entries(TODO_SORTS)
       .map(([k, v]) => `<option value="${k}"${k === sk ? " selected" : ""}>${v.etiqueta}</option>`).join("");
 
     // el filtro 🤖 es de la vista en la que estás, y en cada una significa lo suyo: en Pendientes,
-    // «te espera respuesta»; en Hechas, «llegó algo después de cerrarla»
+    // «te espera respuesta»; en Hechas, «llegó algo después de cerrarla». Buscando vale la unión:
+    // el sentido de cada tarea lo da su propio estado, no la pestaña.
     const soloBot = ui.soloBot;
-    const casaBot = i => !soloBot || (ui.view === "pend" ? esperaRespuestaSuya(i) : agenteTrasCierre(i));
+    const casaBot = i => !soloBot
+      || (buscando ? (i.done ? agenteTrasCierre(i) : esperaRespuestaSuya(i))
+                   : (ui.view === "pend" ? esperaRespuestaSuya(i) : agenteTrasCierre(i)));
     // se avisa SIEMPRE de que hay un filtro puesto, aunque sí haya resultados: un filtro invisible
     // que esconde tareas es peor que no tenerlo (misma razón que la barra de filtro por etiqueta)
     renderFiltro(soloBot);
+    const q = search.value.trim().toLowerCase();
+    const casaQ = i => !q || i.t.toLowerCase().includes(q);
+    const cmpPend = TODO_SORTS[sk].cmp;
+    // `slice` implícito: `filter` ya devuelve un array nuevo, así que ordenar aquí NO toca
+    // `w.data.items`. Es una vista, no una reescritura: cambiar de criterio y volver a «A mano»
+    // devuelve exactamente el orden que tú pusiste arrastrando.
+    const pendientes = () => { const l = w.data.items.filter(i => !i.done && casaBot(i) && casaQ(i)); if (cmpPend) l.sort(cmpPend); return l; };
+    const hechas = () => w.data.items.filter(i => i.done && casaBot(i) && casaQ(i)).sort((a, b) => (b.doneAt || 0) - (a.doneAt || 0));
     let list, vacio;
-    if (ui.view === "pend"){
-      const q = search.value.trim().toLowerCase();
-      list = w.data.items.filter(i => !i.done && casaBot(i) && (!q || i.t.toLowerCase().includes(q)));
-      // `slice` implícito: `filter` ya devuelve un array nuevo, así que ordenar aquí NO toca
-      // `w.data.items`. Es una vista, no una reescritura: cambiar de criterio y volver a «A mano»
-      // devuelve exactamente el orden que tú pusiste arrastrando.
-      const cmp = TODO_SORTS[sk].cmp;
-      if (cmp) list.sort(cmp);
-      vacio = q ? `<div class="empty">Ninguna tarea pendiente con «${esc(search.value.trim())}».</div>`
-                : soloBot ? `<div class="empty">Ninguna pendiente con respuesta del agente sin contestar.</div>`
-                : `<div class="empty">Sin tareas pendientes.</div>`;
+    if (buscando){
+      // las hechas van DETRÁS y tachadas, como en Microsoft: lo cerrado es contexto, no trabajo
+      const gp = pendientes(), gh = hechas();
+      grupos = { pend: gp.length, done: gh.length };
+      list = gp.concat(gh);
+      vacio = `<div class="empty">Nada coincide con «${esc(search.value.trim())}», ni pendiente ni hecha.</div>`;
     } else {
-      const q = search.value.trim().toLowerCase();
-      list = w.data.items.filter(i => i.done && casaBot(i) && (!q || i.t.toLowerCase().includes(q)))
-        .sort((a, b) => (b.doneAt || 0) - (a.doneAt || 0));
-      vacio = `<div class="empty">${q ? "Nada coincide." : soloBot ? "Ninguna cerrada con respuesta posterior." : "Aún no has completado tareas."}</div>`;
+      grupos = null;
+      if (ui.view === "pend"){
+        list = pendientes();
+        vacio = soloBot ? `<div class="empty">Ninguna pendiente con respuesta del agente sin contestar.</div>`
+                        : `<div class="empty">Sin tareas pendientes.</div>`;
+      } else {
+        list = hechas();
+        vacio = `<div class="empty">${soloBot ? "Ninguna cerrada con respuesta posterior." : "Aún no has completado tareas."}</div>`;
+      }
     }
     if (!list.length){ ul.innerHTML = vacio; setPage(0); renderPager(1, 0); return; }
 
@@ -6422,8 +6451,24 @@ function bodyTodo(w, el){
     // 0.53.0 — reordenar a mano solo tiene sentido si el orden ES el manual. Con un criterio
     // automático, mover una tarea arriba no la deja arriba: el siguiente repintado la devuelve a
     // su sitio. Dejar el gesto disponible sería prometer algo que no ocurre.
-    const reordenable = ui.view === "pend" && sortDe(w) === "manual";
+    // 0.60.0 — y buscando tampoco: la lista mezcla pendientes y hechas, así que «arriba» no
+    // significa nada en el array de verdad.
+    const reordenable = ui.view === "pend" && sortDe(w) === "manual" && !grupos;
+    /* 0.60.0 — el subtítulo de grupo. Se repite al principio de CADA página: paginar por dentro de
+       un grupo dejaría páginas huérfanas sin decir de qué son. El número es el del grupo ENTERO,
+       no el de la página, porque lo que se busca saber es cuántas hay. */
+    let grupoActual = null;
+    const cabecera = g => {
+      const li = document.createElement("li");
+      li.className = "todo-grupo";
+      li.textContent = g === "pend" ? `Pendientes (${grupos.pend})` : `Hechas (${grupos.done})`;
+      return li;
+    };
     list.forEach(it => {
+      if (grupos){
+        const g = it.done ? "done" : "pend";
+        if (g !== grupoActual){ grupoActual = g; ul.appendChild(cabecera(g)); }
+      }
       const li = document.createElement("li");
       const taskColor = TASK_COLORS[it.color] || "";
       li.className = "todo-it" + (it.done ? " done" : "") + (taskColor ? " has-task-color" : "");
@@ -6535,7 +6580,13 @@ function bodyTodo(w, el){
     if (!lis.length) return 0;
     const limite = el.getBoundingClientRect().bottom;
     let caben = 0;
-    for (const li of lis){ if (li.getBoundingClientRect().bottom <= limite + 1) caben++; else break; }
+    // 0.60.0 — los subtítulos de grupo ocupan sitio pero NO son tareas: se recorren para saber
+    // dónde acaba lo que cabe, y no se cuentan. Contarlos daría páginas de menos tareas de las que
+    // caben, y la cuenta de páginas dejaría de casar con la lista que se rebana.
+    for (const li of lis){
+      if (li.getBoundingClientRect().bottom > limite + 1) break;
+      if (li.classList.contains("todo-it")) caben++;
+    }
     caben = Math.max(1, caben);   // una tarea larguísima ocupa su página entera antes que cortarse
     return caben >= total ? 0 : caben;
   }
@@ -6548,7 +6599,8 @@ function bodyTodo(w, el){
       + `<span class="pg">${ui.page + 1} / ${pages}</span>`
       + `<button class="mini next" title="Tareas siguientes"${ui.page >= pages - 1 ? " disabled" : ""}>›</button>`
       // 0.59.0 — decía «pendientes» también en «Hechas», donde el número es de las cerradas
-      + `<span class="pg dim">${total} ${ui.view === "pend" ? "pendientes" : "hechas"}</span>`;
+      // 0.60.0 — y buscando el total es de las dos, así que tampoco es ninguna de las dos palabras
+      + `<span class="pg dim">${total} ${grupos ? "resultados" : ui.view === "pend" ? "pendientes" : "hechas"}</span>`;
     if (!old) bar.appendChild(nav);
     nav.querySelector(".prev").addEventListener("click", () => { setPage(ui.page - 1); paint(); });
     nav.querySelector(".next").addEventListener("click", () => { setPage(ui.page + 1); paint(); });
