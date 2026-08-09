@@ -2,3 +2,4 @@ _privado/
 
 # artefactos de sondeo de hooks (Codex), no son del proyecto
 .codex-hook-probe/
+.codex-hook-log-inspect.py
