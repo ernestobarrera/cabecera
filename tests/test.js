@@ -3537,5 +3537,26 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
     console.log('OK 0.62.0 (el ámbar solo cuando el agente pide algo; lo informativo no reclama turno)');
   }
 
+  /* ── 0.66.0 — la etiqueta de sistema explica su rol al pasar el ratón ─────────────────
+     Parte suya: «la misma etiqueta en hover me podría dar alguna pista para seleccionar (ahora solo
+     aparece su nombre)». El texto sale de IA_ROLES, el mismo dueño que la ⓘ del widget, para que no
+     puedan divergir. Las libres no llevan pista: significan lo que él quiera. */
+  {
+    if (!/rol \? `\$\{esc\(tg\)\} · rol de superficie — \$\{esc\(rol\.desc\)\}/.test(src))
+      throw new Error('el chip de una ia-* debe explicar su rol en el hover');
+    if (!/const rol = \/\^ia-\/\.test\(tg\) \? IA_ROLES\[tg\.slice\(3\)\] : null;/.test(src))
+      throw new Error('la pista debe salir de IA_ROLES, no de un texto paralelo que se quede viejo');
+    // en el SELECTOR también: elegir una etiqueta sin saber qué hace era el hueco real
+    if (!/rol \? `\$\{esc\(t\)\} · rol de superficie — \$\{esc\(rol\.desc\)\}` : esc\(t\)/.test(src))
+      throw new Error('el selector debe decir qué hará la etiqueta si la pones');
+    // las libres NO se explican: el producto no opina sobre lo que significan
+    if (/tag-chip[\s\S]{0,200}etiqueta libre — significa/.test(src))
+      throw new Error('el producto no puede inventar significado para las etiquetas suyas');
+    // y siguen distinguidas por color, que ya existía: el hover añade, no sustituye
+    if (!/\.win-tags \.tag-chip\.sistema\{/.test(html) || !/\.tag-pick \.tag-chip\.sistema\{/.test(html))
+      throw new Error('las de sistema deben seguir distinguidas a la vista, no solo al pasar el ratón');
+    console.log('OK 0.66.0 (la etiqueta de sistema dice su rol al pasar el ratón, desde IA_ROLES)');
+  }
+
   console.log('\nTODO EN VERDE');
 })().catch(e => { console.error(e && e.stack || e); process.exitCode = 1; });

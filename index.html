@@ -1940,7 +1940,7 @@ function syncUI(mode, txt){
    reaparece) y si Recargar está activo. El descarte ✕ vive solo en memoria de la sesión.
    Demora asumida: la CDN de Pages puede servir la versión vieja hasta ~10 min aun con
    no-store (gobierna la caché del navegador, no la CDN); para pestañas de días, irrelevante. */
-const APP_VERSION = "0.65.0";
+const APP_VERSION = "0.66.0";
 let newVersionDetected = null;   // versión superior detectada; detiene futuras consultas
 let verDismissed = false;        // ✕: solo esta sesión — nunca persistido en disco
 let verCheckInflight = false;    // sin consultas concurrentes
@@ -3936,7 +3936,13 @@ function editWidgetTags(w, el){
   const enUso = new Set(allTags());
   const catalogo = [...allTags(), ...declaradas.filter(t => !enUso.has(t))];
   const sugeridas = catalogo.length
-    ? `<div class="tag-pick">${catalogo.map(t => `<button class="tag-chip${puestas.has(t) ? " on" : ""}${/^ia-/.test(t) ? " sistema" : ""}${!enUso.has(t) ? " propuesta" : ""}" data-t="${esc(t)}" title="${enUso.has(t) ? "" : "Etiqueta de sistema, aún sin usar: "}${esc(t)}">${esc(t)}</button>`).join("")}</div>`
+    // 0.66.0 — en el selector, la etiqueta de sistema explica QUÉ VA A HACER si la pones. Era lo que
+    // faltaba para elegirla sin saberla de memoria: verla en la lista no dice para qué sirve.
+    ? `<div class="tag-pick">${catalogo.map(t => {
+        const rol = /^ia-/.test(t) ? IA_ROLES[t.slice(3)] : null;
+        const pista = rol ? `${esc(t)} · rol de superficie — ${esc(rol.desc)}` : esc(t);
+        return `<button class="tag-chip${puestas.has(t) ? " on" : ""}${rol ? " sistema" : ""}${!enUso.has(t) ? " propuesta" : ""}" data-t="${esc(t)}" title="${enUso.has(t) ? "" : "Aún sin usar · "}${pista}">${esc(t)}</button>`;
+      }).join("")}</div>`
     : `<div class="tag-pick empty">Aún no has usado ninguna etiqueta. Escribe la primera aquí abajo.</div>`;
   ed.innerHTML = sugeridas
     + `<div class="tag-row"><input type="text" value="${esc((w.tags || []).join(", "))}" placeholder="etiquetas separadas por comas"><button class="mini ok">Guardar</button><button class="mini clear">Quitar</button></div>`;
@@ -3986,7 +3992,17 @@ function paintWinTags(el, w){
   // 0.52.0: viven en la barra de título, que es zona de arrastre — de ahí `draggable="false"`, o
   // intentar filtrar arrastraría la ventana. El tooltip lleva el nombre entero porque la insignia
   // se recorta con puntos suspensivos cuando el título es largo.
-  strip.innerHTML = tags.map(tg => `<button class="tag-chip${tagFilter === tg ? " on" : ""}${/^ia-/.test(tg) ? " sistema" : ""}" draggable="false" data-t="${esc(tg)}" title="${esc(tg)} — clic para filtrar por esta etiqueta">${esc(tg)}</button>`).join("");
+  /* 0.66.0 — el chip de una etiqueta de SISTEMA explica su rol al pasar el ratón. Parte suya:
+     «la misma etiqueta en hover me podría dar alguna pista para seleccionar (ahora solo aparece su
+     nombre)». Sale de `IA_ROLES`, que ya es el dueño del texto: la misma frase que la ⓘ del widget,
+     así que no puede divergir. Las etiquetas libres siguen sin explicación porque no la tienen:
+     significan lo que tú quieras y el producto no opina. */
+  strip.innerHTML = tags.map(tg => {
+    const rol = /^ia-/.test(tg) ? IA_ROLES[tg.slice(3)] : null;
+    const pista = rol ? `${esc(tg)} · rol de superficie — ${esc(rol.desc)}\n\nClic para ver todos los widgets con esta etiqueta`
+                      : `${esc(tg)} — clic para filtrar por esta etiqueta`;
+    return `<button class="tag-chip${tagFilter === tg ? " on" : ""}${rol ? " sistema" : ""}" draggable="false" data-t="${esc(tg)}" title="${pista}">${esc(tg)}</button>`;
+  }).join("");
   strip.querySelectorAll(".tag-chip").forEach(c => {
     c.addEventListener("mousedown", e => e.stopPropagation());   // no arrancar el arrastre de la ventana
     c.addEventListener("click", e => {

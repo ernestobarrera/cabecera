@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.66.0] - 2026-08-09 — la etiqueta de sistema dice para qué sirve
+
+- **Al pasar el ratón por una etiqueta `ia-*` se explica su rol**, en el chip del widget y también en
+  el selector de etiquetas. Antes solo veías el nombre, así que elegir una exigía saberla de memoria.
+- El texto sale del mismo sitio que la cabecera ⓘ del widget, así que **no pueden decir cosas
+  distintas**.
+- **Las etiquetas tuyas no se explican**, a propósito: significan lo que tú quieras y el producto no
+  opina sobre ellas. Solo las de sistema llevan contrato, y siguen distinguidas por color.
+
 ## [0.65.0] - 2026-08-09 — el contador cuenta los robots que se ven
 
 - **Los contadores `· 🤖 n` de Pendientes y Hechas cuentan ahora todos los robots**, ámbar y grises.
