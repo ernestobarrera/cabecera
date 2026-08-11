@@ -3594,5 +3594,26 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
     console.log('OK 0.67.0 (desplegar devuelve la altura y repagina; el chip se aplica al marcarlo)');
   }
 
+  /* ── 0.68.0 — la firma de agente en la conversación (P3) ──────────────────────────────
+     Del marco de bandejas multi-agente decidido por él el 11/08: se abre la superficie a Codex y
+     Antigravity, y el gate son P2 (un dueño por bandeja) y P3 (firma). `by` solo separaba persona
+     de máquina; con tres runtimes leyendo la misma bandeja, «Agente» a secas hace indistinguibles
+     dos criterios de triaje, y entonces P2 no se puede auditar. */
+  {
+    if (!/const quien = r\.by === "agente" \? \(r\.ag \? "Agente " \+ r\.ag : "Agente"\) : "Tú";/.test(src))
+      throw new Error('la conversación debe decir QUÉ agente escribió, cuando la entrada lo trae');
+    if (!/rp-meta">\$\{esc\(quien\)\}/.test(src))
+      throw new Error('la firma tiene que salir escapada en la cabecera de la entrada');
+    // lo escrito antes de 0.68.0 no lleva firma y NO puede inventarse una
+    if (/r\.ag \|\| ["'](claude|agente|Claude)/.test(src))
+      throw new Error('sin firma se dice «Agente», que es lo que era: no se atribuye a nadie');
+    // `by` sigue siendo quien decide el turno y el bando: la firma añade, no sustituye
+    if (!/r\.by === "agente" \? "de-agente" : "de-mi"/.test(src))
+      throw new Error('el bando de la entrada sigue saliendo de `by`, no de la firma');
+    if (/esperaRespuestaSuya[\s\S]{0,400}\.ag\b/.test(src))
+      throw new Error('el turno no puede depender de QUIÉN firmó: se deriva del orden (R8/I4)');
+    console.log('OK 0.68.0 (la conversación dice qué agente escribió; sin firma, «Agente» como siempre)');
+  }
+
   console.log('\nTODO EN VERDE');
 })().catch(e => { console.error(e && e.stack || e); process.exitCode = 1; });

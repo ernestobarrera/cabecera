@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.68.0] - 2026-08-11 — la conversación dice qué agente escribió
+
+- **Cada respuesta de un agente lleva su nombre**: «Agente claude», «Agente codex». Hasta ahora todas
+  decían «Agente» a secas, que bastaba mientras solo había uno.
+- Es la condición que hacía falta para **abrir la superficie a más de un asistente**: sin saber quién
+  contestó, no se puede sostener que cada bandeja tenga un responsable.
+- **Lo escrito antes sigue diciendo «Agente»**, que es exactamente lo que era: no se le atribuye a
+  nadie a posteriori.
+- Quién habló —tú o una máquina— y a quién le toca el turno **no cambian**: siguen saliendo de dónde
+  salían, y la firma solo añade el nombre.
+
 ## [0.67.0] - 2026-08-11 — desplegar devuelve el tamaño, y marcar una etiqueta la aplica
 
 - **Una ventana plegada vuelve a su alto de verdad al desplegarla.** Si se había pintado ya plegada

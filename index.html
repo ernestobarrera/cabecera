@@ -1940,7 +1940,7 @@ function syncUI(mode, txt){
    reaparece) y si Recargar está activo. El descarte ✕ vive solo en memoria de la sesión.
    Demora asumida: la CDN de Pages puede servir la versión vieja hasta ~10 min aun con
    no-store (gobierna la caché del navegador, no la CDN); para pestañas de días, irrelevante. */
-const APP_VERSION = "0.67.0";
+const APP_VERSION = "0.68.0";
 let newVersionDetected = null;   // versión superior detectada; detiene futuras consultas
 let verDismissed = false;        // ✕: solo esta sesión — nunca persistido en disco
 let verCheckInflight = false;    // sin consultas concurrentes
@@ -6211,7 +6211,14 @@ function bodyTodo(w, el){
     const hilo = (Array.isArray(it.replies) ? it.replies : []).map((r, i) => {
       const cuando = new Date(+r.at || 0);
       const fecha = isNaN(cuando) ? "" : cuando.toLocaleString("es-ES", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
-      return `<div class="rp ${r.by === "agente" ? "de-agente" : "de-mi"}" data-i="${i}"><span class="rp-meta">${esc(r.by === "agente" ? "Agente" : "Tú")} · ${esc(fecha)}${r.ed ? " · editado" : ""}`
+      /* 0.68.0 — FIRMA DE AGENTE (P3 del marco de bandejas multi-agente). `by` solo distingue
+         persona de máquina, y eso bastaba mientras hubo un único agente. Con Codex y Antigravity
+         leyendo la misma bandeja, «Agente» a secas hace indistinguibles dos criterios de triaje
+         distintos, y sin poder distinguirlos «un dueño por bandeja» no es auditable. `ag` lo
+         escribe el escritor canónico (`cabecera-io`, que ya recibía el autor y no lo guardaba);
+         lo anterior no lo lleva y sigue diciendo «Agente», que es exactamente lo que era. */
+      const quien = r.by === "agente" ? (r.ag ? "Agente " + r.ag : "Agente") : "Tú";
+      return `<div class="rp ${r.by === "agente" ? "de-agente" : "de-mi"}" data-i="${i}"><span class="rp-meta">${esc(quien)} · ${esc(fecha)}${r.ed ? " · editado" : ""}`
         + `<span class="rp-acts"><button class="rp-ed" type="button" title="Editar">✎</button><button class="rp-del" type="button" title="Borrar esta respuesta">✕</button></span></span>`
         + `<span class="rp-txt">${esc(r.t)}</span></div>`;
     }).join("");
