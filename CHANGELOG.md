@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.67.0] - 2026-08-11 — desplegar devuelve el tamaño, y marcar una etiqueta la aplica
+
+- **Una ventana plegada vuelve a su alto de verdad al desplegarla.** Si se había pintado ya plegada
+  —al recargar, o al volver a su escritorio—, se abría a la altura de su cabecera y había que
+  estirarla a mano para que cupiera algo. El alto guardado nunca se perdió: faltaba devolverlo.
+- **En Tareas, además, se recalcula lo que cabe en la primera página** al desplegar, porque la
+  paginación se mide sobre lo pintado y una ventana plegada no mide nada.
+- **Marcar una etiqueta en el selector ya la aplica**, sin pulsar Guardar. El editor sigue abierto
+  para marcar varias seguidas; **Guardar** queda para lo que escribes a mano en el campo de texto.
+- No se ha cambiado el modelo de selección (un clic reemplaza / Ctrl añade): en un widget lo normal
+  es añadir una etiqueta a las que ya tiene, y así un clic despistado borraría el resto.
+
 ## [0.66.0] - 2026-08-09 — la etiqueta de sistema dice para qué sirve
 
 - **Al pasar el ratón por una etiqueta `ia-*` se explica su rol**, en el chip del widget y también en

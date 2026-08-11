@@ -3558,5 +3558,41 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
     console.log('OK 0.66.0 (la etiqueta de sistema dice su rol al pasar el ratón, desde IA_ROLES)');
   }
 
+  /* ── 0.67.0 — desplegar devuelve la altura, y marcar una etiqueta ya la aplica ────────
+     Parte suya del 10/08: «al minimizar un widget de tareas con alguna tarea pendiente, y volverlo
+     a maximizar, se abre con el tamaño de etiquetas»; y «si selecciono [un chip] podría valer, sin
+     necesidad de luego tener que guardar».
+     El primero era una DEGRADACIÓN de restaurar (R41): `w.h` nunca se perdió, lo que faltaba era
+     volver a escribir la altura en el elemento, porque el `height:auto !important` de `.collapsed`
+     solo tapa la inline mientras la clase está puesta. Los tests se atan a lo OBSERVABLE (R37): que
+     al desplegar se escriba la altura y se repinte el cuerpo, y que el chip aplique sin «Guardar». */
+  {
+    const plegar = src.match(/\.collapse"\)\.addEventListener\("click"[\s\S]*?\n  \}\);/);
+    if (!plegar) throw new Error('no se localiza el manejador de plegar/desplegar');
+    const cuerpo = plegar[0];
+    if (!/if \(!w\.collapsed\)\{[\s\S]*?el\.style\.height = proj\.h \+ "px";/.test(cuerpo))
+      throw new Error('al desplegar hay que devolver la altura al elemento, o se abre a la de su cabecera');
+    if (!/if \(!w\.collapsed\)\{[\s\S]*?refreshWidget\(w\);/.test(cuerpo))
+      throw new Error('al desplegar hay que repintar el cuerpo: la paginación se mide sobre el DOM');
+    // la altura sale de la PROYECCIÓN, no de un número escrito a mano (R42: si se puede medir, se mide)
+    if (!/const proj = projectWidgets\(\[w\]\)\[0\];/.test(cuerpo))
+      throw new Error('la altura al desplegar debe salir de projectWidgets, no de una constante');
+    // y NO se toca el alto guardado: plegar nunca fue una pérdida de dato
+    if (/w\.h\s*=/.test(cuerpo))
+      throw new Error('plegar/desplegar no puede escribir w.h: el alto guardado no se pierde al plegar');
+
+    // marcar un chip aplica solo; «Guardar» queda para lo que se escribe a mano
+    const chip = src.match(/\.tag-pick \.tag-chip"\)\.forEach\(chip => chip\.addEventListener\("click"[\s\S]*?\n  \}\)\);/);
+    if (!chip) throw new Error('no se localiza el manejador del chip de etiquetas');
+    if (!/const efecto = aplicar\(\);/.test(chip[0]))
+      throw new Error('marcar un chip tiene que APLICAR, no solo escribir en el campo');
+    if (/ed\.remove\(\)/.test(chip[0]))
+      throw new Error('marcar un chip no cierra el editor: hay que poder marcar varias seguidas');
+    // el campo de texto sigue siendo el único sitio donde vive la verdad (chip → input → w.tags)
+    if (!/const aplicar = \(\) => \{\n    const tags = normTags\(input\.value\);/.test(src))
+      throw new Error('aplicar debe leer del campo: un chip que escriba en w.tags abre una segunda verdad');
+    console.log('OK 0.67.0 (desplegar devuelve la altura y repagina; el chip se aplica al marcarlo)');
+  }
+
   console.log('\nTODO EN VERDE');
 })().catch(e => { console.error(e && e.stack || e); process.exitCode = 1; });

@@ -1940,7 +1940,7 @@ function syncUI(mode, txt){
    reaparece) y si Recargar está activo. El descarte ✕ vive solo en memoria de la sesión.
    Demora asumida: la CDN de Pages puede servir la versión vieja hasta ~10 min aun con
    no-store (gobierna la caché del navegador, no la CDN); para pestañas de días, irrelevante. */
-const APP_VERSION = "0.66.0";
+const APP_VERSION = "0.67.0";
 let newVersionDetected = null;   // versión superior detectada; detiene futuras consultas
 let verDismissed = false;        // ✕: solo esta sesión — nunca persistido en disco
 let verCheckInflight = false;    // sin consultas concurrentes
@@ -3945,10 +3945,28 @@ function editWidgetTags(w, el){
       }).join("")}</div>`
     : `<div class="tag-pick empty">Aún no has usado ninguna etiqueta. Escribe la primera aquí abajo.</div>`;
   ed.innerHTML = sugeridas
-    + `<div class="tag-row"><input type="text" value="${esc((w.tags || []).join(", "))}" placeholder="etiquetas separadas por comas"><button class="mini ok">Guardar</button><button class="mini clear">Quitar</button></div>`;
+    + `<div class="tag-row"><input type="text" value="${esc((w.tags || []).join(", "))}" placeholder="…o escribe una nueva, separando por comas"><button class="mini ok" title="Guarda lo que hayas escrito aquí. Los chips de arriba se aplican solos al marcarlos">Guardar</button><button class="mini clear" title="Quita todas las etiquetas de este widget">Quitar</button></div>`;
   el.querySelector(".win-title").after(ed);
   const input = ed.querySelector("input");
-  // marcar un chip escribe en el campo: sigue habiendo UN solo sitio donde vive la verdad
+  /* 0.67.0 — APLICAR es ahora lo mismo que marcar. Antes, marcar un chip solo escribía en el campo
+     de texto y hacía falta pulsar «Guardar»: un paso de más en el caso del 90%, que es poner o
+     quitar UNA etiqueta ya existente. El campo de texto sigue siendo el único sitio donde vive la
+     verdad —de ahí que el chip escriba en él y no en `w.tags`—, y «Guardar» sigue haciendo falta
+     para lo que se ESCRIBE a mano, que es lo único que el editor no puede dar por terminado solo.
+     No se ha hecho «un clic reemplaza la selección y Ctrl añade»: en un widget la operación normal
+     es añadir una etiqueta a las que ya tiene, y con ese modelo un clic despistado borraría el
+     resto. El motivo queda escrito por si se prefiere lo contrario. */
+  const aplicar = () => {
+    const tags = normTags(input.value);
+    w.tags = tags.length ? tags : undefined;
+    // 0.53.0 — poner una ia-* aplica sola su cabecera ⓘ y su color. Si tocó algo, hay que repintar
+    // el widget entero, no solo la tira de etiquetas: la ⓘ vive dentro del cuerpo.
+    const efecto = aplicarEfectoEtiquetas(w);
+    paintWinTags(el, w);
+    if (efecto) refreshWidget(w);
+    markDirty();
+    return efecto;
+  };
   ed.querySelectorAll(".tag-pick .tag-chip").forEach(chip => chip.addEventListener("click", e => {
     e.stopPropagation();
     const t = chip.dataset.t;
@@ -3957,18 +3975,15 @@ function editWidgetTags(w, el){
     if (i >= 0) act.splice(i, 1); else act.push(t);
     input.value = act.join(", ");
     chip.classList.toggle("on", i < 0);
+    const efecto = aplicar();
+    toast(efecto ? "Etiqueta de sistema: se ha puesto su cabecera ⓘ y su color"
+                 : (i >= 0 ? `Quitada «${t}»` : `Puesta «${t}»`));
     input.focus();
   }));
   const commit = () => {
-    const tags = normTags(input.value);
-    w.tags = tags.length ? tags : undefined;
+    const efecto = aplicar();
     ed.remove();
-    // 0.53.0 — poner una ia-* aplica sola su cabecera ⓘ y su color. Si tocó algo, hay que repintar
-    // el widget entero, no solo la tira de etiquetas: la ⓘ vive dentro del cuerpo.
-    const efecto = aplicarEfectoEtiquetas(w);
-    paintWinTags(el, w);
-    if (efecto){ refreshWidget(w); toast("Etiqueta de sistema: se ha puesto su cabecera ⓘ y su color"); }
-    markDirty();
+    if (efecto) toast("Etiqueta de sistema: se ha puesto su cabecera ⓘ y su color");
   };
   input.addEventListener("keydown", e => {
     if (e.key === "Enter") commit();
@@ -4903,6 +4918,18 @@ function buildWindow(w){
     w.collapsed = !w.collapsed;
     el.classList.toggle("collapsed", w.collapsed);
     e.currentTarget.textContent = w.collapsed ? "▸" : "▾";
+    /* 0.67.0 — DESPLEGAR NO DEVOLVÍA LA ALTURA. El elemento conserva el `height:NNNpx` inline con
+       que se pintó, y mientras está plegado lo tapa el `height:auto !important` de `.collapsed`;
+       al quitar la clase, si el widget se pintó YA plegado (recarga, o volver al escritorio), lo
+       que reaparece es la altura de plegado y la ventana se abre a la altura de su cabecera. El
+       alto guardado (`w.h`) nunca se perdió: solo faltaba volver a escribirlo en el elemento.
+       Y se repinta el cuerpo porque la paginación se calcula midiendo el DOM: pintada a 42 px,
+       la lista no sabe cuántas tareas caben en su primera página, que es el criterio de hecho. */
+    if (!w.collapsed){
+      const proj = projectWidgets([w])[0];
+      if (proj) el.style.height = proj.h + "px";
+      refreshWidget(w);
+    }
     markDirty();
   });
   if (w.type === "notes" && state.dictTargetId === w.id) el.classList.add("dict-recv");
