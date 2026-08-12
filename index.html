@@ -1972,7 +1972,7 @@ function syncUI(mode, txt){
    reaparece) y si Recargar está activo. El descarte ✕ vive solo en memoria de la sesión.
    Demora asumida: la CDN de Pages puede servir la versión vieja hasta ~10 min aun con
    no-store (gobierna la caché del navegador, no la CDN); para pestañas de días, irrelevante. */
-const APP_VERSION = "0.71.0";
+const APP_VERSION = "0.72.0";
 let newVersionDetected = null;   // versión superior detectada; detiene futuras consultas
 let verDismissed = false;        // ✕: solo esta sesión — nunca persistido en disco
 let verCheckInflight = false;    // sin consultas concurrentes
@@ -6181,6 +6181,23 @@ function esRelleno(it){ return !!(it && it.fill); }
    discreparan, que es exactamente el defecto que salió por cuatro sitios distintos en 0.62–0.65.
    No mira `done` a propósito: una tarea cerrada conserva su fecha a la vista, y quien cuenta deuda
    es quien tiene que excluirla. */
+/* 0.72.0 — ¿esta tarea agéntica está LISTA para que un agente la tome? Una sola regla, y existe
+   porque el producto y el lector de la superficie decían cosas distintas sobre lo mismo.
+   Medido el 12/08, buscando los huecos de UX que él pidió revisar de la convención ⚙: marcar la
+   casilla ⚙ **sin poner fecha** era un gesto MUDO en pantalla. La fila no pintaba nada (sin fecha
+   no hay chip) y el contador ⚙ no la contaba (contaba vencimientos, y no había ninguno). Mientras
+   tanto `superficie.mjs --modo agenda` sí la ofrecía —«sin fecha, una ⚙ está lista desde siempre;
+   esperar a una fecha que él no puso sería inventarse un plazo», y es lo correcto—.
+   Resultado: podía tener tareas delegables que un agente le iba a ofrecer y que él no veía por
+   ninguna parte. Es el mismo defecto de R47 (la señal pintada en un sitio y contada en otro) con
+   una vuelta más: pintada en un sitio, contada en otro y leída en un tercero.
+   La regla la copia del lector, a propósito: sin fecha → lista; con fecha → no antes de ella. */
+function execLista(it, t0){
+  if (!esAgentica(it)) return false;
+  if (!it.due) return true;
+  const cls = claseVencimiento(it.due, t0);
+  return cls === "overdue" || cls === "today";
+}
 function claseVencimiento(due, t0){
   if (!due) return null;
   const d = new Date(due + "T00:00:00");
@@ -6308,6 +6325,14 @@ function bodyTodo(w, el){
     const today = new Date(); today.setHours(0, 0, 0, 0);
     // 0.69.0 — la clase temporal sale de `claseVencimiento`, que es la misma que cuenta la barra
     const cls = claseVencimiento(it.due, today);
+    /* 0.72.0 — una ⚙ SIN FECHA tiene chip. Antes no: sin fecha no había `cls` y la fila salía
+       muda, así que marcar la casilla no producía ningún cambio visible en ninguna parte —ni
+       aquí, ni en el contador— aunque el agente sí la viera y se la fuera a ofrecer. Marcar algo
+       y que no pase nada es lo que hace que una convención se sienta poco intuitiva. */
+    if (!cls && !it.done && esAgentica(it)) return {
+      cls: "exec", exec: true, label: "⚙ lista",
+      title: "Ejecución agéntica sin fecha: delegable desde ya. La hace un agente cuando abras sesión y lo autorices — no se ejecuta sola."
+    };
     if (!cls) return null;
     const time = it.remind ? " " + it.remind : "";
     const alarm = it.remind ? " alarm" : "";
@@ -10373,10 +10398,13 @@ function dueTaskStats(){
   state.spaces.forEach((sp, si) => (sp.widgets || []).filter(x => x.type === "todo").forEach(w => {
     (w.data.items || []).forEach(it => {
       if (it.done) return;
+      /* 0.72.0 — las ⚙ se resuelven ANTES y con su propia regla (`execLista`), porque una ⚙ SIN
+         FECHA está lista y hasta ahora se caía por el filtro de vencimientos: no la pintaba nadie
+         y no la contaba nadie, mientras el lector de la superficie sí se la ofrecía al agente. */
+      if (esAgentica(it)){ if (execLista(it, t0)) out.exec.push({ w, si, it }); return; }
       const cls = claseVencimiento(it.due, t0);   // misma regla que pinta el chip de la fila
       if (!cls || cls === "future") return;
-      if (esAgentica(it)) out.exec.push({ w, si, it });
-      else if (cls === "overdue") out.overdue.push({ w, si, it });
+      if (cls === "overdue") out.overdue.push({ w, si, it });
       else out.today.push({ w, si, it });
     });
   }));

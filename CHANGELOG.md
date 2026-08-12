@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.72.0] - 2026-08-12 — marcar ⚙ sin fecha ya se nota
+
+- **Una tarea marcada «⚙ Fecha de ejecución agéntica» pero SIN fecha ahora se ve.** Antes, marcar
+  la casilla sin poner fecha no cambiaba nada en pantalla: ni chip en la fila, ni número en el
+  aviso ⚙ de la barra. El asistente sí la veía y te la iba a ofrecer, así que podías tener trabajo
+  delegado que no aparecía por ninguna parte.
+- Ahora su fila dice **«⚙ lista»** y **cuenta en el aviso ⚙**, que es lo que ya significaba: sin
+  fecha, una tarea agéntica está disponible desde el momento en que la marcas. Poner fecha sigue
+  significando «no antes de ese día».
+- La regla vive en **un solo sitio** para los tres que la usan —la fila, el contador y el asistente
+  que lee tus tareas—, que era el origen del desajuste.
+
 ## [0.71.0] - 2026-08-12 — responder y cerrar en un gesto
 
 - **Botón «👍 Vale y hecha»** en la conversación de una tarea: responde y la da por hecha de una

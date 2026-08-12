@@ -3648,13 +3648,16 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
        Se prueba sobre `dueTaskStats` de verdad, con un `state` de mentira, porque contar mal aquí
        es exactamente el fallo que él tumbó: mezclar «hazlo tú» con «enciende y autoriza». */
     const stats = pickFn('dueTaskStats', '');
+    // 0.72.0: el reparto pregunta también por `execLista` (una ⚙ sin fecha está lista), así que la
+    // caja de arena tiene que dársela — con la de VERDAD, extraída del propio fuente
+    eval('globalThis.execLista = ' + pickFn('execLista', 'it, t0'));
     const correr = items => {
       const sandbox = {
         state: { spaces: [{ widgets: [{ type: 'todo', data: { items } }] }] },
-        claseVencimiento, esAgentica
+        claseVencimiento, esAgentica, execLista
       };
-      return new Function('state', 'claseVencimiento', 'esAgentica',
-        'return (' + stats + ')();')(sandbox.state, claseVencimiento, esAgentica);
+      return new Function('state', 'claseVencimiento', 'esAgentica', 'execLista',
+        'return (' + stats + ')();')(sandbox.state, claseVencimiento, esAgentica, execLista);
     };
     /* Fechas en HORA LOCAL, no `toISOString()`, que es UTC. `todayIso()` del producto usa reloj de
        pared (`getFullYear/getMonth/getDate`) y `claseVencimiento` compara contra él. Con UTC, en
@@ -3836,6 +3839,54 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
       throw new Error('el aviso ⏰ cuenta deuda: una tarea hecha nunca es deuda');
 
     console.log('OK 0.71.0 (responder y cerrar en un gesto; una tarea hecha deja de decir «vencida» y sigue fuera del ⏰)');
+  }
+
+  // --- 0.72.0: una ⚙ SIN FECHA deja de ser un gesto mudo -----------------------------------------
+  {
+    /* El defecto, medido el 12/08 al revisar los huecos de UX de la convención ⚙ que él pidió
+       mirar: marcar la casilla ⚙ sin poner fecha no producía NINGÚN cambio visible —la fila no
+       pintaba chip (sin fecha no había clase temporal) y el contador ⚙ no la contaba (contaba
+       vencimientos)— mientras `superficie.mjs --modo agenda` SÍ se la ofrecía al agente. Es R47
+       con una vuelta más: pintada en un sitio, contada en otro y leída en un tercero.
+       Los tres tienen que decir lo mismo, y por eso la regla vive en UNA función. */
+    eval('globalThis.execLista2 = ' + pickFn('execLista', 'it, t0'));
+    eval('globalThis.claseVencimiento2 = ' + pickFn('claseVencimiento', 'due, t0'));
+    const esAgentica2 = it => !!(it && it.exec);
+    const t0 = new Date(); t0.setHours(0, 0, 0, 0);
+    const iso2 = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    // el reparto de verdad, en su propia caja de arena (el del bloque de 0.69.0 no llega hasta aquí)
+    const stats2 = pickFn('dueTaskStats', '');
+    const correr = items => new Function('state', 'claseVencimiento', 'esAgentica', 'execLista',
+      'return (' + stats2 + ')();')(
+        { spaces: [{ widgets: [{ type: 'todo', data: { items } }] }] },
+        claseVencimiento2, esAgentica2, execLista2);
+
+    // la regla, comprobada contra la del lector de la superficie: sin fecha → lista desde siempre
+    if (execLista2({ exec: 1 }, t0) !== true)
+      throw new Error('una ⚙ sin fecha está LISTA: esperar a una fecha que él no puso sería inventarse un plazo');
+    if (execLista2({ exec: 1, due: iso2(new Date(Date.now() + 86400000)) }, t0) !== false)
+      throw new Error('«no antes de» sigue mandando cuando SÍ hay fecha');
+    if (execLista2({ due: iso2(new Date(Date.now() - 86400000)) }, t0) !== false)
+      throw new Error('una tarea normal vencida no es una ⚙: no puede colarse en el contador azul');
+
+    // y el efecto en el reparto: la ⚙ sin fecha CUENTA, y no se cuela en los cubos suyos
+    let s2 = correr([{ t: 'agéntica sin fecha', exec: 1 }]);
+    if (s2.exec.length !== 1 || s2.overdue.length || s2.today.length)
+      throw new Error('la ⚙ sin fecha tiene que contar en ⚙ y en ningún otro sitio: el agente ya se la ofrece');
+    s2 = correr([{ t: 'agéntica sin fecha hecha', exec: 1, done: true }]);
+    if (s2.exec.length !== 0) throw new Error('una tarea hecha no reclama nada, tampoco sin fecha');
+
+    // el reparto pregunta por la función única, no repite la condición a mano
+    const dts2 = src.match(/function dueTaskStats\(\)\{[\s\S]*?\n\}/)[0];
+    if (!/if \(esAgentica\(it\)\)\{ if \(execLista\(it, t0\)\) out\.exec\.push\(\{ w, si, it \}\); return; \}/.test(dts2))
+      throw new Error('las ⚙ se resuelven con execLista y antes del filtro de vencimientos, o la que no tiene fecha se cae');
+
+    // y la FILA pinta el mismo caso: marcar algo y que no pase nada es lo que hace que una
+    // convención se sienta poco intuitiva, que fue literalmente su comentario
+    if (!/if \(!cls && !it\.done && esAgentica\(it\)\) return \{/.test(src))
+      throw new Error('una ⚙ sin fecha tiene que verse en su fila: sin chip, marcar la casilla es un gesto mudo');
+
+    console.log('OK 0.72.0 (una ⚙ sin fecha se ve, se cuenta y se ofrece: producto y lector dicen por fin lo mismo)');
   }
 
   console.log('\nTODO EN VERDE');
