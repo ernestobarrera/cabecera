@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.69.0] - 2026-08-12 — tareas que hace un agente, y tareas que no urgen
+
+- **Dos casillas nuevas en el editor de fecha de una tarea**, independientes entre sí:
+  - **«⚙ Fecha de ejecución agéntica»** — declara que esa tarea la hace un asistente, no tú. Con
+    ella, **la fecha pasa a significar «no antes de»** en lugar de «me vence a mí». El cambio de
+    significado vale **solo para esa tarea**: las que ya tenías siguen queriendo decir lo mismo.
+  - **«▪ Relleno: hacer cuando sobren tokens»** — hay que hacerlo, pero no urge. Sin fecha y sin
+    aviso: aparece cuando pides la lista.
+- **Nada se ejecuta solo.** Marcar la casilla no autoriza nada: declara que la tarea es delegable y
+  desde qué día. El asistente te las **lista y te pregunta** cuáles lanza, cada vez.
+- **Un segundo aviso en la barra de abajo, separado del de siempre**: **⏰** son tus vencimientos
+  («hazlo tú») y **⚙** las agénticas cuya fecha ya llegó («enciende y autoriza»). **Ninguno de los
+  dos se pinta cuando está a cero**, y el ⚙ se ve **también en el equipo donde no vas a ejecutar
+  nada** — que es justo donde te sirve, porque es el que te dice que hoy toca encender el otro.
+- **En la fila**, una tarea agéntica dice **«⚙ lista»** en vez de «vencida»: no llegas tarde a algo
+  que no te tocaba. Las de relleno llevan su chip junto a la fecha de alta.
+- **Se ve qué asistente ha tomado cada tarea** (🔒 con su nombre). Con varios asistentes leyendo la
+  misma bandeja, sin esto los tres te ofrecerían la misma tarea; una vez tomada, no se vuelve a
+  ofrecer.
+- Nada de esto cambia el aviso ⏰ que ya usabas, ni el significado de ninguna fecha ya escrita.
+
 ## [0.68.0] - 2026-08-11 — la conversación dice qué agente escribió
 
 - **Cada respuesta de un agente lleva su nombre**: «Agente claude», «Agente codex». Hasta ahora todas

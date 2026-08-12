@@ -3615,5 +3615,128 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
     console.log('OK 0.68.0 (la conversación dice qué agente escribió; sin firma, «Agente» como siempre)');
   }
 
+  /* ── 0.69.0 — tareas agénticas (⚙) y de relleno (▪), con reclamo de agente ────────────
+     Diseño suyo del 11/08. Dos casillas ORTOGONALES por tarea; la ⚙ cambia lo que significa la
+     fecha de ESA tarea y solo de esa. Los tests se atan al EFECTO, no al mecanismo (R37: el tamaño
+     de letra de 0.55.0 salió en verde estando inerte porque el test fijaba cómo, no qué). */
+  {
+    eval('globalThis.esAgentica = ' + pickFn('esAgentica', 'it'));
+    eval('globalThis.esRelleno = ' + pickFn('esRelleno', 'it'));
+    eval('globalThis.claseVencimiento = ' + pickFn('claseVencimiento', 'due, t0'));
+
+    // ── las dos marcas son independientes, y ausente = falso (nada que migrar)
+    if (esAgentica({}) !== false || esRelleno({}) !== false)
+      throw new Error('una tarea sin casillas no puede ser agéntica ni de relleno: las 460 que ya existen no cambian de significado');
+    if (esAgentica({ fill: 1 }) !== false || esRelleno({ exec: 1 }) !== false)
+      throw new Error('las dos marcas son ortogonales: una no puede implicar la otra');
+    if (esAgentica({ exec: 1, fill: 1 }) !== true || esRelleno({ exec: 1, fill: 1 }) !== true)
+      throw new Error('una tarea puede ser las dos a la vez');
+
+    // ── la clase temporal, que es la regla común de la fila y del contador
+    const t0 = new Date('2026-08-12T00:00:00');
+    if (claseVencimiento('2026-08-11', t0) !== 'overdue') throw new Error('ayer es overdue');
+    if (claseVencimiento('2026-08-12', t0) !== 'today') throw new Error('hoy es today');
+    if (claseVencimiento('2026-08-13', t0) !== 'future') throw new Error('mañana es future');
+    if (claseVencimiento('', t0) !== null || claseVencimiento(undefined, t0) !== null)
+      throw new Error('sin fecha no hay clase temporal');
+
+    /* ── EL EFECTO QUE IMPORTA: una ⚙ vencida cuenta en ⚙ y NO en ⏰.
+       Se prueba sobre `dueTaskStats` de verdad, con un `state` de mentira, porque contar mal aquí
+       es exactamente el fallo que él tumbó: mezclar «hazlo tú» con «enciende y autoriza». */
+    const stats = pickFn('dueTaskStats', '');
+    const correr = items => {
+      const sandbox = {
+        state: { spaces: [{ widgets: [{ type: 'todo', data: { items } }] }] },
+        claseVencimiento, esAgentica
+      };
+      return new Function('state', 'claseVencimiento', 'esAgentica',
+        'return (' + stats + ')();')(sandbox.state, claseVencimiento, esAgentica);
+    };
+    /* Fechas en HORA LOCAL, no `toISOString()`, que es UTC. `todayIso()` del producto usa reloj de
+       pared (`getFullYear/getMonth/getDate`) y `claseVencimiento` compara contra él. Con UTC, en
+       Madrid y de madrugada, «mañana» pasaba a ser HOY y el test decía que el filtro estaba roto
+       estando bien — dos horas de diferencia bastan para volver verde un test que miente. */
+    const iso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const ayer = iso(new Date(Date.now() - 86400000));
+    const hoy = iso(new Date());
+    const manana = iso(new Date(Date.now() + 86400000));
+
+    let s = correr([{ t: 'suya', due: ayer }, { t: 'agéntica', due: ayer, exec: 1 }]);
+    if (s.overdue.length !== 1 || s.exec.length !== 1)
+      throw new Error('una ⚙ vencida cuenta en ⚙ y no en ⏰: contarla como deuda suya le dice que llega tarde a algo que no le tocaba');
+    if (s.overdue[0].it.t !== 'suya' || s.exec[0].it.t !== 'agéntica')
+      throw new Error('cada tarea tiene que caer en su cubo');
+
+    s = correr([{ t: 'hoy agéntica', due: hoy, exec: 1 }]);
+    if (s.today.length !== 0 || s.exec.length !== 1)
+      throw new Error('una ⚙ de hoy también va al cubo ⚙, no al 📌');
+
+    s = correr([{ t: 'futura', due: manana, exec: 1 }]);
+    if (s.exec.length !== 0)
+      throw new Error('«no antes de» significa que hasta esa fecha NO se ofrece');
+
+    s = correr([{ t: 'hecha', due: ayer, exec: 1, done: true }]);
+    if (s.exec.length !== 0) throw new Error('una tarea hecha no reclama nada');
+
+    s = correr([{ t: 'relleno sin fecha', fill: 1 }]);
+    if (s.exec.length + s.overdue.length + s.today.length !== 0)
+      throw new Error('el relleno sin fecha NUNCA avisa: sale cuando él pide la lista, y ya');
+
+    // ── A CERO NO SE PINTA. Se comprueba sobre el código del chip, porque el efecto es que el
+    //    elemento no exista en pantalla; un aviso que suele venir vacío se aprende a no abrir.
+    const chip = src.match(/function renderExecChip\(\)\{[\s\S]*?\n\}/);
+    if (!chip) throw new Error('no se localiza renderExecChip');
+    if (!/if \(!n\)\{ el\.style\.display = "none"; return; \}/.test(chip[0]))
+      throw new Error('el contador ⚙ a cero no se pinta');
+    if (!/const n = s\.exec\.length;/.test(chip[0]))
+      throw new Error('el contador ⚙ cuenta el cubo `exec` de dueTaskStats, no una regla propia');
+
+    /* ── UN SOLO PUNTO DE LLAMADA. Los dos chips son mitades del mismo reparto; con llamadas
+       independientes se acaba con uno al día y el otro no, que es el defecto que salió por cuatro
+       sitios distintos entre 0.62.0 y 0.65.0. Y tiene que ir ANTES del `return` temprano: el caso
+       normal —ninguna tarea suya vencida— era justo el que se lo comía. */
+    const tc = src.match(/function renderTaskChip\(\)\{[\s\S]*?\n\}/);
+    if (!tc) throw new Error('no se localiza renderTaskChip');
+    const iRender = tc[0].indexOf('renderExecChip();');
+    const iReturn = tc[0].indexOf('if (!n){ el.style.display = "none"; return; }');
+    if (iRender < 0) throw new Error('renderTaskChip debe refrescar también el chip ⚙');
+    if (iReturn >= 0 && iRender > iReturn)
+      throw new Error('renderExecChip va ANTES del return temprano, o sin tareas suyas el aviso agéntico no se refresca');
+
+    // ── LA FILA usa las mismas funciones que el contador (R47: pintar y contar por reglas
+    //    distintas es el defecto que volvió cuatro versiones seguidas)
+    if (!/const cls = claseVencimiento\(it\.due, today\);/.test(src))
+      throw new Error('el chip de la fila debe derivar su clase de claseVencimiento');
+    if (!/const exec = esAgentica\(it\);/.test(src))
+      throw new Error('la fila debe preguntar por esAgentica, no mirar it.exec a mano');
+    if (!/esRelleno\(it\) \? `<span class="fill-chip"/.test(src))
+      throw new Error('el chip de relleno debe salir de esRelleno');
+    // una ⚙ NO puede decir «vencida»: diría que él llega tarde a algo que no era suyo
+    if (!/exec \? "⚙ lista" : "vencida"/.test(src))
+      throw new Error('una tarea agéntica con la fecha pasada está LISTA, no vencida');
+
+    // ── EL RECLAMO: lo escribe el agente, se ve en la fila, y quitar la ⚙ no lo deja colgando
+    if (!/it\.claim && it\.claim\.ag \? `<span class="claim-chip"/.test(src))
+      throw new Error('el reclamo tiene que verse en la fila: un reclamo invisible no reclama nada');
+    if (!/if \(!it\.exec\) delete it\.claim;/.test(src))
+      throw new Error('quitar la casilla ⚙ tiene que soltar el reclamo, o queda colgando de nada');
+
+    // ── LAS CASILLAS: aplican al marcarlas y NO cierran el editor (mismo criterio que 0.67.0)
+    const ap = src.match(/const aplicarCasillas = \(\) => \{[\s\S]*?\n    \};/);
+    if (!ap) throw new Error('no se localiza aplicarCasillas');
+    if (/paint\(\)|ed\.remove\(\)/.test(ap[0]))
+      throw new Error('marcar una casilla no repinta ni cierra: paint() reconstruye la lista y se lleva el editor por delante');
+    if (!/if \(exec\.checked\) it\.exec = 1; else delete it\.exec;/.test(ap[0]))
+      throw new Error('ausente = falso: la marca se BORRA en vez de guardarse como 0');
+
+    // ── el editor no puede haber perdido lo que ya hacía
+    if (!/<label class="due-check"><input class="xx" type="checkbox"/.test(src))
+      throw new Error('falta la casilla de ejecución agéntica en el editor de fecha');
+    if (!/<label class="due-check"><input class="ff" type="checkbox"/.test(src))
+      throw new Error('falta la casilla de relleno en el editor de fecha');
+
+    console.log('OK 0.69.0 (⚙ y ▪ por tarea; la ⚙ cuenta aparte, no avisa antes de su fecha y el reclamo se ve)');
+  }
+
   console.log('\nTODO EN VERDE');
 })().catch(e => { console.error(e && e.stack || e); process.exitCode = 1; });
