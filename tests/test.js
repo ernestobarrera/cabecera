@@ -3123,7 +3123,9 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
     // (3) LOS DOS BUSCADORES DEL MENÚ ENTIENDEN LO MISMO. La caja de arriba es la que tiene el
     // foco al abrir: si no conoce los sinónimos, «vacaciones» no encuentra Permisos.
     // 0.58.0: ya no son dos (ver su bloque), pero la condición sigue valiendo para la que queda.
-    const pe = src.match(/function paletteEntries\(\)\{[\s\S]*?\n\}/)[0];
+    // 0.70.0: la firma pasó a `paletteEntries(terms)` para poder señalar la tarea que casó; el
+    // patrón se abre a argumentos para que un cambio de firma no se lea como un fallo de sinónimos
+    const pe = src.match(/function paletteEntries\([^)]*\)\{[\s\S]*?\n\}/)[0];
     if (!/t\.busca/.test(pe))
       throw new Error('la paleta debe mirar los mismos sinónimos que el filtro de tipos: es la caja que tiene el foco');
 
@@ -3736,6 +3738,68 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
       throw new Error('falta la casilla de relleno en el editor de fecha');
 
     console.log('OK 0.69.0 (⚙ y ▪ por tarea; la ⚙ cuenta aparte, no avisa antes de su fecha y el reclamo se ve)');
+  }
+
+  // --- 0.70.0: el salto lleva a LA TAREA, no al widget (parte suya del 11/08) -------------------
+  {
+    /* R37 — un test que solo comprobara «existe focusTask» no probaría nada: la función podría
+       estar ahí y no llamarla nadie, que es exactamente cómo 0.55.0 salió en verde con el tamaño
+       de letra inerte. Así que lo que se fija es que NINGUNA de las cuatro entradas se quede en
+       `focusWidget`, y que la página la decida quien conoce `per`. */
+
+    // (1) LA PUERTA ÚNICA EXISTE Y PREPARA LA LISTA. Si no se pone la pestaña y no se quitan los
+    // filtros, el salto puede aterrizar en una página que no contiene la fila: parecería no hacer nada.
+    const ft = src.match(/function focusTask\(id, si, it\)\{[\s\S]*?\n\}/);
+    if (!ft) throw new Error('no se localiza focusTask: es la única puerta para llegar a una fila desde fuera');
+    if (!/ui\.view = it\.done \? "done" : "pend";/.test(ft[0]))
+      throw new Error('saltar a una tarea hecha con la pestaña en Pendientes la deja fuera de la lista pintada');
+    if (!/ui\.soloBot = false;/.test(ft[0]) || !/ui\.q = "";/.test(ft[0]))
+      throw new Error('el filtro 🤖 y la lupa del widget pueden esconder la fila a la que se salta: hay que retirarlos');
+    if (!/todoJump\.set\(id, it\)/.test(ft[0]))
+      throw new Error('el salto es un ENCARGO que resuelve paint(): aquí no se puede buscar el nodo, puede no estar pintado');
+    if (!/focusWidget\(id, si\)/.test(ft[0]))
+      throw new Error('focusTask tiene que seguir haciendo lo que hacía focusWidget: traer la ventana y cambiar de escritorio');
+    // cambiar de escritorio YA repinta: repintar otra vez reconstruiría el `li` señalado y borraría
+    // el destello. El salto funcionaría y no se vería, que es la mitad de lo que él pidió.
+    if (!/if \(!todoJump\.has\(id\)\) return;/.test(ft[0]))
+      throw new Error('solo se repinta si el encargo sigue sin servir: repintar de más se lleva el destello por delante');
+
+    // (2) LAS CUATRO ENTRADAS PASAN POR ELLA. Esta es la comprobación que de verdad protege: una
+    // entrada que se quede en focusWidget vuelve a dejarle la mitad del trabajo a él.
+    const chipTareas = src.match(/\$\("#tb-tasks"\)\.addEventListener\("click"[\s\S]*?\n  \}\);/)[0];
+    if (!/focusTask\(h\.w\.id, h\.si, h\.it\)/.test(chipTareas))
+      throw new Error('el aviso ⏰/📌 debe llevar a la tarea que vence, no a su lista (ampliación suya del 11/08)');
+    const chipExec = src.match(/\$\("#tb-exec"\)\.addEventListener\("click"[\s\S]*?\n  \}\);/)[0];
+    if (!/focusTask\(h\.w\.id, h\.si, h\.it\)/.test(chipExec))
+      throw new Error('el aviso ⚙ es gemelo del ⏰: dos chips iguales con dos comportamientos distintos es peor que ninguno');
+    if (!/"Ver", \(\) => focusTask\(w\.id, si, it\)/.test(src))
+      throw new Error('el «Ver» del aviso de una tarea ya sabe de cuál habla: tiene que llevar a ella');
+    if (!/hit \? \(\) => focusTask\(w\.id, si, hit\)/.test(src))
+      throw new Error('Ctrl+K: si lo tecleado casa con una tarea, el resultado tiene que aterrizar en ESA fila');
+
+    // (3) LA PÁGINA LA DECIDE QUIEN CONOCE `per`, y por referencia al objeto. Por índice del array
+    // saltaría a otra fila en cuanto la lista esté ordenada o tenga ancladas arriba.
+    if (!/const k = salto \? list\.indexOf\(salto\) : -1;/.test(src))
+      throw new Error('el salto se resuelve por referencia en la lista PINTADA: el orden de w.data.items no es el de la pantalla');
+    if (!/if \(k >= 0\) setPage\(per \? Math\.floor\(k \/ per\) : 0\);/.test(src))
+      throw new Error('la página del salto sale de `per`, que solo se conoce después de pintar y medir');
+    // y el clamp sigue DESPUÉS, o una tarea en la última página podría dejar la página fuera de rango
+    const iSet = src.indexOf('if (k >= 0) setPage(per ?');
+    const iClamp = src.indexOf('setPage(Math.max(0, Math.min(ui.page, pages - 1)));');
+    if (!(iSet > 0 && iClamp > iSet))
+      throw new Error('el clamp de página tiene que correr DESPUÉS del salto, no antes');
+
+    // (4) EL ENCARGO SE CONSUME. Sin esto vuelve a aplicarse en cada repintado —y hay uno cada 4 s—,
+    // así que le robaría la página cada vez que mirase otra. Es el defecto de 0.44.0 otra vez.
+    if (!/todoJump\.delete\(w\.id\);/.test(src))
+      throw new Error('un salto que no se consume se repite en cada sondeo y le roba la página');
+    // (5) Y NO SE PERSISTE (I7): a qué fila vas es de esta pestaña, no contenido que viaje al otro equipo
+    if (!/const todoJump = new Map\(\)/.test(src))
+      throw new Error('el salto vive en memoria, como el resto de todoUI');
+    if (/data\.jump|w\.data\.destello|it\.destello/.test(src))
+      throw new Error('ni el salto ni el destello se guardan en datos.json: son efectos del momento');
+
+    console.log('OK 0.70.0 (una sola puerta a la fila: paleta, ⏰/📌, ⚙ y el aviso; página por referencia y encargo que se consume)');
   }
 
   console.log('\nTODO EN VERDE');

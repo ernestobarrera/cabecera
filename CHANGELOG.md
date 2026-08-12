@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.70.0] - 2026-08-12 — te lleva a la tarea, no al widget
+
+- **Buscar una tarea en la paleta (Ctrl+K) ahora te deja en esa tarea.** Antes te dejaba en la
+  lista que la contenía y la parte difícil —encontrarla entre cientos— seguía siendo tuya. El
+  resultado muestra el texto de la tarea que ha casado, y al abrirlo Cabecera **cambia de
+  escritorio, de pestaña y de página si hace falta**, y **señala la fila unos segundos**.
+- **El aviso ⏰/📌 de la barra hace lo mismo**: te lleva a la tarea que vence, no a su lista. Y el
+  aviso **⚙** de tareas agénticas también, porque son dos avisos gemelos y sería raro que uno
+  llevara a un sitio y el otro a otro.
+- **El botón «Ver» de una alarma de tarea** te lleva igualmente a la fila que ha avisado.
+- Si la tarea está en «Hechas», salta a esa pestaña; si tenías puesto un filtro o algo escrito en
+  la lupa del widget, se retiran para que la fila no quede escondida.
+- Nada de esto se guarda: a qué fila vas es de esta pestaña y de este momento, no viaja al otro
+  equipo ni ocupa sitio en tus datos.
+
 ## [0.69.0] - 2026-08-12 — tareas que hace un agente, y tareas que no urgen
 
 - **Dos casillas nuevas en el editor de fecha de una tarea**, independientes entre sí:

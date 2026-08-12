@@ -518,6 +518,16 @@ ul.plain{list-style:none}
    «vencida» ni con el ámbar de «hoy»: usa el azul del acento, que en el resto del producto ya
    significa «esto lo hace la máquina». Gana por especificidad a .overdue/.today de arriba. */
 .todo-it .due.exec{background:rgba(90,169,247,.16); color:#7ab6f5}
+/* 0.70.0 — DESTELLO DE FILA al llegar desde fuera (Ctrl+K, aviso ⏰/📌, aviso ⚙).
+   Dura más que el de la ventana (2,2 s frente a 1,1 s) y a propósito: el de la ventana solo tiene
+   que decirte CUÁL es entre cinco ventanas; este tiene que encontrarte una fila entre veinte que se
+   parecen mucho, y encima acabas de cambiar de página sin haberlo pedido tú.
+   Es la MISMA convención que cualquier buscador serio: te lleva y te señala. */
+.todo-it.destello{animation:itflash 2.2s ease-out}
+@keyframes itflash{
+  0%,25%{background:var(--accent-soft); box-shadow:inset 0 0 0 1px var(--accent)}
+  100%{background:transparent; box-shadow:inset 0 0 0 1px transparent}
+}
 .todo-it .fill-chip,.todo-it .claim-chip{font-size:10.5px; padding:1px 7px; border-radius:20px; white-space:nowrap; flex-shrink:0; align-self:flex-start; margin-top:2px}
 .todo-it .fill-chip{background:rgba(255,255,255,.06); color:var(--text-dim)}
 .todo-it .claim-chip{background:rgba(90,169,247,.10); color:var(--text-dim); border:1px solid rgba(90,169,247,.22)}
@@ -1335,7 +1345,7 @@ ul.plain{list-style:none}
       — En un grupo de enlaces, el botón <b>⇱ N</b> abre los N enlaces de una vez (permite los pop-ups la primera vez). También desde la paleta: «Abrir grupo: …».<br>
       — Doble clic en el título de una ventana o en una pestaña de espacio para renombrar inline. El chevron <b>▾</b> pliega una ventana; <b>⊟</b> pliega/despliega todas (al desplegar, si no caben, se reordenan solas). <b>⛶</b> maximiza una ventana y <b>❐</b> la restaura.<br>
       — Al arrastrar una ventana aparecen <b>columnas guía</b> (2–4 según el ancho): la ventana se encaja en el carril donde apuntes y las de abajo hacen sitio; una <b>sombra</b> te enseña dónde quedará. Mantén <b>Alt</b> para moverla libre, sin carriles. El escritorio tiene <b>scroll vertical</b> si no caben todas.<br>
-      — Las tareas <b>vencidas o de hoy</b> tienen su propio aviso ⏰/📌 en la barra: cada clic salta a la siguiente.<br>
+      — Las tareas <b>vencidas o de hoy</b> tienen su propio aviso ⏰/📌 en la barra: cada clic te lleva a la siguiente, <b>hasta su fila</b> —abriendo su página si está en una avanzada— y la señala unos segundos. Lo mismo hace la paleta cuando lo que buscas es una tarea.<br>
       — <b>inbox.txt</b> en tu carpeta de datos: cualquier línea (una macro de teclado, un agente, el móvil vía OneDrive) aparece en la Bandeja.<br>
       — <b>?add=texto</b> añade a la Bandeja; <b>?pack=nombre|URL</b> carga un escritorio completo.<br>
       — Ctrl+V con una captura dentro del widget Imagen.<br>
@@ -1959,7 +1969,7 @@ function syncUI(mode, txt){
    reaparece) y si Recargar está activo. El descarte ✕ vive solo en memoria de la sesión.
    Demora asumida: la CDN de Pages puede servir la versión vieja hasta ~10 min aun con
    no-store (gobierna la caché del navegador, no la CDN); para pestañas de días, irrelevante. */
-const APP_VERSION = "0.69.0";
+const APP_VERSION = "0.70.0";
 let newVersionDetected = null;   // versión superior detectada; detiene futuras consultas
 let verDismissed = false;        // ✕: solo esta sesión — nunca persistido en disco
 let verCheckInflight = false;    // sin consultas concurrentes
@@ -5989,6 +5999,62 @@ const todoUiDe = id => {
   return u;
 };
 
+/* 0.70.0 — LLEVAR A LA TAREA, NO AL WIDGET.
+   Parte suya del 11/08: «cuando busco una tarea en todo cabecera desde Ctrl+K me indica bien el
+   widget, pero no me lleva a la tarea concreta, que podría aparecer algo seleccionada y
+   parpadeante unos segundos, como hacen canónicamente otros buscadores. Eso pierde UX además, si
+   esa tarea está en páginas avanzadas del widget que no sea la 1». Y su ampliación, comprobada y
+   correcta: al aviso ⏰/📌 de la barra le pasaba lo mismo, y al ⚙ de 0.69.0 también, porque los
+   tres llamaban a `focusWidget` — que sabe traer la ventana y nada más.
+   Con 460 tareas repartidas en decenas de páginas, «te dejo en el widget» es la mitad del trabajo:
+   la otra mitad la hacía él a mano, pasando páginas con las flechas.
+
+   UNA SOLA PUERTA, y esa es la parte que importa. `focusTask` es la única forma de llegar a una
+   fila desde fuera, así que las tres entradas —paleta, ⏰/📌, ⚙— se comportan igual por
+   construcción y no por acordarse. Es la misma lección de R47 (una señal que se pinta en un sitio
+   y se cuenta en otro divergirá) aplicada a un gesto en vez de a un contador.
+
+   Por qué un ENCARGO y no un scroll directo: la fila puede no estar pintada todavía —está en otra
+   página, en la otra pestaña, o el widget aún no ha repintado tras cambiar de escritorio—. Así que
+   no se busca el nodo: se deja dicho a qué fila hay que ir y lo resuelve `paint()`, que es el único
+   que sabe cuántas caben y por tanto en qué página cae. Se consume al servirlo: un encargo que se
+   quedara puesto volvería a robarle la página en cada sondeo de 4 s, que es justo el defecto de
+   0.44.0 que ya le costó una versión.
+   Vive en MEMORIA, como el resto de `todoUI` (I7): a qué fila vas es de esta pestaña y de este
+   momento; persistirlo lo haría viajar al otro equipo, donde nadie ha pulsado nada. */
+const todoJump = new Map();   // widgetId → la tarea (por referencia) a la que hay que llevarle
+function focusTask(id, si, it){
+  if (!it){ focusWidget(id, si); return; }   // sin tarea que señalar, el comportamiento de siempre
+  const ui = todoUiDe(id);
+  /* La fila tiene que ESTAR en la lista que se va a pintar, o el salto acaba en una página que no
+     la contiene y parece que no ha pasado nada. Así que se pone la pestaña que le toca y se retiran
+     los dos filtros que podrían esconderla. No es «resetear por si acaso»: son exactamente los tres
+     estados de `todoUI` capaces de dejar fuera una tarea concreta. */
+  ui.view = it.done ? "done" : "pend";
+  ui.soloBot = false;
+  ui.q = "";
+  todoJump.set(id, it);
+  focusWidget(id, si);   // trae la ventana al frente, la despliega y cambia de escritorio si hace falta
+  /* Y aquí el detalle que se come el destello si se pasa por alto: cambiar de escritorio ya
+     re-renderiza todos sus widgets, así que `paint()` puede haber servido el encargo por el camino.
+     Repintar «por si acaso» reconstruiría el `li` recién señalado y se llevaría el destello por
+     delante — el salto funcionaría y no se vería, que es la mitad de lo que él pidió.
+     Se repinta SOLO si el encargo sigue sin servir: es el caso del widget que ya estaba a la vista
+     (nadie ha vuelto a pintarlo) o que venía plegado. */
+  if (!todoJump.has(id)) return;
+  const w = (state.widgets || []).find(x => x.id === id);
+  if (w) refreshWidget(w);
+}
+/* Señalar la fila: el destello dura 2,2 s y se limpia solo. No se guarda ninguna marca de
+   «señalada» en ningún sitio — es un efecto del momento, no un estado. */
+function destellarFila(ul, idx){
+  const li = ul.querySelectorAll(".todo-it")[idx];   // los subtítulos de grupo son `.todo-grupo`
+  if (!li) return;
+  li.classList.remove("destello"); void li.offsetWidth; li.classList.add("destello");
+  li.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  setTimeout(() => li.classList.remove("destello"), 2300);
+}
+
 /* 0.51.0 — el TEXTO A MEDIO ESCRIBIR de la caja «Nueva tarea…», conservado entre repintados.
    Mismo problema que `todoPage` y mucho peor consecuencia: `renderBody` reconstruye el cuerpo con
    innerHTML, así que la caja se sustituye por una vacía y lo tecleado se pierde sin rastro. Bastaba
@@ -6639,11 +6705,26 @@ function bodyTodo(w, el){
     pintar(list);
     const per = growAndCount(list.length);
     const pages = per ? Math.ceil(list.length / per) : 1;
+    /* 0.70.0 — un salto pedido desde fuera (`focusTask`) MANDA sobre la página recordada, y tiene
+       que decidirse aquí porque es el único punto que conoce `per`: cuántas caben de verdad
+       depende del alto que haya cogido la ventana, y eso no se sabe hasta haber pintado.
+       Se resuelve por REFERENCIA al objeto, no por índice del array: la lista pintada está
+       ordenada, filtrada y con las ancladas arriba, así que el sitio de una tarea en `list` no
+       tiene nada que ver con su sitio en `w.data.items`. */
+    const salto = todoJump.get(w.id);
+    const k = salto ? list.indexOf(salto) : -1;
+    if (k >= 0) setPage(per ? Math.floor(k / per) : 0);
     // el clamp también se recuerda: si borras tareas y la última página desaparece, la posición
     // que se conserva es la corregida, no la que ya no existe
     setPage(Math.max(0, Math.min(ui.page, pages - 1)));
     if (pages > 1) pintar(list.slice(ui.page * per, ui.page * per + per));
     renderPager(pages, list.length);
+    if (salto){
+      // el encargo se CONSUME aunque la tarea ya no esté (borrada, o cambiada de lista): dejarlo
+      // puesto lo repetiría en cada repintado, y hay uno cada 4 s
+      todoJump.delete(w.id);
+      if (k >= 0) destellarFila(ul, k - (pages > 1 ? ui.page * per : 0));
+    }
   }
   /* 0.59.0 — la barra del filtro 🤖 vive en `.todo-bar`, NO dentro de la lista: `pintar` vacía la
      lista en cada repintado y un aviso metido ahí desaparecería justo cuando hay resultados que
@@ -9058,9 +9139,25 @@ const kbd = k => {
   return ` <span class="kbd-hint">${esc(a.teclas)}${a.alt ? " · " + esc(a.alt) : ""}</span>`;
 };
 
-function paletteEntries(){
+/* 0.70.0 — `terms` son las palabras que él ha tecleado, y llegan hasta aquí por una razón concreta:
+   una lista de tareas ya aparece en la paleta porque su texto entero alimenta `hay`, pero al
+   abrirla no había forma de saber CUÁL de sus 200 tareas fue la que casó. Con los términos a mano,
+   la entrada resuelve su propia tarea y el destino deja de ser «el widget» para ser «esa fila».
+   Se resuelve al CONSTRUIR la entrada, no al pulsarla, porque la paleta se reconstruye entera en
+   cada tecla: el resultado ya es de esa consulta y de ninguna otra.
+   No se emite una entrada por tarea a propósito: con ~460 tareas, buscar «vale» devolvería
+   cuarenta filas casi idénticas y la paleta dejaría de servir para lo demás. Una entrada por
+   lista, que es lo que él ya conoce, y que ahora aterriza donde toca. */
+function paletteEntries(terms){
   const E = [];
   const add = (icon, label, sub, run, hay, atajo, tipo) => E.push({ icon, label, sub, run, atajo, tipo, hay: (hay || (label + " " + sub)).toLowerCase() });
+  const ts = (terms || []).map(t => String(t).toLowerCase()).filter(Boolean);
+  // primera tarea de la lista cuyo texto case con TODOS los términos (el mismo «y» que filtra la
+  // paleta, para que lo que se señala sea de verdad lo que hizo aparecer el resultado)
+  const tareaQueCasa = w => {
+    if (!ts.length || w.type !== "todo") return null;
+    return (w.data.items || []).find(i => { const t = String(i.t || "").toLowerCase(); return ts.every(x => t.includes(x)); }) || null;
+  };
   const multi = state.spaces.length > 1;
   state.spaces.forEach((sp, si) => {
     const tag = multi ? (sp.name || ("Espacio " + (si + 1))) : "";
@@ -9081,8 +9178,14 @@ function paletteEntries(){
         }
       } else {
         const text = widgetText(w), wtags = (w.tags || []).join(" ");
-        const sub = (tag ? tag + (text ? " · " : "") : "") + (text ? snippet(text) : (tag ? "" : "ir al widget"));
-        add(ico, name, sub || "ir al widget", () => focusWidget(w.id, si), name + " " + text + " " + tag + " " + wtags);
+        // 0.70.0 — si lo tecleado casa con una tarea concreta, el subtítulo deja de ser un trozo
+        // cualquiera del widget y pasa a ser ESA tarea: así ve antes de pulsar a dónde va a ir
+        const hit = tareaQueCasa(w);
+        const sub = hit ? (tag ? tag + " · " : "") + snippet(hit.t)
+          : (tag ? tag + (text ? " · " : "") : "") + (text ? snippet(text) : (tag ? "" : "ir al widget"));
+        add(hit ? "✅" : ico, name, sub || "ir al widget",
+          hit ? () => focusTask(w.id, si, hit) : () => focusWidget(w.id, si),
+          name + " " + text + " " + tag + " " + wtags);
       }
     }
   });
@@ -9233,7 +9336,7 @@ function renderResults(q){
     extras.sort((a, b) => (a.si === state.active ? 0 : 1) - (b.si === state.active ? 0 : 1));
     extras = extras.slice(0, 3);
   }
-  const hits = ordenarHits(paletteEntries().filter(e => terms.every(t => e.hay.includes(t))),
+  const hits = ordenarHits(paletteEntries(terms).filter(e => terms.every(t => e.hay.includes(t))),
     terms, cap ? 9 - extras.length : 10);
   if (cap) hits.unshift({ icon: "➕", label: CAPTURE_META[cap.kind].name + ": " + captureSummary(cap), sub: captureDest(cap),
     run: () => { applyCapture(cap); closeMenu(); } });
@@ -9510,7 +9613,9 @@ function wireUI(){
     if (privacyOn) hits = hits.filter(h => !h.w.priv);
     if (!hits.length) return;
     const h = hits[taskChipIdx++ % hits.length];
-    focusWidget(h.w.id, h.si);
+    // 0.70.0 — hasta aquí llevaba al WIDGET, y con listas de cientos de tareas eso dejaba la parte
+    // difícil sin hacer: encontrar CUÁL vencía. Ampliación suya del 11/08, y tenía razón.
+    focusTask(h.w.id, h.si, h.it);
   });
   /* 0.69.0 — el chip ⚙ SALTA a la tarea, igual que el ⏰, en vez de filtrar.
      DESVÍO DELIBERADO DE LA SPEC (§4 pedía filtrar): el ⏰ lleva publicado desde hace versiones
@@ -9524,7 +9629,7 @@ function wireUI(){
     if (privacyOn) hits = hits.filter(h => !h.w.priv);
     if (!hits.length) return;
     const h = hits[taskChipIdx++ % hits.length];
-    focusWidget(h.w.id, h.si);
+    focusTask(h.w.id, h.si, h.it);   // 0.70.0 — misma puerta que el ⏰: dos chips gemelos, un gesto
   });
   // 0.53.0 — atender la alarma: te lleva al temporizador que sonó y la apaga. Se apaga la que
   // atiendes, no todas: con dos temporizadores, apagarlas juntas te haría perder la otra.
@@ -9957,7 +10062,9 @@ function checkTaskAlerts(){
       playAlertSound("soft");
       // con privacidad activa, el texto de una tarea privada no viaja al toast (spec 0b)
       const oculto = privacyOn && w.priv;
-      toastAction(oculto ? "Aviso en un widget privado" : "Aviso: " + snippet(it.t || "tarea"), "Ver", () => focusWidget(w.id, si));
+      // 0.70.0 — «Ver» lleva a LA tarea que ha avisado, no a su lista. Es la cuarta entrada de
+      // `focusTask` y la más obvia: el aviso ya sabe de cuál habla, sería raro no decírselo.
+      toastAction(oculto ? "Aviso en un widget privado" : "Aviso: " + snippet(it.t || "tarea"), "Ver", () => focusTask(w.id, si, it));
     });
   }));
   // alertedAt viaja con el siguiente guardado humano: los avisos que saltan al abrir
