@@ -2612,7 +2612,9 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
     // (1) «👍 Vale» no puede ser un atajo que se trague lo escrito, ni un «visto» disfrazado:
     // inserta una respuesta fechada como cualquier otra. Esa es la razón por la que se eligió
     // frente a un check — un check no deja constancia.
-    if (!/const enviar = \(porDefecto\) => \{\s*\n\s*const t = ta\.value\.trim\(\) \|\| \(porDefecto \|\| ""\);/.test(src))
+    // 0.71.0: la firma pasó a `enviar(porDefecto, cerrarla)`; lo que se protege sigue siendo lo
+    // mismo —que el texto por defecto solo entre si él no ha escrito nada—
+    if (!/const enviar = \(porDefecto, cerrarla\) => \{\s*\n\s*const t = ta\.value\.trim\(\) \|\| \(porDefecto \|\| ""\);/.test(src))
       throw new Error('«Vale» debe ceder ante lo que el usuario ya había escrito');
     if (!/\.rp-actions \.ok"\)\.addEventListener\("click", \(\) => enviar\("Vale"\)\)/.test(src))
       throw new Error('falta el botón «Vale» o no manda una respuesta real');
@@ -3800,6 +3802,40 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
       throw new Error('ni el salto ni el destello se guardan en datos.json: son efectos del momento');
 
     console.log('OK 0.70.0 (una sola puerta a la fila: paleta, ⏰/📌, ⚙ y el aviso; página por referencia y encargo que se consume)');
+  }
+
+  // --- 0.71.0: cerrar en un gesto, y una tarea hecha que deja de decir «vencida» ----------------
+  {
+    // ── «👍 Vale y hecha». Pregunta suya del 11/08: contestar la saca del filtro 🤖, así que el
+    // segundo gesto —el que de verdad cierra— había que hacerlo persiguiendo la tarea.
+    if (!/if \(okDone\) okDone\.addEventListener\("click", \(\) => enviar\("Vale", true\)\)/.test(src))
+      throw new Error('falta el botón «Vale y hecha», o no cierra la tarea al responder');
+    // cierra con LOS MISMOS campos que la casilla de la fila: dos caminos distintos darían dos
+    // «Hechas» distintas (mismo defecto que R47, un estado escrito en dos sitios)
+    if (!/if \(cerrarla && !it\.done\)\{ it\.done = true; it\.doneAt = Date\.now\(\); playDoneClick\(\); \}/.test(src))
+      throw new Error('cerrar desde la conversación debe fijar done+doneAt igual que la casilla de la fila');
+    // y no se ofrece en una tarea ya hecha: ahí no cierra nada
+    if (!/\$\{it\.done \? "" : `<button class="mini okdone"/.test(src))
+      throw new Error('el botón no debe aparecer si la tarea ya está hecha');
+    // R21 — sigue cerrando ÉL: es un botón suyo. Que no aparezca ningún cierre automático colado
+    // en el camino del agente (el agente responde, no cierra lo suyo).
+    if (/by: "agente"[^\n]*it\.done = true/.test(src))
+      throw new Error('R21: el agente no cierra tareas suyas, ni de paso al responder');
+
+    // ── UNA TAREA HECHA NO VENCE. El contador ya las excluía; la fila no. R47: la misma señal
+    // pintada en un sitio y contada en otro, discrepando.
+    if (!/if \(it\.done && cls !== "future"\)\{/.test(src))
+      throw new Error('una tarea hecha con la fecha ya pasada no puede seguir diciendo «vencida» en rojo');
+    if (!/const antes = it\.doneAt && it\.doneAt < \+new Date\(it\.due \+ "T00:00:00"\);/.test(src))
+      throw new Error('«antes de vencer» se mide contra doneAt: afirmarlo sin comprobarlo sería un dato falso');
+    if (!/\.todo-it \.due\.hecha\{/.test(html))
+      throw new Error('falta el estilo neutro del chip de una tarea hecha: sin él hereda el rojo de vencida');
+    // el contador de la barra ya lo hacía y tiene que seguir haciéndolo: es la otra mitad del par
+    const dts = src.match(/function dueTaskStats\(\)\{[\s\S]*?\n\}/)[0];
+    if (!/if \(it\.done\) return;/.test(dts))
+      throw new Error('el aviso ⏰ cuenta deuda: una tarea hecha nunca es deuda');
+
+    console.log('OK 0.71.0 (responder y cerrar en un gesto; una tarea hecha deja de decir «vencida» y sigue fuera del ⏰)');
   }
 
   console.log('\nTODO EN VERDE');

@@ -513,6 +513,9 @@ ul.plain{list-style:none}
 .todo-it .due.overdue{background:rgba(243,108,108,.18); color:#f36c6c}
 .todo-it .due.today{background:rgba(240,194,94,.20); color:#f0c25e}
 .todo-it .due.future{background:rgba(255,255,255,.06); color:var(--text-dim)}
+/* 0.71.0 — una tarea HECHA con la fecha ya pasada no lleva el rojo de «vencida»: no es deuda, y el
+   contador ⏰ nunca la contó. El chip queda neutro, como el de una fecha futura. */
+.todo-it .due.hecha{background:rgba(255,255,255,.06); color:var(--text-dim)}
 .todo-it .due.alarm{border:1px solid rgba(90,169,247,.35)}
 /* 0.69.0 — una fecha de ejecución agéntica NO es deuda suya, así que no se pinta con el rojo de
    «vencida» ni con el ámbar de «hoy»: usa el azul del acento, que en el resto del producto ya
@@ -1969,7 +1972,7 @@ function syncUI(mode, txt){
    reaparece) y si Recargar está activo. El descarte ✕ vive solo en memoria de la sesión.
    Demora asumida: la CDN de Pages puede servir la versión vieja hasta ~10 min aun con
    no-store (gobierna la caché del navegador, no la CDN); para pestañas de días, irrelevante. */
-const APP_VERSION = "0.70.0";
+const APP_VERSION = "0.71.0";
 let newVersionDetected = null;   // versión superior detectada; detiene futuras consultas
 let verDismissed = false;        // ✕: solo esta sesión — nunca persistido en disco
 let verCheckInflight = false;    // sin consultas concurrentes
@@ -6311,9 +6314,28 @@ function bodyTodo(w, el){
     // 0.69.0 — con la casilla ⚙ la fecha NO es un vencimiento suyo, así que la etiqueta no puede
     // decir «vencida»: diría que él llega tarde a algo que no le tocaba. Dice «lista» y «desde hoy».
     const exec = esAgentica(it);
+    const corta = new Date(it.due + "T00:00:00").toLocaleDateString("es-ES", { day: "numeric", month: "short" });
+    /* 0.71.0 — UNA TAREA HECHA NO VENCE. Nace de su nota del 11/08 en «probar»: si das por hecha
+       una tarea con fecha futura, el día que llega la fila se pone roja y dice «vencida», como si
+       llegara tarde a algo que ya cerró. La mitad del arreglo ya estaba puesta sin saberlo —el
+       contador ⏰ nunca contó las hechas, `dueTaskStats` las descarta la primera—, así que lo único
+       que faltaba era que la FILA dijera lo mismo que el contador. Es R47 otra vez: la señal se
+       pintaba en un sitio y se contaba en otro, y discrepaban.
+       «Antes de vencer» se MIDE, no se supone (R42): solo lo dice si el cierre es anterior al día
+       de vencimiento. Cerrada el mismo día, o después, se queda en la fecha a secas — decirle
+       «antes de vencer» a algo cerrado tarde sería halagarle con un dato falso. */
+    if (it.done && cls !== "future"){
+      const antes = it.doneAt && it.doneAt < +new Date(it.due + "T00:00:00");
+      return {
+        cls: "hecha" + alarm, exec,
+        label: (antes ? "✓ antes de vencer" : "✓ " + corta) + time,
+        title: antes ? "La cerraste el " + new Date(it.doneAt).toLocaleDateString("es-ES") + ", antes de su fecha. No cuenta en el aviso ⏰ de la barra."
+          : "Hecha. Su fecha ya pasó, pero una tarea cerrada no es deuda: no cuenta en el aviso ⏰ de la barra."
+      };
+    }
     const label = cls === "overdue" ? (exec ? "⚙ lista" : "vencida") + time
       : cls === "today" ? (exec ? "⚙ desde hoy" : "hoy") + time
-      : (exec ? "⚙ " : "") + new Date(it.due + "T00:00:00").toLocaleDateString("es-ES", { day: "numeric", month: "short" }) + time;
+      : (exec ? "⚙ " : "") + corta + time;
     return {
       cls: cls + alarm + (exec ? " exec" : ""), label, exec,
       title: exec
@@ -6354,7 +6376,7 @@ function bodyTodo(w, el){
       <div class="rp-hilo">${hilo || `<div class="rp-vacio">Aún no hay respuestas. Lo que escribas se guarda con su fecha y no se sobrescribe.</div>`}</div>
       ${it.note ? `<div class="rp-nota"><b>Nota:</b> ${esc(it.note)}</div>` : ""}
       <textarea class="rp-t" placeholder="Escribe tu respuesta…  (Ctrl+Enter para enviar)"></textarea>
-      <div class="rp-actions"><button class="mini send" type="button">Responder</button><button class="mini ok" type="button" title="Responder «Vale» sin escribir — apaga el 🤖 y deja constancia de que lo leíste">👍 Vale</button><button class="mini" type="button" data-x="1">Cerrar</button></div>`;
+      <div class="rp-actions"><button class="mini send" type="button">Responder</button><button class="mini ok" type="button" title="Responder «Vale» sin escribir — apaga el 🤖 y deja constancia de que lo leíste">👍 Vale</button>${it.done ? "" : `<button class="mini okdone" type="button" title="Responder y dar la tarea por hecha, en un gesto — si ya has escrito algo, se manda lo tuyo">👍 Vale y hecha</button>`}<button class="mini" type="button" data-x="1">Cerrar</button></div>`;
     li.appendChild(ed);
     const ta = ed.querySelector(".rp-t");
     const cerrar = () => { ed.remove(); };
@@ -6364,12 +6386,24 @@ function bodyTodo(w, el){
        comentario es incongruente — un «Vale» fechado es trazabilidad, un check no lo es.
        `enviar` acepta un texto por defecto: si ya había escrito algo, se manda LO SUYO. El botón
        nunca puede tragarse lo que estaba escribiendo. */
-    const enviar = (porDefecto) => {
+    /* 0.71.0 — `cerrarla` responde a una pregunta suya del 11/08, y la pregunta traía ya el motivo:
+       «además del vale, sería algo como vale y dar por hecha la tarea, porque si tengo un filtro de
+       robots, por ejemplo para contestar tareas, pierdo esa tarea de vista y la tengo que buscar de
+       nuevo para darla por hecha si es el caso».
+       Es exacto: contestar la saca del filtro 🤖 —deja de tener la última palabra el agente— así que
+       el segundo gesto, que es el que de verdad cierra, hay que hacerlo persiguiéndola. Dos gestos
+       que casi siempre van juntos y que el producto separaba sin ninguna razón.
+       Sigue siendo ÉL quien cierra (R21): es un botón suyo, no una deducción del agente. Y no
+       aparece si la tarea ya está hecha, porque ahí no cierra nada. */
+    const enviar = (porDefecto, cerrarla) => {
       const t = ta.value.trim() || (porDefecto || "");
       if (!t){ cerrar(); return; }
       if (!Array.isArray(it.replies)) it.replies = [];
       it.replies.push({ at: Date.now(), by: "yo", t: t.slice(0, 2000) });
       if (it.replies.length > 50) it.replies.splice(0, it.replies.length - 50);
+      // el cierre usa EXACTAMENTE los mismos campos que la casilla de la fila: dos caminos que
+      // cierran de formas distintas acaban dando dos «Hechas» diferentes (R47)
+      if (cerrarla && !it.done){ it.done = true; it.doneAt = Date.now(); playDoneClick(); }
       ed.remove(); paint(); markDirty();
     };
     /* 0.48.3 — Ernesto escribió «df» probando y no tenía forma de quitarlo: «esto es un problema».
@@ -6419,6 +6453,8 @@ function bodyTodo(w, el){
     // envuelto a propósito: pasar `enviar` pelado le colaría el MouseEvent como texto por defecto
     ed.querySelector(".send").addEventListener("click", () => enviar());
     ed.querySelector(".rp-actions .ok").addEventListener("click", () => enviar("Vale"));
+    const okDone = ed.querySelector(".rp-actions .okdone");
+    if (okDone) okDone.addEventListener("click", () => enviar("Vale", true));
     ed.querySelector(".rp-x").addEventListener("click", cerrar);
     ed.querySelector('[data-x="1"]').addEventListener("click", cerrar);
     ed.addEventListener("keydown", e => {

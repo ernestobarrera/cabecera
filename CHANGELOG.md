@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.71.0] - 2026-08-12 — responder y cerrar en un gesto
+
+- **Botón «👍 Vale y hecha»** en la conversación de una tarea: responde y la da por hecha de una
+  vez. Antes, contestar la sacaba del filtro 🤖 y había que volver a buscarla para cerrarla. Si ya
+  habías escrito algo, se manda lo tuyo. No aparece si la tarea ya está hecha.
+- **Una tarea hecha deja de decir «vencida».** Si la cerraste y su fecha llega después, la fila ya
+  no se pone en rojo: dice **«✓ antes de vencer»** cuando de verdad la cerraste antes de esa fecha,
+  y si no, la fecha a secas, en gris. El aviso ⏰ de la barra nunca las contó —solo cuenta lo
+  pendiente—, así que lo que cambia es que la fila ahora dice lo mismo que el contador.
+
 ## [0.70.0] - 2026-08-12 — te lleva a la tarea, no al widget
 
 - **Buscar una tarea en la paleta (Ctrl+K) ahora te deja en esa tarea.** Antes te dejaba en la
