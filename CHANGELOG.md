@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.73.0] - 2026-08-13 — el aviso ⚙ deja de partirse, y la fecha explica qué significa
+
+- **El aviso ⚙ de la barra de abajo ya no parte el número a otra línea.** El contador aparecía
+  debajo de la rueda dentada en vez de a su derecha, al contrario que el ⏰ de tareas pendientes.
+  Los dos avisos se leen como uno solo, así que ahora comparten también las reglas que los hacen
+  leerse igual, no solo el color.
+- **El chip de fecha de una tarea dice al pasar el ratón qué significa**: si venció, si vence hoy
+  o si aún no, y si cuenta o no en el aviso de la barra. Antes solo lo explicaban las señales
+  nuevas (⚙, ▪ relleno, 🔒 reclamo) y las de siempre no decían nada.
+- **La campanita de aviso también se explica** en ese mismo globo: a qué hora suena y que necesita
+  Cabecera abierta.
+
 ## [0.72.0] - 2026-08-12 — marcar ⚙ sin fecha ya se nota
 
 - **Una tarea marcada «⚙ Fecha de ejecución agéntica» pero SIN fecha ahora se ve.** Antes, marcar

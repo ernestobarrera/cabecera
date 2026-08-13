@@ -3889,5 +3889,54 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
     console.log('OK 0.72.0 (una ⚙ sin fecha se ve, se cuenta y se ofrece: producto y lector dicen por fin lo mismo)');
   }
 
+  // --- 0.73.0: dos avisos gemelos se leen igual, y la fecha explica qué significa ------------------
+  {
+    /* Parte suyo del 13/08: «el numero de tarea agentica aparece debajo de la rueda dentada, en la
+       barra de abajo, no aparece a la derecha del pin como en tareas pendientes». La causa era que
+       #tb-tasks llevaba `white-space:nowrap` y #tb-exec no. R47 en el CSS.
+       El test se ata a la PARIDAD, no al literal: lo que tiene que ser cierto no es «tb-exec lleva
+       nowrap», es «los dos chips comparten las reglas que los hacen leerse igual». Escrito así, el
+       día que aparezca un tercer aviso hermano el test dirá qué le falta en vez de callar. */
+    const reglaDe = sel => {
+      // el CSS vive en el <head>, no en el script inline: aquí se mira el archivo entero
+      const m = html.match(new RegExp(sel + '\\{([^}]*)\\}'));
+      if (!m) throw new Error(`no encuentro la regla CSS de ${sel}`);
+      return m[1];
+    };
+    const LEGIBILIDAD = ['white-space:nowrap', 'font-variant-numeric:tabular-nums'];
+    for (const sel of ['#tb-exec', '#tb-tasks']){
+      const r = reglaDe(sel).replace(/\s*:\s*/g, ':');
+      for (const prop of LEGIBILIDAD)
+        if (!r.includes(prop))
+          throw new Error(`${sel} no lleva «${prop}»: los avisos de la barra se leen como uno solo, `
+            + 'así que un contador que parte a otra línea rompe la pareja (parte suyo del 13/08)');
+    }
+
+    /* Y el segundo hueco que él nombró el mismo día: «recuerda seguir poniendo un tooltip … en los
+       relojes y avisos de tareas pendientes». Las señales agénticas nacieron explicadas; las de
+       siempre, no. El test exige texto en los TRES estados suyos, porque el defecto era justo que
+       la rama `exec` tenía título y la otra devolvía cadena vacía. */
+    const dueMetaSrc = src.match(/const dueMeta = it => \{[\s\S]*?\n  \};/)[0].replace(/^const dueMeta = /, '');
+    const claseV = pickFn('claseVencimiento', 'due, t0');
+    const hacerDueMeta = () => new Function('claseVencimiento', 'esAgentica',
+      'return (' + dueMetaSrc.replace(/;\s*$/, '') + ');')(
+        eval('(' + claseV + ')'), it => !!(it && it.exec));
+    const dueMeta73 = hacerDueMeta();
+    const isoD = off => { const d = new Date(); d.setDate(d.getDate() + off); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+
+    for (const [off, que] of [[-3, 'vencida'], [0, 'de hoy'], [5, 'futura']]){
+      const dm = dueMeta73({ t: 'x', due: isoD(off) });
+      if (!dm || !dm.title || !dm.title.trim())
+        throw new Error(`el chip de una tarea ${que} tiene que decir qué significa al pasar el ratón: `
+          + 'las señales nuevas se explicaron y las de siempre se quedaron mudas (13/08)');
+    }
+    const conAviso = dueMeta73({ t: 'x', due: isoD(-1), remind: '09:30' });
+    if (!/09:30/.test(conAviso.title || ''))
+      throw new Error('la campanita se explica DENTRO del mismo globo: el label ya enseña la hora y '
+        + 'dos tooltips para un chip serían peor que ninguno');
+
+    console.log('OK 0.73.0 (los dos avisos de la barra se leen igual; el chip de fecha y su campanita se explican)');
+  }
+
   console.log('\nTODO EN VERDE');
 })().catch(e => { console.error(e && e.stack || e); process.exitCode = 1; });

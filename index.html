@@ -251,8 +251,12 @@ body{font-family:var(--font); color:var(--text); background:#10131a}
 .tf-otros:hover{opacity:1; color:var(--accent)}
 /* 0.69.0 — el aviso de tareas agénticas. Azul, no ámbar: no es urgencia suya, es «enciende y
    autoriza». Si compartiera color con #tb-tasks los leería como el mismo aviso, que es justo lo
-   que hace que un aviso deje de significar nada. */
-#tb-exec{display:none; color:#7ab6f5; border-color:rgba(90,169,247,.35); background:rgba(90,169,247,.10)}
+   que hace que un aviso deje de significar nada.
+   0.73.0 — `white-space:nowrap` NO estaba y en #tb-tasks sí: el chip gemelo partía «⚙ 3» en dos
+   líneas y el número caía DEBAJO de la rueda dentada (parte suyo, 13/08: «no aparece a la derecha
+   como en tareas pendientes»). Es R47 en el CSS: dos avisos que se leen como uno solo tienen que
+   compartir las reglas que los hacen leerse igual, no solo el color. Van juntas a propósito. */
+#tb-exec{display:none; color:#7ab6f5; border-color:rgba(90,169,247,.35); background:rgba(90,169,247,.10); white-space:nowrap; font-variant-numeric:tabular-nums}
 #tb-tasks{display:none; color:var(--warn); border-color:rgba(240,194,94,.35); background:rgba(240,194,94,.08); white-space:nowrap; font-variant-numeric:tabular-nums}
 #tb-tasks.overdue{color:var(--danger); border-color:rgba(243,108,108,.4); background:rgba(243,108,108,.09)}
 /* 0.53.0 — el temporizador sonaba y sacaba un aviso pasajero: si no estabas mirando, no quedaba
@@ -1972,7 +1976,7 @@ function syncUI(mode, txt){
    reaparece) y si Recargar está activo. El descarte ✕ vive solo en memoria de la sesión.
    Demora asumida: la CDN de Pages puede servir la versión vieja hasta ~10 min aun con
    no-store (gobierna la caché del navegador, no la CDN); para pestañas de días, irrelevante. */
-const APP_VERSION = "0.72.0";
+const APP_VERSION = "0.73.0";
 let newVersionDetected = null;   // versión superior detectada; detiene futuras consultas
 let verDismissed = false;        // ✕: solo esta sesión — nunca persistido en disco
 let verCheckInflight = false;    // sin consultas concurrentes
@@ -6361,11 +6365,23 @@ function bodyTodo(w, el){
     const label = cls === "overdue" ? (exec ? "⚙ lista" : "vencida") + time
       : cls === "today" ? (exec ? "⚙ desde hoy" : "hoy") + time
       : (exec ? "⚙ " : "") + corta + time;
+    /* 0.73.0 — EL CHIP DE FECHA SUYO SE QUEDÓ SIN TOOLTIP, y era el hueco que él nombró el 13/08
+       («los relojes y avisos de tareas pendientes»). Las señales agénticas —⚙, ▪ relleno, 🔒
+       reclamo— nacieron ya explicadas porque eran nuevas y hubo que justificarlas; «vencida» y la
+       campanita llevaban aquí desde el principio y nadie las explicó nunca. Es exactamente el
+       sesgo que él detectó: se documenta lo que se acaba de construir, no lo que hace falta
+       entender. La hora de aviso va DENTRO del mismo tooltip y no en uno aparte: el label ya
+       muestra «vencida 09:30» y dos globos para un chip serían peor que ninguno. */
+    const avisoTxt = it.remind
+      ? ` La campanita suena a las ${it.remind} el día del vencimiento, solo con Cabecera abierta.`
+      : "";
     return {
       cls: cls + alarm + (exec ? " exec" : ""), label, exec,
-      title: exec
+      title: (exec
         ? "Ejecución agéntica: no antes de esta fecha. La hace un agente cuando abras sesión y lo autorices — no se ejecuta sola."
-        : ""
+        : cls === "overdue" ? `Venció el ${corta} y sigue abierta. Cuenta en el aviso ⏰ de la barra de abajo.`
+        : cls === "today" ? "Vence hoy. Cuenta en el aviso 📌 de la barra de abajo."
+        : `Vence el ${corta}. Todavía no cuenta en el aviso de la barra.`) + avisoTxt
     };
   };
   /* 0.48.2 — RESPONDER es una cosa distinta de RECORDAR, y en 0.48.1 las mezclé: reutilicé el
