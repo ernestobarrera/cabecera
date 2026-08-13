@@ -11,6 +11,9 @@
   nuevas (⚙, ▪ relleno, 🔒 reclamo) y las de siempre no decían nada.
 - **La campanita de aviso también se explica** en ese mismo globo: a qué hora suena y que necesita
   Cabecera abierta.
+- **«👍 Vale y hecha» pasa a llamarse «👍 Responder y hecha» cuando has escrito algo.** Hacía ya lo
+  correcto —manda lo tuyo y cierra— pero el rótulo decía «Vale», que es acusar recibo. No faltaba
+  función: faltaba que el botón no mintiera.
 
 ## [0.72.0] - 2026-08-12 — marcar ⚙ sin fecha ya se nota
 

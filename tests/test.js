@@ -3935,7 +3935,17 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
       throw new Error('la campanita se explica DENTRO del mismo globo: el label ya enseña la hora y '
         + 'dos tooltips para un chip serían peor que ninguno');
 
-    console.log('OK 0.73.0 (los dos avisos de la barra se leen igual; el chip de fecha y su campanita se explican)');
+    /* Y su tercera pregunta del 13/08: «me pregunto si tendría sentido un "Responder y hecha"».
+       La función ya estaba (0.71.0 manda lo escrito y cierra); mentía el rótulo. El test se ata a
+       que el botón CAMBIE de nombre según haya texto, que es lo único observable de ese arreglo. */
+    if (!/okdone\.textContent = ta\.value\.trim\(\) \? "👍 Responder y hecha" : "👍 Vale y hecha"/.test(src))
+      throw new Error('con algo escrito el botón tiene que decir «Responder y hecha»: la función ya '
+        + 'mandaba lo suyo desde 0.71.0 y el rótulo seguía diciendo «Vale», que es acusar recibo');
+    if (!/ta\.addEventListener\("input"/.test(src))
+      throw new Error('el rótulo se recalcula al TECLEAR: hacerlo solo al abrir el editor lo dejaría '
+        + 'mintiendo justo cuando él escribe');
+
+    console.log('OK 0.73.0 (los dos avisos de la barra se leen igual; el chip de fecha, su campanita y el botón de cerrar dicen lo que hacen)');
   }
 
   console.log('\nTODO EN VERDE');

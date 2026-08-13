@@ -6452,6 +6452,16 @@ function bodyTodo(w, el){
        aquí el dueño del archivo es él: negarle borrar su propio error no protege nada, solo
        ensucia. Se cambia por lo que hacen los mensajeros: **se puede editar y borrar, y lo editado
        queda marcado**. La honestidad la da la marca, no la prohibición. */
+    /* 0.73.0 — EL BOTÓN DICE LO QUE VA A HACER. Su pregunta del 13/08: «me pregunto si tendría
+       sentido un "Responder y hecha"». La función ya existía desde 0.71.0 —si has escrito algo, se
+       manda lo tuyo y se cierra— pero el rótulo seguía diciendo «Vale y hecha», que es otra cosa:
+       un «Vale» es acusar recibo. Así que no faltaba función, faltaba que el botón no mintiera.
+       No se toca «👍 Vale»: con texto escrito ya está «Responder» al lado haciendo eso mismo, y
+       cambiarle el rótulo a los dos sería rediseñar el editor en vez de responder lo que preguntó. */
+    const okdone = ed.querySelector(".rp-actions .okdone");
+    if (okdone) ta.addEventListener("input", () => {
+      okdone.textContent = ta.value.trim() ? "👍 Responder y hecha" : "👍 Vale y hecha";
+    });
     const reabrir = () => { ed.remove(); replyTo(it, li); };
     ed.querySelectorAll(".rp-del").forEach(b => b.addEventListener("click", e => {
       e.stopPropagation();
