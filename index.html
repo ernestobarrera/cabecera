@@ -606,6 +606,11 @@ ul.plain{list-style:none}
 .todo-it .it-actions .it-pin.on{opacity:1; color:var(--warn)}
 .todo-it .task-note-mark{font-size:11px; color:var(--text-dim); cursor:pointer; flex-shrink:0}
 .todo-it .task-note-mark:hover{color:var(--accent)}
+/* 0.74.0 — una petición que lleva días esperándole. NO cambia de color ni de tamaño: el ámbar de
+   `.me-toca` ya dice «te toca» y el rojo ya significa «vencido» en este producto. Lo único que se
+   añade es el número de días, en tono ligeramente más firme. Si esto pesara más que el vencimiento
+   competiría con él, y lo que se quería era recordar, no gritar. */
+.todo-it .task-note-mark.añeja{font-variant-numeric:tabular-nums; font-weight:600}
 /* el 🤖 sin contestar no puede pasar desapercibido: es la única señal de que el agente te dejó
    algo y no lo has visto. Se apaga solo en cuanto respondes, porque se deriva de quién habló último. */
 .todo-it .task-note-mark.me-toca{color:var(--warn); font-weight:600}
@@ -1976,7 +1981,7 @@ function syncUI(mode, txt){
    reaparece) y si Recargar está activo. El descarte ✕ vive solo en memoria de la sesión.
    Demora asumida: la CDN de Pages puede servir la versión vieja hasta ~10 min aun con
    no-store (gobierna la caché del navegador, no la CDN); para pestañas de días, irrelevante. */
-const APP_VERSION = "0.73.0";
+const APP_VERSION = "0.74.0";
 let newVersionDetected = null;   // versión superior detectada; detiene futuras consultas
 let verDismissed = false;        // ✕: solo esta sesión — nunca persistido en disco
 let verCheckInflight = false;    // sin consultas concurrentes
@@ -6147,6 +6152,29 @@ function agenteTrasCierre(it){
 function esperaRespuestaSuya(it){
   return hayRobot(it) && !it.replies[it.replies.length - 1].info;
 }
+/* 0.74.0 — CUÁNTOS DÍAS LLEVA ESPERÁNDOLE. Devuelve 0 si no llega al umbral: a cero no se pinta.
+   Petición suya (13/08): «algo que, sin caer en la fatiga de alertas, me ayude a entender que la
+   cognición humana está recibiendo mensajes agénticos de valor a tener en cuenta que puede haber
+   pasado por alto».
+   POR QUÉ UN NÚMERO EN EL ROBOT Y NO UNA SÉPTIMA SEÑAL, que era su primera idea: la fila ya lleva
+   ⏰ 📌 ⚙ ▪ 🔒 y 💬/🤖. Añadir otra es lo que hace que se dejen de mirar todas — el fallo que ya
+   costó dos versiones cuando el 🤖 significaba tres cosas. Esto no añade señal: le pone edad a la
+   que ya mira. Y descartado el ROJO que proponía: aquí el rojo YA significa «vencido», y darle un
+   segundo significado estropearía el que funciona.
+   SOLO EN LAS QUE PIDEN ALGO (ámbar). Un «recibido» de hace un mes no envejece porque no esperaba
+   nada, y marcarlo sería exactamente el aviso vacío que se aprende a ignorar.
+   UMBRAL 3 DÍAS: por debajo es ruido —hay días que no abre Cabecera— y el aviso perdería el sentido
+   de «esto se te ha pasado», que es el que él pidió.
+   Es cálculo del producto, no del agente: se deriva de la fecha que la entrada ya guarda, sin ningún
+   estado nuevo que pueda quedarse desfasado entre sus dos equipos (I4). */
+const ESPERA_DIAS = 3;
+function diasEsperando(it, ahora = Date.now()){
+  if (!esperaRespuestaSuya(it) || it.done) return 0;
+  const ult = it.replies[it.replies.length - 1];
+  if (!ult || !ult.at) return 0;
+  const dias = Math.floor((ahora - ult.at) / 86400000);
+  return dias >= ESPERA_DIAS ? dias : 0;
+}
 /* 0.65.0 — ¿la última palabra es del agente? Sin más matices: es EXACTAMENTE lo que hace aparecer
    un 🤖 en la fila, ámbar o gris. Parte suya, y es la tercera vez que el mismo error vuelve por
    otro sitio: «acabo de dar por vista esta tarea y en hechas no aparece que hay un robot sin
@@ -6859,6 +6887,12 @@ function bodyTodo(w, el){
       // la pestaña y el filtro tienen que decir SIEMPRE lo mismo, y con la regla escrita dos veces
       // era cuestión de tiempo que discreparan.
       const meToca = esperaRespuestaSuya(it);
+      /* 0.74.0 — la EDAD de una petición sin contestar va DENTRO de la marca 🤖 que él ya mira, no
+         en una señal nueva. `dEsp` es 0 por debajo del umbral, y a cero no se pinta nada.
+         El comentario vive aquí y no junto al render a propósito: hay un test de 0.58.0 que vigila
+         que la marca siga pegada al texto de la tarea —él rechazó que se moviera— y partir esa
+         expresión con un comentario lo rompe. Se mueve el comentario, no la guarda. */
+      const dEsp = diasEsperando(it);
       /* 0.64.0 — el agente habló el último pero solo informa: 🤖 APAGADO (gris), no 💬.
          Parte suya a los diez minutos de publicar 0.62.0, y era un fallo de diseño mío: «el robot no
          me ha aparecido y acabas de escribir un comentario; no me entero de que has contestado, y
@@ -6881,7 +6915,7 @@ function bodyTodo(w, el){
         // pierde ni un píxel de texto por una señal que no le toca (R43)
         + (it.pin ? `<span class="pin-mark" title="Anclada arriba">📌</span>` : "")
         + `<span class="t"${alta}>${linkifyEsc(it.t)}</span>`
-        + (nRep || it.note ? `<span class="task-note-mark${meToca ? " me-toca" : ""}" title="${esc(meToca ? "El agente te pide algo y no lo has contestado (" + nRep + " en el hilo) — clic para leerlo" : soloInforma ? "El agente te ha contestado y no espera respuesta (" + nRep + " en el hilo) — léelo cuando quieras" : nRep ? nRep + " respuesta(s) — clic para leer y contestar" : it.note)}">${meToca || soloInforma ? "🤖" : "💬"}${nRep > 1 ? " " + nRep : ""}</span>` : "")
+        + (nRep || it.note ? `<span class="task-note-mark${meToca ? " me-toca" : ""}${dEsp ? " añeja" : ""}" title="${esc(meToca ? "El agente te pide algo y no lo has contestado (" + nRep + " en el hilo)" + (dEsp ? ` — lleva ${dEsp} días esperándote` : "") + " — clic para leerlo" : soloInforma ? "El agente te ha contestado y no espera respuesta (" + nRep + " en el hilo) — léelo cuando quieras" : nRep ? nRep + " respuesta(s) — clic para leer y contestar" : it.note)}">${meToca || soloInforma ? "🤖" : "💬"}${dEsp ? " " + dEsp + "d" : nRep > 1 ? " " + nRep : ""}</span>` : "")
         + (am ? `<span class="alta" title="${esc(am.largo)}">${esc(am.corto)}</span>` : "")
         // 0.69.0 — el chip de relleno va junto a la fecha de ALTA, no junto al vencimiento: no
         // habla de cuándo vence nada, habla de cuándo conviene gastarlo
@@ -6935,10 +6969,21 @@ function bodyTodo(w, el){
          y su test también—; aprende un concepto que tiene cualquier gestor de tareas, y quien decide
          qué está encolado es él. `pin` ausente es lo normal: se borra en vez de guardarse en false,
          para no engordar el archivo con el valor por omisión. */
+      /* 0.74.0 — LA VISTA SIGUE A LA TAREA, no al principio de la lista. Parte suyo del 13/08:
+         «el comportamiento de pinear debería mantenerme el foco en las tareas que estoy pineando, y
+         no como ahora que me pone en el principio del widget; eso no es muy UX si estoy en la
+         segunda página o más».
+         Tenía razón, y el `setPage(0)` anterior solo acertaba en el caso de anclar UNA desde la
+         página 1. En dos casos frecuentes mentía: anclando varias seguidas desde una página
+         avanzada, cada clic le devolvía al principio; y al DESANCLAR le mandaba a la página 1
+         mientras la fila se iba a la 4, que es justo lo contrario de seguirla.
+         No se inventa mecanismo: se reutiliza el encargo de salto de 0.70.0, que ya sabe llevarle a
+         una fila concreta calculando su página después de pintar. Anclar y desanclar quedan así
+         simétricos — la vista va donde va la tarea, en los dos sentidos. */
       li.querySelector(".it-pin").addEventListener("click", e => {
         e.stopPropagation();
         if (it.pin) delete it.pin; else it.pin = true;
-        setPage(0);   // lo que acabas de anclar está arriba, y arriba es la página 1
+        todoJump.set(w.id, it);   // llévame a donde haya ido ESTA tarea, no al principio
         paint(); markDirty();
       });
       li.querySelector(".it-up").addEventListener("click", e => { e.stopPropagation(); if (!reordenable){ toast("Con un orden automático no se reordena a mano: elige «↕ A mano»"); return; } moveItem(it, -1); });

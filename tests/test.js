@@ -3483,8 +3483,18 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
     // el dato: ausente por omisión, no `false` guardado
     if (!/if \(it\.pin\) delete it\.pin; else it\.pin = true;/.test(todoFn4))
       throw new Error('desanclar BORRA la clave: guardar `pin:false` engorda el archivo con el valor por omisión');
-    if (!/setPage\(0\);   \/\/ lo que acabas de anclar/.test(todoFn4))
-      throw new Error('anclar debe llevarte a la página 1: si no, anclas algo y no lo ves');
+    /* 0.74.0 — ESTA GUARDA CAMBIA DE FORMA, NO DE PROPÓSITO. Decía «anclar debe llevarte a la
+       página 1: si no, anclas algo y no lo ves», y lo exigía comprobando un `setPage(0)`.
+       El propósito —que no pierdas de vista lo que acabas de anclar— sigue siendo el bueno; lo que
+       era falso es que la página 1 lo cumpliera. Parte suyo del 13/08: anclando varias desde una
+       página avanzada, cada clic le devolvía al principio, y al DESANCLAR le mandaba arriba mientras
+       la fila se iba abajo. Ahora se exige lo que de verdad se quería: que la vista SIGA a esa
+       tarea, usando el encargo de salto de 0.70.0. Y se prohíbe explícitamente volver al `setPage(0)`,
+       para que el defecto no pueda reaparecer con el test en verde. */
+    if (!/todoJump\.set\(w\.id, it\);   \/\/ llévame a donde haya ido/.test(todoFn4))
+      throw new Error('anclar debe llevarte a donde haya ido ESA tarea: si no, anclas algo y no lo ves');
+    if (/it\.pin = true;\s*\n\s*setPage\(0\)/.test(todoFn4))
+      throw new Error('anclar ya no fuerza la página 1: era el defecto que reportó el 13/08');
     // la señal se ve sin pasar el ratón, y solo la pagan las filas ancladas
     const pintarFn4 = todoFn4.match(/function pintar\(list\)\{[\s\S]*?\n  \}/)[0];
     if (!/it\.pin \? `<span class="pin-mark"/.test(pintarFn4))
@@ -3946,6 +3956,61 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
         + 'mintiendo justo cuando él escribe');
 
     console.log('OK 0.73.0 (los dos avisos de la barra se leen igual; el chip de fecha, su campanita y el botón de cerrar dicen lo que hacen)');
+  }
+
+  // --- 0.74.0: la vista sigue a la tarea al anclar, y el robot envejece ---------------------------
+  {
+    /* (1) ANCLAR/DESANCLAR. Parte suyo del 13/08: «el comportamiento de pinear debería mantenerme el
+       foco en las tareas que estoy pineando, y no como ahora que me pone en el principio del widget».
+       El test se ata a que el gesto ENCARGUE UN SALTO A ESA TAREA, que es lo único observable, y a
+       que YA NO fuerce la página 0 — sin lo segundo, el arreglo podría convivir con el defecto. */
+    const pin = src.match(/li\.querySelector\("\.it-pin"\)\.addEventListener[\s\S]{0,400}?\}\);/)[0];
+    if (!/todoJump\.set\(w\.id, it\)/.test(pin))
+      throw new Error('anclar tiene que encargar el salto a ESA tarea (todoJump), o la vista no la sigue');
+    if (/setPage\(0\)/.test(pin))
+      throw new Error('anclar ya no puede forzar la página 1: era el defecto, y al DESANCLAR mandaba '
+        + 'al principio mientras la fila se iba a otra página');
+
+    /* (2) EL ROBOT QUE ENVEJECE. Se prueba la función, no el HTML: es la que decide, y así el test
+       sigue valiendo si cambia el render. Lo que tiene que ser cierto: cuenta solo lo que le PIDE
+       algo, respeta el umbral, y a cero no pinta. */
+    eval('globalThis.hayRobot74 = ' + pickFn('hayRobot', 'it'));
+    eval('globalThis.espera74 = ' + pickFn('esperaRespuestaSuya', 'it'));
+    const diasFn = pickFn('diasEsperando', 'it, ahora = Date\\.now\\(\\)');
+    /* El umbral se LEE DEL CÓDIGO, no se inyecta. Inyectarlo era el error de la primera versión de
+       este test: pasaba en verde aunque el producto avisara desde el primer día, porque el test
+       probaba su propio 3 y no el del programa. Es R37 en directo, cazado por la prueba de mutación
+       del 14/08 — el mutante que ponía el umbral a 0 no tumbaba nada. */
+    const mU = src.match(/const ESPERA_DIAS = (\d+);/);
+    if (!mU) throw new Error('el umbral de espera tiene que estar declarado y ser legible');
+    const UMBRAL = +mU[1];
+    if (UMBRAL < 2 || UMBRAL > 7)
+      throw new Error(`umbral de ${UMBRAL} días: por debajo de 2 es ruido —hay días que no abre `
+        + 'Cabecera— y por encima de 7 llega tarde para lo que él pidió');
+    const dias = new Function('esperaRespuestaSuya', 'ESPERA_DIAS', 'return (' + diasFn + ');')(espera74, UMBRAL);
+    const hace = d => Date.now() - d * 86400000;
+    const pide = d => ({ replies: [{ by: 'agente', at: hace(d) }] });
+
+    if (dias(pide(UMBRAL + 7)) !== UMBRAL + 7)
+      throw new Error('una petición vieja tiene que decir sus días exactos');
+    if (dias(pide(0)) !== 0 || dias(pide(UMBRAL - 1)) !== 0)
+      throw new Error('por debajo del umbral NO se pinta: un aviso que sale siempre se aprende a ignorar');
+    if (dias(pide(UMBRAL)) !== UMBRAL)
+      throw new Error('justo en el umbral SÍ se pinta: el borde tiene que estar en un sitio, no en dos');
+    if (dias({ replies: [{ by: 'agente', at: hace(9), info: 1 }] }) !== 0)
+      throw new Error('lo INFORMATIVO no envejece: no esperaba respuesta, así que no le reclama nada');
+    if (dias({ done: true, replies: [{ by: 'agente', at: hace(9) }] }) !== 0)
+      throw new Error('una tarea cerrada no reclama nada, tampoco por antigüedad');
+    if (dias({ replies: [{ by: 'agente', at: hace(9) }, { by: 'yo', at: hace(1) }] }) !== 0)
+      throw new Error('si él contestó después, no hay nada esperándole: manda el ORDEN, como siempre');
+
+    // y el render lo usa: sin esto la función podría estar en verde y ser inerte (R37)
+    if (!/const dEsp = diasEsperando\(it\)/.test(src))
+      throw new Error('la fila tiene que llamar a diasEsperando, o el cálculo es correcto e invisible');
+    if (!/\$\{dEsp \? " " \+ dEsp \+ "d" :/.test(src))
+      throw new Error('los días tienen que salir EN la marca 🤖 que ya mira, no en una señal nueva');
+
+    console.log('OK 0.74.0 (la vista sigue a la tarea al anclar; el robot dice cuántos días lleva esperándole)');
   }
 
   console.log('\nTODO EN VERDE');

@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.74.0] - 2026-08-14 — anclar ya no te devuelve al principio, y el robot dice cuánto lleva esperando
+
+- **Anclar o desanclar una tarea te deja donde está esa tarea**, no en la primera página. Antes, cada
+  clic en 📌 te devolvía al principio de la lista: molesto si estabas anclando varias desde una
+  página avanzada, y al revés de lo esperado al desanclar, que te mandaba arriba mientras la fila se
+  iba hacia abajo.
+- **Una petición del asistente que lleva días sin contestar ahora lo dice**: el 🤖 pasa a mostrar
+  «🤖 4d». Aparece **a partir de tres días** y **solo en las que te piden algo** — un aviso ya
+  contestado, o meramente informativo, no envejece.
+- No hay ninguna señal nueva: el número va en la marca que ya mirabas. El color no cambia, porque el
+  rojo aquí significa «vencido» y no debe significar dos cosas.
+
 ## [0.73.0] - 2026-08-13 — el aviso ⚙ deja de partirse, y la fecha explica qué significa
 
 - **El aviso ⚙ de la barra de abajo ya no parte el número a otra línea.** El contador aparecía
