@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.76.1] - 2026-08-15 — el botón 📅 del alta ya abre el editor
+
+- **Corregido: pulsar 📅 al crear una tarea la creaba pero no abría su editor de fecha.** Al añadir
+  ese botón, la barra de alta pasó a tener dos botones con la misma clase, y ambas acciones acabaron
+  enganchadas al mismo: el 📅 creaba la tarea y dejaba el campo vacío, así que la parte de «abrir la
+  fecha» se encontraba sin nada que hacer. El ＋ se había quedado sin acción propia.
+
 ## [0.76.0] - 2026-08-15 — buscar deja de llevarte a tareas cerradas sin avisar
 
 - **Ctrl+K prefiere las tareas pendientes.** Antes te llevaba a la primera que coincidiera, aunque

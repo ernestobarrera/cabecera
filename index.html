@@ -2018,7 +2018,7 @@ function syncUI(mode, txt){
    reaparece) y si Recargar está activo. El descarte ✕ vive solo en memoria de la sesión.
    Demora asumida: la CDN de Pages puede servir la versión vieja hasta ~10 min aun con
    no-store (gobierna la caché del navegador, no la CDN); para pestañas de días, irrelevante. */
-const APP_VERSION = "0.76.0";
+const APP_VERSION = "0.76.1";
 let newVersionDetected = null;   // versión superior detectada; detiene futuras consultas
 let verDismissed = false;        // ✕: solo esta sesión — nunca persistido en disco
 let verCheckInflight = false;    // sin consultas concurrentes
@@ -6333,7 +6333,7 @@ function bodyTodo(w, el){
   el.classList.toggle("has-desc", !!desc);
   el.innerHTML = (desc ? `${descHtml(desc, w.id)}` : "")
     + `
-    <div class="todo-add"><input type="text" placeholder="Nueva tarea…"><button class="mini add-due" title="Crear y ponerle fecha, aviso o marca de agente en el mismo gesto (Ctrl+Enter)">📅</button><button class="mini">＋</button></div>
+    <div class="todo-add"><input type="text" placeholder="Nueva tarea…"><button class="mini add-due" title="Crear y ponerle fecha, aviso o marca de agente en el mismo gesto (Ctrl+Enter)">📅</button><button class="mini add-now" title="Crear la tarea (Enter)">＋</button></div>
     <div class="todo-bar"><div class="todo-tabs todo-toggle"></div><input type="search" class="todo-search" placeholder="Buscar…"><select class="todo-sort mini" title="Cómo se ordenan las tareas pendientes"></select></div>
     <ul class="plain todo-list"></ul>`;
   if (!Array.isArray(w.data.items)) w.data.items = [];
@@ -6393,7 +6393,16 @@ function bodyTodo(w, el){
       if (fila) setDue(it, fila);
     }
   };
-  el.querySelector(".todo-add .mini").addEventListener("click", () => add(false));
+  /* 0.76.1 — CADA BOTÓN POR SU CLASE PROPIA. Parte suyo del 15/08: «se guarda tarea, pero no se abre
+     selector de fecha». La causa era de una línea y vale la pena dejarla escrita: al añadir el 📅,
+     la barra de alta pasó a tener DOS `.mini`, y `querySelector(".todo-add .mini")` devuelve el
+     PRIMERO — que era el 📅. Así que el 📅 acabó con los dos manejadores: creaba la tarea con
+     `add(false)`, vaciaba el campo, y el `add(true)` que venía detrás se encontraba el campo vacío
+     y salía por su propia guarda. El ＋ se quedó sin ninguno.
+     LECCIÓN, porque el test no lo cazó: comprobaba que EXISTIERAN los dos manejadores, no que
+     apuntaran a botones DISTINTOS. Un selector por clase compartida es frágil en cuanto llega un
+     segundo elemento; cada acción lleva ahora su clase. */
+  el.querySelector(".todo-add .add-now").addEventListener("click", () => add(false));
   el.querySelector(".todo-add .add-due").addEventListener("click", () => add(true));
   inp.addEventListener("keydown", e => {
     if (e.key !== "Enter") return;

@@ -4078,6 +4078,16 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
     if (!/class="mini add-due"/.test(src)) throw new Error('falta el botón 📅 en el alta');
     if (!/\.add-due"\)\.addEventListener\("click", \(\) => add\(true\)\)/.test(src))
       throw new Error('el botón 📅 tiene que crear la tarea CON fecha, o es decorativo');
+    /* 0.76.1 — LA GUARDA QUE FALTABA, y por eso el fallo llegó a producción: se comprobaba que
+       existieran los DOS manejadores, no que fueran a botones DISTINTOS. `querySelector` sobre una
+       clase compartida devuelve el primero, así que ambos acabaron en el 📅 y el ＋ sin ninguno.
+       Ahora se exige que cada acción se enganche por una clase propia y que no compartan selector. */
+    const selAdd = [...src.matchAll(/\.todo-add \.([\w-]+)"\)\.addEventListener\("click"/g)].map(m => m[1]);
+    if (selAdd.length !== 2 || selAdd[0] === selAdd[1])
+      throw new Error('los dos botones del alta tienen que engancharse por clases DISTINTAS: con una '
+        + 'clase compartida, querySelector devuelve el primero y uno de los dos se queda muerto');
+    if (selAdd.includes('mini'))
+      throw new Error('«mini» la llevan los dos botones: seleccionar por ella es el fallo que hubo');
     if (!/add\(e\.ctrlKey \|\| e\.metaKey\)/.test(src))
       throw new Error('Ctrl+Enter hace lo mismo que el botón: un atajo anunciado tiene que existir (R27)');
     if (!/if \(conFecha\)[\s\S]{0,200}setDue\(it, fila\)/.test(addT))
