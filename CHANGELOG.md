@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.77.0] - 2026-08-15 — la alarma sobrevive a recargar la página
+
+- **La alarma del temporizador ya no se pierde al recargar.** Antes, el campo seguía mostrando la
+  hora que habías puesto pero **no había ninguna alarma detrás**: parecía armada y no lo estaba.
+  Ahora se rearma sola si la hora aún no ha llegado.
+- **Si venció mientras Cabecera estaba cerrada, no suena tarde**: lo dice —«no sonó»— con la hora, y
+  te deja volver a activarla. Un aviso retroactivo de anoche al abrir el portátil es ruido, no aviso.
+- Sigue siendo una alarma local, que necesita Cabecera abierta para sonar. Lo que cambia es que
+  ahora el widget **dice la verdad** sobre si está activa o no.
+
 ## [0.76.1] - 2026-08-15 — el botón 📅 del alta ya abre el editor
 
 - **Corregido: pulsar 📅 al crear una tarea la creaba pero no abría su editor de fecha.** Al añadir

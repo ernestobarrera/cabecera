@@ -2018,7 +2018,7 @@ function syncUI(mode, txt){
    reaparece) y si Recargar está activo. El descarte ✕ vive solo en memoria de la sesión.
    Demora asumida: la CDN de Pages puede servir la versión vieja hasta ~10 min aun con
    no-store (gobierna la caché del navegador, no la CDN); para pestañas de días, irrelevante. */
-const APP_VERSION = "0.76.1";
+const APP_VERSION = "0.77.0";
 let newVersionDetected = null;   // versión superior detectada; detiene futuras consultas
 let verDismissed = false;        // ✕: solo esta sesión — nunca persistido en disco
 let verCheckInflight = false;    // sin consultas concurrentes
@@ -8272,19 +8272,62 @@ function bodyTimer(w, el){
     body.querySelector(".snd").addEventListener("change", e => { w.data.sound = e.target.value; markDirty(); });
     const setLabel = () => { w.data.alarmLabel = body.querySelector(".al-label").value.trim().slice(0, 80); markDirty(); };
     body.querySelector(".al-label").addEventListener("change", setLabel);
+
+    /* 0.77.0 — LA ALARMA SE REARMA SOLA, y cuando no puede LO DICE. Deuda vieja, con la causa
+       localizada en julio de 2026 y sin decidir hasta hoy: `w.data.alarmTime` persistía y se pintaba
+       en el campo, pero el `setInterval` que dispara solo nacía al pulsar «Activar». Tras recargar,
+       **el campo mostraba la hora y no había ninguna alarma puesta**: el widget mentía en silencio,
+       que es peor que no tener la función.
+
+       LA DECISIÓN QUE ESTABA ABIERTA era «¿rearmar sola, o exigir Activar y pintar "no activa"?».
+       Se hacen LAS DOS, porque son casos distintos y solo juntas dejan de mentir:
+       · si el instante guardado SIGUE EN EL FUTURO → se rearma sola y se dice que está activa;
+       · si YA PASÓ mientras Cabecera estaba cerrada → **no suena retroactivamente** (una alarma que
+         salta al abrir el portátil por la mañana por algo de anoche es ruido, no aviso) y se pinta
+         «no sonó», con la hora, para que se sepa qué ocurrió y se pueda volver a armar.
+
+       Se guarda el INSTANTE (`alarmAt`), no solo la hora: con «07:30» a secas no se puede distinguir
+       «faltan diez minutos» de «pasó hace veintitrés horas», que es justo lo que hay que distinguir.
+       Y `armar` es UNA sola función para el botón y para el rearme: dos caminos que arman de formas
+       distintas acaban con dos alarmas distintas (el defecto que ya salió por cuatro sitios). */
+    const armar = (at, v) => {
+      stop();
+      big.textContent = v;
+      sub.textContent = w.data.alarmLabel || "alarma activa";
+      iv = setInterval(() => {
+        if (!guard()) return;
+        if (Date.now() < at) return;
+        stop(); sound();
+        toast("Alarma: " + (w.data.alarmLabel || v));
+        marcarAlarma(w, "Alarma · " + (w.data.alarmLabel || v));
+        // la alarma consumida se borra: dejarla puesta la rearmaría al recargar, sin haberlo pedido
+        delete w.data.alarmAt; markDirty();
+        big.textContent = "--:--"; sub.textContent = "alarma finalizada";
+      }, 1000);
+    };
+
     body.querySelector(".go").addEventListener("click", () => {
       const v = body.querySelector(".at").value; if (!v) return;
       const [H, M] = v.split(":").map(Number);
       const t = new Date(); t.setHours(H, M, 0, 0);
       if (t <= new Date()) t.setDate(t.getDate() + 1);
-      w.data.alarmTime = v; setLabel();
-      big.textContent = v; sub.textContent = w.data.alarmLabel || "alarma activa"; markDirty();
-      stop();
-      iv = setInterval(() => { if (!guard()) return;
-        if (Date.now() >= t){ stop(); sound(); toast("Alarma: " + (w.data.alarmLabel || v)); marcarAlarma(w, "Alarma · " + (w.data.alarmLabel || v)); big.textContent = "--:--"; sub.textContent = "alarma finalizada"; }
-      }, 1000);
+      w.data.alarmTime = v; w.data.alarmAt = t.getTime(); setLabel(); markDirty();
+      armar(t.getTime(), v);
     });
-    body.querySelector(".st").addEventListener("click", () => { stop(); delete w.data.alarmTime; big.textContent = "--:--"; sub.textContent = "alarma local mientras Cabecera esté abierta"; markDirty(); });
+    body.querySelector(".st").addEventListener("click", () => {
+      stop(); delete w.data.alarmTime; delete w.data.alarmAt;
+      big.textContent = "--:--"; sub.textContent = "alarma local mientras Cabecera esté abierta"; markDirty();
+    });
+
+    // REARME al pintar: es lo que convierte el campo en una promesa cumplida o en un aviso honesto
+    if (Number.isFinite(w.data.alarmAt)){
+      if (w.data.alarmAt > Date.now()) armar(w.data.alarmAt, w.data.alarmTime || "--:--");
+      else {
+        big.textContent = "--:--";
+        sub.textContent = `no sonó (${w.data.alarmTime || "?"}): Cabecera no estaba abierta — pulsa Activar`;
+        delete w.data.alarmAt;   // no se arrastra: o se rearma a mano, o deja de prometer nada
+      }
+    }
   };
   const paint = () => {
     stop(); w.data.tab = mode;

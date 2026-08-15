@@ -4159,5 +4159,49 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
     console.log('OK 0.76.0 (buscar prefiere lo pendiente y avisa de lo cerrado; #128 buscable; la consulta sobrevive y caduca)');
   }
 
+  // --- 0.77.0: la alarma se rearma sola, y cuando no puede lo dice ------------------------------
+  {
+    /* Deuda vieja con la causa localizada en julio de 2026: `alarmTime` persistía y se pintaba en el
+       campo, pero el temporizador que dispara solo nacía al pulsar «Activar». Tras recargar, el
+       widget enseñaba una hora SIN alarma detrás — mentía en silencio, que es peor que no tenerla.
+       Se prueba por fuente porque el efecto vive en un setInterval, pero atado a lo que tiene que
+       ser cierto, no a cómo está escrito. */
+    const al = src.match(/const paintAl = \(\) => \{[\s\S]*?\n  \};/)[0];
+
+    // UNA sola función arma, para el botón y para el rearme: dos caminos = dos alarmas distintas
+    if (!/const armar = \(at, v\) => \{/.test(al))
+      throw new Error('armar tiene que ser UNA función: si el botón y el rearme arman por su cuenta, divergen');
+    // las DOS llamadas: la del botón y la del rearme al pintar (la declaración no cuenta)
+    if (!/armar\(t\.getTime\(\), v\)/.test(al))
+      throw new Error('el botón «Activar» tiene que armar con esa función, no por su cuenta');
+    if (!/armar\(w\.data\.alarmAt,/.test(al))
+      throw new Error('al pintar hay que rearmar con la MISMA función, o el rearme no existe');
+
+    // se guarda el INSTANTE, no solo la hora: con «07:30» no se distingue futuro de pasado
+    if (!/w\.data\.alarmAt = t\.getTime\(\)/.test(al))
+      throw new Error('hay que guardar el instante: con la hora suelta no se sabe si ya pasó');
+
+    // el rearme SOLO si sigue en el futuro
+    if (!/if \(w\.data\.alarmAt > Date\.now\(\)\) armar\(/.test(al))
+      throw new Error('se rearma solo lo que aún no ha vencido');
+
+    /* Y LO QUE NO DEBE PASAR, que es la mitad de la decisión: una alarma vencida mientras Cabecera
+       estaba cerrada NO suena al abrir. Un aviso retroactivo de anoche es ruido, no aviso. */
+    const rama = al.slice(al.indexOf('else {'));
+    if (/sound\(\)/.test(rama))
+      throw new Error('una alarma vencida NO puede sonar retroactivamente al abrir');
+    if (!/no sonó/.test(rama))
+      throw new Error('y tiene que DECIR que no sonó: callar es exactamente el defecto que se arregla');
+    if (!/delete w\.data\.alarmAt/.test(rama))
+      throw new Error('la vencida se limpia, o el widget sigue prometiendo una alarma que no existe');
+
+    // al consumirse también se borra: si no, recargar la volvería a armar sin haberlo pedido
+    const dentro = al.slice(al.indexOf('const armar'), al.indexOf('body.querySelector(".go")'));
+    if (!/delete w\.data\.alarmAt/.test(dentro))
+      throw new Error('una alarma ya sonada se borra: si no, se rearma sola al recargar');
+
+    console.log('OK 0.77.0 (la alarma sobrevive al recargar; la vencida no suena tarde y lo declara)');
+  }
+
   console.log('\nTODO EN VERDE');
 })().catch(e => { console.error(e && e.stack || e); process.exitCode = 1; });
