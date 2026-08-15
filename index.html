@@ -549,6 +549,9 @@ ul.plain{list-style:none}
 .reply-editor{margin:6px 0 2px; padding:9px 10px; border-radius:10px; border:1px solid var(--border-soft); background:rgba(0,0,0,.22);
   position:static; width:100%; flex:1 0 100%}
 .rp-head{display:flex; align-items:center; justify-content:space-between; font-size:12px; color:var(--text-dim); margin-bottom:7px}
+/* 0.75.0 — el número de la tarea, a la vista donde se cita. Se selecciona con doble clic para
+   poder copiarlo, y en tono apagado: acompaña al título, no compite con él. */
+.rp-n{font-weight:400; opacity:.65; font-variant-numeric:tabular-nums; user-select:all; margin-left:4px}
 .rp-x{border:none; background:none; color:var(--text-dim); cursor:pointer; font-size:13px; padding:0 4px; border-radius:6px}
 .rp-x:hover{color:var(--text); background:rgba(255,255,255,.1)}
 .rp-hilo{max-height:190px; overflow:auto; display:flex; flex-direction:column; gap:6px; margin-bottom:8px}
@@ -1536,8 +1539,10 @@ function bootstrapElementIds(s){
   for (const sp of (s.spaces || [])){
     for (const w of (sp.widgets || [])){
       const base = w.id, d = w.data || {};
-      if (w.type === "todo" && Array.isArray(d.items))
+      if (w.type === "todo" && Array.isArray(d.items)){
         d.items.forEach((it, i) => { if (it && typeof it === "object") assign(it, "t", base + "|t|" + i); });
+        numerarTareas(d);
+      }
       else if (w.type === "clips" && Array.isArray(d.items))
         d.items.forEach((it, i) => { if (it && typeof it === "object") assign(it, "c", base + "|c|" + i); });
       else if (w.type === "links" && Array.isArray(d.groups))
@@ -1549,6 +1554,38 @@ function bootstrapElementIds(s){
     }
   }
   s.identityVersion = 1;
+}
+/* 0.75.0 — NUMERACIÓN «#128» DE TAREAS. Decidida hace tiempo y sin construir: correlativo POR LISTA,
+   asignado al nacer, **nunca reutilizado**, para poder citar una tarea en una conversación con un
+   agente sin pegar su texto entero.
+
+   EL DETALLE QUE ESTABA ABIERTO ERA LA FUSIÓN, y es real: sus dos equipos pueden crear una tarea
+   cada uno estando desconectados, y ambos reclamarían el mismo número. No se puede impedir sin un
+   servidor, así que se resuelve **reparándolo**, no evitándolo: al cargar, si dos tareas de la misma
+   lista comparten número, la más nueva recibe el siguiente libre. Es aceptable **porque el número no
+   es la identidad** —para eso está el `id` estable de arriba, que sí se fusiona bien—: `#128` es una
+   etiqueta de conveniencia para hablar, y que una cambie una vez tras una fusión no rompe nada.
+   `CONTRATO:` el `id` identifica, el `#n` solo nombra. Nunca al revés.
+
+   `w.data.lastNum` guarda el último entregado, así que **borrar una tarea no libera su número**:
+   sin eso, borrar la #128 y crear otra daría dos #128 en el histórico y las citas viejas mentirían.
+
+   RETROACTIVO la primera vez, a propósito: numerar solo lo nuevo dejaría 475 tareas suyas sin poder
+   citarse, que es justo para lo que se pidió. Se asignan por su orden en el array, que es el de
+   creación. */
+function numerarTareas(d){
+  const items = d.items;
+  const vistos = new Set();
+  let ultimo = Number.isInteger(d.lastNum) ? d.lastNum : 0;
+  for (const it of items){
+    if (!it || typeof it !== "object") continue;
+    const n = it.n;
+    // sin número, o repetido dentro de la lista (fusión entre equipos) → se le da el siguiente
+    if (!Number.isInteger(n) || n < 1 || vistos.has(n)) it.n = ++ultimo;
+    else if (n > ultimo) ultimo = n;
+    vistos.add(it.n);
+  }
+  if (ultimo > 0) d.lastNum = ultimo;
 }
 function sanitizeState(s){
   if (!s || typeof s !== "object") s = migrate(defaultState());
@@ -1981,7 +2018,7 @@ function syncUI(mode, txt){
    reaparece) y si Recargar está activo. El descarte ✕ vive solo en memoria de la sesión.
    Demora asumida: la CDN de Pages puede servir la versión vieja hasta ~10 min aun con
    no-store (gobierna la caché del navegador, no la CDN); para pestañas de días, irrelevante. */
-const APP_VERSION = "0.74.0";
+const APP_VERSION = "0.75.0";
 let newVersionDetected = null;   // versión superior detectada; detiene futuras consultas
 let verDismissed = false;        // ✕: solo esta sesión — nunca persistido en disco
 let verCheckInflight = false;    // sin consultas concurrentes
@@ -6296,7 +6333,7 @@ function bodyTodo(w, el){
   el.classList.toggle("has-desc", !!desc);
   el.innerHTML = (desc ? `${descHtml(desc, w.id)}` : "")
     + `
-    <div class="todo-add"><input type="text" placeholder="Nueva tarea…"><button class="mini">＋</button></div>
+    <div class="todo-add"><input type="text" placeholder="Nueva tarea…"><button class="mini add-due" title="Crear y ponerle fecha, aviso o marca de agente en el mismo gesto (Ctrl+Enter)">📅</button><button class="mini">＋</button></div>
     <div class="todo-bar"><div class="todo-tabs todo-toggle"></div><input type="search" class="todo-search" placeholder="Buscar…"><select class="todo-sort mini" title="Cómo se ordenan las tareas pendientes"></select></div>
     <ul class="plain todo-list"></ul>`;
   if (!Array.isArray(w.data.items)) w.data.items = [];
@@ -6325,16 +6362,44 @@ function bodyTodo(w, el){
     if (inp.value) todoDraft.set(w.id, inp.value); else todoDraft.delete(w.id);
   });
 
-  const add = () => {
+  /* 0.75.0 — CREAR Y PARAMETRIZAR EN UN GESTO. Petición suya (13/08): «en to-do existe un botón
+     flotante en el formulario de creación para que al crearla pueda parametrizar sin necesidad de
+     ir a buscarla una vez creada como sucede ahora, lo que es también mejora ux».
+     Es fricción diaria: escribes la tarea, se crea, se va a su sitio en la lista —que con un orden
+     automático o con paginación puede ser cualquiera— y hay que encontrarla para ponerle fecha.
+     `conFecha` crea la tarea y abre SU editor de fecha, que es el mismo de siempre y ya trae dentro
+     la hora de aviso y las casillas ⚙/▪. No se duplica ningún formulario: se encadena el que hay.
+     Se resuelve la fila DESPUÉS de pintar, porque hasta entonces no se sabe en qué página cayó. */
+  const add = (conFecha = false) => {
     const t = inp.value.trim(); if (!t) return;
     const it = { t, done: false, created: todayIso(), createdT: horaCorta() };
-    w.data.items.push(it); inp.value = ""; todoDraft.delete(w.id);
+    // 0.75.0 — el número se asigna AL NACER, con la misma función que lo repara al cargar: dos
+    // caminos que numeran de formas distintas acaban dando dos numeraciones (R47)
+    w.data.items.push(it); numerarTareas(w.data);
+    inp.value = ""; todoDraft.delete(w.id);
     // una tarea recién creada no tiene conversación: con el filtro 🤖 puesto no se vería ninguna
-    ui.view = "pend"; ui.soloBot = false; paint(); markDirty();
+    ui.view = "pend"; ui.soloBot = false;
+    // el salto reutiliza la puerta de 0.70.0: lleva a su fila abriendo la página que haga falta
+    if (conFecha) todoJump.set(w.id, it);
+    paint(); markDirty();
+    /* La oferta de convertir en nota va SIEMPRE, también con 📅. Saltármela cuando abro el editor
+       de fecha parecía razonable —dos cosas a la vez estorban— pero el caso que cubre es que hayas
+       PEGADO un texto largo, y ahí la oferta importa más que la fecha: es lo único que evita que
+       una conversación entera acabe viviendo en una línea de lista. Un test lo cazó, con razón.
+       La oferta es un aviso al pie, no un modal, así que conviven sin taparse. */
     offerTaskToNote(w, it, paint);   // pegar aquí una conversación entera tiene arreglo de un clic
+    if (conFecha) {
+      const fila = [...el.querySelectorAll(".todo-it")].find(li => li.__it === it);
+      if (fila) setDue(it, fila);
+    }
   };
-  el.querySelector(".todo-add .mini").addEventListener("click", add);
-  inp.addEventListener("keydown", e => { if (e.key === "Enter") add(); });
+  el.querySelector(".todo-add .mini").addEventListener("click", () => add(false));
+  el.querySelector(".todo-add .add-due").addEventListener("click", () => add(true));
+  inp.addEventListener("keydown", e => {
+    if (e.key !== "Enter") return;
+    // Ctrl+Enter crea y abre la fecha, como el botón. Enter a secas sigue haciendo lo de siempre.
+    add(e.ctrlKey || e.metaKey);
+  });
   // cambiar de vista o filtrar empieza por la primera página: conservar la posición solo tiene
   // sentido dentro de la MISMA lista; entre listas distintas sería memoria de otra cosa.
   // 0.52.0: el cambio de vista lo cablea `paint()` en cada pestaña, porque los botones se
@@ -6441,7 +6506,7 @@ function bodyTodo(w, el){
         + `<span class="rp-acts"><button class="rp-ed" type="button" title="Editar">✎</button><button class="rp-del" type="button" title="Borrar esta respuesta">✕</button></span></span>`
         + `<span class="rp-txt">${esc(r.t)}</span></div>`;
     }).join("");
-    ed.innerHTML = `<div class="rp-head"><b>Conversación</b><button class="rp-x" type="button" title="Cerrar (Esc)">✕</button></div>
+    ed.innerHTML = `<div class="rp-head"><b>Conversación${it.n ? ` <span class="rp-n" title="Número de esta tarea en la lista: cítalo tal cual cuando hables de ella con un asistente">#${it.n}</span>` : ""}</b><button class="rp-x" type="button" title="Cerrar (Esc)">✕</button></div>
       <div class="rp-hilo">${hilo || `<div class="rp-vacio">Aún no hay respuestas. Lo que escribas se guarda con su fecha y no se sobrescribe.</div>`}</div>
       ${it.note ? `<div class="rp-nota"><b>Nota:</b> ${esc(it.note)}</div>` : ""}
       <textarea class="rp-t" placeholder="Escribe tu respuesta…  (Ctrl+Enter para enviar)"></textarea>
@@ -6767,6 +6832,20 @@ function bodyTodo(w, el){
     orden.style.display = ui.view === "pend" || buscando ? "" : "none";
     orden.innerHTML = Object.entries(TODO_SORTS)
       .map(([k, v]) => `<option value="${k}"${k === sk ? " selected" : ""}>${v.etiqueta}</option>`).join("");
+    /* 0.75.0 — EL SELECTOR DICE LA CONSECUENCIA, no solo el criterio. Parte suyo del 14/08: «ahora
+       entiendo lo de antiguas arriba; no tenía entendido que un orden de vista tenía repercusión
+       funcional como es el caso. No sé si esto tiene más solución técnica canónica que poner un
+       tooltip en orden que avise de esto».
+       El aviso existía desde 0.53.0 pero SOLO en el asa ⋮⋮ de una fila: aparecía cuando ya habías
+       intentado arrastrar y había fallado. Estaba en el sitio de la consecuencia, no en el de la
+       DECISIÓN. Ponerlo aquí es lo que él pedía y es lo canónico: la advertencia va donde se elige,
+       no donde se sufre. El texto cambia según el estado, así que también sirve de confirmación
+       cuando el arrastre SÍ está disponible. */
+    orden.title = sk === "manual"
+      ? "Orden a mano: puedes arrastrar las tareas por su asa ⋮⋮ para ponerlas en el orden que quieras."
+      : `Orden automático (${TODO_SORTS[sk].etiqueta}). Con un criterio automático NO se puede arrastrar: `
+        + "elige «↕ A mano» para volver a reordenar tú. Tu orden manual no se pierde por cambiar de criterio.";
+    orden.classList.toggle("auto", sk !== "manual");
 
     // el filtro 🤖 es de la vista en la que estás, y en cada una significa lo suyo: en Pendientes,
     // «te espera respuesta»; en Hechas, «llegó algo después de cerrarla». Buscando vale la unión:
@@ -6879,6 +6958,9 @@ function bodyTodo(w, el){
       const li = document.createElement("li");
       const taskColor = TASK_COLORS[it.color] || "";
       li.className = "todo-it" + (it.done ? " done" : "") + (taskColor ? " has-task-color" : "") + (it.pin ? " anclada" : "");
+      // 0.75.0 — la fila recuerda SU tarea por referencia, para poder abrirle el editor de fecha
+      // justo después de crearla. Por índice no valdría: la lista va ordenada, filtrada y paginada.
+      li.__it = it;
       if (taskColor) li.style.setProperty("--task-color", taskColor);
       const dm = dueMeta(it);
       const nRep = Array.isArray(it.replies) ? it.replies.length : 0;
@@ -6909,7 +6991,12 @@ function bodyTodo(w, el){
       // la fecha de alta va TAMBIÉN en la fila desde 0.49.0 (ver altaMeta): el tooltip sigue dando
       // la fecha larga completa, pero la señal corta se ve sin tener que buscarla
       const am = it.created ? altaMeta(it.created, it.createdT) : null;
-      const alta = am ? ` title="${esc(am.largo)}"` : "";
+      /* 0.75.0 — el número va en el TOOLTIP del texto, no en la fila. Es para citarlo en una
+         conversación («mira la #128»), no para leerlo cien veces: pintarlo en cada fila costaría
+         ancho a las 475 tareas para servir en una. Se busca pasando el ratón, que es cuando hace
+         falta. La cabecera de la conversación sí lo lleva a la vista, porque ahí sí se cita. */
+      const alta = am ? ` title="${esc((it.n ? "#" + it.n + " · " : "") + am.largo)}"`
+        : it.n ? ` title="#${it.n}"` : "";
       li.innerHTML = `<span class="it-drag" draggable="${reordenable}" title="${reordenable ? "Arrastrar para reordenar (o usa ↑ ↓)" : (ui.view === "pend" ? "Con un orden automático no se reordena a mano: elige «↕ A mano»" : "En «Hechas» no se reordena")}">⋮⋮</span><input type="checkbox" ${it.done ? "checked" : ""}>`
         // la marca de anclada se ve SIEMPRE, y solo la pagan las filas ancladas: una fila normal no
         // pierde ni un píxel de texto por una señal que no le toca (R43)

@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.75.0] - 2026-08-15 — crear y poner fecha en un gesto, tareas numeradas, y el orden avisa
+
+- **Nuevo botón 📅 al crear una tarea** (o **Ctrl+Enter**): la crea y abre su editor de fecha en el
+  mismo gesto, con la hora de aviso y las casillas ⚙/▪ dentro. Antes había que crearla, buscarla en
+  la lista —que con orden automático o varias páginas puede estar en cualquier sitio— y abrirla.
+- **Cada tarea tiene su número**, tipo `#128`, para poder citarla al hablar con un asistente sin
+  pegar su texto. Se ve al pasar el ratón por el texto y en la cabecera de su conversación. Se
+  asigna al crearla y **no se reutiliza** aunque borres tareas.
+  - Las tareas que ya tenías reciben número por su orden de creación, para que también se puedan
+    citar.
+  - Si tus dos equipos crean una tarea a la vez estando desconectados, al juntarse podrían pedir el
+    mismo número: en ese caso **se renumera la más nueva** al abrir. El número sirve para hablar; lo
+    que identifica una tarea por dentro no cambia nunca.
+- **El selector de orden avisa de lo que implica.** Con un criterio automático no se puede arrastrar,
+  y hasta ahora eso solo se descubría al intentarlo. Ahora lo dice al pasar el ratón, donde se elige.
+
 ## [0.74.0] - 2026-08-14 — anclar ya no te devuelve al principio, y el robot dice cuánto lleva esperando
 
 - **Anclar o desanclar una tarea te deja donde está esa tarea**, no en la primera página. Antes, cada

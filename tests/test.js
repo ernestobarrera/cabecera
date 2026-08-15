@@ -306,6 +306,7 @@ globalThis.defaultState = function(){ return { version: 1, updatedAt: Date.now()
 eval('globalThis.migrate = ' + pickFn('migrate', 's'));
 eval('globalThis.sanitizeWidgetShape = ' + pickFn('sanitizeWidgetShape', 'w'));
 eval('globalThis.detHash = ' + pickFn('detHash', 'str'));                       // D1: dependencia de sanitizeState
+eval('globalThis.numerarTareas = ' + pickFn('numerarTareas', 'd'));             // 0.75.0: la llama bootstrapElementIds
 eval('globalThis.bootstrapElementIds = ' + pickFn('bootstrapElementIds', 's')); // D1: la llama sanitizeState
 eval('globalThis.canonJSON = ' + pickFn('canonJSON', 'v'));                      // 0.57.0: base de la identidad legacy de la papelera
 eval('globalThis.trashLegacyId = ' + pickFn('trashLegacyId', 'item'));
@@ -1520,7 +1521,14 @@ eval('globalThis.taskNotePointer = ' + pickFn('taskNotePointer', 'titulo, hoy'))
   if (!/indexOf\(it\) < 0/.test(body)) throw new Error('E: debe abortar si la tarea se borró mientras el aviso estaba en pantalla');
   if (!/w\.data\.items/.test(body) || !/state\.widgets\.push/.test(body)) throw new Error('E: debe crear la nota en el espacio activo');
   // cableado en las DOS puertas de entrada de texto: alta y edición
-  const add = src.match(/const add = \(\) => \{[\s\S]*?\n  \};/)[0];
+  /* 0.75.0 — se ancla por el CONTENIDO, no por la firma. Antes buscaba `const add = () => {` y hay
+     DOS funciones con ese nombre (tareas y enlaces): al cambiar la firma del alta de tareas, este
+     test pasó a examinar la de enlaces sin avisar. Un test que se ancla a la forma puede acabar
+     comprobando otra cosa y seguir en verde — aquí falló por suerte. `todoDraft` solo aparece en la
+     de tareas, así que identifica la correcta pase lo que pase con sus parámetros. */
+  const addTodo = src.match(/const add = \([^)]*\) => \{[\s\S]*?todoDraft[\s\S]*?\n  \};/);
+  if (!addTodo) throw new Error('E: no encuentro el alta de TAREAS (la que toca todoDraft)');
+  const add = addTodo[0];
   if (!/offerTaskToNote/.test(add)) throw new Error('E: el alta de tarea no ofrece la conversión');
   // 0.46.0: el ancla cambió porque `commit` abre ahora con el guard `cerrado` (salir de la edición
   // sin cambio real ya no repinta la lista entera). La INTENCIÓN vigilada es la misma; no relajar.
@@ -2760,7 +2768,9 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
       throw new Error('el borrador debe guardarse mientras se escribe: restaurarlo sin guardarlo no repone nada');
     // superviviente de la prueba de mutación: se puede guardar y restaurar y no limpiar nunca, y
     // entonces la caja resucita el texto de una tarea YA creada cada vez que se repinta
-    const addFn = todoFn.match(/const add = \(\) => \{[\s\S]*?\n  \};/)[0];
+    // 0.75.0 — firma tolerante: `add` pasó a aceptar un parámetro (crear con fecha) y este anclaje
+    // se rompía. Lo que importa es la función, no cuántos argumentos tenga hoy.
+    const addFn = todoFn.match(/const add = \([^)]*\) => \{[\s\S]*?\n  \};/)[0];
     if (!/todoDraft\.delete\(w\.id\)/.test(addFn))
       throw new Error('al crear la tarea hay que limpiar el borrador, o el texto ya usado reaparece en la caja');
     if (/todoDraft/.test(src.match(/function sanitizeState[\s\S]*?\n\}/) ? src.match(/function sanitizeState[\s\S]*?\n\}/)[0] : ''))
@@ -4011,6 +4021,71 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
       throw new Error('los días tienen que salir EN la marca 🤖 que ya mira, no en una señal nueva');
 
     console.log('OK 0.74.0 (la vista sigue a la tarea al anclar; el robot dice cuántos días lleva esperándole)');
+  }
+
+  // --- 0.75.0: numeración #128, crear con fecha, y el orden avisa -------------------------------
+  {
+    /* (1) LA NUMERACIÓN. Lo que de verdad tiene que ser cierto: números únicos por lista, que no se
+       reutilizan al borrar, y que una COLISIÓN DE FUSIÓN se repare sola. Esto último es el detalle
+       que llevaba meses abierto: sus dos equipos pueden crear una tarea cada uno sin conexión y
+       reclamar el mismo número. */
+    const num = new Function('d', 'return (' + pickFn('numerarTareas', 'd').replace(/^function/, 'function') + ')(d);');
+    const ns = d => d.items.map(i => i.n);
+
+    let d1 = { items: [{ t: 'a' }, { t: 'b' }, { t: 'c' }] };
+    num(d1);
+    if (ns(d1).join() !== '1,2,3') throw new Error('las tareas sin número reciben uno correlativo, por orden de creación');
+    if (d1.lastNum !== 3) throw new Error('hay que recordar el último entregado, o borrar libera números');
+
+    // borrar la última y crear otra NO devuelve el 3: una cita vieja apuntaría a otra tarea
+    d1.items.pop(); d1.items.push({ t: 'd' }); num(d1);
+    if (d1.items[2].n !== 4) throw new Error('un número NO se reutiliza tras borrar (era el contrato)');
+
+    // idempotente: volver a pasar no renumera nada
+    const antes = ns(d1).join(); num(d1);
+    if (ns(d1).join() !== antes) throw new Error('renumerar al cargar cada vez movería los números bajo sus pies');
+
+    // LA COLISIÓN DE FUSIÓN, que es el caso que justificaba el diseño
+    const d2 = { lastNum: 5, items: [{ t: 'x', n: 5 }, { t: 'y', n: 5 }] };
+    num(d2);
+    if (d2.items[0].n === d2.items[1].n) throw new Error('dos tareas con el mismo número tras fusionar: hay que reparar la más nueva');
+    if (d2.items[0].n !== 5) throw new Error('la primera conserva el suyo: se repara la que llega después, no las dos');
+
+    // basura de entrada no rompe la numeración
+    const d3 = { items: [{ t: 'a', n: -4 }, { t: 'b', n: 'ocho' }, { t: 'c', n: 2.5 }] };
+    num(d3);
+    if (d3.items.some(i => !Number.isInteger(i.n) || i.n < 1)) throw new Error('un número inválido se sustituye, no se conserva');
+    if (new Set(ns(d3)).size !== 3) throw new Error('y siguen siendo únicos');
+
+    // se numera AL NACER con la misma función que repara al cargar (R47: un solo sitio)
+    const addT = src.match(/const add = \([^)]*\) => \{[\s\S]*?todoDraft[\s\S]*?\n  \};/)[0];
+    if (!/numerarTareas\(w\.data\)/.test(addT))
+      throw new Error('crear una tarea tiene que numerarla con la MISMA función que la repara, o habrá dos numeraciones');
+    if (!/numerarTareas\(d\)/.test(src.match(/function bootstrapElementIds[\s\S]*?\n\}/)[0]))
+      throw new Error('al cargar hay que numerar y reparar colisiones, o la fusión deja duplicados para siempre');
+
+    /* (2) CREAR Y PONER FECHA EN UN GESTO. Se comprueba el efecto: que exista la puerta, que abra el
+       editor que YA existe (no uno nuevo) y que no se trague la oferta de convertir en nota. */
+    if (!/class="mini add-due"/.test(src)) throw new Error('falta el botón 📅 en el alta');
+    if (!/\.add-due"\)\.addEventListener\("click", \(\) => add\(true\)\)/.test(src))
+      throw new Error('el botón 📅 tiene que crear la tarea CON fecha, o es decorativo');
+    if (!/add\(e\.ctrlKey \|\| e\.metaKey\)/.test(src))
+      throw new Error('Ctrl+Enter hace lo mismo que el botón: un atajo anunciado tiene que existir (R27)');
+    if (!/if \(conFecha\)[\s\S]{0,200}setDue\(it, fila\)/.test(addT))
+      throw new Error('tiene que abrir el editor de fecha QUE YA EXISTE, no duplicar formulario');
+    if (addT.indexOf('offerTaskToNote') > addT.indexOf('if (conFecha) {'))
+      throw new Error('la oferta de convertir en nota va ANTES y siempre: cubre el caso de pegar un texto largo');
+    if (!/li\.__it = it/.test(src))
+      throw new Error('la fila tiene que recordar su tarea por REFERENCIA: por índice fallaría, la lista va ordenada y paginada');
+
+    /* (3) EL SELECTOR DE ORDEN AVISA. Su parte del 14/08: no sabía que un orden de vista apagaba el
+       arrastre. El aviso existía solo en el asa, o sea después de fallar. */
+    if (!/orden\.title = sk === "manual"/.test(src))
+      throw new Error('el selector de orden tiene que decir la consecuencia donde se ELIGE, no solo donde se sufre');
+    if (!/NO se puede arrastrar/.test(src))
+      throw new Error('el aviso tiene que nombrar la consecuencia real: que no se puede reordenar a mano');
+
+    console.log('OK 0.75.0 (tareas numeradas y a prueba de fusión; crear con fecha en un gesto; el orden avisa)');
   }
 
   console.log('\nTODO EN VERDE');
