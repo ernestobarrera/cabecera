@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.79.0] - 2026-08-15 — aviso de peso del archivo, y el nombre de la imagen a un clic
+
+- **Nuevo aviso 💾 en la barra de abajo cuando tu archivo de datos empieza a pesar.** Mide el coste
+  de *trabajo*, no el disco de tu nube: ese archivo se relee y se reescribe entero en tus equipos
+  cada pocos segundos, así que cuanto más pesa, más lenta va la sincronización.
+- Aparece a partir de **1,5 MB** y se pone en ámbar a partir de **3 MB**. Por debajo no se pinta.
+- **Dice qué lo engorda**, no solo cuánto: nombra el widget que más ocupa y qué suele bastar para
+  bajarlo. Un número sin causa no se puede accionar.
+- **El indicador «📁 en la carpeta» de una imagen ahora copia el nombre del archivo** al pulsarlo,
+  para que puedas buscarlo en tu carpeta. Abrir el explorador de archivos **no es posible** desde una
+  página web, en ningún navegador; esto es lo más cerca que se puede estar.
+
 ## [0.78.0] - 2026-08-15 — las imágenes dejan de viajar dentro de datos.json
 
 - **Una imagen pegada ahora se guarda en tu carpeta sincronizada**, en `cabecera-imagenes`, y en

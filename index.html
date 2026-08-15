@@ -256,6 +256,8 @@ body{font-family:var(--font); color:var(--text); background:#10131a}
    líneas y el número caía DEBAJO de la rueda dentada (parte suyo, 13/08: «no aparece a la derecha
    como en tareas pendientes»). Es R47 en el CSS: dos avisos que se leen como uno solo tienen que
    compartir las reglas que los hacen leerse igual, no solo el color. Van juntas a propósito. */
+#tb-peso{display:none; color:var(--text-dim); white-space:nowrap; font-variant-numeric:tabular-nums; cursor:pointer}
+#tb-peso.alto{color:var(--warn); border-color:rgba(240,194,94,.35); background:rgba(240,194,94,.08)}
 #tb-exec{display:none; color:#7ab6f5; border-color:rgba(90,169,247,.35); background:rgba(90,169,247,.10); white-space:nowrap; font-variant-numeric:tabular-nums}
 #tb-tasks{display:none; color:var(--warn); border-color:rgba(240,194,94,.35); background:rgba(240,194,94,.08); white-space:nowrap; font-variant-numeric:tabular-nums}
 #tb-tasks.overdue{color:var(--danger); border-color:rgba(243,108,108,.4); background:rgba(243,108,108,.09)}
@@ -1059,6 +1061,7 @@ ul.plain{list-style:none}
   <div id="tb-spacer"></div>
   <div class="tb-item" id="tb-filter" title="Filtro por etiqueta activo" style="display:none"></div>
   <div class="tb-item" id="tb-trash" title="La papelera ocupa espacio en tu archivo de datos" style="display:none"></div>
+  <div class="tb-item" id="tb-peso" title="Peso del archivo de datos" style="display:none"></div>
   <div class="tb-item" id="tb-tasks" title="Tareas vencidas o que vencen hoy"></div>
   <div class="tb-item" id="tb-exec" title="Tareas de ejecución agéntica cuya fecha ya llegó"></div>
   <div class="tb-item" id="tb-alarm" title="Alarmas de temporizador que ya han sonado — clic para ir al temporizador"></div>
@@ -2018,7 +2021,7 @@ function syncUI(mode, txt){
    reaparece) y si Recargar está activo. El descarte ✕ vive solo en memoria de la sesión.
    Demora asumida: la CDN de Pages puede servir la versión vieja hasta ~10 min aun con
    no-store (gobierna la caché del navegador, no la CDN); para pestañas de días, irrelevante. */
-const APP_VERSION = "0.78.0";
+const APP_VERSION = "0.79.0";
 let newVersionDetected = null;   // versión superior detectada; detiene futuras consultas
 let verDismissed = false;        // ✕: solo esta sesión — nunca persistido en disco
 let verCheckInflight = false;    // sin consultas concurrentes
@@ -2375,7 +2378,7 @@ async function reducirPapelera(){
   state.trash = (state.trash || []).filter(x => !ids.has(x.id));
   markDirty();
   renderTrash();
-  renderTrashChip();
+  renderTrashChip(); renderPesoChip();
   toast(`${fuera.length} elemento${fuera.length === 1 ? "" : "s"} en ${TRASH_DIR}/${nombre}`);
   return true;
 }
@@ -2391,6 +2394,49 @@ function renderTrashChip(){
   el.style.display = "flex";
   el.textContent = `🗑️ ${kb(b)}`;
   el.title = `La papelera ocupa ${kb(b)} en ${n} elementos dentro de tu archivo de datos, que se relee continuamente en tus equipos — clic para revisarla`;
+}
+/* 0.79.0 — AVISO DE PESO DEL ARCHIVO. Decisión suya del 05/08, con el matiz que puso él y que fija
+   qué se mide: **el coste de TRABAJO, no el disco de su nube**. Su frase: «tienes razón en que el
+   límite no es nuestro». Lo que duele no es ocupar espacio —le sobra— sino que `datos.json` se relee
+   y se reescribe entero en sus dos equipos continuamente: cuanto más pesa, más lenta la
+   sincronización y más grande la ventana en la que dos escrituras pueden pisarse.
+
+   POR QUÉ ESTE AVISO VA DESPUÉS DE SACAR LAS IMÁGENES, y era el motivo de ordenarlo así: medido hoy,
+   su archivo pasó de 1,17 MB a **780 KB** al mover las imágenes fuera. Calibrar el umbral ayer
+   habría sido calibrarlo contra un tamaño que estaba a punto de caer un tercio.
+
+   LOS UMBRALES, y se eligen con su archivo real delante, no de memoria: **aviso a 1,5 MB** (casi el
+   doble de lo que pesa ahora: no salta hoy, y salta antes de que moleste) y **rojo a 3 MB**. A cero
+   no se pinta, como todos los avisos de esta barra.
+
+   Y DICE QUÉ HACER, que es lo que separa un aviso útil de uno culpabilizador: nombra al widget que
+   más ocupa, porque en su caso una sola imagen eran 371 KB de 1 MB. Un número sin causa no se
+   puede accionar. */
+const PESO_AVISO = 1500000, PESO_ROJO = 3000000;
+/** El widget que más pesa dentro del archivo. Solo su nombre y su tamaño: nunca su contenido. */
+function widgetMasPesado(){
+  let peor = null;
+  for (const sp of (state.spaces || []))
+    for (const w of (sp.widgets || [])){
+      const n = JSON.stringify(w).length;
+      if (!peor || n > peor.n) peor = { n, t: w.t || (WTYPES[w.type] || {}).name || w.type, sp: sp.name || "" };
+    }
+  return peor;
+}
+function renderPesoChip(){
+  const el = $("#tb-peso");
+  if (!el || !state) return;
+  const b = JSON.stringify(state).length;
+  if (b < PESO_AVISO){ el.style.display = "none"; return; }
+  el.style.display = "flex";
+  el.classList.toggle("alto", b >= PESO_ROJO);
+  el.textContent = `💾 ${(b / 1048576).toFixed(1)} MB`;
+  const peor = widgetMasPesado();
+  el.title = `Tu archivo de datos ocupa ${(b / 1048576).toFixed(1)} MB y se relee entero en tus equipos `
+    + `cada pocos segundos: cuanto más pesa, más lenta va la sincronización.`
+    + (peor ? `\n\nLo que más ocupa: «${peor.t}»${peor.sp ? " (" + peor.sp + ")" : ""}, ${kb(peor.n)}.` : "")
+    + `\n\nQué suele bastar: sacar las imágenes del archivo con «📤 Sacar del archivo», y reducir la papelera.`
+    + `\n\nClic para abrir la papelera.`;
 }
 function renderDock(){
   const b = $("#desk-trash"), n = $("#desk-trash-n");
@@ -2488,7 +2534,7 @@ function renderTrash(){
   const rb = $("#trash-reduce");
   if (rb) rb.style.display = trashCandidatos().length ? "" : "none";
   renderDock();
-  renderTrashChip();
+  renderTrashChip(); renderPesoChip();
 }
 /* Se llama tras una mutación REAL de la papelera. No reduce por su cuenta: evalúa y AVISA.
    Desviación consciente del gate, y su motivo: el gate autoriza reducir aquí, pero también fija
@@ -2498,7 +2544,7 @@ function renderTrash(){
    pasa por el diálogo de «Reducir». */
 let avisoPapeleraDado = false;
 function trasMutarPapelera(){
-  renderTrashChip();
+  renderTrashChip(); renderPesoChip();
   const b = trashBytes();
   if (b < TRASH_AVISO){ avisoPapeleraDado = false; return; }
   if (avisoPapeleraDado) return;
@@ -3919,7 +3965,7 @@ function renderAll(){
   renderTagFilterBar();
   renderDock();
   renderTaskChip();
-  renderTrashChip();
+  renderTrashChip(); renderPesoChip();
   repaintPill();
   renderColsControl();
   renderLaneAmbient();
@@ -8152,7 +8198,14 @@ function bodyImg(w, el){
       // saneo de normalizePack es la primera, pero esto protege también a un datos.json manipulado)
       const refe = !w.data.img && w.data.imgRef;
       el.innerHTML = `<div class="img-box"><img alt=""><div class="img-bar">${refe
-        ? `<span class="empty" title="Guardada en la carpeta ${IMG_DIR}, fuera de datos.json">📁 en la carpeta</span>`
+        /* 0.79.0 — su petición: «la carpeta del widget podría abrirse al pulsarla». NO SE PUEDE, y
+           no es una limitación nuestra: ningún navegador deja abrir el explorador de archivos del
+           sistema —sería una vía para sacar al usuario de la web sin que lo sepa—. La API que
+           tenemos concede lectura y escritura DENTRO de una carpeta, no abrirla.
+           Lo que sí resuelve su necesidad real —llegar al fichero— es darle el nombre exacto para
+           pegarlo en el buscador del explorador. Así que el chip pasa a ser un botón que lo copia
+           y dice dónde está. Prometer «abrir» y que no abra sería peor que no ofrecerlo. */
+        ? `<button class="mini ref" title="Copiar el nombre del archivo para buscarlo en tu carpeta ${IMG_DIR}">📁 en la carpeta</button>`
         : `<button class="mini fuera" title="Sacar esta imagen de datos.json y guardarla en la carpeta: deja de viajar en el archivo que tus equipos releen cada 4 s">📤 Sacar del archivo</button>`}<button class="mini rm">✕ Quitar</button></div></div>`;
       const img = el.querySelector("img");
       if (w.data.img) img.src = w.data.img;
@@ -8162,6 +8215,13 @@ function bodyImg(w, el){
            Un hueco mudo haría pensar que la imagen se perdió, cuando lo que falta es el fichero. */
         .catch(() => { el.querySelector(".img-bar").insertAdjacentHTML("afterbegin",
           `<span class="empty">No encuentro «${esc(w.data.imgRef)}» en la carpeta</span>`); });
+      const ref = el.querySelector(".ref");
+      if (ref) ref.addEventListener("click", async () => {
+        try{
+          await navigator.clipboard.writeText(w.data.imgRef);
+          toast(`Nombre copiado: búscalo en la carpeta «${IMG_DIR}», junto a tu datos.json`);
+        }catch(e){ toast(`Está en «${IMG_DIR}/${w.data.imgRef}»`); }
+      });
       const bt = el.querySelector(".fuera");
       // 0.78.0 — migrar UNA imagen ya incrustada, a petición y de una en una. No se hace solo:
       // reescribir sus datos sin pedírselo es justo lo que la regla del dueño prohíbe.
@@ -10227,6 +10287,8 @@ function wireUI(){
   $("#trash-reduce").addEventListener("click", () => reducirPapelera());
   $("#trash-archivo-btn").addEventListener("click", () => renderArchivoFrio());
   $("#tb-trash").addEventListener("click", openTrash);
+  // 0.79.0 — el aviso de peso lleva a la papelera, que es la palanca más directa que tiene a mano
+  $("#tb-peso").addEventListener("click", openTrash);
   $("#mark-save").addEventListener("click", saveCalendarMark);
   $("#mark-close").addEventListener("click", () => $("#ov-mark").classList.remove("open"));
   $("#mark-custom-new").addEventListener("click", () => {

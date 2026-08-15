@@ -4253,5 +4253,45 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
     console.log('OK 0.78.0 (las imágenes nuevas van fuera de datos.json, con verificación y sin degradar en silencio)');
   }
 
+  // --- 0.79.0: aviso de peso, calibrado contra su archivo real ----------------------------------
+  {
+    /* Su condición del 05/08, que fija QUÉ se mide: «el coste de TRABAJO, no el disco de tu nube —
+       tienes razón en que el límite no es nuestro». Lo que duele es que el archivo se relee y
+       reescribe entero en sus dos equipos, no que ocupe sitio. */
+    const chip = src.match(/function renderPesoChip\(\)\{[\s\S]*?\n\}/)[0];
+
+    // a cero no se pinta, como el resto de avisos de esa barra (R45)
+    if (!/if \(b < PESO_AVISO\)\{ el\.style\.display = "none"; return; \}/.test(chip))
+      throw new Error('por debajo del umbral no se pinta: un aviso que sale siempre se aprende a ignorar');
+
+    /* LOS UMBRALES SE LEEN DEL CÓDIGO y se acotan contra su archivo REAL (780 KB tras sacar las
+       imágenes). Es la lección del test del umbral de espera, que inyectaba su propio valor y por
+       eso pasaba en verde con el producto avisando desde el primer día. */
+    const mA = src.match(/const PESO_AVISO = (\d+), PESO_ROJO = (\d+);/);
+    if (!mA) throw new Error('los umbrales tienen que estar declarados y ser legibles');
+    const [aviso, rojo] = [+mA[1], +mA[2]];
+    if (aviso <= 800000)
+      throw new Error(`umbral de ${aviso}: su archivo ya pesa 780 KB, así que saltaría desde el primer día`);
+    if (aviso >= rojo) throw new Error('el umbral rojo tiene que estar por encima del de aviso');
+    if (rojo > 10000000) throw new Error('un rojo a más de 10 MB llega cuando la sincronización ya duele');
+
+    /* Y LO QUE LO HACE ACCIONABLE: decir QUÉ pesa, no solo cuánto. En su caso una sola imagen eran
+       371 KB de 1 MB; un número sin causa no se puede arreglar. */
+    if (!/widgetMasPesado\(\)/.test(chip))
+      throw new Error('el aviso tiene que nombrar lo que más ocupa, o es un número que no se puede accionar');
+    const peor = src.match(/function widgetMasPesado\(\)\{[\s\S]*?\n\}/)[0];
+    if (/w\.data\b(?!.*length)/.test(peor.replace(/JSON\.stringify\(w\)/g, '')))
+      throw new Error('solo se emite el NOMBRE y el tamaño del widget, nunca su contenido');
+
+    // la petición de «abrir la carpeta»: se copia el nombre porque abrir no es posible en un navegador
+    const bi = src.match(/function bodyImg\(w, el\)\{[\s\S]*?\n\}\n/)[0];
+    if (/showDirectoryPicker|shell|explorer/i.test(bi))
+      throw new Error('un navegador no puede abrir el explorador de archivos: no se promete lo que no se puede');
+    if (!/clipboard\.writeText\(w\.data\.imgRef\)/.test(bi))
+      throw new Error('lo que sí resuelve su necesidad es darle el nombre exacto para buscarlo');
+
+    console.log('OK 0.79.0 (el aviso de peso mide el coste de trabajo, dice qué lo engorda y no salta hoy)');
+  }
+
   console.log('\nTODO EN VERDE');
 })().catch(e => { console.error(e && e.stack || e); process.exitCode = 1; });
