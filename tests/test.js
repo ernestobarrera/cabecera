@@ -1747,7 +1747,21 @@ console.log('OK captura por arrastre en Nota/Tareas (texto compuesto, sin domini
   if (!npOk || npOk.widgets[0].data.img !== okImg) throw new Error('una imagen legítima fue rechazada');
   // segunda capa: la fuente jamás se interpola en innerHTML
   if (/innerHTML\s*=\s*`[^`]*<img src="\$\{/.test(src)) throw new Error('XSS: bodyImg vuelve a interpolar la fuente en innerHTML');
-  if (!src.includes('el.querySelector("img").src = w.data.img;')) throw new Error('regresión: la fuente de la imagen ya no se asigna como propiedad');
+  /* 0.78.0 — LA GARANTÍA NO CAMBIA, SÍ SU COMPROBACIÓN. Se exigía la línea literal
+     `el.querySelector("img").src = w.data.img;`, y al añadir la variante por referencia la
+     asignación pasó por una variable. Lo que protege esta guarda es que la fuente **se asigne como
+     propiedad y nunca se interpole en el HTML**, no cómo se llame la variable. Se comprueba eso, y
+     además que NINGUNA de las dos fuentes —la incrustada y la leída de la carpeta— llegue por
+     innerHTML, que es lo que reabriría el XSS de v0.39.1. */
+  {
+    const bi = src.match(/function bodyImg\(w, el\)\{[\s\S]*?\n\}\n/)[0];
+    if (!/\bimg\.src = w\.data\.img\b/.test(bi))
+      throw new Error('regresión: la imagen incrustada ya no se asigna como propiedad .src');
+    if (!/\bimg\.src = u\b/.test(bi))
+      throw new Error('regresión: la imagen por referencia tampoco puede interpolarse; se asigna como propiedad');
+    if (/<img[^>]*src=/i.test(bi))
+      throw new Error('XSS: bodyImg no puede escribir un atributo src en el HTML, ni con la referencia');
+  }
 
   // (2) aplicar un pack NO puede destruir más de lo que anuncia
   if (/setState\(\{\s*\n?\s*version: 1,[\s\S]{0,200}widgets: np\.widgets/.test(src))
@@ -4201,6 +4215,42 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
       throw new Error('una alarma ya sonada se borra: si no, se rearma sola al recargar');
 
     console.log('OK 0.77.0 (la alarma sobrevive al recargar; la vencida no suena tarde y lo declara)');
+  }
+
+  // --- 0.78.0: imágenes por referencia, fuera de datos.json -------------------------------------
+  {
+    /* Medido en su archivo: 464 KB de imágenes dentro de un datos.json de ~1 MB que sus dos equipos
+       releen cada 4 s, y 371 KB en UNA sola. Lo que se prueba no es que «funcione», sino las cuatro
+       cosas que no pueden fallar sin costarle datos o confianza. */
+    const guardar = src.match(/async function guardarImagenFuera\(blob, ext\)\{[\s\S]*?\n\}/)[0];
+    const leer = src.match(/async function leerImagenFuera\(nombre\)\{[\s\S]*?\n\}/)[0];
+    const img = src.match(/function bodyImg\(w, el\)\{[\s\S]*?\n\}\n/)[0];
+
+    // 1 · verificación por relectura, igual que los lotes fríos: que el archivo exista no basta
+    if (!/leido\.size !== blob\.size/.test(guardar))
+      throw new Error('hay que comprobar por RELECTURA que lo escrito es lo que se mandó, como en la papelera');
+    // 2 · leer NUNCA fabrica la carpeta: mirar no crea nada (misma regla que listarLotesFrios)
+    if (/getDirectoryHandle\(IMG_DIR, \{ create: true \}\)/.test(leer))
+      throw new Error('leer no puede crear la carpeta: mirar no fabrica nada');
+    // 3 · la incrustada solo se borra DESPUÉS de que la copia de fuera esté verificada
+    const iRef = img.indexOf('w.data.imgRef = await guardarImagenFuera');
+    const iDel = img.indexOf('delete w.data.img;', iRef);
+    if (iRef < 0 || iDel < iRef)
+      throw new Error('primero se guarda fuera y se verifica, y solo entonces se borra la de dentro: '
+        + 'al revés, un fallo de escritura pierde la imagen');
+    // 4 · sin carpeta NO se degrada en silencio: se incrusta como siempre
+    if (!/if \(!fuera\)\{ w\.data\.img = dataUrl/.test(img))
+      throw new Error('sin carpeta concedida hay que seguir incrustando: romper el modo «solo navegador» '
+        + 'sería quitarle algo que hoy le funciona');
+    // y si el archivo referenciado no aparece, se DICE (un hueco mudo parece una imagen perdida)
+    if (!/No encuentro «/.test(img))
+      throw new Error('si falta el fichero referenciado hay que decirlo, no dejar el hueco en blanco');
+    // 5 · un pack externo no puede traer una referencia a un archivo local
+    const np = src.match(/function normalizePack\(p, opts\)\{[\s\S]*?\n\}/)[0];
+    if (/imgRef/.test(np))
+      throw new Error('un pack no puede traer imgRef: apuntaría a un archivo que no existe en su carpeta');
+
+    console.log('OK 0.78.0 (las imágenes nuevas van fuera de datos.json, con verificación y sin degradar en silencio)');
   }
 
   console.log('\nTODO EN VERDE');

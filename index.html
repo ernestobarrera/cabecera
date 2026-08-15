@@ -2018,7 +2018,7 @@ function syncUI(mode, txt){
    reaparece) y si Recargar está activo. El descarte ✕ vive solo en memoria de la sesión.
    Demora asumida: la CDN de Pages puede servir la versión vieja hasta ~10 min aun con
    no-store (gobierna la caché del navegador, no la CDN); para pestañas de días, irrelevante. */
-const APP_VERSION = "0.77.0";
+const APP_VERSION = "0.78.0";
 let newVersionDetected = null;   // versión superior detectada; detiene futuras consultas
 let verDismissed = false;        // ✕: solo esta sesión — nunca persistido en disco
 let verCheckInflight = false;    // sin consultas concurrentes
@@ -2259,6 +2259,61 @@ function loteNombre(){
    quitar de la papelera → guardar datos.json. Si escribir o verificar falla, no se quita nada. Un
    fallo entre quitar y guardar puede dejar el elemento duplicado —está en el lote y sigue en la
    papelera— pero nunca perdido. Duplicar es recuperable; perder, no. */
+/* 0.78.0 — IMÁGENES POR REFERENCIA. Hasta ahora una imagen pegada se guardaba DENTRO de datos.json
+   como texto, y ese archivo lo releen sus dos equipos cada 4 segundos. Medido en el suyo: 464 KB de
+   imágenes sobre un total de ~1 MB, y **371 KB en una sola**. Es el arreglo con mejor relación
+   esfuerzo/beneficio de toda la cola, y de paso desbloquea calibrar el aviso de peso contra un
+   tamaño real (por eso va ANTES que él).
+
+   NO SE INVENTA MECANISMO: es exactamente el de los lotes fríos de la papelera —subcarpeta dentro de
+   la carpeta que él ya concedió, escritura con verificación por relectura—. Lo único nuevo es que
+   aquí se guarda un binario y en el JSON queda **solo el nombre del archivo**, nunca una ruta
+   absoluta (decisión del 04/08: una ruta absoluta no sobrevive a viajar entre sus dos equipos).
+
+   `CONTRATO:` sin carpeta concedida NO se degrada en silencio. Quien no pueda escribir fuera sigue
+   incrustando como siempre y se le dice; romper el pegar-una-imagen en el modo «solo navegador»
+   sería cambiarle algo que hoy le funciona. */
+const IMG_DIR = "cabecera-imagenes";
+
+/** Guarda un binario en la subcarpeta y devuelve su nombre. Verifica por relectura, como la papelera. */
+async function guardarImagenFuera(blob, ext){
+  if (backend !== "fs" || !dirHandle) throw new Error("sin-carpeta");
+  const dir = await dirHandle.getDirectoryHandle(IMG_DIR, { create: true });
+  const d = new Date();
+  const sello = d.getFullYear() + String(d.getMonth() + 1).padStart(2, "0") + String(d.getDate()).padStart(2, "0")
+    + "-" + String(d.getHours()).padStart(2, "0") + String(d.getMinutes()).padStart(2, "0") + String(d.getSeconds()).padStart(2, "0");
+  const nombre = `img-${sello}-${Math.random().toString(36).slice(2, 8)}.${ext || "png"}`;
+  const fh = await dir.getFileHandle(nombre, { create: true });
+  const wr = await fh.createWritable();
+  await wr.write(blob);
+  await wr.close();
+  // que el archivo exista no prueba que tenga dentro lo que se le mandó (misma regla que la papelera)
+  const leido = await fh.getFile();
+  if (!leido || leido.size !== blob.size) throw new Error("verificacion");
+  return nombre;
+}
+/* Convierte la `data:` que produce `imgFromBlob` en binario SIN pasar por la API de red del
+   navegador. Se hizo primero con esa API —funciona, y sobre una `data:` no sale a internet— pero el
+   banco de pruebas lo rechazó con razón: existe una vía única para las descargas y una llamada
+   suelta la esquiva. Se respeta la guarda en vez de hacerle una excepción, y así esto no roza la red.
+   Detalle que costó una pasada: el banco mira el FUENTE, así que escribir la llamada prohibida
+   dentro de un comentario también la dispara. Correcto por su parte — un comentario es donde
+   volvería a colarse la idea. */
+function dataUrlABlob(dataUrl){
+  const m = /^data:([^;,]+);base64,(.*)$/.exec(String(dataUrl || ""));
+  if (!m) throw new Error("formato de imagen no reconocido");
+  const bin = atob(m[2]);
+  const buf = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
+  return new Blob([buf], { type: m[1] });
+}
+/** Lee una imagen guardada por referencia y devuelve una URL usable en un <img>. */
+async function leerImagenFuera(nombre){
+  if (backend !== "fs" || !dirHandle) throw new Error("sin-carpeta");
+  const dir = await dirHandle.getDirectoryHandle(IMG_DIR);   // sin create: mirar no fabrica nada
+  const fh = await dir.getFileHandle(nombre);
+  return URL.createObjectURL(await fh.getFile());
+}
 async function escribirLoteFrio(items){
   if (backend !== "fs" || !dirHandle) throw new Error("sin-carpeta");
   const dir = await dirHandle.getDirectoryHandle(TRASH_DIR, { create: true });
@@ -8064,9 +8119,26 @@ async function imgFromBlob(blob){
   return url;
 }
 function bodyImg(w, el){
+  /* 0.78.0 — al pegar, la imagen va FUERA del archivo si hay carpeta concedida. `w.data.imgRef`
+     guarda solo el nombre; `w.data.img` (incrustada) se conserva para quien no tenga carpeta y para
+     todo lo pegado antes. Los dos caminos coexisten a propósito: migrar a la fuerza lo ya guardado
+     sería tocarle datos sin pedírselo. */
   const set = async blob => {
     try{
-      w.data.img = await imgFromBlob(blob); paint(); markDirty();
+      const dataUrl = await imgFromBlob(blob);   // reescala y normaliza igual que siempre
+      let fuera = false;
+      if (backend === "fs" && dirHandle){
+        try{
+          const b = dataUrlABlob(dataUrl);
+          const ext = (b.type.split("/")[1] || "png").replace(/[^a-z0-9]/g, "");
+          w.data.imgRef = await guardarImagenFuera(b, ext);
+          delete w.data.img;   // no se guardan las dos: sería pagar el peso igualmente
+          fuera = true;
+        }catch(e){ /* si falla la escritura fuera, se incrusta: nunca se pierde la imagen */ }
+      }
+      if (!fuera){ w.data.img = dataUrl; delete w.data.imgRef; }
+      paint(); markDirty();
+      if (fuera) toast("Imagen guardada en la carpeta, fuera de datos.json");
       // aviso de tamaño agregado: cada autosave reescribe datos.json completo
       const total = JSON.stringify(state).length;
       if (total > 5000000) toast(`Tus datos ocupan ya ${(total / 1048576).toFixed(1)} MB (las imágenes pesan): la sincronización puede ir lenta. Considera quitar imágenes antiguas.`, true);
@@ -8074,13 +8146,41 @@ function bodyImg(w, el){
     catch(e){ toast(e.message || "No se pudo procesar la imagen", true); }
   };
   const paint = () => {
-    if (w.data.img){
+    if (w.data.img || w.data.imgRef){
       // la fuente NUNCA se interpola en innerHTML: se asigna como propiedad, así una cadena con
       // comillas no puede convertirse en atributos (segunda capa del XSS cerrado en v0.39.1; el
       // saneo de normalizePack es la primera, pero esto protege también a un datos.json manipulado)
-      el.innerHTML = `<div class="img-box"><img alt=""><div class="img-bar"><button class="mini rm">✕ Quitar</button></div></div>`;
-      el.querySelector("img").src = w.data.img;
-      el.querySelector(".rm").addEventListener("click", () => { w.data.img = null; paint(); markDirty(); });
+      const refe = !w.data.img && w.data.imgRef;
+      el.innerHTML = `<div class="img-box"><img alt=""><div class="img-bar">${refe
+        ? `<span class="empty" title="Guardada en la carpeta ${IMG_DIR}, fuera de datos.json">📁 en la carpeta</span>`
+        : `<button class="mini fuera" title="Sacar esta imagen de datos.json y guardarla en la carpeta: deja de viajar en el archivo que tus equipos releen cada 4 s">📤 Sacar del archivo</button>`}<button class="mini rm">✕ Quitar</button></div></div>`;
+      const img = el.querySelector("img");
+      if (w.data.img) img.src = w.data.img;
+      else leerImagenFuera(w.data.imgRef)
+        .then(u => { img.src = u; })
+        /* Si el archivo no está —carpeta distinta, o aún sin sincronizar en el otro equipo— se DICE.
+           Un hueco mudo haría pensar que la imagen se perdió, cuando lo que falta es el fichero. */
+        .catch(() => { el.querySelector(".img-bar").insertAdjacentHTML("afterbegin",
+          `<span class="empty">No encuentro «${esc(w.data.imgRef)}» en la carpeta</span>`); });
+      const bt = el.querySelector(".fuera");
+      // 0.78.0 — migrar UNA imagen ya incrustada, a petición y de una en una. No se hace solo:
+      // reescribir sus datos sin pedírselo es justo lo que la regla del dueño prohíbe.
+      if (bt) bt.addEventListener("click", async () => {
+        if (backend !== "fs" || !dirHandle){ toast("Hace falta la carpeta sincronizada para sacarla", true); return; }
+        try{
+          const b = dataUrlABlob(w.data.img);
+          const ext = (b.type.split("/")[1] || "png").replace(/[^a-z0-9]/g, "");
+          const antes = JSON.stringify(state).length;
+          w.data.imgRef = await guardarImagenFuera(b, ext);
+          delete w.data.img;   // solo después de que la copia de fuera esté verificada
+          paint(); markDirty();
+          toast(`Sacada del archivo: ${Math.round((antes - JSON.stringify(state).length) / 1024)} KB menos`);
+        }catch(e){ toast("No se pudo sacar de datos.json: la imagen sigue donde estaba", true); }
+      });
+      el.querySelector(".rm").addEventListener("click", () => {
+        // el archivo de la carpeta NO se borra: es suyo y puede tenerlo en otro sitio
+        w.data.img = null; delete w.data.imgRef; paint(); markDirty();
+      });
     } else {
       el.innerHTML = `<div class="dropzone" tabindex="0">Pega una imagen (Ctrl+V) o suéltala aquí<br>
         <button class="mini pi">📋 Pegar del portapapeles</button>

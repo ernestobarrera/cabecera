@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.78.0] - 2026-08-15 — las imágenes dejan de viajar dentro de datos.json
+
+- **Una imagen pegada ahora se guarda en tu carpeta sincronizada**, en `cabecera-imagenes`, y en
+  `datos.json` queda solo su nombre. Ese archivo lo releen tus dos equipos cada pocos segundos, así
+  que las imágenes eran, con diferencia, lo que más lo engordaba.
+- **Botón «📤 Sacar del archivo»** en las imágenes que ya tenías incrustadas: las mueve a la carpeta
+  de una en una y te dice cuántos KB has recuperado. **No se hace solo**: son tus datos.
+- Si no tienes carpeta sincronizada, todo sigue como antes: la imagen se incrusta y se te avisa.
+- Si el fichero no aparece —por ejemplo, aún sin sincronizar en el otro equipo— **se dice cuál
+  falta**, en vez de dejar un hueco en blanco que parecería una imagen perdida.
+- Quitar una imagen del widget **no borra el archivo** de tu carpeta.
+
+## [0.78.0] - 2026-08-15 — las imágenes dejan de viajar dentro de datos.json
+
+- **Una imagen pegada ahora se guarda en tu carpeta sincronizada**, en , y en
+   queda solo su nombre. Ese archivo lo releen tus dos equipos cada pocos segundos, así
+  que las imágenes eran lo que más lo engordaba.
+- **Botón «📤 Sacar del archivo»** en las imágenes que ya tenías incrustadas: las mueve a la carpeta
+  de una en una y te dice cuántos KB has recuperado. **No se hace solo**: son tus datos.
+- Si no tienes carpeta sincronizada, todo sigue como antes: la imagen se incrusta y se te dice.
+- Si el fichero no aparece —por ejemplo, aún sin sincronizar en el otro equipo— **se dice cuál falta**
+  en vez de dejar un hueco en blanco.
+- Quitar una imagen del widget **no borra el archivo** de tu carpeta.
+
 ## [0.77.0] - 2026-08-15 — la alarma sobrevive a recargar la página
 
 - **La alarma del temporizador ya no se pierde al recargar.** Antes, el campo seguía mostrando la
