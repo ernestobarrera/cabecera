@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.76.0] - 2026-08-15 — buscar deja de llevarte a tareas cerradas sin avisar
+
+- **Ctrl+K prefiere las tareas pendientes.** Antes te llevaba a la primera que coincidiera, aunque
+  estuviera cerrada hace un mes y creyeras que era trabajo vivo. Ahora solo ofrece una hecha si no
+  hay ninguna pendiente que coincida, **y lo dice**: sale con `✔ hecha` y otro icono.
+- **Se puede buscar por número**: escribe `#128` —o `128` a secas— y va a esa tarea. Es para lo que
+  servía la numeración.
+- **El resultado enseña el número y el estado** antes de pulsar, para confirmar que es la que
+  buscabas sin tener que ir a mirarla.
+- **La búsqueda sobrevive si vuelves enseguida.** Si eliges un resultado, no era el que querías y
+  reabres Ctrl+K en el minuto y medio siguiente, el texto sigue puesto y seleccionado: teclear lo
+  sustituye. Pasado ese rato se abre limpio, para que una búsqueda vieja no confunda.
+
 ## [0.75.0] - 2026-08-15 — crear y poner fecha en un gesto, tareas numeradas, y el orden avisa
 
 - **Nuevo botón 📅 al crear una tarea** (o **Ctrl+Enter**): la crea y abre su editor de fecha en el

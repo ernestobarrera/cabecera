@@ -3236,7 +3236,14 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
     const pt2 = src.match(/function pintarTipos\(\)\{[\s\S]*?\n\}/)[0];
     if (!/#menu-search/.test(pt2))
       throw new Error('la rejilla de tipos la filtra la caja única de arriba: si lee otra, vuelven a ser dos buscadores');
-    if (!/\$\("#menu-search"\)\.addEventListener\("input", e => \{ renderResults\(e\.target\.value\); pintarTipos\(\); \}\)/.test(src))
+    /* 0.76.0 — anclado al CUERPO del listener, no a su forma en una línea. Lo que tiene que ser
+       cierto es que el MISMO manejador alimente las dos zonas; que quepa en una línea o en cinco
+       es irrelevante y romperlo por eso hace que el test estorbe en vez de proteger. Tercer caso
+       hoy del mismo error de método: un test que vigila la forma acaba fallando —o peor, mirando
+       otra función— cuando el código se reorganiza sin cambiar de comportamiento. */
+    const inputListener = src.match(/\$\("#menu-search"\)\.addEventListener\("input",[\s\S]*?\n  \}\);/);
+    if (!inputListener) throw new Error('falta el listener de la caja única de la paleta');
+    if (!/renderResults\(/.test(inputListener[0]) || !/pintarTipos\(\)/.test(inputListener[0]))
       throw new Error('la caja única tiene que alimentar las DOS zonas del panel, o una de ellas se queda muerta');
     // mientras lo tecleado parsea como captura, la rejilla NO se filtra: estás escribiendo
     // contenido, no buscando un tipo, y «Ningún tipo coincide» debajo es ruido puro.
@@ -3799,7 +3806,9 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
       throw new Error('el aviso ⚙ es gemelo del ⏰: dos chips iguales con dos comportamientos distintos es peor que ninguno');
     if (!/"Ver", \(\) => focusTask\(w\.id, si, it\)/.test(src))
       throw new Error('el «Ver» del aviso de una tarea ya sabe de cuál habla: tiene que llevar a ella');
-    if (!/hit \? \(\) => focusTask\(w\.id, si, hit\)/.test(src))
+    // 0.76.0 — `hit` pasó a ser `{ it, hecha }` para poder decir el estado antes de saltar; el
+    // destino sigue siendo la tarea concreta, que es lo que esta guarda protege.
+    if (!/hit \? \(\) => focusTask\(w\.id, si, hit\.it\)/.test(src))
       throw new Error('Ctrl+K: si lo tecleado casa con una tarea, el resultado tiene que aterrizar en ESA fila');
 
     // (3) LA PÁGINA LA DECIDE QUIEN CONOCE `per`, y por referencia al objeto. Por índice del array
@@ -4086,6 +4095,58 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
       throw new Error('el aviso tiene que nombrar la consecuencia real: que no se puede reordenar a mano');
 
     console.log('OK 0.75.0 (tareas numeradas y a prueba de fusión; crear con fecha en un gesto; el orden avisa)');
+  }
+
+  // --- 0.76.0: buscar deja de llevar a tareas cerradas sin avisar -------------------------------
+  {
+    /* Sus dos partes del 12/08 sobre Ctrl+K: «no distingue tareas hechas de no» y «si aparece en
+       múltiples widgets… tengo que volver a escribirlo en n búsquedas».
+       Se prueba la función que decide el destino, que es donde vive la regla. */
+    const tqc = new Function('ts', 'w', `
+      const casaNum = ${src.match(/const casaNum = \(it, t\) => \{[\s\S]*?\n  \};/)[0].replace('const casaNum = ', '')}
+      ${src.match(/const tareaQueCasa = w => \{[\s\S]*?\n  \};/)[0].replace('const tareaQueCasa = ', 'const f = ')}
+      return f(w);`);
+    const W = items => ({ type: 'todo', data: { items } });
+
+    // LAS PENDIENTES MANDAN: aterrizar en algo cerrado creyéndolo vivo era el defecto
+    const mix = W([{ t: 'informe cerrado', done: true, n: 5 }, { t: 'informe vivo', done: false, n: 9 }]);
+    let h = tqc(['informe'], mix);
+    if (!h || h.it.n !== 9 || h.hecha) throw new Error('con una pendiente y una hecha que casan, gana la PENDIENTE');
+
+    // solo si NO hay ninguna viva se ofrece una hecha, y se DECLARA
+    h = tqc(['cerrado'], mix);
+    if (!h || h.it.n !== 5 || !h.hecha) throw new Error('si solo casa una hecha, se ofrece pero marcada como hecha');
+
+    // BUSCAR POR NÚMERO, con y sin almohadilla: se teclea de las dos formas
+    if (tqc(['#9'], mix)?.it.n !== 9) throw new Error('«#9» tiene que llevar a la tarea 9');
+    if (tqc(['9'], mix)?.it.n !== 9) throw new Error('«9» a secas también: es lo que se teclea sin pensar');
+    if (tqc(['#77'], mix)) throw new Error('un número que no existe no puede casar con otra tarea');
+    // y no confundir un número del TEXTO con el de la tarea
+    const conCifra = W([{ t: 'revisar 128 pacientes', done: false, n: 3 }]);
+    if (tqc(['#3'], conCifra)?.it.n !== 3) throw new Error('el número de la tarea se busca por su campo, no por su texto');
+
+    if (tqc([], mix)) throw new Error('sin términos no hay destino: iría a una tarea cualquiera');
+
+    // el resultado tiene que DECIR el estado, o el arreglo es invisible
+    if (!/hit\.hecha \? "✔ hecha · " : ""/.test(src))
+      throw new Error('una tarea cerrada tiene que verse cerrada en el resultado, antes de pulsar');
+    if (!/hit\.hecha \? "☑️" : "✅"/.test(src))
+      throw new Error('y el icono tiene que distinguirlas: el subtítulo se lee después que el icono');
+
+    /* LA CONSULTA SOBREVIVE, pero CADUCA. Sin caducidad, abrir la paleta tres horas después con
+       texto viejo es la trampa contraria: buscas otra cosa, no aparece, y no ves por qué. */
+    if (!/ultimaBusqueda = \{ t: e\.target\.value, at: Date\.now\(\) \}/.test(src))
+      throw new Error('hay que recordar lo tecleado para poder reponerlo');
+    const mCad = src.match(/Date\.now\(\) - ultimaBusqueda\.at\) < (\d+)/);
+    if (!mCad) throw new Error('la búsqueda repuesta tiene que CADUCAR, o el texto viejo confunde');
+    const seg = +mCad[1] / 1000;
+    if (seg < 20 || seg > 600)
+      throw new Error(`caducidad de ${seg}s: por debajo de 20 no da tiempo a probar otro resultado, `
+        + 'y por encima de 10 min ya no estás iterando sobre la misma búsqueda');
+    if (!/if \(reciente\) box2\.select\(\)/.test(src))
+      throw new Error('el texto repuesto va SELECCIONADO: si no, hay que borrarlo a mano para buscar otra cosa');
+
+    console.log('OK 0.76.0 (buscar prefiere lo pendiente y avisa de lo cerrado; #128 buscable; la consulta sobrevive y caduca)');
   }
 
   console.log('\nTODO EN VERDE');
