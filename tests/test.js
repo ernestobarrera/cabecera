@@ -4881,5 +4881,33 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
     console.log('OK 0.83.0 (incrustar en caja aislada: sin allow-same-origin, solo https, host completo y sin llegar por packs)');
   }
 
+  // --- 0.84.0: el aviso de versión nueva llega a tiempo -----------------------------------------
+  {
+    /* Parte suyo del 16/08: «ya no me aparece un menú diciendo que se ha actualizado el escritorio;
+       si pulso en versión sí que me lo dice». No era una regresión —los números venían de 0.28.0—:
+       el aviso llegaba tarde para el caso que hoy es el normal, un agente publicando mientras él
+       mira. Estos topes fijan que no se pueda volver a aflojar sin darse cuenta. */
+    const mV = src.match(/const VER_VUELTA_MS = ([\d\s*]+);/), mI = src.match(/const VER_INTERVALO_MS = ([\d\s*]+);/);
+    if (!mV || !mI) throw new Error('los dos tiempos de la comprobación tienen que estar declarados y ser legibles');
+    const vuelta = eval(mV[1]), intervalo = eval(mI[1]);
+    if (vuelta > 5 * 60000)
+      throw new Error(`al volver a la pestaña se espera ${Math.round(vuelta / 60000)} min: con eso publicar mientras trabaja no se entera`);
+    if (vuelta < 10000)
+      throw new Error('tampoco en cada parpadeo: sin ninguna espera, cambiar de pestaña dispara una consulta por gesto');
+    if (intervalo > 30 * 60000)
+      throw new Error(`una consulta cada ${Math.round(intervalo / 60000)} min no informa de una publicación en la misma sesión`);
+    if (intervalo < 60000) throw new Error('un minuto es consultar por consultar: no se publica tan seguido');
+
+    // y el aviso sigue saliendo del MISMO estado que la píldora, que es lo que impide que digan
+    // cosas distintas (el defecto que ya costó cuatro versiones con la marca 🤖)
+    const rvn = src.match(/function renderVersionNotice\(\)\{[\s\S]*?\n\}/)[0];
+    if (!/renderVerPill\(\);/.test(rvn))
+      throw new Error('la píldora y el aviso se pintan juntos y del mismo estado, o acabarán diciendo cosas distintas');
+    if (!/const show = newVersionDetected && !verDismissed && !conflictPending;/.test(rvn))
+      throw new Error('el aviso se deriva del estado, no se guarda: un «ya avisé» persistido volvería a desfasarse');
+
+    console.log('OK 0.84.0 (el aviso de versión nueva llega dentro de la sesión, no seis horas después)');
+  }
+
   console.log('\nTODO EN VERDE');
 })().catch(e => { console.error(e && e.stack || e); process.exitCode = 1; });

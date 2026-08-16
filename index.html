@@ -2106,7 +2106,7 @@ function syncUI(mode, txt){
    reaparece) y si Recargar está activo. El descarte ✕ vive solo en memoria de la sesión.
    Demora asumida: la CDN de Pages puede servir la versión vieja hasta ~10 min aun con
    no-store (gobierna la caché del navegador, no la CDN); para pestañas de días, irrelevante. */
-const APP_VERSION = "0.83.0";
+const APP_VERSION = "0.84.0";
 let newVersionDetected = null;   // versión superior detectada; detiene futuras consultas
 let verDismissed = false;        // ✕: solo esta sesión — nunca persistido en disco
 let verCheckInflight = false;    // sin consultas concurrentes
@@ -2199,13 +2199,30 @@ function renderVersionNotice(){
   go.disabled = blocked;
   go.title = blocked ? "Hay cambios guardándose: espera un momento" : "Recargar para actualizar";
 }
+/* 0.84.0 — CADENCIA DE LA COMPROBACIÓN. Parte de fallo suyo del 16/08: «ya no me aparece un menú
+   diciendo que se ha actualizado el escritorio; si pulso en versión sí que me lo dice».
+
+   NO ERA UNA REGRESIÓN: estos números no se tocaban desde 0.28.0. Se comprobaba **al cargar**,
+   **al volver a la pestaña pero solo si habían pasado 30 minutos**, y **cada 6 horas**. Con eso,
+   publicar mientras él trabaja en la misma pestaña significaba media hora sin enterarse, y encima
+   solo si se iba a otra pestaña y volvía. El aviso no estaba roto: llegaba tarde.
+
+   LO QUE CAMBIÓ NO ES EL CÓDIGO, ES EL CASO. Aquella cadencia se pensó para un sitio que se publica
+   cada varias semanas. Hoy hay un agente publicando cuatro versiones **en la misma sesión en la que
+   él está mirando**, y ahí «cada seis horas» no informa de nada.
+
+   Se ajustan los dos números y NADA MÁS —ni el aviso, ni la píldora, ni el descarte—: el caso que
+   faltaba era la frecuencia, así que el arreglo es la frecuencia. El coste es una consulta de siete
+   bytes cada cuarto de hora, al lado de releer un `datos.json` de 780 KB cada cuatro segundos. */
+const VER_VUELTA_MS = 60 * 1000;        // al volver a la pestaña: basta con no repetir en el mismo minuto
+const VER_INTERVALO_MS = 15 * 60 * 1000; // pestaña siempre visible: un cuarto de hora
 function startVersionChecks(){
   wireVerPill();    // la píldora se pinta ya, antes de saber si hay algo nuevo
   checkVersion();   // al cargar
   document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible" && Date.now() - verLastCheck > 30 * 60000) checkVersion();
+    if (document.visibilityState === "visible" && Date.now() - verLastCheck > VER_VUELTA_MS) checkVersion();
   });
-  setInterval(checkVersion, 6 * 3600000);   // red de seguridad para una pestaña siempre visible
+  setInterval(checkVersion, VER_INTERVALO_MS);
 }
 
 /* ---------- Diálogo modal propio del sitio (una sola base para todos) ----------

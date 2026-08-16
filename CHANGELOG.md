@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.84.0] - 2026-08-16 — el aviso de versión nueva ya no llega tarde
+
+- **Cabecera comprueba si hay una versión nueva mucho antes que antes.** Al volver a la pestaña
+  basta con que haya pasado un minuto (antes, media hora), y si la dejas siempre abierta, cada
+  cuarto de hora (antes, seis).
+- No estaba roto: **llegaba tarde**. Con la cadencia anterior, publicar algo mientras trabajabas en
+  la misma pestaña podía tardar media hora en avisarte, y solo si te ibas a otra pestaña y volvías.
+- El aviso y la píldora de versión no cambian: pulsar `v0.84.0` en la barra sigue comprobándolo al
+  momento.
+
 ## [0.83.0] - 2026-08-16 — incrustar una página dentro del escritorio
 
 - **Nuevo widget 🪟 Incrustar**: mete una página web dentro de tu escritorio. Nace ocupando todo el
