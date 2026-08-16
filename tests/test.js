@@ -452,7 +452,17 @@ if (!src.match(/function addSpace[\s\S]{0,700}defaultCols/)) throw new Error('re
 if (src.match(/function blankSpace[\s\S]{0,300}defaultCols/)) throw new Error('regresión ⚙: blankSpace NO debe consultar defaultCols (solo el gesto de crear espacio)');
 const cfgWiring = src.match(/panel ⚙ de configuración general[\s\S]*?\$\("#cfg-save"\)/);
 if (!cfgWiring || cfgWiring[0].includes('markDirty')) throw new Error('regresión ⚙: abrir/preview/cancelar no deben escribir (markDirty solo en saveConfig)');
-if (!src.match(/function saveConfig[\s\S]{0,700}markDirty/)) throw new Error('regresión ⚙: saveConfig debe ser el único commit');
+/* REANCLADO EN 0.80.0. Vigilaba que `markDirty` apareciera dentro de los 700 primeros caracteres de
+   `saveConfig`, y al añadir la opción de reducción automática —con su comentario— el commit se fue
+   al carácter 900 sin que nada cambiara de comportamiento. Es el cuarto test de este proyecto atado
+   a la FORMA en vez de al efecto. Ahora se lee el CUERPO de la función, sin límite de longitud: la
+   garantía sigue siendo la misma y deja de caducar cada vez que se añade una preferencia. */
+{
+  const sc = src.match(/function saveConfig\(\)\{[\s\S]*?\n\}/)[0];
+  if (!/markDirty\(\)/.test(sc)) throw new Error('regresión ⚙: saveConfig debe ser el único commit');
+  if ((src.match(/markDirty\(\);\s*toast\("Configuración guardada"\)/g) || []).length !== 1)
+    throw new Error('regresión ⚙: hay más de un punto que confirma la configuración');
+}
 console.log('OK panel ⚙ (appSettings raíz con whitelist, sin auto-creación, independiente del espacio, transaccional)');
 
 // --- snapPosition: imán de arrastre (bordes del escritorio y de otras ventanas) ---
@@ -3198,10 +3208,16 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
     // (3) ORDEN TRANSACCIONAL. Escribir el lote → releerlo y verificar → quitar de la papelera →
     // guardar. Si falla el archivo frío, no se quita nada. Es la condición que hace que reducir
     // no pueda perder.
+    /* REANCLADO EN 0.80.0. Antes exigía la secuencia literal `createWritable … getFile() … items.length`
+       DENTRO de escribirLoteFrio. Al pasar la escritura a la puerta única esa secuencia se fue de aquí
+       y el test habría quedado vigilando una forma que ya no existe. Lo que se conserva es su PROPÓSITO,
+       que es más fuerte que la forma: el lote se verifica releyéndolo, elemento a elemento. */
     const elf = src.match(/async function escribirLoteFrio\(items\)\{[\s\S]*?\n\}/)[0];
-    if (!/createWritable[\s\S]*getFile\(\)[\s\S]*items\.length/.test(elf))
-      throw new Error('el lote se verifica RELEYÉNDOLO: que el archivo exista no prueba que contenga lo que se le mandó');
-    const red = src.match(/async function reducirPapelera\(\)\{[\s\S]*?\n\}/)[0];
+    if (!/escribirVerificado\(TRASH_DIR/.test(elf))
+      throw new Error('el lote se escribe por la puerta única, que es la que verifica por relectura');
+    if (!/JSON\.parse\(await f\.text\(\)\)/.test(elf) || !/items\.length/.test(elf) || !/every\(it => ids\.has\(it\.id\)\)/.test(elf))
+      throw new Error('el lote se verifica RELEYÉNDOLO elemento a elemento: que el archivo exista no prueba que contenga lo que se le mandó');
+    const red = src.match(/async function reducirPapelera\(opts\)\{[\s\S]*?\n\}/)[0];
     const iEscribe = red.indexOf('escribirLoteFrio'), iQuita = red.indexOf('state.trash =');
     if (iEscribe < 0 || iQuita < 0 || iQuita < iEscribe)
       throw new Error('se quita de la papelera ANTES de tener el lote verificado: un fallo ahí es pérdida');
@@ -3216,9 +3232,20 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
       throw new Error('abrir jamás escribe: el saneo no puede disparar la reducción');
     if (/set(Interval|Timeout)\([^)]*reducirPapelera/.test(src))
       throw new Error('purga por reloj: descartada por el gate — menos temporizadores, menos comportamiento invisible');
+    /* REANCLADO EN 0.80.0, y es R48: un guardián no se apaga, se le DECLARA la excepción, más
+       estricta que la comprobación original. Antes esto decía «trasMutarPapelera no puede nombrar
+       reducirPapelera». Él pidió el 08/08 que la reducción se hiciera sola «si da el VB», así que
+       ahora sí puede — pero por UN solo camino y con las tres condiciones que el gate protegía. */
     const tm = src.match(/function trasMutarPapelera\(\)\{[\s\S]*?\n\}/)[0];
-    if (/reducirPapelera/.test(tm))
-      throw new Error('el disparador por mutación avisa; mover siempre pasa por el diálogo que enseña qué se mueve');
+    const llamAuto = tm.match(/reducirPapelera\(([^)]*)\)/g) || [];
+    if (llamAuto.length > 1)
+      throw new Error('el disparador por mutación solo puede llegar a la reducción por el camino automático');
+    if (llamAuto.length === 1){
+      if (llamAuto[0] !== 'reducirPapelera({ auto: true })')
+        throw new Error('desde la mutación solo se entra en modo auto: el camino manual tiene que seguir enseñando qué se mueve');
+      if (!/objetivoAuto\(\)/.test(tm))
+        throw new Error('sin su VB explícito en Configuración no puede haber reducción automática');
+    }
 
     // (5) EL PESO SE MIDE, NO SE GUARDA. Un número persistido es un número que puede mentir.
     if (/trashBytes\s*:|\.trashBytes\s*=|state\.trashBytes/.test(src))
@@ -3230,7 +3257,7 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
     // (6) EL ARCHIVO FRÍO NO SE RELEE NI SE FABRICA POR MIRARLO, y son LOTES, no un archivo único.
     const ll = src.match(/async function listarLotesFrios\(\)\{[\s\S]*?\n\}/)[0];
     if (/create: true/.test(ll)) throw new Error('enumerar el archivo frío no puede crear la carpeta: mirar nunca fabrica nada');
-    if (!/getDirectoryHandle\(TRASH_DIR, \{ create: true \}\)/.test(elf))
+    if (!/escribirVerificado\(TRASH_DIR/.test(elf))
       throw new Error('el lote vive en su carpeta propia, creada solo al escribir de verdad');
     if (/POLL|poll|readDataFile/.test(ll) || /TRASH_DIR/.test(src.match(/async function readDataFile[\s\S]*?\n\}/)?.[0] || ''))
       throw new Error('el archivo frío NO entra en el ciclo de relectura: ese es todo su valor');
@@ -4226,11 +4253,19 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
     const leer = src.match(/async function leerImagenFuera\(nombre\)\{[\s\S]*?\n\}/)[0];
     const img = src.match(/function bodyImg\(w, el\)\{[\s\S]*?\n\}\n/)[0];
 
-    // 1 · verificación por relectura, igual que los lotes fríos: que el archivo exista no basta
-    if (!/leido\.size !== blob\.size/.test(guardar))
+    /* 1 · verificación por relectura, igual que los lotes fríos: que el archivo exista no basta.
+       REANCLADO EN 0.80.0 a la comparación de tamaño, esté donde esté escrita: la escritura se fue a
+       la puerta única y lo que sigue siendo de esta función es DECIR CÓMO se verifica lo suyo. */
+    if (!/leido\.size === blob\.size|leido\.size !== blob\.size/.test(guardar))
       throw new Error('hay que comprobar por RELECTURA que lo escrito es lo que se mandó, como en la papelera');
-    // 2 · leer NUNCA fabrica la carpeta: mirar no crea nada (misma regla que listarLotesFrios)
-    if (/getDirectoryHandle\(IMG_DIR, \{ create: true \}\)/.test(leer))
+    /* 2 · leer NUNCA fabrica la carpeta: mirar no crea nada (misma regla que listarLotesFrios).
+       REANCLADO: al centralizarse en `abrirDeCarpeta`, la comprobación vieja —que en `leer` no
+       apareciera `create: true`— pasaba en verde sin mirar nada, porque en `leer` ya no aparece
+       ningún `getDirectoryHandle`. Un test que aprueba por no encontrar es el fallo de R65. */
+    if (!/abrirDeCarpeta\(IMG_DIR/.test(leer))
+      throw new Error('leer una imagen pasa por la puerta de solo lectura, que es la que no crea nada');
+    const puertaLeer = src.match(/async function abrirDeCarpeta\(subdir, nombre\)\{[\s\S]*?\n\}/)[0];
+    if (/create: true/.test(puertaLeer))
       throw new Error('leer no puede crear la carpeta: mirar no fabrica nada');
     // 3 · la incrustada solo se borra DESPUÉS de que la copia de fuera esté verificada
     const iRef = img.indexOf('w.data.imgRef = await guardarImagenFuera');
@@ -4291,6 +4326,191 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
       throw new Error('lo que sí resuelve su necesidad es darle el nombre exacto para buscarlo');
 
     console.log('OK 0.79.0 (el aviso de peso mide el coste de trabajo, dice qué lo engorda y no salta hoy)');
+  }
+
+  // --- 0.80.0: una sola puerta a su carpeta (refactor preparatorio) -----------------------------
+  {
+    /* Este bloque NO prueba una función nueva del producto: prueba que la garantía que antes vivía
+       repetida en dos sitios ahora sea inevitable. Se escribió ANTES de construir adjuntos y la
+       reducción automática, que eran el tercer y cuarto sitio que iban a copiarla a mano.
+
+       Por qué importa: la verificación por relectura es lo único que impide que un fallo de escritura
+       le cueste datos —la copia de dentro se borra DESPUÉS de comprobar la de fuera—. Mientras fuera
+       una costumbre repetida, el sitio nuevo que se la dejara pasaría en verde. */
+
+    // 1 · LA PUERTA EXISTE Y VERIFICA. No basta con que escriba: tiene que releer y consultar.
+    const puerta = src.match(/async function escribirVerificado\(subdir, nombre, payload, verificar\)\{[\s\S]*?\n\}/)?.[0];
+    if (!puerta) throw new Error('la puerta única de escritura en su carpeta tiene que existir y llamarse así');
+    const iEscribe = puerta.indexOf('createWritable'), iRelee = puerta.indexOf('fh.getFile()'), iPide = puerta.indexOf('verificar(leido)');
+    if (!(iEscribe >= 0 && iRelee > iEscribe && iPide > iRelee))
+      throw new Error('la puerta tiene que escribir, RELEER y solo entonces preguntar: en otro orden no verifica nada');
+    if (!/throw new Error\("verificacion"\)/.test(puerta))
+      throw new Error('si la relectura no cuadra hay que ABORTAR: devolver el nombre haría creer al llamante que puede borrar su copia');
+
+    /* 2 · Y ES LA ÚNICA. Cualquier `createWritable` nuevo fuera de las tres funciones autorizadas
+       tumba esto. Es R48 aplicada: un guardián no se apaga, se le declara la excepción — y aquí las
+       excepciones son las dos escrituras de raíz, que no son subcarpetas y tienen su propio contrato
+       (datos.json con CAS por lastSavedText, e inbox). */
+    const AUTORIZADAS = ['escribirVerificado', 'writeDataFile', 'writeInboxRaw'];
+    const lineas = src.split('\n');
+    for (let i = 0; i < lineas.length; i++){
+      if (!/\.createWritable\(/.test(lineas[i])) continue;
+      let dueno = null;
+      for (let j = i; j >= 0; j--){
+        const m = /^(?:async )?function (\w+)/.exec(lineas[j]);
+        if (m){ dueno = m[1]; break; }
+      }
+      if (!AUTORIZADAS.includes(dueno))
+        throw new Error(`escritura suelta en «${dueno}» (línea ${i + 1}): todo lo que va a una subcarpeta suya `
+          + 'pasa por escribirVerificado, o la verificación por relectura vuelve a ser una costumbre y no una garantía');
+    }
+
+    /* 3 · NINGÚN LLAMANTE VERIFICA A CIEGAS. Un `() => true` deja la puerta puesta y la garantía
+       vacía: escribir sin mirar, con aspecto de seguro. Es el mismo fallo que el umbral inyectado por
+       el propio test (R37), un escalón más arriba. */
+    const llamadas = [];
+    for (let i = src.indexOf('escribirVerificado('); i >= 0; i = src.indexOf('escribirVerificado(', i + 1)){
+      if (/(?:async\s+)?function\s+$/.test(src.slice(Math.max(0, i - 24), i))) continue;   // la definición, no una llamada
+      let d = 0, j = src.indexOf('(', i);
+      const ini = j;
+      for (; j < src.length; j++){
+        if (src[j] === '(') d++;
+        else if (src[j] === ')' && --d === 0) break;
+      }
+      llamadas.push(src.slice(ini, j + 1));
+    }
+    if (llamadas.length < 2) throw new Error('se esperaban al menos las dos llamadas originales (imágenes y lotes fríos)');
+    for (const c of llamadas){
+      if (/=>\s*true\b/.test(c))
+        throw new Error('un verificador que siempre dice que sí es escribir a ciegas con aspecto de seguro');
+      if (!/\.size|\.text\(\)/.test(c))
+        throw new Error('cada verificador tiene que mirar el fichero releído: su tamaño o su contenido');
+    }
+
+    /* 4 · Y LA PUERTA DE LEER SIGUE SIN FABRICAR NADA. Se comprueba aquí además de en 0.78.0 porque
+       ahora es una sola función y su regresión afectaría a imágenes, adjuntos y lotes a la vez. */
+    const lector = src.match(/async function abrirDeCarpeta\(subdir, nombre\)\{[\s\S]*?\n\}/)[0];
+    if (/create: true/.test(lector))
+      throw new Error('mirar no fabrica: la puerta de lectura no puede crear la carpeta ni el fichero');
+
+    console.log('OK 0.80.0 (una sola puerta escribe en su carpeta, verifica releyendo y nadie la esquiva)');
+  }
+
+  // --- 0.80.0: adjuntos en una tarea ------------------------------------------------------------
+  {
+    /* Petición suya del 15/08: «colgarte un PDF o una captura desde la propia tarea». Lo que se
+       prueba es lo que no puede fallar sin costarle datos o deshacer 0.78.0. */
+    const ga = src.match(/async function guardarAdjunto\(file\)\{[\s\S]*?\n\}/)[0];
+
+    // 1 · pasa por la puerta única y verifica el TAMAÑO releído, no solo que exista
+    if (!/escribirVerificado\(ADJ_DIR/.test(ga))
+      throw new Error('un adjunto se escribe por la puerta única, que es la que verifica por relectura');
+    if (!/leido\.size === file\.size/.test(ga))
+      throw new Error('un PDF a medio escribir tiene el mismo aspecto que uno entero: hay que comparar tamaños');
+
+    /* 2 · NUNCA se incrusta, ni como respaldo. Es la diferencia deliberada con las imágenes: una
+       imagen tiene un modo «solo navegador» que le funciona desde siempre; un adjunto es función
+       nueva, y meterle un PDF dentro de datos.json sería rehacer a mano el problema que 0.78.0
+       acaba de quitarle (1,17 MB → 780 KB). */
+    const panel = src.match(/const btAdj = ed\.querySelector\("\.rp-actions \.adj"\);[\s\S]*?\n    \}\);/)[0];
+    if (/readAsDataURL|imgFromBlob|data:|\.att\.push\(\{[^}]*b64|dataUrl/.test(panel))
+      throw new Error('un adjunto no puede acabar dentro de datos.json: deshace 0.78.0 en la misma pasada');
+    if (!/backend !== "fs" \|\| !dirHandle/.test(panel))
+      throw new Error('sin carpeta concedida se dice y se para: no hay alternativa que incruste');
+
+    // 3 · se apunta en la tarea DESPUÉS de que el fichero esté escrito y verificado
+    const iGuarda = panel.indexOf('await guardarAdjunto(f)'), iApunta = panel.indexOf('it.att.push(a)');
+    if (iGuarda < 0 || iApunta < iGuarda)
+      throw new Error('primero se guarda y se verifica, y solo entonces se apunta: al revés, la tarea '
+        + 'referencia un fichero que puede no existir');
+
+    // 4 · quitar de la tarea NO borra el fichero de su carpeta (mismo contrato que las imágenes)
+    const quitar = src.match(/ed\.querySelectorAll\("\.rp-a-rm"\)[\s\S]*?\n    \}\)\);/)[0];
+    if (/removeEntry/.test(quitar))
+      throw new Error('quitar un adjunto de la tarea no puede borrar el fichero: es suyo y puede estar referenciado en otro sitio');
+    if (!/toastAction/.test(quitar))
+      throw new Error('quitar tiene que ofrecer Deshacer, como el resto de lo que se quita de una tarea');
+
+    /* 5 · UN PACK NO PUEDE TRAER UN ADJUNTO. Apuntaría a un fichero que no existe en su carpeta.
+       Hoy se cumple porque `normalizePack` RECONSTRUYE cada tarea con lista blanca; el test vigila
+       que siga siendo lista blanca y no pase a ser lista negra, que es donde se cuela el campo
+       siguiente que nadie recuerda prohibir. */
+    const np = src.match(/function normalizePack\(p, opts\)\{[\s\S]*?\n\}/)[0];
+    const items = np.match(/data\.items = \(Array\.isArray\(d\.items\) \? d\.items : \[\]\)\.map\(i => \(\{([^}]*)\}\)\)/);
+    if (!items) throw new Error('normalizePack tiene que seguir reconstruyendo las tareas de un pack, campo a campo');
+    if (/att|imgRef|replies/.test(items[1]))
+      throw new Error('un pack no puede traer adjuntos, referencias ni conversación: apuntarían a algo que no existe en su carpeta');
+
+    // 6 · el tope está declarado y es legible (no un número mágico dentro de un if)
+    const mx = src.match(/const ADJ_MAX = (\d+) \* 1024 \* 1024;/);
+    if (!mx) throw new Error('el tope de tamaño tiene que estar declarado y ser legible');
+    if (+mx[1] < 1 || +mx[1] > 50)
+      throw new Error(`tope de ${mx[1]} MB: por debajo de 1 no cabe un PDF normal y por encima de 50 el fichero estorba en su carpeta sincronizada`);
+
+    console.log('OK 0.80.0 (adjuntos verificados, nunca dentro de datos.json, y quitar no borra el fichero)');
+  }
+
+  // --- 0.80.0: reducción automática de la papelera ----------------------------------------------
+  {
+    /* Su petición del 08/08 traía la condición dentro: «que esta operación se haga sola y
+       desatendida por el usuario SI DA EL VB». Lo que se prueba es que «automático» no se haya
+       convertido en «silencioso» ni en «sin red debajo», que es lo único que el gate protegía. */
+    const red = src.match(/async function reducirPapelera\(opts\)\{[\s\S]*?\n\}/)[0];
+    const oa = src.match(/function objetivoAuto\(\)\{[\s\S]*?\n\}/)[0];
+
+    // 1 · APAGADO POR DEFECTO. Ausencia = manual: nadie hereda una limpieza que no encendió.
+    if (!/appSettings\(\)\.trashAuto/.test(oa))
+      throw new Error('el automático se lee de su configuración, no de una constante');
+    if (!/if \(auto && !meta\) return false;/.test(red))
+      throw new Error('sin su VB explícito el camino automático no puede existir siquiera');
+
+    /* 2 · SIGUE HABIENDO RED DEBAJO (R38). El lote frío se escribe y se verifica ANTES de quitar,
+       exactamente igual que en el camino manual: automático cambia quién dice «sí», no si hay red.
+       Esta es la comprobación que no puede caerse por ningún motivo. */
+    const iEsc = red.indexOf('escribirLoteFrio'), iQta = red.indexOf('state.trash =');
+    if (iEsc < 0 || iQta < iEsc)
+      throw new Error('también en automático se archiva y se verifica antes de quitar: al revés es pérdida silenciosa');
+    if (!/if \(auto\)\{ if \(!avisoAutoSinCarpeta\)/.test(red))
+      throw new Error('sin carpeta conectada el automático no puede quitar nada, y tiene que decirlo');
+
+    /* 3 · AUTOMÁTICO NO ES SILENCIOSO, que es la mitad de su condición y la que se olvida. El aviso
+       tiene que decir cuántos, cuánto pesaban y EN QUÉ FICHERO están: sin las tres cosas no se
+       puede deshacer a mano, y «se ha limpiado la papelera» es como se descubre un mes después que
+       faltaba algo. */
+    /* SE LEE SOLO EL AVISO AUTOMÁTICO. Estaban los dos en un ternario y el banco los leía como uno:
+       el mensaje manual —que sí nombra el fichero— le tapaba a este los huecos, y dos de las tres
+       mutaciones NO CAÍAN. Es el mismo defecto que R47 describe: lo que se pinta en un sitio y se
+       comprueba en otro acaba divergiendo. Ahora es una función propia y se examina sola. */
+    if (!/toast\(auto \? avisoAutoReducida\(/.test(red))
+      throw new Error('el aviso del automático tiene que ser su propia función, o el manual le tapa los huecos al comprobarlo');
+    const avisoAuto = src.match(/function avisoAutoReducida\(n, bytes, nombre\)\{[\s\S]*?\n\}/)[0];
+    for (const [q, err] of [
+      ['${n} elemento', 'cuántos elementos salieron'],
+      ['${kb(bytes)}', 'cuánto pesaban'],
+      ['${TRASH_DIR}/${nombre}', 'en qué fichero exacto han quedado'],
+      ['«Archivo de papelera»', 'de dónde se recuperan, o no sabrá que puede'],
+    ]) if (!avisoAuto.includes(q)) throw new Error(`el aviso del automático tiene que decir ${err}`);
+
+    /* 4 · Y NO SE RELAJA NADA DE LO QUE EL GATE DESCARTÓ. Siguen prohibidos el reloj y la carga:
+       automático se dispara por una MUTACIÓN REAL de la papelera, que es lo que hace visible la
+       relación entre lo que él acaba de hacer y lo que se mueve. (Se comprueba también en 0.57.0;
+       se repite aquí porque es este cambio el que lo pondría en riesgo.) */
+    if (/set(Interval|Timeout)\([^)]*reducirPapelera/.test(src))
+      throw new Error('el automático NO puede ser por reloj: eso es lo que el gate descartó');
+    const iSan = src.indexOf('function sanitizeState');
+    if (/reducirPapelera/.test(src.slice(iSan, iSan + 4000)))
+      throw new Error('abrir jamás escribe: el saneo no puede disparar la reducción, ni siquiera la automática');
+
+    // 5 · el objetivo se acota: un datos.json editado a mano no puede pedir que se vacíe entera
+    if (!/v >= 50 && v <= 5000/.test(oa))
+      throw new Error('el objetivo tiene que acotarse: si no, un valor manipulado decide cuánto se le quita');
+    const sel = html.match(/<select id="cfg-trashauto"[\s\S]*?<\/select>/)[0];
+    if (!/value="0"/.test(sel) || !/Desactivada/.test(sel))
+      throw new Error('«desactivada» tiene que ser una opción visible y la primera: es el estado por defecto');
+    if (!/No se borra nada/.test(html.match(/for="cfg-trashauto"[\s\S]*?<\/label>/)[0]))
+      throw new Error('donde se enciende hay que decir que no se borra nada, que es la condición con la que lo aprobó');
+
+    console.log('OK 0.80.0 (la papelera se reduce sola solo con su VB, sigue archivando antes de quitar y lo dice)');
   }
 
   console.log('\nTODO EN VERDE');

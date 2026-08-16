@@ -572,6 +572,18 @@ ul.plain{list-style:none}
 .rp.de-agente{align-self:flex-start; background:rgba(255,255,255,.05); border:1px solid var(--border-soft)}
 .rp-vacio{font-size:11.5px; color:var(--text-dim); line-height:1.45}
 .rp-nota{font-size:11.5px; color:var(--text-dim); border-left:2px solid var(--border-soft); padding:2px 0 2px 8px; margin-bottom:8px; white-space:pre-wrap}
+/* 0.80.0 — adjuntos. Van entre el hilo y la caja de escribir: se cuelgan mientras se contesta.
+   El nombre ocupa el hueco que sobra y se recorta con puntos suspensivos en vez de partir la fila,
+   que es lo que hacía ilegible el peso — y el peso es justo lo que decide si abrirlo. */
+.rp-adj{display:flex; flex-direction:column; gap:4px; margin-bottom:8px}
+.rp-a{display:flex; align-items:center; gap:6px; font-size:11.5px}
+.rp-a-open{flex:1; min-width:0; text-align:left; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  background:none; border:1px solid var(--border-soft); border-radius:8px; padding:3px 7px; color:var(--text);
+  font-family:var(--font); font-size:11.5px; cursor:pointer}
+.rp-a-open:hover{border-color:var(--accent)}
+.rp-a-kb{color:var(--text-dim); flex:0 0 auto; font-variant-numeric:tabular-nums}
+.rp-a-cp,.rp-a-rm{flex:0 0 auto; background:none; border:none; color:var(--text-dim); cursor:pointer; padding:2px 4px; font-size:11.5px}
+.rp-a-cp:hover,.rp-a-rm:hover{color:var(--text)}
 .rp-t{width:100%; box-sizing:border-box; min-height:52px; resize:vertical; padding:7px 9px; border-radius:9px;
   border:1px solid var(--border-soft); background:rgba(0,0,0,.25); color:var(--text); font-family:var(--font); font-size:12.5px}
 .rp-t:focus{border-color:var(--accent); outline:none}
@@ -1252,6 +1264,16 @@ ul.plain{list-style:none}
         <option value="4">4 columnas</option>
       </select>
     </div>
+    <div class="field" style="flex-direction:column; align-items:stretch; gap:4px">
+      <label for="cfg-trashauto" style="font-size:13px"><b>Reducir la papelera sola</b> <span style="color:var(--text-dim)">— al pasar del tamaño que elijas, lo más antiguo va solo al archivo de recuperación de tu carpeta y se te dice. <b>No se borra nada</b>: se recupera desde «Archivo de papelera». Necesita la carpeta sincronizada conectada</span></label>
+      <select id="cfg-trashauto" class="cfg-sel">
+        <option value="0">Desactivada — preguntar siempre</option>
+        <option value="150">Sí, por encima de 150 KB</option>
+        <option value="300">Sí, por encima de 300 KB</option>
+        <option value="500">Sí, por encima de 500 KB</option>
+        <option value="1000">Sí, por encima de 1 MB</option>
+      </select>
+    </div>
     <div class="row">
       <button class="btn" id="cfg-save">💾 Guardar</button>
       <button class="btn" id="cfg-cancel">Cancelar</button>
@@ -1776,6 +1798,7 @@ function openConfig(){
   $("#cfg-defcols").value = (a.defaultCols === 2 || a.defaultCols === 3 || a.defaultCols === 4) ? String(a.defaultCols) : "auto";
   $("#cfg-scale").value = [110, 125].includes(+a.uiScale) ? String(+a.uiScale) : "100";
   $("#cfg-contrast").value = a.contrast === "alto" ? "alto" : "normal";
+  $("#cfg-trashauto").value = [150, 300, 500, 1000].includes(+a.trashAuto) ? String(+a.trashAuto) : "0";
   $("#ov-config").classList.add("open");
 }
 function saveConfig(){
@@ -1787,6 +1810,11 @@ function saveConfig(){
   const sc = +$("#cfg-scale").value;
   if (sc === 110 || sc === 125) a.uiScale = sc;                       // 100 = defecto → ausencia
   if ($("#cfg-contrast").value === "alto") a.contrast = "alto";       // normal = defecto → ausencia
+  /* 0.80.0 — solo se persisten los cuatro valores de la lista: apagada = ausencia, igual que el
+     resto. Un número libre aquí es un pie de datos manipulables que decide cuánto se le quita de
+     la papelera, y eso no puede depender de lo que ponga un datos.json editado a mano. */
+  const ta = +$("#cfg-trashauto").value;
+  if ([150, 300, 500, 1000].includes(ta)) a.trashAuto = ta;
   if (Object.keys(a).length) state.appSettings = a;
   else delete state.appSettings;   // todo por defecto = ausencia (el estado canónico)
   $("#ov-config").classList.remove("open");
@@ -2021,7 +2049,7 @@ function syncUI(mode, txt){
    reaparece) y si Recargar está activo. El descarte ✕ vive solo en memoria de la sesión.
    Demora asumida: la CDN de Pages puede servir la versión vieja hasta ~10 min aun con
    no-store (gobierna la caché del navegador, no la CDN); para pestañas de días, irrelevante. */
-const APP_VERSION = "0.79.0";
+const APP_VERSION = "0.80.0";
 let newVersionDetected = null;   // versión superior detectada; detiene futuras consultas
 let verDismissed = false;        // ✕: solo esta sesión — nunca persistido en disco
 let verCheckInflight = false;    // sin consultas concurrentes
@@ -2211,7 +2239,22 @@ const kb = n => n >= 1024 * 1024 ? (n / 1024 / 1024).toFixed(1) + " MB" : Math.r
    confirmación —que tiene que decir cuántos y cuántos bytes ANTES de mover nada— como la propia
    reducción. Salen los más ANTIGUOS primero: aquí la antigüedad sirve para elegir candidatos, que
    es lo único para lo que el gate la admite (como reloj que dispara escrituras, descartada). */
-function trashCandidatos(){
+/* 0.80.0 — EL OBJETIVO PUEDE SER SUYO. Ausente = la reducción sigue siendo a petición, con su
+   diálogo, y el objetivo es la constante de siempre. Presente = él lo encendió en Configuración y
+   además fija hasta dónde se baja. La ausencia como valor por defecto es el canon del archivo
+   («todo por defecto = ausencia»), y aquí además importa: significa que nadie hereda una limpieza
+   automática que no pidió. */
+function objetivoAuto(){
+  const v = +(appSettings().trashAuto || 0);
+  return v >= 50 && v <= 5000 ? v * 1024 : 0;
+}
+/** El aviso de que la papelera se ha reducido SOLA. Función propia para poder comprobarla aparte. */
+function avisoAutoReducida(n, bytes, nombre){
+  return `Papelera reducida sola: ${n} elemento${n === 1 ? "" : "s"} (${kb(bytes)}) a ${TRASH_DIR}/${nombre}`
+    + ` — se recuperan desde «Archivo de papelera»`;
+}
+function trashCandidatos(objetivo){
+  const meta = objetivo || TRASH_OBJETIVO;
   const items = (state && Array.isArray(state.trash)) ? state.trash : [];
   if (!items.length) return [];
   const orden = [...items].sort((a, b) => (a.at || 0) - (b.at || 0));   // el más viejo, el primero en salir
@@ -2221,7 +2264,7 @@ function trashCandidatos(){
   let restanN = items.length, restanB = bytesDe(items);
   const fuera = [];
   for (const cand of orden){
-    if (restanB <= TRASH_OBJETIVO && restanN <= TRASH_MAX_N) break;
+    if (restanB <= meta && restanN <= TRASH_MAX_N) break;
     /* EXCEPCIÓN del gate: si el elemento recién borrado pesa él solo más que el presupuesto, se
        conserva y se avisa. Una papelera que se salta a sí misma para cumplir una cifra es peor que
        un archivo grande. Aquí se traduce en no dejar NUNCA la papelera vacía: el último sobrevive
@@ -2277,23 +2320,88 @@ function loteNombre(){
    incrustando como siempre y se le dice; romper el pegar-una-imagen en el modo «solo navegador»
    sería cambiarle algo que hoy le funciona. */
 const IMG_DIR = "cabecera-imagenes";
+const ADJ_DIR = "cabecera-adjuntos";
 
-/** Guarda un binario en la subcarpeta y devuelve su nombre. Verifica por relectura, como la papelera. */
-async function guardarImagenFuera(blob, ext){
+/* 0.80.0 — LA PUERTA ÚNICA A SU CARPETA. Refactor preparatorio (Kent Beck: «make the change easy,
+   then make the easy change»), hecho ANTES de construir adjuntos y la reducción automática porque
+   las dos necesitaban por tercera y cuarta vez lo mismo que ya estaba escrito dos veces.
+
+   Lo que estaba duplicado, palabra por palabra, en `guardarImagenFuera` y en `escribirLoteFrio`:
+   comprobar que hay carpeta → abrir la subcarpeta creándola → abrir el fichero → escribir → cerrar →
+   **releerlo y comprobar que dentro está lo que se mandó** → y solo entonces devolver el nombre para
+   que el llamante mute el estado. Ese último paso es el que impide perder datos, y es exactamente el
+   que un tercer sitio copiado a mano se habría dejado.
+
+   `CONTRATO:` NADA se escribe en una subcarpeta suya fuera de esta función. El banco de pruebas lo
+   comprueba por fuente: cualquier `createWritable` nuevo dentro de una subcarpeta lo tumba. No es
+   estilo — es que la verificación por relectura deje de ser una costumbre y pase a ser el único
+   camino, que es la diferencia entre una convención y una garantía.
+
+   `CONTRATO:` `verificar` recibe el fichero RELEÍDO y tiene que mirarlo de verdad. Un `() => true`
+   convierte esto en una escritura a ciegas con aspecto de segura, así que el banco también exige que
+   cada llamante inspeccione tamaño o contenido. */
+async function escribirVerificado(subdir, nombre, payload, verificar){
   if (backend !== "fs" || !dirHandle) throw new Error("sin-carpeta");
-  const dir = await dirHandle.getDirectoryHandle(IMG_DIR, { create: true });
+  const dir = await dirHandle.getDirectoryHandle(subdir, { create: true });
+  const fh = await dir.getFileHandle(nombre, { create: true });
+  const wr = await fh.createWritable();
+  await wr.write(payload);
+  await wr.close();
+  // que el archivo exista no prueba que tenga dentro lo que se le mandó
+  const leido = await fh.getFile();
+  if (!leido || !(await verificar(leido))) throw new Error("verificacion");
+  return nombre;
+}
+/** Abre un fichero de una subcarpeta suya. NUNCA crea nada: mirar no fabrica. */
+async function abrirDeCarpeta(subdir, nombre){
+  if (backend !== "fs" || !dirHandle) throw new Error("sin-carpeta");
+  const dir = await dirHandle.getDirectoryHandle(subdir);   // sin create: mirar no fabrica nada
+  return (await dir.getFileHandle(nombre)).getFile();
+}
+/** Nombre único y ordenable por fecha, común a imágenes y adjuntos. */
+function selloNombre(prefijo, ext){
   const d = new Date();
   const sello = d.getFullYear() + String(d.getMonth() + 1).padStart(2, "0") + String(d.getDate()).padStart(2, "0")
     + "-" + String(d.getHours()).padStart(2, "0") + String(d.getMinutes()).padStart(2, "0") + String(d.getSeconds()).padStart(2, "0");
-  const nombre = `img-${sello}-${Math.random().toString(36).slice(2, 8)}.${ext || "png"}`;
-  const fh = await dir.getFileHandle(nombre, { create: true });
-  const wr = await fh.createWritable();
-  await wr.write(blob);
-  await wr.close();
-  // que el archivo exista no prueba que tenga dentro lo que se le mandó (misma regla que la papelera)
-  const leido = await fh.getFile();
-  if (!leido || leido.size !== blob.size) throw new Error("verificacion");
-  return nombre;
+  return `${prefijo}-${sello}-${Math.random().toString(36).slice(2, 8)}.${ext || "bin"}`;
+}
+
+/** Guarda un binario en la subcarpeta y devuelve su nombre. Verifica por relectura, como la papelera. */
+async function guardarImagenFuera(blob, ext){
+  return escribirVerificado(IMG_DIR, selloNombre("img", ext || "png"), blob,
+    leido => leido.size === blob.size);
+}
+
+/* 0.80.0 — ADJUNTOS EN UNA TAREA. Petición suya del 15/08: «poder colgarte un PDF o una captura
+   desde la propia tarea». Iba encadenada a la galería por referencia y por eso esperaba; con la
+   puerta única ya construida, es barata.
+
+   `CONTRATO:` un adjunto NUNCA se incrusta en datos.json, ni siquiera como respaldo. Es la
+   diferencia con las imágenes, y es deliberada: una imagen pegada tiene un modo «solo navegador»
+   que le funciona desde siempre y romperlo sería quitarle algo, mientras que un adjunto es una
+   función NUEVA — meterle un PDF de 2 MB dentro del archivo que sus dos equipos releen cada cuatro
+   segundos sería reintroducir a mano el problema que 0.78.0 acaba de quitar (1,17 MB → 780 KB).
+   Sin carpeta concedida, se dice y no se adjunta.
+
+   `CONTRATO:` en la tarea queda el NOMBRE del fichero, nunca una ruta absoluta (decisión del
+   04/08: una ruta absoluta no sobrevive a viajar entre sus dos equipos), más el nombre original y
+   el tamaño para poder enseñarlos sin abrir la carpeta.
+
+   `CONTRATO:` quitar un adjunto de la tarea NO borra el fichero, igual que en las imágenes. El
+   fichero es suyo y puede tenerlo referenciado en otro sitio. */
+const ADJ_MAX = 20 * 1024 * 1024;
+async function guardarAdjunto(file){
+  if (!file || !file.size) throw new Error("vacio");
+  if (file.size > ADJ_MAX) throw new Error("grande");
+  const ext = (String(file.name || "").split(".").pop() || "bin").toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 8);
+  const f = await escribirVerificado(ADJ_DIR, selloNombre("adj", ext), file, leido => leido.size === file.size);
+  return { f, n: String(file.name || "archivo").slice(0, 120), s: file.size, at: Date.now() };
+}
+async function abrirAdjunto(a){
+  const f = await abrirDeCarpeta(ADJ_DIR, a.f);
+  const u = URL.createObjectURL(f);
+  window.open(u, "_blank", "noopener");
+  setTimeout(() => URL.revokeObjectURL(u), 30000);
 }
 /* Convierte la `data:` que produce `imgFromBlob` en binario SIN pasar por la API de red del
    navegador. Se hizo primero con esa API —funciona, y sobre una `data:` no sale a internet— pero el
@@ -2312,28 +2420,18 @@ function dataUrlABlob(dataUrl){
 }
 /** Lee una imagen guardada por referencia y devuelve una URL usable en un <img>. */
 async function leerImagenFuera(nombre){
-  if (backend !== "fs" || !dirHandle) throw new Error("sin-carpeta");
-  const dir = await dirHandle.getDirectoryHandle(IMG_DIR);   // sin create: mirar no fabrica nada
-  const fh = await dir.getFileHandle(nombre);
-  return URL.createObjectURL(await fh.getFile());
+  return URL.createObjectURL(await abrirDeCarpeta(IMG_DIR, nombre));
 }
 async function escribirLoteFrio(items){
-  if (backend !== "fs" || !dirHandle) throw new Error("sin-carpeta");
-  const dir = await dirHandle.getDirectoryHandle(TRASH_DIR, { create: true });
-  const nombre = loteNombre();
-  const lote = { cabeceraPapelera: 1, at: Date.now(), equipo: (dirHandle.name || ""), items: plainClone(items) };
-  const payload = JSON.stringify(lote, null, 2);
-  const fh = await dir.getFileHandle(nombre, { create: true });
-  const w = await fh.createWritable();
-  await w.write(payload);
-  await w.close();
-  // verificación por RELECTURA: que el archivo exista no prueba que contenga lo que se le mandó
-  const leido = JSON.parse(await (await fh.getFile()).text());
-  if (!leido || leido.cabeceraPapelera !== 1 || !Array.isArray(leido.items) || leido.items.length !== items.length)
-    throw new Error("verificacion");
-  const ids = new Set(leido.items.map(x => x && x.id));
-  for (const it of items) if (!ids.has(it.id)) throw new Error("verificacion");
-  return nombre;
+  const lote = { cabeceraPapelera: 1, at: Date.now(), equipo: (dirHandle && dirHandle.name) || "", items: plainClone(items) };
+  return escribirVerificado(TRASH_DIR, loteNombre(), JSON.stringify(lote, null, 2), async f => {
+    // verificación por RELECTURA, elemento a elemento: que el archivo exista no prueba que
+    // contenga lo que se le mandó, y aquí lo que se pierde si miente son sus datos borrados
+    const leido = JSON.parse(await f.text());
+    if (!leido || leido.cabeceraPapelera !== 1 || !Array.isArray(leido.items) || leido.items.length !== items.length) return false;
+    const ids = new Set(leido.items.map(x => x && x.id));
+    return items.every(it => ids.has(it.id));
+  });
 }
 async function listarLotesFrios(){
   if (backend !== "fs" || !dirHandle) return [];
@@ -2351,20 +2449,43 @@ async function leerLoteFrio(h){
 /* La reducción. Se dispara SOLO desde aquí, y aquí solo se llega por acción humana («Revisar») o
    tras una mutación real de la papelera. Nunca al cargar, nunca por temporizador, nunca en el
    primer guardado de una edición cualquiera: eso acoplaría editar una tarea con borrar contenido
-   antiguo sin relación visible. */
-async function reducirPapelera(){
-  const fuera = trashCandidatos();
-  if (!fuera.length){ toast("La papelera ya está dentro del presupuesto"); return false; }
+   antiguo sin relación visible.
+
+   0.80.0 — MODO AUTOMÁTICO, y hay que decir con qué gate choca y por qué NO lo rompe. Su petición
+   del 08/08 traía ya la condición dentro: «que esta operación se haga sola y desatendida por el
+   usuario SI DA EL VB». El gate de la papelera había descartado tres cosas —que abrir escriba, que
+   un reloj purgue, y que algo se mueva sin que se vea qué—. Ninguna de las tres se toca:
+
+     · el disparador sigue siendo una MUTACIÓN REAL de la papelera, no el reloj ni la carga;
+     · sigue escribiéndose y VERIFICÁNDOSE el lote frío antes de quitar nada (R38: nada sale sin
+       red debajo). Automático cambia quién dice «sí», no si hay red;
+     · y lo que sustituye al diálogo es un aviso que dice cuántos, cuántos KB y en qué fichero —
+       automático no es silencioso. Un modal saltando solo sería lo peor de las dos reglas.
+
+   Lo que de verdad cambia es que el «sí» se da UNA VEZ en Configuración en lugar de cada vez, que
+   es exactamente lo que él pidió. Apagado por defecto: nadie hereda una limpieza que no encendió. */
+async function reducirPapelera(opts){
+  const auto = !!(opts && opts.auto);
+  const meta = auto ? objetivoAuto() : 0;
+  if (auto && !meta) return false;   // sin su VB explícito, el camino automático no existe
+  const fuera = trashCandidatos(meta);
+  if (!fuera.length){ if (!auto) toast("La papelera ya está dentro del presupuesto"); return false; }
   if (backend !== "fs" || !dirHandle){
+    /* Sin carpeta no hay red debajo y NO se quita nada, tampoco en automático. En automático se
+       dice una sola vez y sin modal: un diálogo que aparece solo, por algo que él no acaba de
+       pedir, es justo lo que el gate prohíbe. */
+    if (auto){ if (!avisoAutoSinCarpeta){ avisoAutoSinCarpeta = true; toast("La reducción automática necesita tu carpeta sincronizada: no se ha quitado nada", true); } return false; }
     await dlgConfirm("El archivo de recuperación vive en tu carpeta sincronizada, y ahora mismo no hay ninguna conectada. Sin ella no hay red debajo, así que no se quita nada: conecta la carpeta desde «📁 Sincronizar equipos» y vuelve a intentarlo.",
       { title: "No se puede reducir todavía", okLabel: "Entendido", cancelLabel: "Cerrar" });
     return false;
   }
   const bytes = bytesDe(fuera);
-  const ok = await dlgConfirm(
-    `Se moverán ${fuera.length} elemento${fuera.length === 1 ? "" : "s"} (${kb(bytes)}) al archivo de recuperación, dentro de tu carpeta de datos (${TRASH_DIR}/). Salen los más antiguos.\n\nNo se borra nada: siguen ahí y puedes recuperarlos desde «Archivo de papelera». Lo que se consigue es que dejen de viajar en el archivo que tus dos equipos releen continuamente.`,
-    { title: "Reducir la papelera", okLabel: "Mover al archivo" });
-  if (!ok) return false;
+  if (!auto){
+    const ok = await dlgConfirm(
+      `Se moverán ${fuera.length} elemento${fuera.length === 1 ? "" : "s"} (${kb(bytes)}) al archivo de recuperación, dentro de tu carpeta de datos (${TRASH_DIR}/). Salen los más antiguos.\n\nNo se borra nada: siguen ahí y puedes recuperarlos desde «Archivo de papelera». Lo que se consigue es que dejen de viajar en el archivo que tus dos equipos releen continuamente.`,
+      { title: "Reducir la papelera", okLabel: "Mover al archivo" });
+    if (!ok) return false;
+  }
   let nombre;
   try{
     nombre = await escribirLoteFrio(fuera);
@@ -2379,7 +2500,15 @@ async function reducirPapelera(){
   markDirty();
   renderTrash();
   renderTrashChip(); renderPesoChip();
-  toast(`${fuera.length} elemento${fuera.length === 1 ? "" : "s"} en ${TRASH_DIR}/${nombre}`);
+  /* El aviso del automático dice las CUATRO cosas que hacen falta para poder deshacerlo a mano:
+     cuántos, cuánto pesaban, en qué fichero están y de dónde se recuperan. «Se ha limpiado la
+     papelera» no serviría — es así como se descubre un mes después que faltaba algo.
+     Va en su propia función y no dentro de un ternario junto al aviso manual: cuando estaban
+     juntos, el banco de pruebas leía los dos mensajes como uno solo y el manual le tapaba a este
+     los huecos. Dos avisos con condiciones distintas se comprueban por separado o no se comprueban
+     (R47: lo que se pinta en un sitio y se cuenta en otro, diverge). */
+  toast(auto ? avisoAutoReducida(fuera.length, bytes, nombre)
+             : `${fuera.length} elemento${fuera.length === 1 ? "" : "s"} en ${TRASH_DIR}/${nombre}`);
   return true;
 }
 /* Indicador de la barra: aparece SOLO por encima del umbral y su acción se llama «Revisar», no
@@ -2542,9 +2671,15 @@ function renderTrash(){
    Un modal saltando encima justo después de borrar un widget sería lo peor de las dos reglas, así
    que este disparador enciende el indicador de la barra y lo dice una vez; el movimiento siempre
    pasa por el diálogo de «Reducir». */
-let avisoPapeleraDado = false;
+let avisoPapeleraDado = false, avisoAutoSinCarpeta = false;
 function trasMutarPapelera(){
   renderTrashChip(); renderPesoChip();
+  /* 0.80.0 — el único camino por el que la reducción ocurre sin preguntar, y solo existe si él lo
+     encendió en Configuración. Va antes del aviso manual a propósito: si la reducción automática se
+     va a encargar, avisarle además de que «conviene reducirla» sería pedirle que haga lo que acaba
+     de delegar. Es `void` porque este disparador no puede esperar a una escritura de disco: lo
+     llaman rutas síncronas de borrado, y bloquearlas dejaría la interfaz colgada del disco. */
+  if (objetivoAuto() && trashBytes() > objetivoAuto()){ void reducirPapelera({ auto: true }); return; }
   const b = trashBytes();
   if (b < TRASH_AVISO){ avisoPapeleraDado = false; return; }
   if (avisoPapeleraDado) return;
@@ -6616,11 +6751,20 @@ function bodyTodo(w, el){
         + `<span class="rp-acts"><button class="rp-ed" type="button" title="Editar">✎</button><button class="rp-del" type="button" title="Borrar esta respuesta">✕</button></span></span>`
         + `<span class="rp-txt">${esc(r.t)}</span></div>`;
     }).join("");
+    /* 0.80.0 — los adjuntos se pintan ENTRE el hilo y la caja de escribir, no en una pestaña aparte:
+       lo que se adjunta se adjunta mientras se contesta, y separarlos obligaría a dos gestos para
+       una sola intención. El tamaño va a la vista porque es lo que decide si merece la pena. */
+    const adj = (Array.isArray(it.att) ? it.att : []).map((a, i) =>
+      `<div class="rp-a" data-a="${i}"><button class="rp-a-open" type="button" title="Abrir «${esc(a.n)}» desde tu carpeta ${ADJ_DIR}">📎 ${esc(a.n)}</button>`
+      + `<span class="rp-a-kb">${kb(a.s || 0)}</span>`
+      + `<button class="rp-a-cp" type="button" title="Copiar el nombre del fichero para buscarlo en tu carpeta">⧉</button>`
+      + `<button class="rp-a-rm" type="button" title="Quitarlo de la tarea — el fichero NO se borra de tu carpeta">✕</button></div>`).join("");
     ed.innerHTML = `<div class="rp-head"><b>Conversación${it.n ? ` <span class="rp-n" title="Número de esta tarea en la lista: cítalo tal cual cuando hables de ella con un asistente">#${it.n}</span>` : ""}</b><button class="rp-x" type="button" title="Cerrar (Esc)">✕</button></div>
       <div class="rp-hilo">${hilo || `<div class="rp-vacio">Aún no hay respuestas. Lo que escribas se guarda con su fecha y no se sobrescribe.</div>`}</div>
       ${it.note ? `<div class="rp-nota"><b>Nota:</b> ${esc(it.note)}</div>` : ""}
+      ${adj ? `<div class="rp-adj">${adj}</div>` : ""}
       <textarea class="rp-t" placeholder="Escribe tu respuesta…  (Ctrl+Enter para enviar)"></textarea>
-      <div class="rp-actions"><button class="mini send" type="button">Responder</button><button class="mini ok" type="button" title="Responder «Vale» sin escribir — apaga el 🤖 y deja constancia de que lo leíste">👍 Vale</button>${it.done ? "" : `<button class="mini okdone" type="button" title="Responder y dar la tarea por hecha, en un gesto — si ya has escrito algo, se manda lo tuyo">👍 Vale y hecha</button>`}<button class="mini" type="button" data-x="1">Cerrar</button></div>`;
+      <div class="rp-actions"><button class="mini send" type="button">Responder</button><button class="mini ok" type="button" title="Responder «Vale» sin escribir — apaga el 🤖 y deja constancia de que lo leíste">👍 Vale</button>${it.done ? "" : `<button class="mini okdone" type="button" title="Responder y dar la tarea por hecha, en un gesto — si ya has escrito algo, se manda lo tuyo">👍 Vale y hecha</button>`}<button class="mini adj" type="button" title="Colgar un PDF o una captura en esta tarea: se guarda en tu carpeta, no dentro de datos.json">📎 Adjuntar</button><button class="mini" type="button" data-x="1">Cerrar</button></div>`;
     li.appendChild(ed);
     const ta = ed.querySelector(".rp-t");
     const cerrar = () => { ed.remove(); };
@@ -6709,6 +6853,73 @@ function bodyTodo(w, el){
     ed.querySelector(".rp-actions .ok").addEventListener("click", () => enviar("Vale"));
     const okDone = ed.querySelector(".rp-actions .okdone");
     if (okDone) okDone.addEventListener("click", () => enviar("Vale", true));
+    /* 0.80.0 — ADJUNTAR. El diálogo de archivos se abre con `showOpenFilePicker` si está, y si no
+       con un <input type=file>, que es lo que hay en los navegadores que no la tienen. Sin carpeta
+       concedida NO se ofrece la alternativa de incrustar: se dice y se para (ver contrato arriba). */
+    const btAdj = ed.querySelector(".rp-actions .adj");
+    if (btAdj) btAdj.addEventListener("click", async () => {
+      if (backend !== "fs" || !dirHandle){
+        toast("Un adjunto vive en tu carpeta sincronizada, y ahora no hay ninguna conectada. Conéctala desde «📁 Sincronizar equipos»", true);
+        return;
+      }
+      let files = [];
+      try{
+        if (window.showOpenFilePicker){
+          const hs = await window.showOpenFilePicker({ multiple: true });
+          files = await Promise.all(hs.map(h => h.getFile()));
+        } else {
+          files = await new Promise(res => {
+            const inp = document.createElement("input");
+            inp.type = "file"; inp.multiple = true;
+            inp.addEventListener("change", () => res([...(inp.files || [])]));
+            inp.click();
+          });
+        }
+      }catch(e){ return; }   // cancelar no es un error
+      if (!files.length) return;
+      let n = 0, fallo = "";
+      for (const f of files){
+        try{
+          const a = await guardarAdjunto(f);
+          if (!Array.isArray(it.att)) it.att = [];
+          it.att.push(a);   // solo se apunta DESPUÉS de que el fichero esté escrito y verificado
+          n++;
+        }catch(e){
+          fallo = e && e.message === "grande"
+            ? `«${f.name}» pasa de ${kb(ADJ_MAX)} y no se ha adjuntado`
+            : `No se pudo guardar «${f.name}»: no se ha adjuntado`;
+        }
+      }
+      if (n){ markDirty(); paint(); reabrir(); toast(`${n} adjunto${n === 1 ? "" : "s"} en la carpeta «${ADJ_DIR}»`); }
+      if (fallo) toast(fallo, true);
+    });
+    ed.querySelectorAll(".rp-a-open").forEach(b => b.addEventListener("click", async e => {
+      e.stopPropagation();
+      const a = it.att[+b.closest(".rp-a").dataset.a];
+      /* Si el fichero no está —carpeta distinta, o aún sin sincronizar en el otro equipo— se DICE
+         cuál falta, igual que en las imágenes: un fallo mudo parece un adjunto perdido. */
+      try{ await abrirAdjunto(a); }
+      catch(err){ toast(`No encuentro «${a.f}» en la carpeta «${ADJ_DIR}»`, true); }
+    }));
+    ed.querySelectorAll(".rp-a-cp").forEach(b => b.addEventListener("click", async e => {
+      e.stopPropagation();
+      const a = it.att[+b.closest(".rp-a").dataset.a];
+      try{ await navigator.clipboard.writeText(a.f); toast(`Nombre copiado: búscalo en «${ADJ_DIR}»`); }
+      catch(err){ toast(`Está en «${ADJ_DIR}/${a.f}»`); }
+    }));
+    ed.querySelectorAll(".rp-a-rm").forEach(b => b.addEventListener("click", e => {
+      e.stopPropagation();
+      const i = +b.closest(".rp-a").dataset.a, quitado = it.att[i];
+      it.att.splice(i, 1);
+      if (!it.att.length) delete it.att;
+      markDirty(); paint(); reabrir();
+      // el fichero de la carpeta NO se borra (contrato): por eso deshacer puede devolverlo entero
+      toastAction(`Quitado de la tarea. El fichero sigue en «${ADJ_DIR}».`, "Deshacer", () => {
+        if (!Array.isArray(it.att)) it.att = [];
+        it.att.splice(Math.min(i, it.att.length), 0, quitado);
+        markDirty(); paint(); reabrir();
+      });
+    }));
     ed.querySelector(".rp-x").addEventListener("click", cerrar);
     ed.querySelector('[data-x="1"]').addEventListener("click", cerrar);
     ed.addEventListener("keydown", e => {

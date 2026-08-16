@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.80.0] - 2026-08-16 — adjuntos en una tarea, y la papelera puede reducirse sola
+
+- **Puedes colgar un PDF o una captura en cualquier tarea**, desde su propia conversación. El
+  fichero se guarda en `cabecera-adjuntos`, dentro de tu carpeta sincronizada, y en la tarea queda
+  solo su nombre y su tamaño. Se abre con un clic, y el botón `⧉` copia el nombre del fichero por
+  si prefieres buscarlo en tu carpeta.
+- **Un adjunto nunca viaja dentro de `datos.json`**, ni siquiera como respaldo: sería rehacer a mano
+  el problema que se acaba de quitar en 0.78.0. Si no tienes carpeta sincronizada conectada, se te
+  dice y no se adjunta.
+- **Quitar un adjunto de la tarea no borra el fichero** de tu carpeta, igual que en las imágenes. Y
+  ofrece Deshacer.
+- **Nuevo ajuste «Reducir la papelera sola»**, en ⚙ Configuración. Desactivado por defecto: si lo
+  enciendes y eliges un tamaño, al pasarlo lo más antiguo va solo al archivo de recuperación y se te
+  dice cuántos elementos, cuánto pesaban y en qué fichero han quedado.
+- **No se borra nada, tampoco en automático**: primero se escribe el archivo de recuperación y se
+  comprueba releyéndolo, y solo entonces salen de la papelera. Se recuperan desde «Archivo de
+  papelera». Sin carpeta conectada no se quita nada.
+- Por dentro: todo lo que Cabecera escribe en tu carpeta —imágenes, adjuntos y archivo de
+  recuperación— pasa ahora por un único camino que comprueba lo escrito releyéndolo.
+
 ## [0.79.0] - 2026-08-15 — aviso de peso del archivo, y el nombre de la imagen a un clic
 
 - **Nuevo aviso 💾 en la barra de abajo cuando tu archivo de datos empieza a pesar.** Mide el coste
@@ -22,18 +42,6 @@
 - Si no tienes carpeta sincronizada, todo sigue como antes: la imagen se incrusta y se te avisa.
 - Si el fichero no aparece —por ejemplo, aún sin sincronizar en el otro equipo— **se dice cuál
   falta**, en vez de dejar un hueco en blanco que parecería una imagen perdida.
-- Quitar una imagen del widget **no borra el archivo** de tu carpeta.
-
-## [0.78.0] - 2026-08-15 — las imágenes dejan de viajar dentro de datos.json
-
-- **Una imagen pegada ahora se guarda en tu carpeta sincronizada**, en , y en
-   queda solo su nombre. Ese archivo lo releen tus dos equipos cada pocos segundos, así
-  que las imágenes eran lo que más lo engordaba.
-- **Botón «📤 Sacar del archivo»** en las imágenes que ya tenías incrustadas: las mueve a la carpeta
-  de una en una y te dice cuántos KB has recuperado. **No se hace solo**: son tus datos.
-- Si no tienes carpeta sincronizada, todo sigue como antes: la imagen se incrusta y se te dice.
-- Si el fichero no aparece —por ejemplo, aún sin sincronizar en el otro equipo— **se dice cuál falta**
-  en vez de dejar un hueco en blanco.
 - Quitar una imagen del widget **no borra el archivo** de tu carpeta.
 
 ## [0.77.0] - 2026-08-15 — la alarma sobrevive a recargar la página
