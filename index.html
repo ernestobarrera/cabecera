@@ -751,10 +751,13 @@ ul.plain{list-style:none}
   background:rgba(255,255,255,.04); color:var(--text-dim); cursor:pointer; font-family:var(--font); white-space:nowrap}
 .todo-tabs .tab:hover{border-color:var(--accent); color:var(--text)}
 .todo-tabs .tab.on{background:var(--accent-soft); border-color:var(--accent); color:var(--text); font-weight:600}
-.todo-sort{padding:4px 6px; border-radius:8px; border:1px solid var(--border-soft); background:rgba(255,255,255,.05);
-  color:var(--text-dim); font-family:var(--font); font-size:11.5px; cursor:pointer; flex-shrink:0; max-width:150px}
-.todo-sort:hover{border-color:var(--accent); color:var(--text)}
-.todo-sort option{background:#161b24; color:#e8ecf3}
+/* 0.82.0 — el selector de agrupación comparte estilo con el de orden porque son hermanos: dos
+   preguntas distintas sobre la misma lista, al mismo nivel. Estrecharlos un poco a los dos evita
+   que la barra parta de línea en sus ventanas de ~441 px, medido contra su geometría real. */
+.todo-sort,.todo-group{padding:4px 6px; border-radius:8px; border:1px solid var(--border-soft); background:rgba(255,255,255,.05);
+  color:var(--text-dim); font-family:var(--font); font-size:11.5px; cursor:pointer; flex-shrink:0; max-width:132px}
+.todo-sort:hover,.todo-group:hover{border-color:var(--accent); color:var(--text)}
+.todo-sort option,.todo-group option{background:#161b24; color:#e8ecf3}
 .todo-search{flex:1; min-width:110px; padding:5px 9px; border-radius:8px; border:1px solid var(--border-soft); background:rgba(255,255,255,.05); color:var(--text); font-family:var(--font); font-size:13px}
 .todo-search:focus{border-color:var(--accent); outline:none}
 .task-edit{flex:1; min-width:80px; padding:2px 3px; border-radius:6px; border:1px solid var(--accent);
@@ -975,7 +978,26 @@ ul.plain{list-style:none}
    de unidades quedaba empujado fuera de la ventana. */
 .calc-grid[hidden]{display:none}
 .calc-tabs{display:flex; gap:6px; margin-top:8px; flex-shrink:0}
-.calc-hist,.calc-conv{flex:1; overflow:auto; font-size:12.5px}
+.calc-hist,.calc-conv,.calc-clin{flex:1; overflow:auto; font-size:12.5px}
+/* 0.82.0 — cálculos clínicos. El selector reutiliza el estilo del de unidades (.calc-u) porque son
+   el mismo gesto: elegir de qué va el panel. Los campos se apilan y no se ponen en fila como el
+   par de conversión: aquí no son dos caras de lo mismo, son dos datos distintos. */
+.calc-c{width:100%; padding:6px 8px; border-radius:8px; border:1px solid var(--border-soft); background:rgba(0,0,0,.25); color:var(--text); font-family:var(--font); font-size:12.5px}
+.calc-c option{background:#161b24; color:#e8ecf3}
+.calc-campos{display:flex; gap:6px; margin-top:8px}
+.calc-campos label{flex:1; min-width:0; display:flex; flex-direction:column; gap:3px; font-size:11px; color:var(--text-dim)}
+.calc-campos input{width:100%; box-sizing:border-box; padding:6px 8px; border-radius:8px; border:1px solid var(--border-soft); background:rgba(0,0,0,.25); color:var(--text); font-family:var(--font); font-size:13px}
+.calc-campos input:focus{border-color:var(--accent); outline:none}
+.calc-uf{opacity:.75}
+.calc-out{margin-top:9px; font-size:15px; color:var(--text); display:flex; align-items:baseline; gap:7px; flex-wrap:wrap}
+.calc-out b{font-size:20px; font-variant-numeric:tabular-nums}
+.calc-ru{font-size:12px; color:var(--text-dim)}
+/* la banda es interpretación, no medida: se separa del número para que no se lean como una sola
+   cosa, y se pinta en el acento y no en rojo — aquí el rojo ya significa «vencido» en otras partes */
+.calc-banda{font-size:11.5px; color:var(--accent); border:1px solid rgba(90,169,247,.35); border-radius:999px; padding:1px 8px}
+.calc-falta{font-size:12px; color:var(--text-dim)}
+/* el aviso va al PIE, breve y sin tono defensivo: es un encuadre, no un descargo */
+.calc-aviso{margin-top:8px; padding-top:6px; border-top:1px solid var(--border-soft); font-size:10.5px; color:var(--text-dim); line-height:1.45}
 .calc-h{padding:5px 7px; border-radius:7px; border:1px solid var(--border-soft); margin-bottom:5px; cursor:pointer; color:var(--text-dim)}
 .calc-h:hover{border-color:var(--accent); color:var(--text)}
 .calc-empty{color:var(--text-dim); font-size:12px; padding:6px 2px; line-height:1.5}
@@ -2067,7 +2089,7 @@ function syncUI(mode, txt){
    reaparece) y si Recargar está activo. El descarte ✕ vive solo en memoria de la sesión.
    Demora asumida: la CDN de Pages puede servir la versión vieja hasta ~10 min aun con
    no-store (gobierna la caché del navegador, no la CDN); para pestañas de días, irrelevante. */
-const APP_VERSION = "0.81.0";
+const APP_VERSION = "0.82.0";
 let newVersionDetected = null;   // versión superior detectada; detiene futuras consultas
 let verDismissed = false;        // ✕: solo esta sesión — nunca persistido en disco
 let verCheckInflight = false;    // sin consultas concurrentes
@@ -6564,6 +6586,63 @@ const venceMs = it => {
 };
 const sortDe = w => (TODO_SORTS[w && w.data && w.data.sort] ? w.data.sort : "manual");
 
+/* 0.82.0 — AGRUPAR POR SEMANA O MES. Petición suya del 05/08, y su acotación en el mismo mensaje:
+   *«dale, pero como OPCIONES de agrupamiento»*, no como modo fijo.
+
+   POR QUÉ ES UN CONTROL APARTE Y NO UNA OPCIÓN MÁS DEL DESPLEGABLE DE ORDEN — que era lo obvio y
+   habría sido un error. El 13/08 se descubrió que su bandeja usaba un criterio automático y que eso
+   le apagaba el arrastre sin que él lo supiera; si «agrupar por mes» fuera un criterio más del mismo
+   selector, elegirlo le quitaría el orden que tuviera puesto. Son dos preguntas distintas —*cómo se
+   ordenan* y *si se ven por bloques*— y el producto tiene que dejarle contestar las dos.
+
+   `CONTRATO:` agrupar NO sustituye al orden: lo envuelve. Los grupos van del más reciente al más
+   antiguo, y DENTRO de cada uno manda el criterio que él tenga elegido, «a mano» incluido.
+
+   Se agrupa por la FECHA DE ALTA, que es lo que él pidió («ahora que cada una guarda su fecha de
+   alta, era la razón por la que querías el campo») y lo único que toda tarea tiene. Lo anterior a
+   que existiera el campo va a su propio grupo, al final, en vez de mentir metiéndolo en una semana. */
+const TODO_GROUPS = {
+  no:     { etiqueta: "▤ Sin agrupar",     clave: null },
+  semana: { etiqueta: "▤ Por semana",      clave: it => claveSemana(altaMs(it)) },
+  mes:    { etiqueta: "▤ Por mes",         clave: it => claveMes(altaMs(it)) }
+};
+const groupDe = w => (TODO_GROUPS[w && w.data && w.data.group] ? w.data.group : "no");
+// lunes de la semana de ese instante. Se usa como clave Y como etiqueta, así que una sola función
+// decide las dos: si divergieran, dos tareas de la misma semana caerían en cabeceras distintas
+function lunesDe(ms){
+  const d = new Date(ms);
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() - ((d.getDay() + 6) % 7));   // getDay(): 0 = domingo
+  return d;
+}
+const claveSemana = ms => ms ? "s" + lunesDe(ms).getTime() : "";
+const claveMes = ms => { if (!ms) return ""; const d = new Date(ms); return "m" + d.getFullYear() + "-" + d.getMonth(); };
+/* Orden de los grupos entre sí, del más reciente al más antiguo. PURA, y con su prueba, porque el
+   primer intento la resolvió con `"2026-11" → 2026.11` y eso pone diciembre ANTES que agosto:
+   como decimal, .11 es menor que .7. Un fallo que solo se ve en noviembre y diciembre, es decir,
+   dentro de tres meses y sin que nadie lo relacione con este cambio. */
+function rangoGrupo(clave){
+  if (!clave) return -Infinity;                       // sin fecha de alta, siempre al final
+  if (clave[0] === "s") return +clave.slice(1);       // el lunes, en milisegundos
+  const [y, m] = clave.slice(1).split("-").map(Number);
+  return y * 12 + m;
+}
+/* La etiqueta se deriva de la CLAVE, no de la tarea: derivarla de la tarea haría que el título del
+   grupo dependiese de cuál de sus tareas se pintó primero (R47 — lo que se pinta en un sitio y se
+   calcula en otro, diverge). Sin fecha se dice, en vez de colar la tarea en una semana cualquiera. */
+function tituloGrupo(clave){
+  if (!clave) return "Sin fecha de alta";
+  if (clave[0] === "m"){
+    const [y, m] = clave.slice(1).split("-").map(Number);
+    const t = new Date(y, m, 1).toLocaleDateString("es-ES", { month: "long", year: "numeric" });
+    return t.charAt(0).toUpperCase() + t.slice(1);
+  }
+  const ini = new Date(+clave.slice(1)), fin = new Date(+clave.slice(1) + 6 * 86400000);
+  const mismoMes = ini.getMonth() === fin.getMonth();
+  const f = (d, conMes) => d.getDate() + (conMes ? " " + d.toLocaleDateString("es-ES", { month: "short" }).replace(".", "") : "");
+  return `Semana del ${f(ini, !mismoMes)} al ${f(fin, true)}`;
+}
+
 /* Zoom de una ventana, en un solo sitio. Acotado a 50–200: por debajo no se lee y por encima no
    cabe nada, y un valor guardado fuera de rango (archivo tocado a mano, versión futura) se
    corrige en vez de romper. 100 es el defecto y NO se guarda, para no engordar el archivo con lo
@@ -6590,13 +6669,14 @@ function bodyTodo(w, el){
   el.innerHTML = (desc ? `${descHtml(desc, w.id)}` : "")
     + `
     <div class="todo-add"><input type="text" placeholder="Nueva tarea…"><button class="mini add-due" title="Crear y ponerle fecha, aviso o marca de agente en el mismo gesto (Ctrl+Enter)">📅</button><button class="mini add-now" title="Crear la tarea (Enter)">＋</button></div>
-    <div class="todo-bar"><div class="todo-tabs todo-toggle"></div><input type="search" class="todo-search" placeholder="Buscar…"><select class="todo-sort mini" title="Cómo se ordenan las tareas pendientes"></select></div>
+    <div class="todo-bar"><div class="todo-tabs todo-toggle"></div><input type="search" class="todo-search" placeholder="Buscar…"><select class="todo-sort mini" title="Cómo se ordenan las tareas pendientes"></select><select class="todo-group mini" title="Si las tareas se ven por bloques de tiempo"></select></div>
     <ul class="plain todo-list"></ul>`;
   if (!Array.isArray(w.data.items)) w.data.items = [];
   wireDesc(el, w);
   const inp = el.querySelector(".todo-add input"), ul = el.querySelector(".todo-list");
   const toggle = el.querySelector(".todo-toggle"), search = el.querySelector(".todo-search");
   const orden = el.querySelector(".todo-sort");
+  const agrupa = el.querySelector(".todo-group");
   const bar = el.querySelector(".todo-bar");
   // 0.44.0: página visible cuando las tareas no caben ni creciendo el widget.
   // 0.49.0/0.59.0: pestaña, lupa, filtro 🤖 y página viven en `todoUI` para sobrevivir al
@@ -6675,6 +6755,11 @@ function bodyTodo(w, el){
   // el criterio es una preferencia tuya de esa lista, no estado de sesión: vive en `w.data.sort`
   // y viaja entre equipos, igual que `w.data.view` del Markdown
   orden.addEventListener("change", () => { w.data.sort = orden.value; setPage(0); paint(); markDirty(); });
+  // 0.82.0 — «sin agrupar» es el defecto y se guarda como AUSENCIA, igual que el resto del estado
+  agrupa.addEventListener("change", () => {
+    if (agrupa.value === "no") delete w.data.group; else w.data.group = agrupa.value;
+    setPage(0); paint(); markDirty();
+  });
   // marcador o enlace soltado sobre la lista → una tarea por enlace (la URL queda clicable)
   wireLinkCapture(el, links => {
     for (const l of links) w.data.items.push({ t: linkCaptureText(l), done: false, created: todayIso(), createdT: horaCorta() });
@@ -7187,6 +7272,23 @@ function bodyTodo(w, el){
       : `Orden automático (${TODO_SORTS[sk].etiqueta}). Con un criterio automático NO se puede arrastrar: `
         + "elige «↕ A mano» para volver a reordenar tú. Tu orden manual no se pierde por cambiar de criterio.";
     orden.classList.toggle("auto", sk !== "manual");
+    /* 0.82.0 — el selector de agrupación, al lado del de orden y sin mezclarse con él. Solo en
+       Pendientes: «Hechas» es un histórico y buscando la lista ya se agrupa por estado, así que un
+       segundo criterio de bloques encima sería ilegible. */
+    const gk = groupDe(w);
+    agrupa.style.display = ui.view === "pend" && !buscando ? "" : "none";
+    agrupa.innerHTML = Object.entries(TODO_GROUPS)
+      .map(([k, v]) => `<option value="${k}"${k === gk ? " selected" : ""}>${v.etiqueta}</option>`).join("");
+    /* Y DICE LA CONSECUENCIA, que es la lección de 0.75.0: el aviso va donde se DECIDE, no donde se
+       sufre. Agrupar también apaga el arrastre —mover una tarea entre dos bloques de tiempo no
+       significa nada, porque su bloque lo decide su fecha—, y eso hay que decirlo antes de elegir,
+       no cuando ya se ha intentado arrastrar y no ha funcionado. */
+    agrupa.title = gk === "no"
+      ? "Sin agrupar: la lista va seguida. Puedes agruparla por semana o por mes según cuándo anotaste cada tarea."
+      : `Agrupada ${gk === "semana" ? "por semana" : "por mes"} según cuándo anotaste cada tarea. `
+        + "Tu orden sigue mandando DENTRO de cada bloque. Mientras esté agrupada NO se puede arrastrar: "
+        + "el bloque de una tarea lo decide su fecha, así que moverla no la dejaría movida.";
+    agrupa.classList.toggle("auto", gk !== "no");
 
     // el filtro 🤖 es de la vista en la que estás, y en cada una significa lo suyo: en Pendientes,
     // «te espera respuesta»; en Hechas, «llegó algo después de cerrarla». Buscando vale la unión:
@@ -7217,7 +7319,13 @@ function bodyTodo(w, el){
     if (buscando){
       // las hechas van DETRÁS y tachadas, como en Microsoft: lo cerrado es contexto, no trabajo
       const gp = pendientes(), gh = hechas();
-      grupos = { pend: gp.length, done: gh.length };
+      /* 0.82.0 — `grupos` pasa de ser «cuántas pendientes y cuántas hechas» a un par de funciones
+         (a qué grupo va cada tarea, y cómo se titula ese grupo). Se generalizó para que agrupar por
+         fecha reutilizara ENTERA la maquinaria de subtítulos de 0.60.0 —cabecera repetida en cada
+         página, recuento del grupo completo, arrastre desactivado— en vez de escribir una segunda
+         que se comportaría distinto en los bordes. */
+      grupos = { clave: it => it.done ? "done" : "pend",
+                 titulo: g => g === "pend" ? `Pendientes (${gp.length})` : `Hechas (${gh.length})` };
       list = gp.concat(gh);
       vacio = `<div class="empty">Nada coincide con «${esc(search.value.trim())}», ni pendiente ni hecha.</div>`;
     } else {
@@ -7229,6 +7337,23 @@ function bodyTodo(w, el){
       } else {
         list = hechas();
         vacio = `<div class="empty">${soloBot ? "Ninguna cerrada con la última palabra del agente." : "Aún no has completado tareas."}</div>`;
+      }
+      /* 0.82.0 — agrupar ENVUELVE al orden, no lo sustituye: se estabilizan los grupos (del más
+         reciente al más antiguo, y lo que no tiene fecha al final) y DENTRO de cada uno la lista
+         llega ya ordenada por el criterio que él eligiera, «a mano» incluido, porque `sort` es
+         estable. Si lo hubiera metido en el comparador, elegir «por mes» le habría borrado el
+         orden que tuviera puesto — que es exactamente lo que él pidió evitar. */
+      // `gk` es el mismo que ya calculó el selector unas líneas arriba: redeclararlo aquí lo
+      // sombreaba, y dos variables con el mismo nombre en la misma función es cómo se acaba
+      // leyendo una y escribiendo la otra
+      if (gk !== "no" && list.length){
+        const clave = TODO_GROUPS[gk].clave;
+        const cuenta = new Map();
+        for (const it of list) cuenta.set(clave(it), (cuenta.get(clave(it)) || 0) + 1);
+        const orden = [...cuenta.keys()].sort((a, b) => rangoGrupo(b) - rangoGrupo(a));
+        const pos = new Map(orden.map((k, i) => [k, i]));
+        list = list.slice().sort((a, b) => pos.get(clave(a)) - pos.get(clave(b)));
+        grupos = { clave, titulo: k => `${tituloGrupo(k)} (${cuenta.get(k)})` };
       }
     }
     if (!list.length){ ul.innerHTML = vacio; setPage(0); renderPager(1, 0); return; }
@@ -7285,15 +7410,18 @@ function bodyTodo(w, el){
        un grupo dejaría páginas huérfanas sin decir de qué son. El número es el del grupo ENTERO,
        no el de la página, porque lo que se busca saber es cuántas hay. */
     let grupoActual = null;
+    /* 0.82.0 — la cabecera ya no sabe si agrupa por estado o por fecha: pregunta a `grupos`. Los
+       dos casos son el mismo problema —partir una lista en bloques con título— y tenerlos en una
+       sola pieza es lo que garantiza que se comporten igual al paginar. */
     const cabecera = g => {
       const li = document.createElement("li");
       li.className = "todo-grupo";
-      li.textContent = g === "pend" ? `Pendientes (${grupos.pend})` : `Hechas (${grupos.done})`;
+      li.textContent = grupos.titulo(g);
       return li;
     };
     list.forEach(it => {
       if (grupos){
-        const g = it.done ? "done" : "pend";
+        const g = grupos.clave(it);
         if (g !== grupoActual){ grupoActual = g; ul.appendChild(cabecera(g)); }
       }
       const li = document.createElement("li");
@@ -11000,15 +11128,76 @@ function clinConvert(u, valor, haciaB){
   const d = u.dec[haciaB ? 1 : 0];
   return Number(r.toFixed(d));
 }
+/* 0.82.0 — CÁLCULOS CLÍNICOS. Petición suya del 05/08 («IMC y otros cálculos clínicos»), con la
+   regla que la hace aceptable ya escrita y acordada: **aviso breve al pie y fuente a la vista**.
+   Sin ese encuadre la calculadora deja de ser una herramienta personal suya y entra en territorio
+   de producto sanitario, que es una conversación distinta y mucho más cara.
+
+   `CONTRATO:` aquí NO entra ningún cálculo de DOSIS. Es la línea que separa «una fórmula que puedo
+   comprobar de un vistazo» de «un número del que depende lo que recibe alguien». Las dos que hay
+   son antropométricas, con su fuente citada y comprobables a mano; una dosis no lo es, y un error
+   de tecleo en ella no se nota al leer el resultado.
+
+   `CONTRATO:` la fuente va SIEMPRE a la vista, no en un tooltip. Es la misma decisión que ya se
+   tomó con el factor de conversión de unidades: quien usa un número clínico tiene derecho a
+   comprobar de dónde sale sin tener que pasar el ratón por encima.
+
+   Se ha elegido no incluir hoy el aclaramiento de creatinina (Cockcroft-Gault) ni el filtrado
+   glomerular (CKD-EPI): entran sexo y edad, y sobre todo entran en una INTERPRETACIÓN de función
+   renal, que es una decisión clínica suya y no mía. La estructura los admite en una línea. */
+const CLIN_CALCS = [
+  { id: "imc", n: "IMC — índice de masa corporal", u: "kg/m²", dec: 1,
+    campos: [{ k: "peso", l: "Peso", u: "kg" }, { k: "talla", l: "Talla", u: "cm" }],
+    calc: v => v.peso / Math.pow(v.talla / 100, 2),
+    banda: x => x < 18.5 ? "Bajo peso" : x < 25 ? "Normopeso" : x < 30 ? "Sobrepeso"
+      : x < 35 ? "Obesidad grado I" : x < 40 ? "Obesidad grado II" : "Obesidad grado III",
+    src: "peso (kg) ÷ talla (m)². Bandas: OMS, «Obesity: preventing and managing the global epidemic», Serie de Informes Técnicos 894 (2000)" },
+  { id: "sc", n: "Superficie corporal (Mosteller)", u: "m²", dec: 2,
+    campos: [{ k: "talla", l: "Talla", u: "cm" }, { k: "peso", l: "Peso", u: "kg" }],
+    calc: v => Math.sqrt(v.talla * v.peso / 3600),
+    src: "√(talla[cm] × peso[kg] ÷ 3600). Mosteller RD. Simplified calculation of body-surface area. N Engl J Med 1987;317:1098" }
+];
+/* PURA, y separada del pintado a propósito: es lo único que se puede probar de verdad con números
+   conocidos, y una fórmula clínica sin prueba no debería salir. Devuelve `null` mientras falte
+   algún dato — un resultado parcial que se ve como definitivo es peor que ninguno.
+
+   `CONTRATO:` LA VALIDACIÓN VIVE AQUÍ, y las fórmulas la dan por hecha. Nacieron comprobando cada
+   una sus propios `> 0`, y la prueba de mutación lo destapó: quitar la guarda central no tumbaba
+   nada, porque el trabajo lo hacía la copia de dentro de cada fórmula. Eso significa que la
+   garantía no era del sistema sino de que quien escribiera la fórmula siguiente se acordara —y el
+   día que no se acordara, aceptaría un peso negativo sin que ningún test dijera nada.
+   Todo campo tiene que ser un número FINITO y POSITIVO: no hay tallas ni pesos negativos, y un
+   cero delata un campo a medio escribir. Si algún día entra un cálculo que admita cero o
+   negativos, que lo declare aquí y con su motivo; no que se lo salte por su cuenta. */
+function clinCalc(c, valores){
+  if (!c) return null;
+  const v = {};
+  for (const campo of c.campos){
+    const raw = valores[campo.k];
+    /* El corte del vacío es REDUNDANTE con el de positividad de abajo —`Number("")` es 0— y se
+       queda a propósito: sin él, que un campo vacío no dé resultado dependería de una rareza de
+       JavaScript en vez de estar dicho. La prueba de mutación no lo tumba, y está bien que sea así:
+       es la única guarda de este archivo cuya ausencia no cambia el comportamiento HOY, y su valor
+       es el día que alguien admita un cero. No se «limpia». */
+    if (raw === null || raw === undefined || String(raw).trim() === "") return null;
+    const n = Number(raw);
+    if (!Number.isFinite(n) || n <= 0) return null;   // no hay talla ni peso negativos
+    v[campo.k] = n;
+  }
+  const r = c.calc(v);
+  if (r === null || !Number.isFinite(r)) return null;
+  return { valor: Number(r.toFixed(c.dec)), banda: c.banda ? c.banda(r) : null };
+}
+
 /* Historial de la calculadora POR WIDGET y en memoria (I7): ni se guarda en `datos.json` —sería un
    registro de lo que has estado mirando en consulta— ni se pierde al repintar. Ver la nota larga
    dentro de `bodyCalc`. */
 const calcHist = new Map();
 function bodyCalc(w, el){
-  el.innerHTML = `<div class="calc" tabindex="0"><div class="calc-dsp">0</div><div class="calc-hist" hidden></div><div class="calc-conv" hidden></div><div class="calc-grid"></div>
-    <div class="calc-tabs"><button class="mini ch" title="Últimas operaciones">🕘 Historial</button><button class="mini cc" title="Conversión de unidades clínicas">🧪 Unidades</button></div></div>`;
+  el.innerHTML = `<div class="calc" tabindex="0"><div class="calc-dsp">0</div><div class="calc-hist" hidden></div><div class="calc-conv" hidden></div><div class="calc-clin" hidden></div><div class="calc-grid"></div>
+    <div class="calc-tabs"><button class="mini ch" title="Últimas operaciones">🕘 Historial</button><button class="mini cc" title="Conversión de unidades clínicas">🧪 Unidades</button><button class="mini cl" title="IMC y superficie corporal">🩺 Cálculos</button></div></div>`;
   const dsp = el.querySelector(".calc-dsp"), grid = el.querySelector(".calc-grid"), box = el.querySelector(".calc");
-  const hist = el.querySelector(".calc-hist"), conv = el.querySelector(".calc-conv");
+  const hist = el.querySelector(".calc-hist"), conv = el.querySelector(".calc-conv"), clin = el.querySelector(".calc-clin");
   let acc = null, op = null, cur = "0", fresh = true;
   const fmt = v => {
     if (!Number.isFinite(v)) return "Error";
@@ -11117,9 +11306,44 @@ function bodyCalc(w, el){
   sel.addEventListener("change", pintaUnidad);
   pintaUnidad();
 
-  const panel = (elm, otro) => {
+  // --- cálculos clínicos: mismos dos campos vivos, sin botón de «calcular» ---
+  clin.innerHTML = `<select class="calc-c">${CLIN_CALCS.map(c => `<option value="${c.id}">${esc(c.n)}</option>`).join("")}</select>
+    <div class="calc-campos"></div>
+    <div class="calc-out"></div>
+    <div class="calc-src"></div>
+    <div class="calc-aviso">Orientativo y para tu propio cálculo: no sustituye a la valoración clínica ni sirve como registro de un paciente.</div>`;
+  const selC = clin.querySelector(".calc-c"), campos = clin.querySelector(".calc-campos"), out = clin.querySelector(".calc-out");
+  const calcActual = () => CLIN_CALCS.find(c => c.id === selC.value) || CLIN_CALCS[0];
+  const pintaResultado = () => {
+    const c = calcActual();
+    const valores = {};
+    campos.querySelectorAll("input").forEach(i => { valores[i.dataset.k] = i.value; });
+    const r = clinCalc(c, valores);
+    /* Mientras falte un dato NO se enseña un número a medias: se dice qué falta. Un resultado
+       parcial con aspecto de definitivo es lo que hace que alguien apunte el de la mitad. */
+    out.innerHTML = r === null
+      ? `<span class="calc-falta">Rellena ${c.campos.map(x => x.l.toLowerCase()).join(" y ")} para ver el resultado</span>`
+      // `calc-ru` y no `calc-u`: esa clase ya es el desplegable de unidades, y reutilizarla le
+      // habría dado a este texto el aspecto de un campo de formulario
+      : `<b>${r.valor}</b> <span class="calc-ru">${esc(c.u)}</span>`
+        + (r.banda ? `<span class="calc-banda">${esc(r.banda)}</span>` : "");
+  };
+  const pintaCalc = () => {
+    const c = calcActual();
+    campos.innerHTML = c.campos.map(f =>
+      `<label>${esc(f.l)} <span class="calc-uf">${esc(f.u)}</span><input type="number" step="any" inputmode="decimal" data-k="${esc(f.k)}"></label>`).join("");
+    campos.querySelectorAll("input").forEach(i => i.addEventListener("input", pintaResultado));
+    // la fuente a la vista, igual que el factor de las unidades: quien usa un número clínico tiene
+    // derecho a comprobar de dónde sale sin pasar el ratón por encima de nada
+    clin.querySelector(".calc-src").textContent = "Fórmula: " + c.src;
+    pintaResultado();
+  };
+  selC.addEventListener("change", pintaCalc);
+  pintaCalc();
+
+  const panel = (elm, ...otros) => {
     const abrir = elm.hidden;
-    elm.hidden = !abrir; otro.hidden = true;
+    elm.hidden = !abrir; otros.forEach(o => { o.hidden = true; });
     grid.hidden = abrir;
     if (abrir && elm === hist) pintaHist();
     // Abrir un panel no puede dejar los campos fuera de la ventana: si no caben, la ventana crece
@@ -11127,8 +11351,9 @@ function bodyCalc(w, el){
     // Si no cupiera en el lienzo, se abstiene y al menos el panel es desplazable.
     if (abrir) growWidgetToContent(w, el);
   };
-  el.querySelector(".ch").addEventListener("click", () => panel(hist, conv));
-  el.querySelector(".cc").addEventListener("click", () => panel(conv, hist));
+  el.querySelector(".ch").addEventListener("click", () => panel(hist, conv, clin));
+  el.querySelector(".cc").addEventListener("click", () => panel(conv, hist, clin));
+  el.querySelector(".calc-tabs .cl").addEventListener("click", () => panel(clin, hist, conv));
   show();
 }
 

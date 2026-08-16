@@ -3479,8 +3479,15 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
       throw new Error('buscar tiene que ser un modo distinto de navegar por pestañas, no un filtro de la pestaña');
     if (!/list = gp\.concat\(gh\);/.test(todoFn3))
       throw new Error('las hechas van DETRÁS de las pendientes en los resultados: lo cerrado es contexto, no trabajo');
-    if (!/grupos = \{ pend: gp\.length, done: gh\.length \};/.test(todoFn3))
+    /* REANCLADO EN 0.82.0. `grupos` pasó de ser un par de recuentos a un par de funciones (a qué
+       grupo va cada tarea y cómo se titula) para que agrupar por fecha reutilizara esta misma
+       maquinaria. La GARANTÍA no cambia y es la que se sigue comprobando: el número del subtítulo
+       sale de la lista ENTERA (`gp.length` / `gh.length`), nunca de la rebanada que se está
+       pintando — si saliera de la página, la página 2 diría «Pendientes (7)» de un grupo de 40. */
+    if (!/titulo: g => g === "pend" \? `Pendientes \(\$\{gp\.length\}\)` : `Hechas \(\$\{gh\.length\}\)`/.test(todoFn3))
       throw new Error('cada grupo lleva su recuento, y es el del grupo entero, no el de la página');
+    if (!/clave: it => it\.done \? "done" : "pend"/.test(todoFn3))
+      throw new Error('buscando, el grupo de una tarea lo decide su estado');
     // superviviente de la mutación: se puede agrupar y que el subtítulo salga UNA vez, con lo que
     // la página 2 en adelante queda huérfana y no dice de qué grupo es
     const pintarFn3 = todoFn3.match(/function pintar\(list\)\{[\s\S]*?\n  \}/)[0];
@@ -4638,6 +4645,146 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
       throw new Error('con el panel cerrado no se analiza: pagar el cálculo sin enseñarlo es puro gasto');
 
     console.log('OK 0.81.0 (la legibilidad sale por fin a la interfaz, en Nota y Documento, sin dos verdades)');
+  }
+
+  // --- 0.82.0: agrupar tareas por semana o mes -------------------------------------------------
+  {
+    /* Su acotación del 05/08: «dale, pero como OPCIONES de agrupamiento», no como modo fijo. Y el
+       apunte del 12/08 que decide la forma: tiene que CONVIVIR con el orden, no sustituirlo. */
+    eval('globalThis.lunesDe = ' + pickFn('lunesDe', 'ms'));
+    eval('globalThis.rangoGrupo = ' + pickFn('rangoGrupo', 'clave'));
+    eval('globalThis.tituloGrupo = ' + pickFn('tituloGrupo', 'clave'));
+    const claveSemana = ms => ms ? 's' + lunesDe(ms).getTime() : '';
+    const claveMes = ms => { if (!ms) return ''; const d = new Date(ms); return 'm' + d.getFullYear() + '-' + d.getMonth(); };
+
+    /* 1 · LA SEMANA EMPIEZA EN LUNES, y el domingo cae en la que termina, no en la que empieza.
+       `getDay()` devuelve 0 para el domingo, así que la resta ingenua lo manda a la semana
+       siguiente: un lunes y el domingo anterior aparecerían juntos y el domingo real, solo. */
+    const lun = new Date(2026, 7, 10, 9, 0), dom = new Date(2026, 7, 16, 23, 30);
+    if (claveSemana(lun.getTime()) !== claveSemana(dom.getTime()))
+      throw new Error('lunes 10 y domingo 16 son la MISMA semana: el domingo no puede caer en la siguiente');
+    if (claveSemana(new Date(2026, 7, 17, 0, 30).getTime()) === claveSemana(lun.getTime()))
+      throw new Error('el lunes siguiente abre semana nueva');
+    if (lunesDe(dom.getTime()).getDay() !== 1) throw new Error('el corte de la semana tiene que caer en lunes');
+    if (lunesDe(dom.getTime()).getHours() !== 0) throw new Error('la clave se toma a las 00:00, o dos tareas del mismo día caen en claves distintas');
+
+    /* 2 · EL ORDEN DE LOS GRUPOS, que es donde estuvo el fallo de verdad. El primer intento lo
+       resolvió con `"2026-11" → 2026.11`, y como decimal .11 es MENOR que .7: diciembre habría
+       salido antes que agosto. Se ve solo en noviembre, dentro de tres meses, y sin que nadie lo
+       relacione con este cambio. */
+    if (!(rangoGrupo(claveMes(new Date(2026, 10, 5).getTime())) > rangoGrupo(claveMes(new Date(2026, 6, 5).getTime()))))
+      throw new Error('noviembre va DELANTE de julio: el rango del mes no puede compararse como decimal');
+    if (!(rangoGrupo(claveMes(new Date(2027, 0, 5).getTime())) > rangoGrupo(claveMes(new Date(2026, 11, 5).getTime()))))
+      throw new Error('enero del año siguiente va delante de diciembre');
+    if (rangoGrupo('') !== -Infinity)
+      throw new Error('lo que no tiene fecha de alta va al FINAL, no encabezando la lista');
+
+    // 3 · el título sale de la CLAVE, no de una tarea: si saliera de la tarea, el título del grupo
+    //     dependería de cuál de sus tareas se pintó primero (R47)
+    if (tituloGrupo('') !== 'Sin fecha de alta')
+      throw new Error('lo anterior al campo de fecha se dice, no se cuela en una semana cualquiera');
+    if (!/^Noviembre de 2026$/.test(tituloGrupo(claveMes(new Date(2026, 10, 5).getTime()))))
+      throw new Error('el mes se titula con su nombre y su año, en mayúscula inicial');
+    const tw = tituloGrupo(claveSemana(lun.getTime()));
+    if (!/^Semana del 10 al 16 ago$/.test(tw))
+      throw new Error('la semana dice su rango real de días: «' + tw + '»');
+    // una semana a caballo de dos meses tiene que nombrar los dos, o el rango miente
+    const tw2 = tituloGrupo(claveSemana(new Date(2026, 7, 31).getTime()));
+    if (!/ago.* sept/.test(tw2)) throw new Error('una semana entre dos meses nombra los dos: «' + tw2 + '»');
+
+    /* 4 · AGRUPAR ENVUELVE AL ORDEN, NO LO SUSTITUYE. Es la condición que hace aceptable la
+       función: si fuera una opción más del desplegable de orden, elegirla le quitaría el criterio
+       que tuviera puesto — y ya se le apagó el arrastre sin avisar una vez (13/08). */
+    const todoFn = src.match(/function bodyTodo\(w, el\)\{[\s\S]*?\n\}\n/)[0];
+    if (/TODO_SORTS\s*=\s*\{[^}]*semana/.test(src))
+      throw new Error('agrupar NO puede ser un criterio de orden: elegirlo le borraría el orden que tuviera');
+    if (!/list = list\.slice\(\)\.sort\(\(a, b\) => pos\.get\(clave\(a\)\) - pos\.get\(clave\(b\)\)\)/.test(todoFn))
+      throw new Error('los grupos se estabilizan con un sort ESTABLE sobre la lista ya ordenada: así el criterio manda dentro de cada bloque');
+    const iOrden = todoFn.indexOf('if (cmpPend) l.sort(cmpPend)'), iAgrupa = todoFn.indexOf('if (gk !== "no" && list.length)');
+    if (iOrden < 0 || iAgrupa < iOrden)
+      throw new Error('primero se ordena y DESPUÉS se agrupa: al revés, agrupar pisaría el orden');
+    // y `gk` se calcula UNA vez: dos variables con el mismo nombre en la misma función es cómo se
+    // acaba leyendo una y escribiendo la otra (había una sombra real, quitada en 0.82.0)
+    if ((todoFn.match(/const gk = groupDe\(w\);/g) || []).length !== 1)
+      throw new Error('el criterio de agrupación se calcula una sola vez, sin sombras');
+    if (!/list\.slice\(\)/.test(todoFn))
+      throw new Error('agrupar es una VISTA: no puede reescribir w.data.items ni perderle el orden manual');
+
+    // 5 · «sin agrupar» es el defecto y se guarda como ausencia, como el resto del estado
+    if (!/if \(agrupa\.value === "no"\) delete w\.data\.group;/.test(todoFn))
+      throw new Error('sin agrupar tiene que ser ausencia: nadie hereda una vista que no eligió');
+    /* Y el subtítulo se pinta llamando a `grupos.titulo(g)`, no imprimiendo la clave: la clave es
+       un identificador interno («m2026-7», «s1754...») y enseñarlo sería mostrarle plumbing.
+       Lo destapó la prueba de mutación: sustituir la llamada por `String(g)` pasaba en verde. */
+    const pintarFn = todoFn.match(/function pintar\(list\)\{[\s\S]*?\n  \}/)[0];
+    if (!/li\.textContent = grupos\.titulo\(g\);/.test(pintarFn))
+      throw new Error('el subtítulo se pide a `grupos.titulo`: imprimir la clave enseñaría un identificador interno');
+
+    /* 6 · Y DICE LA CONSECUENCIA ANTES DE ELEGIR. Agrupar también apaga el arrastre, y la lección
+       de 0.75.0 —que él pagó— es que el aviso va donde se DECIDE, no donde se sufre. */
+    if (!/NO se puede arrastrar/.test(todoFn.match(/agrupa\.title = [\s\S]*?;/)[0]))
+      throw new Error('hay que avisar de que agrupar apaga el arrastre, en el selector y no en el asa');
+    if (!/const reordenable = ui\.view === "pend" && sortDe\(w\) === "manual" && !grupos;/.test(todoFn))
+      throw new Error('con grupos puestos no se arrastra: el bloque de una tarea lo decide su fecha');
+
+    console.log('OK 0.82.0 (agrupar por semana o mes envuelve al orden sin sustituirlo, y los meses no se comparan como decimales)');
+  }
+
+  // --- 0.82.0: cálculos clínicos (IMC y superficie corporal) -----------------------------------
+  {
+    /* Su petición del 05/08 con la regla acordada: aviso breve al pie y fuente a la vista. Una
+       fórmula clínica sin prueba con números conocidos no debería salir, así que esto se comprueba
+       CALCULANDO, no leyendo el fuente. */
+    eval('globalThis.clinCalc = ' + pickFn('clinCalc', 'c, valores'));
+    const CALCS = eval(src.match(/const CLIN_CALCS = \[[\s\S]*?\n\];/)[0].replace('const CLIN_CALCS =', '(') .replace(/;$/, ')'));
+    const imc = CALCS.find(c => c.id === 'imc'), sc = CALCS.find(c => c.id === 'sc');
+
+    // 1 · IMC con un caso comprobable a mano: 70 kg y 175 cm → 70 / 1,75² = 22,857… → 22,9
+    const r1 = clinCalc(imc, { peso: 70, talla: 175 });
+    if (!r1 || r1.valor !== 22.9) throw new Error('IMC de 70 kg / 175 cm tiene que dar 22,9 y da ' + (r1 && r1.valor));
+    if (r1.banda !== 'Normopeso') throw new Error('22,9 es normopeso según las bandas de la OMS');
+
+    // 2 · LOS BORDES DE LAS BANDAS, que es donde una clasificación miente sin que se note. Los
+    //     cortes de la OMS son 18,5 · 25 · 30 · 35 · 40, y el valor exacto pertenece al de ARRIBA.
+    const banda = x => imc.banda(x);
+    for (const [v, esperada] of [[18.49,'Bajo peso'],[18.5,'Normopeso'],[24.99,'Normopeso'],[25,'Sobrepeso'],
+                                 [29.99,'Sobrepeso'],[30,'Obesidad grado I'],[35,'Obesidad grado II'],[40,'Obesidad grado III']])
+      if (banda(v) !== esperada) throw new Error(`IMC ${v} tendría que ser «${esperada}» y sale «${banda(v)}»`);
+
+    // 3 · Mosteller: √(170 × 70 / 3600) = √3,3055… = 1,8181… → 1,82
+    const r2 = clinCalc(sc, { talla: 170, peso: 70 });
+    if (!r2 || r2.valor !== 1.82) throw new Error('la superficie corporal de 170 cm / 70 kg tiene que dar 1,82 y da ' + (r2 && r2.valor));
+    if (r2.banda) throw new Error('la superficie corporal no tiene bandas: inventar una interpretación sería pasarse');
+
+    /* 4 · MIENTRAS FALTE UN DATO, NADA. Un resultado a medias con aspecto de definitivo es lo que
+       hace que alguien apunte el de la mitad. Y `Number("")` es 0, no NaN: sin el corte explícito,
+       vaciar el peso daría un IMC de 0 en vez de nada. */
+    for (const v of [{ peso: 70 }, { peso: 70, talla: '' }, { peso: 70, talla: '  ' }, { peso: 0, talla: 175 },
+                     { peso: -70, talla: 175 }, { peso: 70, talla: 'abc' }])
+      if (clinCalc(imc, v) !== null) throw new Error('con un dato ausente, cero, negativo o no numérico no se enseña resultado: ' + JSON.stringify(v));
+
+    /* 5 · LAS DOS CONDICIONES QUE LO HACEN ACEPTABLE (R12), y sin ellas esto no debería existir:
+       fuente A LA VISTA (no en un tooltip) y aviso al pie. */
+    for (const c of CALCS){
+      if (!c.src || c.src.length < 20) throw new Error(`«${c.n}» tiene que declarar su fórmula y su fuente`);
+      if (!/\d{4}|OMS/.test(c.src)) throw new Error(`«${c.n}» tiene que citar una referencia comprobable, no solo la fórmula`);
+    }
+    const calcFn = src.match(/function bodyCalc\(w, el\)\{[\s\S]*?\n\}\n/)[0];
+    if (!/clin\.querySelector\("\.calc-src"\)\.textContent = "Fórmula: " \+ c\.src;/.test(calcFn))
+      throw new Error('la fuente se PINTA en el panel: en un tooltip no está a la vista');
+    if (!/calc-aviso/.test(calcFn) || !/no sustituye a la valoración clínica/.test(calcFn))
+      throw new Error('falta el aviso al pie, que es la condición con la que se aprobó esta función');
+    if (!/\.calc-aviso\{[^}]*border-top/.test(html))
+      throw new Error('el aviso va separado al pie, no mezclado con el resultado');
+
+    /* 6 · NINGÚN CÁLCULO DE DOSIS. Es la línea entre «una fórmula que compruebo de un vistazo» y
+       «un número del que depende lo que recibe alguien»: un error de tecleo en una dosis no se ve
+       al leer el resultado. Si algún día entra, que sea una decisión escrita y no un añadido. */
+    for (const c of CALCS)
+      if (/dosis|mg\/kg|posolog/i.test(c.n + ' ' + c.src))
+        throw new Error(`«${c.n}» parece un cálculo de dosis: eso no entra aquí sin una decisión suya explícita`);
+
+    console.log('OK 0.82.0 (IMC y superficie corporal, con sus bordes de banda probados, fuente a la vista y aviso al pie)');
   }
 
   console.log('\nTODO EN VERDE');

@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.82.0] - 2026-08-16 — agrupar tareas por semana o mes, e IMC en la calculadora
+
+- **La lista de tareas puede verse por bloques de tiempo.** Un segundo desplegable, al lado del de
+  orden, agrupa **por semana** o **por mes** según cuándo anotaste cada tarea, con el número de
+  tareas de cada bloque.
+- **Agrupar no te cambia el orden: lo envuelve.** Dentro de cada bloque sigue mandando el criterio
+  que tengas puesto, «a mano» incluido. Son dos preguntas distintas y por eso son dos controles.
+- Mientras esté agrupada no se arrastra, **y el desplegable te lo dice antes de que elijas**: el
+  bloque de una tarea lo decide su fecha, así que moverla no la dejaría movida.
+- Las tareas anteriores a que existiera la fecha de alta van a su propio bloque, al final.
+- **Nueva pestaña 🩺 Cálculos en la calculadora**, con el **IMC** —y su banda según la OMS— y la
+  **superficie corporal** (Mosteller). Escribes peso y talla y el resultado sale solo; mientras
+  falte un dato no se enseña nada, en vez de un número a medias.
+- **La fórmula y su fuente van siempre a la vista**, debajo del resultado, y al pie hay un
+  recordatorio breve de que es orientativo. No hay cálculos de dosis, a propósito.
+
 ## [0.81.0] - 2026-08-16 — buscar dentro de un escritorio o de una ventana
 
 - **La paleta (`Ctrl+K`) entiende dónde quieres buscar.** `#trabajo notas` busca «notas» solo en ese
