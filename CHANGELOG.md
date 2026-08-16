@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.81.0] - 2026-08-16 — buscar dentro de un escritorio o de una ventana
+
+- **La paleta (`Ctrl+K`) entiende dónde quieres buscar.** `#trabajo notas` busca «notas» solo en ese
+  escritorio; `#trabajo @bandeja pendiente` baja hasta esa ventana.
+- **Te ofrece los nombres que tienes**: escribe `#` y aparecen tus escritorios, escribe `@` y
+  aparecen tus ventanas con nombre. Un clic lo rellena y sigues escribiendo.
+- **El destino se ve antes de pulsar nada**, en una banda arriba. Si el nombre casa con varios, lo
+  dice y te pide que lo afines: nunca elige por ti.
+- **`#128` sigue siendo el número de una tarea.** Solo con letras (`#trabajo`) es un escritorio, para
+  no quitarte algo que ya usabas.
+- Con un destino puesto, los comandos generales («Guía», «Añadir Reloj»…) no aparecen: no viven en
+  ese escritorio.
+
 ## [0.80.0] - 2026-08-16 — adjuntos en una tarea, y la papelera puede reducirse sola
 
 - **Puedes colgar un PDF o una captura en cualquier tarea**, desde su propia conversación. El

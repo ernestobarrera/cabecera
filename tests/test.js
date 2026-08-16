@@ -4513,5 +4513,84 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
     console.log('OK 0.80.0 (la papelera se reduce sola solo con su VB, sigue archivando antes de quitar y lo dice)');
   }
 
+  // --- 0.81.0: gramática de destino «#escritorio @widget» en la paleta -------------------------
+  {
+    /* Acotada por el veredicto de Codex. Aquí se prueba FUNCIONALMENTE lo que se puede —el parser
+       es puro— en vez de mirar el fuente, que es la lección de los cuatro tests anclados a la forma
+       que se han tenido que reanclar en las dos últimas versiones. */
+    eval('globalThis.parseDestino = ' + pickFn('parseDestino', 'q'));
+
+    /* 1 · LA COLISIÓN CON «#128», que es lo que había que no romper. El número de tarea existe
+       desde 0.75.0 y él lo usa; se reparte por la forma del sufijo, no por un modo. */
+    if (parseDestino('#128') !== null)
+      throw new Error('«#128» tiene que seguir siendo un número de tarea, no un escritorio: se lo quitaríamos para meter algo que aún no usa');
+    if (parseDestino('#128 rueda') !== null)
+      throw new Error('«#128» sigue siendo número aunque lleve más palabras detrás');
+    const d1 = parseDestino('#trabajo');
+    if (!d1 || d1.esp !== 'trabajo') throw new Error('«#trabajo» tiene que resolverse como escritorio');
+    if (!parseDestino('#a1b')) throw new Error('un nombre con dígitos y letras es un escritorio, no un número');
+
+    // 2 · el resto de términos NO se contamina con el destino: se busca «notas» dentro, no «#casa»
+    const d2 = parseDestino('#casa notas viejas');
+    if (d2.esp !== 'casa' || d2.resto.join(' ') !== 'notas viejas')
+      throw new Error('los términos de búsqueda son el RESTO: si no, «#casa» se buscaría como texto');
+    const d3 = parseDestino('@bandeja');
+    if (!d3 || d3.wid !== 'bandeja' || d3.esp !== null) throw new Error('«@x» acota la ventana, no el escritorio');
+    const d4 = parseDestino('#trabajo @bandeja pendiente');
+    if (d4.esp !== 'trabajo' || d4.wid !== 'bandeja' || d4.resto.join(' ') !== 'pendiente')
+      throw new Error('los dos a la vez tienen que convivir, que es la gramática que se pidió');
+
+    // 3 · sin marca no hay destino: la paleta normal no puede cambiar de comportamiento
+    if (parseDestino('notas del jueves') !== null)
+      throw new Error('una búsqueda normal no puede activar el destino: sería un modo oculto');
+    if (parseDestino('') !== null || parseDestino('   ') !== null) throw new Error('vacío no es destino');
+    // «#» o «@» sueltos tampoco: son el gesto de PEDIR la lista, no un destino a medias
+    if (parseDestino('#') !== null || parseDestino('@') !== null)
+      throw new Error('«#» a secas ofrece los nombres; no puede filtrar por la cadena vacía, que no filtra nada');
+
+    // 4 · un segundo «#» no se traga en silencio: se queda como término, no reescribe el destino
+    const d5 = parseDestino('#uno #dos');
+    if (d5.esp !== 'uno' || !d5.resto.includes('#dos'))
+      throw new Error('el segundo destino no puede pisar al primero sin decirlo: se queda como texto');
+
+    /* 5 · SELECCIÓN HUMANA OBLIGATORIA y DESTINO VISIBLE, las dos condiciones de Codex que no son
+       del parser. Se comprueban en el fuente porque son de interfaz. */
+    const rr = src.match(/function renderResults\(q\)\{[\s\S]*?\n\}/)[0];
+    if (!/res-dest/.test(rr))
+      throw new Error('el destino tiene que verse ANTES de Enter: es la condición literal del veredicto');
+    /* Y QUE LA PALETA USE DE VERDAD EL PARSER, que es el hueco que la prueba de mutación destapó:
+       las comprobaciones de arriba pasaban en verde con `renderResults` buscando el texto crudo.
+       Con eso, «#trabajo notas» busca la palabra literal «#trabajo» y no encuentra NADA — la
+       gramática parecería construida y estaría muerta. Es exactamente R37: probar la pieza no
+       prueba que se use. */
+    if (!/const terms = \(dest \? dest\.resto : q\.split/.test(rr))
+      throw new Error('los términos tienen que salir del parser: si no, «#trabajo» se busca como texto y no casa con nada');
+    if (!/paletteEntries\(terms, dest\)/.test(rr))
+      throw new Error('el destino tiene que llegar al recorrido de widgets, o no acota nada');
+    const banda = src.match(/if \(dest\)\{\s*\n\s*const r = resumenDestino\(dest\);[\s\S]*?box\.appendChild\(d\);\s*\n  \}/)[0];
+    if (!/nada se ejecuta solo/.test(banda))
+      throw new Error('la banda tiene que decir que hay que elegir: la selección humana es obligatoria');
+    if (!/afina el nombre para dejar uno/.test(banda))
+      throw new Error('un destino ambiguo tiene que VERSE ambiguo, o acotar se convierte en adivinar');
+
+    /* 6 · EL ID NO SALE NUNCA. El veredicto pedía «nombre visible con el ID solo en memoria», y es
+       lo que impide que un identificador interno acabe pegado en una conversación. */
+    const rd = src.match(/function resumenDestino\(dest\)\{[\s\S]*?\n\}/)[0];
+    if (/\.id\b/.test(rd))
+      throw new Error('el resumen del destino no puede emitir ids: solo el nombre visible');
+    if (!/privacyOn && w\.priv/.test(rd))
+      throw new Error('un widget privado no puede aparecer ni contado: su nombre ya es una fuga (I6)');
+
+    // 7 · con destino puesto no se ofrecen comandos globales: un filtro a medias no es un filtro
+    const pe = src.match(/function paletteEntries\(terms, dest\)\{[\s\S]*?\n\}/)[0];
+    const iCorte = pe.indexOf('if (dest) return E;'), iGuia = pe.indexOf('"Guía completa"');
+    if (iCorte < 0 || iGuia < iCorte)
+      throw new Error('con «#escritorio» puesto no pueden salir los comandos globales: no están en ese escritorio');
+    if (!/if \(!casaDestino\(dest, sp, w\)\) continue;/.test(pe))
+      throw new Error('el destino tiene que acotar el recorrido de widgets, no filtrarse después');
+
+    console.log('OK 0.81.0 (la paleta acota por #escritorio y @ventana, sin romper #128 y sin elegir por él)');
+  }
+
   console.log('\nTODO EN VERDE');
 })().catch(e => { console.error(e && e.stack || e); process.exitCode = 1; });
