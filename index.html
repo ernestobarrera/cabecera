@@ -978,6 +978,23 @@ ul.plain{list-style:none}
    de unidades quedaba empujado fuera de la ventana. */
 .calc-grid[hidden]{display:none}
 .calc-tabs{display:flex; gap:6px; margin-top:8px; flex-shrink:0}
+/* 0.83.0 — incrustar. El iframe ocupa TODO el cuerpo y no lleva borde propio: el marco ya lo pone
+   la ventana, y un segundo marco dentro haría que pareciera un widget dentro de otro. */
+.emb{display:flex; flex-direction:column; height:100%; min-height:0}
+.emb-bar{display:flex; align-items:center; gap:6px; margin-bottom:6px; flex:0 0 auto}
+.emb-host{flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:11.5px; color:var(--text-dim)}
+/* una de sus páginas se distingue de un sitio externo: no cambia lo que hace el sandbox, cambia lo
+   que él sabe de un vistazo sobre lo que está mirando */
+.emb-host.mio{color:var(--ok)}
+.emb-box{flex:1; min-height:0; border-radius:10px; overflow:hidden; background:#fff}
+.emb-box iframe{width:100%; height:100%; border:0; display:block}
+.emb-vacio{display:flex; flex-direction:column; gap:9px; font-size:12.5px}
+.emb-t{color:var(--text)}
+.emb-cat{display:flex; gap:6px; flex-wrap:wrap}
+.emb-form{display:flex; gap:6px}
+.emb-u{flex:1; min-width:0; padding:6px 9px; border-radius:8px; border:1px solid var(--border-soft); background:rgba(0,0,0,.25); color:var(--text); font-family:var(--font); font-size:12.5px}
+.emb-u:focus{border-color:var(--accent); outline:none}
+.emb-nota{font-size:11px; color:var(--text-dim); line-height:1.5}
 .calc-hist,.calc-conv,.calc-clin{flex:1; overflow:auto; font-size:12.5px}
 /* 0.82.0 — cálculos clínicos. El selector reutiliza el estilo del de unidades (.calc-u) porque son
    el mismo gesto: elegir de qué va el panel. Los campos se apilan y no se ponen en fila como el
@@ -2089,7 +2106,7 @@ function syncUI(mode, txt){
    reaparece) y si Recargar está activo. El descarte ✕ vive solo en memoria de la sesión.
    Demora asumida: la CDN de Pages puede servir la versión vieja hasta ~10 min aun con
    no-store (gobierna la caché del navegador, no la CDN); para pestañas de días, irrelevante. */
-const APP_VERSION = "0.82.0";
+const APP_VERSION = "0.83.0";
 let newVersionDetected = null;   // versión superior detectada; detiene futuras consultas
 let verDismissed = false;        // ✕: solo esta sesión — nunca persistido en disco
 let verCheckInflight = false;    // sin consultas concurrentes
@@ -4109,6 +4126,10 @@ const WTYPES = {
   calc:  { ico: "🧮", name: "Calculadora",  w: 260, h: 340, cat: "util",      busca: "calcular numeros unidades clinicas conversion" },
   files: { ico: "📂", name: "Archivos",     w: 380, h: 360, cat: "contenido", busca: "carpeta documentos abrir local" },
   dictado:{ ico: "🎙️", name: "Dictado",     w: 330, h: 300, cat: "util",      busca: "voz hablar transcribir microfono" },
+  // `ancho: "full"` — nace ocupando el escritorio entero, que es como lo pidió él el 05/08. Solo
+  // afecta al NACIMIENTO: después se redimensiona como cualquier otra ventana.
+  embed: { ico: "🪟", name: "Incrustar",     w: 640, h: 420, minW: 280, minH: 200, ancho: "full",
+           cat: "contenido", busca: "iframe web pagina externa incrustar embeber sitio herramienta" },
   intro: { ico: "👋", name: "Bienvenida",   w: 350, h: 280, cat: "contenido", busca: "ayuda empezar tour" }
 };
 
@@ -6064,6 +6085,17 @@ function addWidget(type){
         : type === "leave" ? { year: new Date().getFullYear() }
         : type === "files" ? {}
         : type === "qr"    ? { text: "" } : {} };
+  /* 0.83.0 — el widget de incrustar NACE con el ancho del escritorio, que es lo que él pidió
+     («que se adapte por defecto al ancho del escritorio completo»). Se coloca DEBAJO de todo lo que
+     ya hay en vez de en un carril: una ventana a todo lo ancho metida en un carril se solaparía con
+     sus vecinas, y el planificador de carriles no sabe colocar algo que no cabe en ninguno. */
+  if (t.ancho === "full" && !isMobile()){
+    const rects = projectWidgets(state.widgets.filter(x => x.id !== w.id));
+    const fondo = rects.reduce((m, r) => Math.max(m, r.y + r.h), LAYOUT.packingMargin);
+    w.x = LAYOUT.packingMargin;
+    w.y = rects.length ? fondo + LAYOUT.snapGap : LAYOUT.packingMargin;
+    w.w = Math.max(LAYOUT.minW, innerWidth - LAYOUT.packingMargin * 2);
+  }
   state.widgets.push(w);
   $("#desktop").appendChild(buildWindow(w));
   markDirty();
@@ -6104,7 +6136,7 @@ function renderBody(w, el){
      clips: bodyClips, qr: bodyQr, clock: bodyClock, intro: bodyIntro,
      md: bodyMd, img: bodyImg, timer: bodyTimer, cal: bodyCal, year: bodyYear, search: bodySearch,
      files: bodyFiles,
-     calc: bodyCalc, dictado: bodyDictate, leave: bodyLeave }[w.type] || (x => x))(w, el);
+     calc: bodyCalc, dictado: bodyDictate, leave: bodyLeave, embed: bodyEmbed }[w.type] || (x => x))(w, el);
 }
 
 /* --- Bienvenida (solo primer arranque) --- */
@@ -11355,6 +11387,96 @@ function bodyCalc(w, el){
   el.querySelector(".cc").addEventListener("click", () => panel(conv, hist, clin));
   el.querySelector(".calc-tabs .cl").addEventListener("click", () => panel(clin, hist, conv));
   show();
+}
+
+/* 0.83.0 — WIDGET DE INCRUSTAR. Aprobado por él el 05/08 y acotado por el acta de endurecimiento,
+   que fijó la única forma admisible: **iframe con sandbox estricto y SIN `allow-same-origin`**.
+   Nunca código de terceros ejecutándose dentro de Cabecera; siempre una caja aislada.
+
+   `CONTRATO:` el atributo `sandbox` va escrito literal en el HTML y NO se compone en tiempo de
+   ejecución. Un sandbox construido con variables es un sandbox que alguien puede vaciar sin que se
+   note al leer; escrito entero, quitarle una palabra se ve en el diff y lo tumba el banco.
+
+   `CONTRATO:` NUNCA `allow-same-origin`. Con él, y junto a `allow-scripts`, la página incrustada
+   podría salirse de la caja y llegar a los datos de este origen. **Y hay que decirle la
+   consecuencia, porque es real y la va a notar:** sin `allow-same-origin` la página va en un origen
+   opaco, así que **no puede usar su propio almacenamiento ni sus sesiones** — una herramienta que
+   guarde cosas o pida login funcionará a medias. Es el precio del aislamiento, no un fallo, y
+   aflojarlo sería otra decisión suya, no un ajuste.
+
+   `CONTRATO:` solo `https:`. `http:` viajaría en claro dentro de una página servida por HTTPS, y
+   `javascript:` / `data:` son ejecución directa disfrazada de dirección.
+
+   LO QUE ESTÁ MEDIDO Y NO ES OPINIÓN (comprobado el 05/08 leyendo sus cabeceras): **Wikipedia se
+   deja incrustar. PubMed (DENY), Google (SAMEORIGIN), ChatGPT (SAMEORIGIN) y Gemini (DENY) NO**, y
+   no hay forma de saltárselo desde una página web — lo decide el servidor de destino con
+   `X-Frame-Options` / `frame-ancestors`. Por eso el catálogo es corto: no es falta de ganas. */
+const EMBED_MIOS = ["ernestobarrera.github.io"];
+const EMBED_CATALOGO = [
+  { n: "MedCheck",   u: "https://ernestobarrera.github.io/medcheck.html" },
+  { n: "Guía de Cabecera", u: "https://ernestobarrera.github.io/cabecera/guia.html" },
+  { n: "Wikipedia",  u: "https://es.wikipedia.org/wiki/Portada" }
+];
+/* PURA. Devuelve la URL normalizada o null. Se prueba con las formas que fallan, no con la que va:
+   una función de saneo se juzga por lo que rechaza. */
+function embedUrl(raw){
+  const s = String(raw == null ? "" : raw).trim();
+  if (!s) return null;
+  let u;
+  try{ u = new URL(s); }catch(e){ return null; }
+  if (u.protocol !== "https:") return null;              // http en claro, javascript: y data: fuera
+  if (u.username || u.password) return null;             // credenciales incrustadas en la dirección
+  return u.href;
+}
+/** ¿Es una de sus páginas? Se compara el HOST completo, nunca por «contiene». */
+function embedEsMio(href){
+  try{ const h = new URL(href).hostname.toLowerCase(); return EMBED_MIOS.includes(h); }
+  catch(e){ return false; }
+}
+function bodyEmbed(w, el){
+  const href = embedUrl(w.data.url);
+  if (!href){
+    el.innerHTML = `<div class="emb-vacio">
+      <div class="emb-t">Incrusta una página dentro de tu escritorio</div>
+      <div class="emb-cat">${EMBED_CATALOGO.map((c, i) => `<button class="mini" data-c="${i}">${esc(c.n)}</button>`).join("")}</div>
+      <div class="emb-form"><input type="url" class="emb-u" placeholder="https://…" inputmode="url"><button class="mini go">Cargar</button></div>
+      <div class="emb-nota">Va en una caja aislada, sin acceso a tus datos. Por eso <b>una página que necesite iniciar sesión o guardar cosas funcionará a medias</b>. Y hay sitios que <b>no se dejan incrustar</b> —PubMed, Google, ChatGPT, Gemini—: lo decide su servidor y no se puede saltar.</div>
+    </div>`;
+    const poner = u => { w.data.url = u; markDirty(); refreshWidget(w); };
+    el.querySelectorAll(".emb-cat button").forEach(b =>
+      b.addEventListener("click", () => poner(EMBED_CATALOGO[+b.dataset.c].u)));
+    const inp = el.querySelector(".emb-u");
+    const cargar = () => {
+      const u = embedUrl(inp.value);
+      if (!u){ toast("Tiene que ser una dirección https:// completa", true); return; }
+      poner(u);
+    };
+    el.querySelector(".go").addEventListener("click", cargar);
+    inp.addEventListener("keydown", e => { if (e.key === "Enter"){ e.stopPropagation(); cargar(); } });
+    return;
+  }
+  const mio = embedEsMio(href);
+  let host = ""; try{ host = new URL(href).hostname; }catch(e){}
+  el.innerHTML = `<div class="emb">
+    <div class="emb-bar"><span class="emb-host ${mio ? "mio" : ""}" title="${mio ? "Una de tus páginas" : "Sitio externo: se carga en una caja aislada, sin acceso a tus datos"}">${mio ? "🏠" : "🌐"} ${esc(host)}</span>
+      <button class="mini ab" title="Abrir en una pestaña, fuera de la caja aislada — allí sí funcionan sus sesiones y su almacenamiento">↗</button>
+      <button class="mini rc" title="Recargar">⟳</button>
+      <button class="mini rm" title="Quitar la página de este widget">✕</button></div>
+    <div class="emb-box"></div></div>`;
+  /* El iframe se crea con la API del DOM y su `src` se ASIGNA como propiedad, nunca interpolado en
+     una plantilla: es la misma segunda capa que protege a la imagen desde v0.39.1, y aquí importa
+     más, porque el valor viene de una caja de texto. */
+  const fr = document.createElement("iframe");
+  fr.setAttribute("sandbox", "allow-scripts allow-forms allow-popups");
+  fr.setAttribute("referrerpolicy", "no-referrer");
+  fr.setAttribute("loading", "lazy");
+  fr.setAttribute("allow", "");   // ni cámara, ni micrófono, ni ubicación, ni pantalla completa
+  fr.title = host;
+  fr.src = href;
+  el.querySelector(".emb-box").appendChild(fr);
+  el.querySelector(".ab").addEventListener("click", () => window.open(href, "_blank", "noopener"));
+  el.querySelector(".rc").addEventListener("click", () => { fr.src = href; });
+  el.querySelector(".rm").addEventListener("click", () => { delete w.data.url; markDirty(); refreshWidget(w); });
 }
 
 /* --- Dictado por voz (Web Speech API; alternativa en Windows: Win+H) --- */

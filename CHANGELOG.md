@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.83.0] - 2026-08-16 — incrustar una página dentro del escritorio
+
+- **Nuevo widget 🪟 Incrustar**: mete una página web dentro de tu escritorio. Nace ocupando todo el
+  ancho y luego se mueve y redimensiona como cualquier ventana.
+- Trae un **catálogo corto** (MedCheck, la guía, Wikipedia) y admite **cualquier dirección
+  `https://`**. La barra de arriba dice si es una de tus páginas (🏠) o un sitio externo (🌐).
+- **La página va en una caja aislada, sin acceso a tus datos.** El precio de ese aislamiento es que
+  tampoco puede usar los suyos: **si necesita iniciar sesión o guardar algo, funcionará a medias**.
+  El botón **↗** la abre en una pestaña normal, donde sí funciona del todo.
+- **Hay sitios que no se dejan incrustar y lo decide su servidor**, no Cabecera: comprobados,
+  PubMed, Google, ChatGPT y Gemini lo prohíben. Wikipedia sí se deja.
+- Solo `https`. Ni una dirección de un pack puede traer una página incrustada.
+
 ## [0.82.0] - 2026-08-16 — agrupar tareas por semana o mes, e IMC en la calculadora
 
 - **La lista de tareas puede verse por bloques de tiempo.** Un segundo desplegable, al lado del de

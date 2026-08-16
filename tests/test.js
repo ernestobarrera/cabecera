@@ -4787,5 +4787,99 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
     console.log('OK 0.82.0 (IMC y superficie corporal, con sus bordes de banda probados, fuente a la vista y aviso al pie)');
   }
 
+  // --- 0.83.0: widget de incrustar, con sandbox estricto ---------------------------------------
+  {
+    /* Aprobado por él el 05/08 y acotado por el acta de endurecimiento: iframe con sandbox estricto
+       y SIN `allow-same-origin`. Este bloque es el que impide que ese acuerdo se afloje sin que
+       nadie se entere, así que se prueba por lo que RECHAZA, no por lo que carga. */
+    eval('globalThis.embedUrl = ' + pickFn('embedUrl', 'raw'));
+    // la lista se toma DEL FUENTE, no se copia aquí: una copia en el test acabaría probando otra
+    eval('globalThis.EMBED_MIOS = ' + src.match(/const EMBED_MIOS = (\[[^\]]*\]);/)[1]);
+    eval('globalThis.embedEsMio = ' + pickFn('embedEsMio', 'href'));
+    if (!EMBED_MIOS.includes('ernestobarrera.github.io'))
+      throw new Error('la lista de sus dominios tiene que incluir el suyo, o el catálogo no marca nada como propio');
+
+    // 1 · SOLO https. `javascript:` y `data:` son ejecución directa disfrazada de dirección, y
+    //     `http:` viajaría en claro dentro de una página servida por HTTPS.
+    for (const malo of ['javascript:alert(1)', 'JavaScript:alert(1)', 'data:text/html,<script>x</script>',
+                        'http://ejemplo.com', 'file:///C:/', 'vbscript:msgbox', 'about:blank',
+                        '', '   ', 'no es una url', 'ernestobarrera.github.io'])
+      if (embedUrl(malo) !== null) throw new Error(`«${malo}» no puede aceptarse como dirección a incrustar`);
+    // credenciales en la URL: el patrón clásico para disfrazar el destino real
+    if (embedUrl('https://usuario:clave@malo.example/') !== null)
+      throw new Error('una dirección con credenciales incrustadas se rechaza: disfraza a qué sitio se va');
+    if (embedUrl('https://es.wikipedia.org/wiki/Portada') !== 'https://es.wikipedia.org/wiki/Portada')
+      throw new Error('una https normal tiene que pasar');
+
+    /* 2 · «UNA DE SUS PÁGINAS» SE DECIDE POR HOST COMPLETO, jamás por «contiene». Comparar por
+       subcadena es cómo `ernestobarrera.github.io.malo.example` se haría pasar por suya. */
+    if (!embedEsMio('https://ernestobarrera.github.io/medcheck.html')) throw new Error('su dominio tiene que reconocerse');
+    for (const impostor of ['https://ernestobarrera.github.io.malo.example/',
+                            'https://malo.example/ernestobarrera.github.io',
+                            'https://xernestobarrera.github.io/'])
+      if (embedEsMio(impostor)) throw new Error(`«${impostor}» no es suyo y se está reconociendo como tal`);
+
+    /* 3 · EL SANDBOX, que es la línea del acta. Escrito LITERAL y sin `allow-same-origin`: con él,
+       junto a `allow-scripts`, la página incrustada podría salirse de la caja y llegar a los datos
+       de este origen. */
+    const emb = src.match(/function bodyEmbed\(w, el\)\{[\s\S]*?\n\}\n/)[0];
+    if (!/fr\.setAttribute\("sandbox", "allow-scripts allow-forms allow-popups"\);/.test(emb))
+      throw new Error('el sandbox va escrito literal y completo: uno compuesto con variables se puede vaciar sin que se note al leer');
+    /* Y NINGÚN sandbox del archivo, esté donde esté, puede llevarlo. Se miran los VALORES del
+       atributo y no la simple mención de la cadena: el porqué de esta prohibición está escrito en
+       un comentario junto al código, y una guarda que dispare con la palabra obligaría a borrar
+       justo la explicación que impide que alguien lo añada «porque no funcionaba el login».
+       Se cubren las dos formas de ponerlo: por propiedad y escrito en el HTML. */
+    const sandboxes = [...src.matchAll(/setAttribute\("sandbox",\s*"([^"]*)"\)/g)].map(m => m[1])
+      .concat([...html.matchAll(/\bsandbox="([^"]*)"/g)].map(m => m[1]));
+    if (!sandboxes.length) throw new Error('no se encuentra ningún sandbox declarado: ¿ha desaparecido el iframe?');
+    for (const s of sandboxes)
+      if (/allow-same-origin/.test(s))
+        throw new Error('un sandbox lleva `allow-same-origin`: con `allow-scripts` deja salir a la página incrustada de la caja y llegar a sus datos');
+    // y tampoco por la puerta de atrás: nadie toca el sandbox después de crearlo
+    if (/\.sandbox\.(add|remove|toggle)|removeAttribute\("sandbox"\)/.test(src))
+      throw new Error('el sandbox no se modifica en tiempo de ejecución: se declara una vez y se queda');
+    if (!/fr\.setAttribute\("allow", ""\);/.test(emb))
+      throw new Error('ni cámara, ni micrófono, ni ubicación: el permiso de funciones va explícitamente vacío');
+    if (!/referrerpolicy/.test(emb))
+      throw new Error('no se filtra a qué página suya estaba mirando: sin referente');
+
+    /* 4 · EL `src` SE ASIGNA COMO PROPIEDAD, nunca interpolado en una plantilla. Es la segunda capa
+       que ya protege a la imagen desde v0.39.1, y aquí importa más porque el valor lo teclea él. */
+    if (/<iframe[^>]*\$\{/.test(src))
+      throw new Error('un iframe interpolado en HTML deja que una comilla en la URL fabrique atributos');
+    if (!/fr\.src = href;/.test(emb))
+      throw new Error('la dirección se asigna como propiedad del elemento, no se pega en una plantilla');
+    // y lo que se pinta pasa por `esc`: el host viene de una URL que ha escrito él
+    if (/emb-host[^`]*\$\{host\}/.test(emb) && !/\$\{esc\(host\)\}/.test(emb))
+      throw new Error('el host se escapa antes de pintarlo');
+
+    /* 5 · UN PACK NO PUEDE TRAER UNA PÁGINA INCRUSTADA. Sería la vía obvia: un escritorio
+       compartido que carga lo que quiera dentro de su Cabecera. El perfil estrecho de las fuentes
+       que se actualizan solas ya lo excluye, y esto vigila que siga excluido. */
+    if (/REMOTE_PACK_TYPES = \{[^}]*embed/.test(src))
+      throw new Error('«embed» no puede entrar en el perfil estrecho: un pack remoto cargaría lo que quisiera');
+    const np2 = src.match(/function normalizePack\(p, opts\)\{[\s\S]*?\n\}/)[0];
+    if (/embed|\.url\b/.test(np2))
+      throw new Error('normalizePack no puede reconstruir una dirección a incrustar: un pack traería su propia página');
+
+    /* 6 · Y SE LE DICE LA CONSECUENCIA DEL AISLAMIENTO, que es real y la va a notar: sin
+       `allow-same-origin` la página va en un origen opaco y no puede usar sus sesiones ni su
+       almacenamiento. Callarlo haría que pareciera un fallo del producto. */
+    if (!/iniciar sesión o guardar cosas funcionará a medias/.test(emb))
+      throw new Error('hay que decirle que una página con login o almacenamiento irá a medias: es el precio del aislamiento, no un fallo');
+    if (!/no se dejan incrustar/.test(emb))
+      throw new Error('hay que decir que hay sitios que lo prohíben desde su servidor, o parecerá cosa nuestra');
+
+    // 7 · el catálogo no puede colar nada que la propia función rechazaría
+    const cat = eval(src.match(/const EMBED_CATALOGO = \[[\s\S]*?\n\];/)[0].replace('const EMBED_CATALOGO =', '(').replace(/;$/, ')'));
+    for (const c of cat)
+      if (embedUrl(c.u) !== c.u) throw new Error(`el catálogo trae una dirección que el saneo rechaza: ${c.u}`);
+    if (cat.some(c => /pubmed|google\.|chatgpt|gemini/i.test(c.u)))
+      throw new Error('no se ofrece en el catálogo un sitio que ya sabemos que NO se deja incrustar: sería prometer lo que no va');
+
+    console.log('OK 0.83.0 (incrustar en caja aislada: sin allow-same-origin, solo https, host completo y sin llegar por packs)');
+  }
+
   console.log('\nTODO EN VERDE');
 })().catch(e => { console.error(e && e.stack || e); process.exitCode = 1; });
