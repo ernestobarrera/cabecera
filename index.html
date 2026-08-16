@@ -338,6 +338,20 @@ body{font-family:var(--font); color:var(--text); background:#10131a}
 .res-item{display:flex; align-items:center; gap:10px; padding:7px 9px; border-radius:9px; cursor:pointer; font-size:13.5px}
 .res-hint{display:flex; align-items:center; gap:10px; padding:7px 9px; margin-bottom:4px; border-radius:9px; font-size:12.5px;
   color:var(--text-dim); background:rgba(255,255,255,.03); border:1px dashed var(--border-soft)}
+/* 0.81.0 — panel de legibilidad. Cerrado ocupa una línea y no roba alto al texto, que es la
+   condición para que quepa dentro del widget sin estorbar. Abierto crece hacia abajo, nunca
+   empuja el editor: `flex:0 0 auto` sobre un cuerpo que ya es columna. */
+.leg{flex:0 0 auto; margin-top:6px; border-top:1px solid var(--border-soft); padding-top:5px}
+.leg-tg{background:none; border:none; color:var(--text-dim); cursor:pointer; padding:2px 0; font-size:11.5px; font-family:var(--font)}
+.leg-tg:hover{color:var(--text)}
+.leg-body{display:none; padding:4px 0 2px}
+.leg.open .leg-body{display:block}
+.leg-banda{font-size:12.5px; color:var(--text); display:flex; align-items:baseline; gap:8px}
+.leg-n{color:var(--text-dim); font-size:11.5px; font-variant-numeric:tabular-nums}
+.leg-datos{display:flex; flex-wrap:wrap; gap:4px 12px; margin-top:4px; font-size:11.5px; color:var(--text-dim)}
+.leg-idio{opacity:.8}
+.leg-aviso{margin-top:4px; font-size:11.5px; color:var(--warn)}
+.leg-vacio{font-size:11.5px; color:var(--text-dim)}
 /* la banda de destino usa el acento, no el gris de una pista: no es una sugerencia, es el alcance
    real de lo que está viendo y tiene que leerse antes que los resultados */
 .res-dest{display:flex; align-items:center; gap:10px; padding:7px 9px; margin-bottom:4px; border-radius:9px; font-size:12.5px;
@@ -6122,7 +6136,9 @@ function bodyNotes(w, el){
     + `<textarea class="notes" placeholder="Escribe aquí…"></textarea>`;
   const ta = el.querySelector("textarea");
   ta.value = w.data.text || "";
-  ta.addEventListener("input", () => { w.data.text = ta.value; markDirty(); });
+  // 0.81.0 — el panel se cuelga del MISMO texto que se está editando: sin copiar a ningún sitio
+  const relegib = panelLegibilidad(w, el, () => ta.value);
+  ta.addEventListener("input", () => { w.data.text = ta.value; markDirty(); relegib(); });
   wireDesc(el, w);
   // marcador o enlace soltado sobre la nota → se añade al final, una línea por enlace
   wireLinkCapture(el, links => {
@@ -7974,6 +7990,64 @@ function analyzeReadability(text){
   };
 }
 
+/* 0.81.0 — EL PANEL DE LEGIBILIDAD, dentro de Nota y de Documento. El análisis estaba portado
+   desde 0.46.2 y **no lo consumía nada**: una función pura, con test, que no salía por ninguna
+   parte de la interfaz. Esto es lo único que faltaba.
+
+   POR QUÉ DENTRO Y NO COMO WIDGET APARTE — decisión suya del 12/08, y el motivo es el que la hace
+   correcta: el editor donde escribe ya existe, y la legibilidad se lee *mirando el texto*. Un
+   widget aparte obligaría a copiar el texto a otro sitio para saber si se entiende, que es la
+   fricción por la que una herramienta de legibilidad acaba sin usarse. Su instinto del 07/08 ya
+   apuntaba ahí: *«a lo mejor es añadir alguna opción a los widgets de notas como los que ya tienes
+   con editar, pegar, etc.»*.
+
+   `CONTRATO:` una sola función para los dos widgets. Dos copias divergirían, y entonces la misma
+   nota daría dos números distintos según dónde estuviera — que es peor que no tener la función.
+
+   `CONTRATO:` la BANDA manda sobre el número. «53» no le dice nada a nadie; «algo difícil,
+   bachillerato» sí. El número va detrás y en pequeño, no al revés. */
+function panelLegibilidad(w, el, getTexto){
+  const abierto = !!w.data.leg;
+  const box = document.createElement("div");
+  box.className = "leg" + (abierto ? " open" : "");
+  box.innerHTML = `<button class="leg-tg mini" type="button" title="Analiza si el texto se entiende: índice de Szigriszt-Pazos (escala INFLESZ) en español, Flesch en inglés">`
+    + `${abierto ? "▾" : "▸"} 📖 Legibilidad</button><div class="leg-body"></div>`;
+  el.appendChild(box);
+  const cuerpo = box.querySelector(".leg-body");
+  const pintar = () => {
+    if (!box.classList.contains("open")) return;
+    const r = analyzeReadability(getTexto());
+    if (r.score === null){ cuerpo.innerHTML = `<div class="leg-vacio">${esc(r.band)}</div>`; return; }
+    /* El aviso de texto híbrido no es decorativo: con la mitad del texto en inglés el índice
+       español mide otra cosa, y dar un número sin decirlo sería dar un número falso con aspecto
+       de bueno. Igual con el vocabulario técnico, que es lo normal en lo que él escribe. */
+    const avisos = [];
+    if (r.hybrid) avisos.push(`Texto mezclado (${r.spanishPct} % español): el índice pierde precisión`);
+    if (r.technical) avisos.push(`${r.technical} término${r.technical === 1 ? "" : "s"} técnico${r.technical === 1 ? "" : "s"} en inglés, descontados al detectar el idioma`);
+    cuerpo.innerHTML = `<div class="leg-banda">${esc(r.band)}<span class="leg-n">${r.score}</span></div>`
+      + `<div class="leg-datos">`
+      + `<span><b>${r.words}</b> palabras</span><span><b>${r.sentences}</b> frases</span>`
+      + `<span><b>${r.perSentence}</b> palabras/frase</span><span><b>${r.perWord}</b> sílabas/palabra</span>`
+      + `<span>≈ <b>${r.minutes}</b> min de lectura</span>`
+      + `<span class="leg-idio">${r.lang === "es" ? "español · Szigriszt-Pazos (INFLESZ)" : "inglés · Flesch Reading Ease"}</span></div>`
+      + avisos.map(a => `<div class="leg-aviso">${esc(a)}</div>`).join("");
+  };
+  box.querySelector(".leg-tg").addEventListener("click", () => {
+    const ahora = !box.classList.contains("open");
+    box.classList.toggle("open", ahora);
+    box.querySelector(".leg-tg").textContent = (ahora ? "▾" : "▸") + " 📖 Legibilidad";
+    if (ahora) w.data.leg = true; else delete w.data.leg;   // cerrado = ausencia, como el resto
+    markDirty();
+    pintar();
+  });
+  pintar();
+  /* Se recalcula mientras escribe, pero no en cada tecla: el análisis recorre el texto entero y
+     hacerlo por pulsación en una nota larga se nota. 400 ms es lo que tarda en dejar de teclear
+     una frase, así que el número se actualiza cuando hace la pausa, que es cuando lo mira. */
+  let t = null;
+  return () => { clearTimeout(t); t = setTimeout(pintar, 400); };
+}
+
 /* --- Markdown (renderizador propio: se escapa TODO antes de aplicar formato) --- */
 /* Tablas GFM (0.46.0). Nacen de una necesidad real: pegar en un widget la respuesta tabulada de
    un agente o una hoja de cálculo y poder LEERLA. Tres reglas de diseño:
@@ -8319,12 +8393,16 @@ function bodyMd(w, el){
     ${desc ? `${descHtml(desc, w.id)}` : ""}
     <div class="md-bar"><button class="mini tg">${view ? "✏️ Editar" : "👁️ Vista"}</button><button class="mini pg" title="Pegar del portapapeles (tabla, Excel, CSV, JSON…)">📋 Pegar</button><button class="mini cp" title="Copiar el Markdown">⧉</button></div>
     ${view ? `<div class="md-view" tabindex="0"></div>` : `<textarea class="notes md-src" placeholder="Escribe Markdown… (#, **, -, [texto](url), tablas con |, \`\`\`)"></textarea>`}`;
+  /* 0.81.0 — el panel se lee de `w.data.text` y no del textarea, porque aquí hay DOS modos: en
+     vista el textarea no existe. Un solo origen para los dos, o el mismo documento daría un número
+     en vista y otro editando. */
+  const relegib = panelLegibilidad(w, el, () => w.data.text || "");
   if (view){
     el.querySelector(".md-view").innerHTML = mdToHtml(w.data.text || "*Vacío. Pulsa Editar o pega una tabla.*");
   } else {
     const ta = el.querySelector(".md-src");
     ta.value = w.data.text || "";
-    ta.addEventListener("input", () => { w.data.text = ta.value; markDirty(); });
+    ta.addEventListener("input", () => { w.data.text = ta.value; markDirty(); relegib(); });
   }
   wireDesc(el, w);
   el.querySelector(".tg").addEventListener("click", () => { w.data.view = view ? "edit" : "view"; refreshWidget(w); markDirty(); });

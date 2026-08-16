@@ -4592,5 +4592,53 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
     console.log('OK 0.81.0 (la paleta acota por #escritorio y @ventana, sin romper #128 y sin elegir por él)');
   }
 
+  // --- 0.81.0: el panel de legibilidad, dentro de Nota y Documento ------------------------------
+  {
+    /* El análisis estaba portado desde 0.46.2, con sus pruebas, y NO LO CONSUMÍA NADA: una función
+       pura y correcta que no salía por ninguna parte de la interfaz. Esto prueba lo que faltaba —
+       que se use— y es literalmente R37: probar la pieza no prueba que se use. */
+    const pl = src.match(/function panelLegibilidad\(w, el, getTexto\)\{[\s\S]*?\n\}/)[0];
+    const notes = src.match(/function bodyNotes\(w, el\)\{[\s\S]*?\n\}/)[0];
+    const md = src.match(/function bodyMd\(w, el\)\{[\s\S]*?\n\}/)[0];
+
+    // 1 · UNA SOLA FUNCIÓN para los dos. Dos copias divergen, y entonces la misma nota da dos
+    //     números distintos según dónde esté, que es peor que no tener la función.
+    if (!/panelLegibilidad\(w, el, \(\) => ta\.value\)/.test(notes))
+      throw new Error('la Nota tiene que usar el panel compartido, leyendo el MISMO texto que se edita');
+    if (!/panelLegibilidad\(w, el, \(\) => w\.data\.text \|\| ""\)/.test(md))
+      throw new Error('el Documento tiene dos modos y en vista no hay textarea: el origen tiene que ser w.data.text');
+    if ((src.match(/analyzeReadability\(/g) || []).length !== 2)
+      throw new Error('el análisis se invoca desde UN solo sitio (el panel): una segunda llamada es una segunda verdad');
+
+    // 2 · LA BANDA MANDA SOBRE EL NÚMERO. «53» no le dice nada a nadie; la banda sí.
+    const iBanda = pl.indexOf('leg-banda'), iNum = pl.indexOf('leg-n');
+    if (iBanda < 0 || iNum < iBanda)
+      throw new Error('la banda va primero y el número detrás: un índice sin banda no se puede accionar');
+
+    /* 3 · UN NÚMERO QUE HA PERDIDO PRECISIÓN LO DICE. Con medio texto en inglés, el índice español
+       mide otra cosa; darlo callando sería dar un número falso con aspecto de bueno, que es peor
+       que no darlo. Vale igual para el vocabulario técnico, que es lo normal en lo que él escribe. */
+    if (!/r\.hybrid/.test(pl) || !/pierde precisión/.test(pl))
+      throw new Error('un texto mezclado tiene que avisar de que el índice pierde precisión');
+    if (!/r\.technical/.test(pl))
+      throw new Error('los tecnicismos descontados se dicen: si no, el idioma detectado parece magia');
+    if (!/Szigriszt-Pazos \(INFLESZ\)/.test(pl) || !/Flesch Reading Ease/.test(pl))
+      throw new Error('hay que decir QUÉ índice se ha usado: son escalas distintas y no se comparan entre sí');
+
+    // 4 · cerrado = ausencia, el canon del archivo (nadie hereda un panel abierto que no abrió)
+    if (!/else delete w\.data\.leg;/.test(pl))
+      throw new Error('cerrado tiene que ser ausencia, como el resto del estado del archivo');
+
+    /* 5 · NO SE RECALCULA POR TECLA. El análisis recorre el texto entero; hacerlo por pulsación en
+       una nota larga se nota al escribir, que es justo cuando el panel tiene que estorbar menos. */
+    if (!/setTimeout\(pintar, 400\)/.test(pl) || !/clearTimeout\(t\)/.test(pl))
+      throw new Error('el recálculo tiene que esperar a que pare de teclear, no correr en cada tecla');
+    // y con el panel cerrado no se calcula nada en absoluto
+    if (!/if \(!box\.classList\.contains\("open"\)\) return;/.test(pl))
+      throw new Error('con el panel cerrado no se analiza: pagar el cálculo sin enseñarlo es puro gasto');
+
+    console.log('OK 0.81.0 (la legibilidad sale por fin a la interfaz, en Nota y Documento, sin dos verdades)');
+  }
+
   console.log('\nTODO EN VERDE');
 })().catch(e => { console.error(e && e.stack || e); process.exitCode = 1; });
