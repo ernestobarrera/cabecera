@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.88.0] - 2026-08-17 — la página incrustada se cambia sin vaciar el widget
+
+- **En el widget Incrustar, la dirección se puede editar donde está.** Pulsa sobre ella arriba,
+  escribe otra y Enter. Esc cancela, y salir del campo sin pulsar Enter no cambia nada.
+- Antes, para cambiar de página había que pulsar ✕ —que la quita— y volver a empezar.
+- La dirección nueva pasa por la misma comprobación que el alta: solo `https://`, sin credenciales
+  dentro. **El aislamiento de la caja no cambia**, ni al editar ni en ningún otro sitio.
+
 ## [0.87.0] - 2026-08-17 — una vista con TODAS tus tareas, de todos los escritorios
 
 - **Cualquier lista de tareas puede enseñar las de todos los escritorios a la vez.** En su barra hay

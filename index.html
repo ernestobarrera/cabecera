@@ -999,7 +999,13 @@ ul.plain{list-style:none}
    la ventana, y un segundo marco dentro haría que pareciera un widget dentro de otro. */
 .emb{display:flex; flex-direction:column; height:100%; min-height:0}
 .emb-bar{display:flex; align-items:center; gap:6px; margin-bottom:6px; flex:0 0 auto}
-.emb-host{flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:11.5px; color:var(--text-dim)}
+.emb-host{flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:11.5px; color:var(--text-dim); cursor:text}
+.emb-host:hover{color:var(--text)}
+/* 0.88.0 — el campo ocupa EL MISMO sitio que la etiqueta a la que sustituye, para que editar la
+   dirección no mueva los botones de al lado ni cambie el alto de la barra */
+.emb-edit{flex:1; min-width:0; font:inherit; font-size:11.5px; padding:2px 6px; border-radius:6px;
+  border:1px solid var(--accent); background:rgba(0,0,0,.26); color:var(--text)}
+.emb-edit:focus{outline:none}
 /* una de sus páginas se distingue de un sitio externo: no cambia lo que hace el sandbox, cambia lo
    que él sabe de un vistazo sobre lo que está mirando */
 .emb-host.mio{color:var(--ok)}
@@ -2123,7 +2129,7 @@ function syncUI(mode, txt){
    reaparece) y si Recargar está activo. El descarte ✕ vive solo en memoria de la sesión.
    Demora asumida: la CDN de Pages puede servir la versión vieja hasta ~10 min aun con
    no-store (gobierna la caché del navegador, no la CDN); para pestañas de días, irrelevante. */
-const APP_VERSION = "0.87.0";
+const APP_VERSION = "0.88.0";
 let newVersionDetected = null;   // versión superior detectada; detiene futuras consultas
 let verDismissed = false;        // ✕: solo esta sesión — nunca persistido en disco
 let verCheckInflight = false;    // sin consultas concurrentes
@@ -11702,8 +11708,16 @@ function bodyEmbed(w, el){
   }
   const mio = embedEsMio(href);
   let host = ""; try{ host = new URL(href).hostname; }catch(e){}
+  /* 0.88.0 — LA DIRECCIÓN SE PUEDE EDITAR SIN VACIAR EL WIDGET. Su apunte del 16/08: «en netvibes
+     se podía editar la URL». Tenía razón y era fricción tonta: para cambiar de página había que
+     pulsar ✕ —que borra— y volver a empezar desde el catálogo.
+     El host deja de ser una etiqueta y pasa a ser un campo. Se edita al pulsarlo, Enter carga y Esc
+     cancela, y el valor vuelve a pasar por `embedUrl`, que es la MISMA puerta de saneo del alta: si
+     hubiera una segunda vía de entrada, sería la que no comprueba (es como se cuelan los `http:` y
+     los `javascript:`). El aislamiento no se toca en ninguna dirección. */
   el.innerHTML = `<div class="emb">
-    <div class="emb-bar"><span class="emb-host ${mio ? "mio" : ""}" title="${mio ? "Una de tus páginas" : "Sitio externo: se carga en una caja aislada, sin acceso a tus datos"}">${mio ? "🏠" : "🌐"} ${esc(host)}</span>
+    <div class="emb-bar"><span class="emb-host ${mio ? "mio" : ""}" title="${mio ? "Una de tus páginas — clic para cambiar la dirección" : "Sitio externo: se carga en una caja aislada, sin acceso a tus datos. Clic para cambiar la dirección"}">${mio ? "🏠" : "🌐"} ${esc(host)}</span>
+      <input type="url" class="emb-edit" inputmode="url" hidden value="${esc(href)}" aria-label="Dirección de la página incrustada">
       <button class="mini ab" title="Abrir en una pestaña, fuera de la caja aislada — allí sí funcionan sus sesiones y su almacenamiento">↗</button>
       <button class="mini rc" title="Recargar">⟳</button>
       <button class="mini rm" title="Quitar la página de este widget">✕</button></div>
@@ -11722,6 +11736,24 @@ function bodyEmbed(w, el){
   el.querySelector(".ab").addEventListener("click", () => window.open(href, "_blank", "noopener"));
   el.querySelector(".rc").addEventListener("click", () => { fr.src = href; });
   el.querySelector(".rm").addEventListener("click", () => { delete w.data.url; markDirty(); refreshWidget(w); });
+  // 0.88.0 — editar la dirección en el sitio, sin borrar el widget
+  const chip = el.querySelector(".emb-host"), campo = el.querySelector(".emb-edit");
+  const salir = () => { campo.hidden = true; chip.hidden = false; campo.value = href; };
+  chip.addEventListener("click", () => {
+    chip.hidden = true; campo.hidden = false;
+    campo.focus(); campo.select();
+  });
+  campo.addEventListener("keydown", e => {
+    if (e.key === "Escape"){ e.stopPropagation(); salir(); return; }
+    if (e.key !== "Enter") return;
+    e.stopPropagation();
+    const u = embedUrl(campo.value);   // la MISMA puerta que el alta: no hay una segunda vía
+    if (!u){ toast("Tiene que ser una dirección https:// completa", true); return; }
+    if (u === href){ salir(); return; }
+    w.data.url = u; markDirty(); refreshWidget(w);
+  });
+  // salir sin Enter no aplica nada: cambiar de ventana no puede valer como confirmación
+  campo.addEventListener("blur", salir);
 }
 
 /* --- Dictado por voz (Web Speech API; alternativa en Windows: Win+H) --- */

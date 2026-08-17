@@ -4942,7 +4942,25 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
     if (cat.some(c => /pubmed|google\.|chatgpt|gemini/i.test(c.u)))
       throw new Error('no se ofrece en el catálogo un sitio que ya sabemos que NO se deja incrustar: sería prometer lo que no va');
 
+    /* 0.88.0 — LA DIRECCIÓN SE EDITA EN EL SITIO, y eso abre una SEGUNDA vía de entrada de URLs.
+       Lo que se vigila no es que se pueda editar, sino que esa vía pase por la misma puerta de
+       saneo que el alta: una entrada que no comprueba es por donde se cuelan `http:` y
+       `javascript:`, y aquí el valor viene literalmente de una caja de texto. */
+    const embFn = src.match(/function bodyEmbed\(w, el\)\{[\s\S]*?\n\}\n/)[0];
+    if (!/const u = embedUrl\(campo\.value\);/.test(embFn))
+      throw new Error('editar la dirección tiene que pasar por embedUrl: una segunda vía sin saneo es la que se cuela');
+    // y escribe en `w.data.url`, que es lo único que lee el render: nunca directamente en el iframe
+    if (/campo[\s\S]{0,200}fr\.src =/.test(embFn))
+      throw new Error('el campo no puede asignar el src del iframe a mano: se pasa por el estado y se repinta');
+    // salir del campo sin Enter NO aplica: cambiar de ventana no es confirmar
+    if (!/campo\.addEventListener\("blur", salir\)/.test(embFn))
+      throw new Error('perder el foco cancela la edición, no la aplica');
+    // el aislamiento sigue escrito literal y sin allow-same-origin (contrato de 0.83.0, revalidado)
+    if (!/fr\.setAttribute\("sandbox", "allow-scripts allow-forms allow-popups"\)/.test(embFn))
+      throw new Error('el sandbox sigue escrito literal: editar la URL no puede haberlo tocado');
+
     console.log('OK 0.83.0 (incrustar en caja aislada: sin allow-same-origin, solo https, host completo y sin llegar por packs)');
+    console.log('OK 0.88.0 (la dirección se edita en el sitio, por la MISMA puerta de saneo y sin tocar el aislamiento)');
   }
 
   // --- 0.84.0: el aviso de versión nueva llega a tiempo -----------------------------------------
