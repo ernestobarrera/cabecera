@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.86.0] - 2026-08-17 — el adjunto se ve sin abrir la conversación, y las hechas se agrupan
+
+- **Una tarea con adjunto lo enseña en su fila**, con un 📎 junto a la marca de conversación, y el
+  número si hay más de uno. Un clic abre la conversación, que es donde vive el fichero. Antes, una
+  tarea con adjunto y sin conversación no mostraba nada: había que acordarse de que estaba ahí.
+- **Las tareas hechas también se pueden agrupar** por semana o por mes. El selector estaba solo en
+  «Pendientes», y es en el histórico donde más falta hace.
+- **Y ahí se agrupan por cuándo las cerraste, no por cuándo las anotaste.** «Hechas» viene ordenada
+  por fecha de cierre, así que agruparla por la de alta habría puesto los bloques en un orden y las
+  tareas dentro en otro. El texto de ayuda del selector dice cuál es el eje en cada pestaña.
+- Una tarea cerrada antes de que existiera la fecha de cierre se agrupa por su fecha de alta, no
+  cae al bloque «sin fecha».
+
 ## [0.85.0] - 2026-08-17 — citar una tarea por su número lleva a esa tarea, y el reloj de las tareas se maneja con la rueda
 
 - **Buscar `#128` te lleva a la tarea 128, no a otra que la mencione.** Escribir el número con

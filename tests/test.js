@@ -4945,5 +4945,53 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
     console.log('OK 0.84.0 (el aviso de versión nueva llega dentro de la sesión, no seis horas después)');
   }
 
+  // --- 0.86.0: el adjunto se ve en la fila, y «Hechas» se puede agrupar por su propio eje --------
+  {
+    /* Sus dos apuntes del 16/08, uno por versión publicada ese día:
+       · sobre 0.80.0: «adjuntado, pero no se ve un clic junto a la tarea o junto a 💬»
+       · sobre 0.82.0: «pero en hechas no aparece y ahí puede tener mucho valor no?» */
+
+    // (1) EL 📎 ES CHIP PROPIO, no una letra dentro del 💬. Una tarea con adjunto y sin conversación
+    //     no pintaba NADA: el fichero quedaba invisible hasta abrir el hilo.
+    if (!/<span class="att-mark"/.test(src))
+      throw new Error('el adjunto necesita marca propia en la fila: dentro del 💬 no se vería sin conversación');
+    const fila = src.match(/li\.innerHTML = `<span class="it-drag"[\s\S]*?bandaAccionesHtml\(meToca, !!it\.pin, soloInforma\);/)[0];
+    if (!/Array\.isArray\(it\.att\) && it\.att\.length/.test(fila))
+      throw new Error('la marca se deriva de que HAYA adjuntos, no de que exista el campo: un array vacío no es un adjunto');
+    // a uno solo no se le pinta el número, mismo criterio que el 💬: un «1» constante es ruido
+    if (!/it\.att\.length > 1 \? " " \+ it\.att\.length : ""/.test(fila))
+      throw new Error('el número solo aparece con más de un adjunto, como en la marca de conversación');
+    // y lleva al MISMO sitio que el 💬: el adjunto vive dentro de la conversación
+    if (!/const clip = li\.querySelector\("\.att-mark"\);[\s\S]{0,220}?replyTo\(it, li\)/.test(src))
+      throw new Error('el 📎 tiene que abrir la conversación: una marca que no se puede pulsar no resuelve su apunte');
+    // no cede al pasar el ratón, igual que la marca de conversación (regla suya de 0.58.0)
+    if (/una-linea:hover \.att-mark/.test(src))
+      throw new Error('el 📎 no cede su sitio a los botones: es una señal, no un dato de relleno');
+
+    // (2) AGRUPAR EN «HECHAS». La maquinaria ya funcionaba allí; lo que faltaba era poder pedirlo.
+    if (/agrupa\.style\.display = ui\.view === "pend"/.test(src))
+      throw new Error('el selector de agrupación tiene que estar también en «Hechas»: es donde más falta hace');
+    if (!/agrupa\.style\.display = buscando \? "none" : ""/.test(src))
+      throw new Error('sigue fuera mientras se BUSCA: ahí la lista ya va agrupada por estado');
+
+    /* (3) Y EL EJE CAMBIA CON LA VISTA, que es la mitad que no era obvia: «Hechas» viene ordenada
+       por fecha de cierre, así que agruparla por fecha de alta pondría cabeceras de un eje sobre
+       una lista ordenada por otro. Se prueba la función pura, no el render. */
+    const msDe = new Function('altaMs', 'return ' + src.match(/const msDe = \(it, vista\) => [^;]+;/)[0].replace(/^const msDe = /, '').replace(/;$/, ''));
+    const f = msDe(() => 1000);
+    if (f({ doneAt: 5000 }, 'done') !== 5000) throw new Error('en «Hechas» manda la fecha de CIERRE');
+    if (f({ doneAt: 5000 }, 'pend') !== 1000) throw new Error('en «Pendientes» manda la fecha de alta, aunque tenga doneAt');
+    if (f({}, 'done') !== 1000) throw new Error('una hecha SIN doneAt cae al alta, no a cero: si no, iría a «sin fecha»');
+
+    // el eje se DICE en el selector (R69: un cambio de significado se declara, no se deduce)
+    if (!/const eje = ui\.view === "done" \? "cuándo la cerraste"/.test(src))
+      throw new Error('el eje tiene que declararse donde se elige, o la agrupación cambia de sentido en silencio');
+    // y la clave se calcula con la vista de ESTA pasada, no con la que hubiera al definir el grupo
+    if (!/const bruta = TODO_GROUPS\[gk\]\.clave, vista = ui\.view/.test(src))
+      throw new Error('la clave del grupo se ata a la vista actual: dos ejes en la misma lista es el defecto de R47');
+
+    console.log('OK 0.86.0 (el adjunto se ve sin abrir el hilo; «Hechas» se agrupa por cuándo la cerraste)');
+  }
+
   console.log('\nTODO EN VERDE');
 })().catch(e => { console.error(e && e.stack || e); process.exitCode = 1; });

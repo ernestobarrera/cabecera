@@ -497,7 +497,7 @@ ul.plain{list-style:none}
 }
 /* en una tarea de varias líneas, la fecha se ancla ARRIBA, junto a la primera línea del texto y a
    la altura del asa ⋮⋮ — centrada quedaba flotando a media altura, que es donde pasa la banda. */
-.todo-it .alta,.todo-it .due,.todo-it .task-note-mark{align-self:flex-start; margin-top:2px}
+.todo-it .alta,.todo-it .due,.todo-it .task-note-mark,.todo-it .att-mark{align-self:flex-start; margin-top:2px}
 .todo-it:hover{background:rgba(255,255,255,.04)}
 .todo-it.has-task-color{box-shadow:inset 3px 0 0 var(--task-color); padding-left:8px}
 .todo-it input[type=checkbox]{width:16px; height:16px; accent-color:var(--accent); cursor:pointer; flex-shrink:0}
@@ -641,6 +641,10 @@ ul.plain{list-style:none}
 .todo-it .it-actions .it-pin.on{opacity:1; color:var(--warn)}
 .todo-it .task-note-mark{font-size:11px; color:var(--text-dim); cursor:pointer; flex-shrink:0}
 .todo-it .task-note-mark:hover{color:var(--accent)}
+/* 0.86.0 — el 📎 es hermano del 💬 y comparte su tamaño y su comportamiento al pasar el ratón,
+   pero es un chip aparte: dicen cosas distintas y se cuentan por separado. */
+.todo-it .att-mark{font-size:11px; color:var(--text-dim); cursor:pointer; flex-shrink:0; font-variant-numeric:tabular-nums}
+.todo-it .att-mark:hover{color:var(--accent)}
 /* 0.74.0 — una petición que lleva días esperándole. NO cambia de color ni de tamaño: el ámbar de
    `.me-toca` ya dice «te toca» y el rojo ya significa «vencido» en este producto. Lo único que se
    añade es el número de días, en tono ligeramente más firme. Si esto pesara más que el vencimiento
@@ -2113,7 +2117,7 @@ function syncUI(mode, txt){
    reaparece) y si Recargar está activo. El descarte ✕ vive solo en memoria de la sesión.
    Demora asumida: la CDN de Pages puede servir la versión vieja hasta ~10 min aun con
    no-store (gobierna la caché del navegador, no la CDN); para pestañas de días, irrelevante. */
-const APP_VERSION = "0.85.0";
+const APP_VERSION = "0.86.0";
 let newVersionDetected = null;   // versión superior detectada; detiene futuras consultas
 let verDismissed = false;        // ✕: solo esta sesión — nunca persistido en disco
 let verCheckInflight = false;    // sin consultas concurrentes
@@ -6657,10 +6661,24 @@ const sortDe = w => (TODO_SORTS[w && w.data && w.data.sort] ? w.data.sort : "man
    Se agrupa por la FECHA DE ALTA, que es lo que él pidió («ahora que cada una guarda su fecha de
    alta, era la razón por la que querías el campo») y lo único que toda tarea tiene. Lo anterior a
    que existiera el campo va a su propio grupo, al final, en vez de mentir metiéndolo en una semana. */
+/* 0.86.0 — EN «HECHAS» SE AGRUPA POR LA FECHA DE CIERRE, NO POR LA DE ALTA. Su apunte del 16/08
+   sobre 0.82.0: «pero en hechas no aparece y ahí puede tener mucho valor no?». Dos cosas, y solo
+   una era el fallo evidente:
+   1. El selector estaba OCULTO en «Hechas» —la maquinaria de agrupar ya funcionaba allí, solo que
+      no había forma de pedirlo—. Eso es el arreglo de una línea.
+   2. Y el eje tenía que cambiar, o el arreglo habría sido peor que el hueco. «Hechas» viene
+      ordenada por fecha de CIERRE (la más reciente arriba); agruparla por fecha de ALTA habría
+      puesto cabeceras de un eje sobre una lista ordenada por otro — grupos en un orden y tareas
+      dentro en otro. En un histórico, además, lo que se busca es «qué cerré en julio», no cuándo
+      lo apunté.
+   El eje se DECLARA en el título del selector, no se deduce (R69: un cambio de significado se dice,
+   nunca se infiere de una convención). `msDe` es una sola función para las dos vistas: si el eje se
+   eligiera en un sitio y se pintara en otro, divergirían (R47). */
+const msDe = (it, vista) => (vista === "done" && it.doneAt) ? it.doneAt : altaMs(it);
 const TODO_GROUPS = {
   no:     { etiqueta: "▤ Sin agrupar",     clave: null },
-  semana: { etiqueta: "▤ Por semana",      clave: it => claveSemana(altaMs(it)) },
-  mes:    { etiqueta: "▤ Por mes",         clave: it => claveMes(altaMs(it)) }
+  semana: { etiqueta: "▤ Por semana",      clave: (it, v) => claveSemana(msDe(it, v)) },
+  mes:    { etiqueta: "▤ Por mes",         clave: (it, v) => claveMes(msDe(it, v)) }
 };
 const groupDe = w => (TODO_GROUPS[w && w.data && w.data.group] ? w.data.group : "no");
 // lunes de la semana de ese instante. Se usa como clave Y como etiqueta, así que una sola función
@@ -7381,20 +7399,27 @@ function bodyTodo(w, el){
       : `Orden automático (${TODO_SORTS[sk].etiqueta}). Con un criterio automático NO se puede arrastrar: `
         + "elige «↕ A mano» para volver a reordenar tú. Tu orden manual no se pierde por cambiar de criterio.";
     orden.classList.toggle("auto", sk !== "manual");
-    /* 0.82.0 — el selector de agrupación, al lado del de orden y sin mezclarse con él. Solo en
-       Pendientes: «Hechas» es un histórico y buscando la lista ya se agrupa por estado, así que un
-       segundo criterio de bloques encima sería ilegible. */
+    /* 0.82.0 — el selector de agrupación, al lado del de orden y sin mezclarse con él.
+       0.86.0 — TAMBIÉN EN «HECHAS», que era su apunte y tenía razón: es donde más falta hace,
+       porque un histórico de cientos de tareas cerradas sin bloques no se recorre. Sigue fuera
+       mientras se BUSCA, y ese sí es el caso que 0.82.0 acotó bien: buscando, la lista ya va
+       agrupada por estado (pendientes / hechas) y un segundo criterio de bloques encima sería
+       ilegible. */
     const gk = groupDe(w);
-    agrupa.style.display = ui.view === "pend" && !buscando ? "" : "none";
+    agrupa.style.display = buscando ? "none" : "";
     agrupa.innerHTML = Object.entries(TODO_GROUPS)
       .map(([k, v]) => `<option value="${k}"${k === gk ? " selected" : ""}>${v.etiqueta}</option>`).join("");
     /* Y DICE LA CONSECUENCIA, que es la lección de 0.75.0: el aviso va donde se DECIDE, no donde se
        sufre. Agrupar también apaga el arrastre —mover una tarea entre dos bloques de tiempo no
        significa nada, porque su bloque lo decide su fecha—, y eso hay que decirlo antes de elegir,
        no cuando ya se ha intentado arrastrar y no ha funcionado. */
+    // 0.86.0 — el EJE se dice, porque cambia con la pestaña: en Pendientes es cuándo la anotaste;
+    // en Hechas, cuándo la cerraste. Deducirlo de la vista en silencio sería justo lo que R69
+    // prohíbe: reinterpretar un dato sin declararlo
+    const eje = ui.view === "done" ? "cuándo la cerraste" : "cuándo anotaste cada tarea";
     agrupa.title = gk === "no"
-      ? "Sin agrupar: la lista va seguida. Puedes agruparla por semana o por mes según cuándo anotaste cada tarea."
-      : `Agrupada ${gk === "semana" ? "por semana" : "por mes"} según cuándo anotaste cada tarea. `
+      ? `Sin agrupar: la lista va seguida. Puedes agruparla por semana o por mes según ${eje}.`
+      : `Agrupada ${gk === "semana" ? "por semana" : "por mes"} según ${eje}. `
         + "Tu orden sigue mandando DENTRO de cada bloque. Mientras esté agrupada NO se puede arrastrar: "
         + "el bloque de una tarea lo decide su fecha, así que moverla no la dejaría movida.";
     agrupa.classList.toggle("auto", gk !== "no");
@@ -7456,7 +7481,9 @@ function bodyTodo(w, el){
       // sombreaba, y dos variables con el mismo nombre en la misma función es cómo se acaba
       // leyendo una y escribiendo la otra
       if (gk !== "no" && list.length){
-        const clave = TODO_GROUPS[gk].clave;
+        // el eje va atado a la VISTA, no a la tarea: en «Hechas», cuándo la cerraste (ver TODO_GROUPS)
+        const bruta = TODO_GROUPS[gk].clave, vista = ui.view;
+        const clave = it => bruta(it, vista);
         const cuenta = new Map();
         for (const it of list) cuenta.set(clave(it), (cuenta.get(clave(it)) || 0) + 1);
         const orden = [...cuenta.keys()].sort((a, b) => rangoGrupo(b) - rangoGrupo(a));
@@ -7581,6 +7608,20 @@ function bodyTodo(w, el){
         + (it.pin ? `<span class="pin-mark" title="Anclada arriba">📌</span>` : "")
         + `<span class="t"${alta}>${linkifyEsc(it.t)}</span>`
         + (nRep || it.note ? `<span class="task-note-mark${meToca ? " me-toca" : ""}${dEsp ? " añeja" : ""}" title="${esc(meToca ? "El agente te pide algo y no lo has contestado (" + nRep + " en el hilo)" + (dEsp ? ` — lleva ${dEsp} días esperándote` : "") + " — clic para leerlo" : soloInforma ? "El agente te ha contestado y no espera respuesta (" + nRep + " en el hilo) — léelo cuando quieras" : nRep ? nRep + " respuesta(s) — clic para leer y contestar" : it.note)}">${meToca || soloInforma ? "🤖" : "💬"}${dEsp ? " " + dEsp + "d" : nRep > 1 ? " " + nRep : ""}</span>` : "")
+        /* 0.86.0 — EL ADJUNTO SE VE EN LA FILA. Su apunte del 16/08 sobre 0.80.0: «adjuntado, pero
+           no se ve un clic junto a la tarea o junto a 💬, y podría verse no?». Tenía razón y era
+           un agujero de verdad, no un adorno: una tarea con adjunto y SIN conversación no pintaba
+           ninguna marca, así que el fichero quedaba invisible hasta abrir el hilo. Un adjunto que
+           no se ve es un adjunto que se olvida.
+           Chip PROPIO y no una letra dentro del 💬, por lo que ya costó dos versiones con el 🤖:
+           una señal que significa dos cosas se aprende a ignorar entera (R45/R46). Aquí dicen
+           cosas distintas —«hay conversación» y «hay un fichero»— y se cuentan por separado.
+           El número solo aparece con más de uno, mismo criterio que el 💬. */
+        + (Array.isArray(it.att) && it.att.length
+          ? `<span class="att-mark" title="${esc(it.att.length === 1
+              ? "Adjunto: " + (it.att[0].n || it.att[0].f) + " — clic para abrirlo desde la conversación"
+              : it.att.length + " adjuntos — clic para verlos en la conversación")}">📎${it.att.length > 1 ? " " + it.att.length : ""}</span>`
+          : "")
         + (am ? `<span class="alta" title="${esc(am.largo)}">${esc(am.corto)}</span>` : "")
         // 0.69.0 — el chip de relleno va junto a la fecha de ALTA, no junto al vencimiento: no
         // habla de cuándo vence nada, habla de cuándo conviene gastarlo
@@ -7658,6 +7699,11 @@ function bodyTodo(w, el){
       li.querySelector(".it-reply").addEventListener("click", e => { e.stopPropagation(); replyTo(it, li); });
       const marca = li.querySelector(".task-note-mark");
       if (marca) marca.addEventListener("click", e => { e.stopPropagation(); replyTo(it, li); });
+      // el 📎 lleva al mismo sitio que el 💬: los adjuntos viven DENTRO de la conversación y no se
+      // abre el fichero desde aquí a propósito — un clic que abre un PDF sin enseñar de qué hilo
+      // sale es justo el contexto que se pierde
+      const clip = li.querySelector(".att-mark");
+      if (clip) clip.addEventListener("click", e => { e.stopPropagation(); replyTo(it, li); });
       li.querySelector(".it-del").addEventListener("click", () => {
         const idx = w.data.items.indexOf(it);
         if (idx >= 0){
