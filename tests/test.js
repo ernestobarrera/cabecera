@@ -3021,10 +3021,18 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
       throw new Error('el sondeo se arma en UN solo sitio, o se acumulan intervalos al cambiar de pestaña');
     if (!/armPoll\(\);   \/\/ 0\.53\.0/.test(src)) throw new Error('el visibilitychange debe reprogramar la cadencia');
 
-    // (4) ALARMA DEL TEMPORIZADOR: un canal para el instante y otro para el rastro, sin un tercero.
-    // se descuenta la definición: lo que se cuenta son las LLAMADAS desde los dos disparos
-    if ((src.match(/(?<!function )marcarAlarma\(w,/g) || []).length !== 2)
-      throw new Error('las DOS vías de disparo (cuenta atrás y alarma) deben dejar rastro');
+    /* (4) ALARMA DEL TEMPORIZADOR: un canal para el instante y otro para el rastro, sin un tercero.
+       Se descuenta la definición: lo que se cuenta son las LLAMADAS desde los disparos.
+       0.85.0 — ERAN DOS Y AHORA ES UNA. Se retiró la pestaña «Alarma» (decisión suya del 16/08),
+       así que el único disparo vivo es la cuenta atrás. La aserción NO se relaja a «≥1»: el número
+       exacto es lo que caza tanto un disparo nuevo sin rastro como el regreso silencioso de la
+       pestaña. Y se comprueba explícitamente que la pestaña no vuelve por la puerta de atrás. */
+    if ((src.match(/(?<!function )marcarAlarma\(w,/g) || []).length !== 1)
+      throw new Error('la cuenta atrás es hoy el ÚNICO disparo, y debe dejar rastro');
+    if (/data-t="al"|paintAl/.test(src))
+      throw new Error('la pestaña Alarma se retiró en 0.85.0: su vuelta es una decisión suya, no un descuido');
+    if (/w\.data\.alarmAt\s*=|w\.data\.alarmTime\s*=/.test(src))
+      throw new Error('nada vuelve a ESCRIBIR el estado de alarma: solo se limpia lo que quedara guardado');
     if (!/const alarmasSonadas = new Map\(\)/.test(src) || /alarmSounded|w\.data\.alarmFired/.test(src))
       throw new Error('I7: una alarma sonada es de esta sesión y de este equipo, no viaja en datos.json');
     console.log('OK 0.53.0 (la etiqueta trae su contrato, la lista se ordena, el sondeo se espacia y la alarma deja rastro)');
@@ -4183,6 +4191,28 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
     const conCifra = W([{ t: 'revisar 128 pacientes', done: false, n: 3 }]);
     if (tqc(['#3'], conCifra)?.it.n !== 3) throw new Error('el número de la tarea se busca por su campo, no por su texto');
 
+    /* 0.85.0 — SU PARTE DEL 16/08, REPRODUCIDA TAL CUAL: «#128 me lleva a #13». Medido en su
+       archivo: la tarea #13 está cerrada y su título menciona literalmente «#128», y aparecía
+       antes en la lista que la #128 real. `casa()` empataba «el texto contiene #128» con «el
+       número es 128», así que ganaba la primera. La almohadilla es la marca de CITA: con ella
+       solo cuenta el número. */
+    const trampa = W([
+      { t: 'cómo citar una tarea: mi propuesta es #128', done: true, n: 13 },
+      { t: 'filtro de etiqueta entre escritorios', done: true, n: 128 }
+    ]);
+    if (tqc(['#128'], trampa)?.it.n !== 128)
+      throw new Error('«#128» es una CITA: no puede aterrizar en otra tarea que mencione ese texto');
+    // sin almohadilla el número sigue mandando, pero el texto vale de respaldo
+    if (tqc(['128'], trampa)?.it.n !== 128)
+      throw new Error('«128» a secas: el número tiene prioridad sobre el texto que lo menciona');
+    if (tqc(['128'], W([{ t: 'revisar 128 pacientes', done: false, n: 4 }]))?.it.n !== 4)
+      throw new Error('sin almohadilla y sin tarea con ese número, el texto sigue valiendo');
+    if (tqc(['#128'], W([{ t: 'revisar #128 cuando pueda', done: false, n: 4 }])))
+      throw new Error('con almohadilla y sin tarea con ese número, NO se cae al texto: mejor nada que otra tarea');
+    // una búsqueda mixta sigue funcionando: el número por número, la palabra por texto
+    if (tqc(['#128', 'etiqueta'], trampa)?.it.n !== 128)
+      throw new Error('«#128 etiqueta» debe seguir casando: cada término por su vía');
+
     if (tqc([], mix)) throw new Error('sin términos no hay destino: iría a una tarea cualquiera');
 
     // el resultado tiene que DECIR el estado, o el arreglo es invisible
@@ -4207,48 +4237,54 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
     console.log('OK 0.76.0 (buscar prefiere lo pendiente y avisa de lo cerrado; #128 buscable; la consulta sobrevive y caduca)');
   }
 
-  // --- 0.77.0: la alarma se rearma sola, y cuando no puede lo dice ------------------------------
+  // --- 0.85.0: la alarma se retira, y lo que cubría pasa al reloj de la TAREA -------------------
   {
-    /* Deuda vieja con la causa localizada en julio de 2026: `alarmTime` persistía y se pintaba en el
-       campo, pero el temporizador que dispara solo nacía al pulsar «Activar». Tras recargar, el
-       widget enseñaba una hora SIN alarma detrás — mentía en silencio, que es peor que no tenerla.
-       Se prueba por fuente porque el efecto vive en un setInterval, pero atado a lo que tiene que
-       ser cierto, no a cómo está escrito. */
-    const al = src.match(/const paintAl = \(\) => \{[\s\S]*?\n  \};/)[0];
+    /* SUSTITUYE AL BLOQUE 0.77.0, que probaba `paintAl` — una función que ya no existe. No se
+       borra sin más: retirar una pieza sin sustituto es quitar, no simplificar, y aquí había un
+       uso real detrás («un recordatorio doméstico puntual, no una tarea de trabajo», suyo, 16/08).
+       Lo que se prueba es LA MITAD BUENA de la decisión: que el editor de fecha de la tarea ganó
+       lo que la alarma tenía y él echaba en falta. Si alguien retira estos atajos, este test cae y
+       obliga a mirar de nuevo la decisión entera.
+       El guardián de que la pestaña no vuelva vive en el bloque 0.53.0, junto al rastro de alarmas. */
+    const setDue = src.match(/const setDue = \(it, li\) => \{[\s\S]*?\n    date\.focus\(\);/)[0];
 
-    // UNA sola función arma, para el botón y para el rearme: dos caminos = dos alarmas distintas
-    if (!/const armar = \(at, v\) => \{/.test(al))
-      throw new Error('armar tiene que ser UNA función: si el botón y el rearme arman por su cuenta, divergen');
-    // las DOS llamadas: la del botón y la del rearme al pintar (la declaración no cuenta)
-    if (!/armar\(t\.getTime\(\), v\)/.test(al))
-      throw new Error('el botón «Activar» tiene que armar con esa función, no por su cuenta');
-    if (!/armar\(w\.data\.alarmAt,/.test(al))
-      throw new Error('al pintar hay que rearmar con la MISMA función, o el rearme no existe');
+    // 1 · LA RUEDA, que era su apunte bueno sobre el reloj de alarma («muchos relojes te permiten
+    //     mover números con la rueda»). Sin esto, retirar la alarma le quita y no le da nada.
+    if (!/addEventListener\("wheel"/.test(setDue))
+      throw new Error('la rueda tiene que mover fecha y hora: es lo que él pedía del reloj de alarma');
+    if (!/passive: false/.test(setDue))
+      throw new Error('sin passive:false el preventDefault no llega y la rueda hace scroll de la página');
+    if ((setDue.match(/bindPaso\((date|time)/g) || []).length !== 2)
+      throw new Error('la rueda va en LOS DOS campos: media función es la incoherencia que él ya señaló');
 
-    // se guarda el INSTANTE, no solo la hora: con «07:30» no se distingue futuro de pasado
-    if (!/w\.data\.alarmAt = t\.getTime\(\)/.test(al))
-      throw new Error('hay que guardar el instante: con la hora suelta no se sabe si ya pasó');
+    // 2 · SOBRE UN CAMPO VACÍO NO SE EMPIEZA EN 1970. Girar la rueda sobre un campo vacío significa
+    //     «ponme algo cerca de ahora», no «llévame al origen de los tiempos».
+    const moverMin = setDue.match(/const moverMin = paso => \{[\s\S]*?\n    \};/)[0];
+    if (!/if \(!time\.value\)/.test(moverMin))
+      throw new Error('el campo vacío tiene que sembrarse con una hora útil, no moverse desde cero');
+    const moverDia = setDue.match(/const moverDia = paso => \{[\s\S]*?\n    \};/)[0];
+    if (!/date\.value \? new Date\(/.test(moverDia))
+      throw new Error('la fecha vacía siembra HOY: es lo que se quiere decir al girar sobre un hueco');
 
-    // el rearme SOLO si sigue en el futuro
-    if (!/if \(w\.data\.alarmAt > Date\.now\(\)\) armar\(/.test(al))
-      throw new Error('se rearma solo lo que aún no ha vencido');
+    // 3 · LOS ATAJOS RELATIVOS son la forma exacta de lo que hacía la alarma: «avísame en 15 min».
+    //     Se comprueba que existen los tres tipos, porque cada uno cubre un caso distinto suyo.
+    if (!/data-m="15"/.test(setDue) || !/data-m="60"/.test(setDue))
+      throw new Error('«+15 min» y «+1 h» son la alarma doméstica retirada, en una pulsación');
+    if (!/data-d="0"|data-d="1"/.test(setDue))
+      throw new Error('«Hoy» y «Mañana» son el caso que la alarma NO podía cubrir: cruzar el día');
+    // un atajo relativo tiene que poner TAMBIÉN la fecha, o «+1 h» a las 23:40 apunta a hoy y ya pasó
+    const chips = setDue.match(/ed\.querySelectorAll\("\.dq"\)[\s\S]*?\n    \}\)\);/)[0];
+    if (!/time\.value = hhmm\(t\); date\.value = isoDe\(t\)/.test(chips))
+      throw new Error('«+1 h» cerca de medianoche cae en el día siguiente: la fecha va con la hora');
+    // y la hora fija sin fecha no puede quedar huérfana: sin `due`, `remind` no se guarda (ver commit)
+    if (!/time\.value = d\.h; if \(!date\.value\) date\.value = hoyIso\(\)/.test(chips))
+      throw new Error('poner «08:00» sin fecha se perdería al guardar: el commit exige `due` para `remind`');
 
-    /* Y LO QUE NO DEBE PASAR, que es la mitad de la decisión: una alarma vencida mientras Cabecera
-       estaba cerrada NO suena al abrir. Un aviso retroactivo de anoche es ruido, no aviso. */
-    const rama = al.slice(al.indexOf('else {'));
-    if (/sound\(\)/.test(rama))
-      throw new Error('una alarma vencida NO puede sonar retroactivamente al abrir');
-    if (!/no sonó/.test(rama))
-      throw new Error('y tiene que DECIR que no sonó: callar es exactamente el defecto que se arregla');
-    if (!/delete w\.data\.alarmAt/.test(rama))
-      throw new Error('la vencida se limpia, o el widget sigue prometiendo una alarma que no existe');
+    // 4 · NO SE TOCA EL ESQUEMA. Los atajos escriben en los campos; guardar sigue siendo `commit`.
+    if (/it\.due =|it\.remind =/.test(chips))
+      throw new Error('los atajos rellenan el formulario, no escriben en la tarea: una sola puerta de escritura');
 
-    // al consumirse también se borra: si no, recargar la volvería a armar sin haberlo pedido
-    const dentro = al.slice(al.indexOf('const armar'), al.indexOf('body.querySelector(".go")'));
-    if (!/delete w\.data\.alarmAt/.test(dentro))
-      throw new Error('una alarma ya sonada se borra: si no, se rearma sola al recargar');
-
-    console.log('OK 0.77.0 (la alarma sobrevive al recargar; la vencida no suena tarde y lo declara)');
+    console.log('OK 0.85.0 (la alarma se retira y su uso real pasa al reloj de la tarea: rueda, siembra y atajos)');
   }
 
   // --- 0.78.0: imágenes por referencia, fuera de datos.json -------------------------------------

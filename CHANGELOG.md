@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.85.0] - 2026-08-17 — citar una tarea por su número lleva a esa tarea, y el reloj de las tareas se maneja con la rueda
+
+- **Buscar `#128` te lleva a la tarea 128, no a otra que la mencione.** Escribir el número con
+  almohadilla es citar: ahora solo cuenta el número. Antes, «el texto contiene *#128*» y «el número
+  es 128» valían lo mismo y ganaba la que estuviera primero en la lista, así que citar una tarea
+  podía llevarte a una tarea cerrada distinta que hablaba de ella.
+- Sin almohadilla no cambia nada de lo que ya usabas: `128` sigue encontrando también «revisar 128
+  pacientes». La tarea con ese número, eso sí, va primero.
+- **El editor de fecha de una tarea se maneja con la rueda del ratón**, como los diales del
+  temporizador: sobre la fecha mueve días, sobre la hora mueve tramos de cinco minutos. Sobre un
+  campo vacío empieza por hoy o por la hora en punto siguiente, no por el año cero.
+- **Y trae atajos de una pulsación**: `Hoy`, `Mañana` y `+1 sem` para la fecha; `+15 min`, `+1 h` y
+  `08:00` para el aviso. Los relativos ponen también la fecha, así que un `+1 h` a las once y media
+  de la noche cae en el día siguiente, que es lo que quieres decir.
+- **Se retira la pestaña «Alarma» del temporizador.** Solo servía para el mismo día, no guardaba de
+  qué era y solo sonaba con Cabecera abierta. Una tarea con fecha y hora hace lo mismo mejor: cruza
+  los días, sobrevive a cerrar el navegador, entra en el aviso ⏰ de la barra, se puede buscar y te
+  dice qué era. Por eso el editor de fecha gana la rueda y los atajos en esta misma versión: lo que
+  la alarma cubría de verdad —un recordatorio suelto— tenía que quedar cubierto antes de quitarla.
+- El temporizador queda más bajo, que era la otra pega. La cuenta atrás y el cronómetro no cambian.
+  Si tenías una alarma guardada, se suelta al abrir: no había nada armado detrás.
+
 ## [0.84.0] - 2026-08-16 — el aviso de versión nueva ya no llega tarde
 
 - **Cabecera comprueba si hay una versión nueva mucho antes que antes.** Al volver a la pestaña

@@ -737,6 +737,13 @@ ul.plain{list-style:none}
 .due-editor label.due-check{flex-direction:row; align-items:center; gap:7px; color:var(--text); font-size:12px; cursor:pointer}
 .due-editor label.due-check input{width:auto; flex:0 0 auto; padding:0; margin:0; accent-color:var(--accent); cursor:pointer}
 .due-editor .due-hint{margin:-4px 0 0 22px; color:var(--text-dim); font-size:10.5px; line-height:1.35}
+/* 0.85.0 — atajos de fecha y hora: una fila baja, sin etiqueta propia. Lo que ahorran se entiende
+   leyéndolos, y ponerles título los haría más altos justo en el panel del que él se quejaba. */
+.due-quick{display:flex; flex-wrap:wrap; align-items:center; gap:5px; margin-top:-2px}
+.due-quick .dq{border:1px solid var(--border-soft); background:rgba(255,255,255,.04); color:var(--text-dim);
+  font:inherit; font-size:11px; padding:3px 9px; border-radius:20px; cursor:pointer; white-space:nowrap}
+.due-quick .dq:hover{color:var(--text); border-color:var(--accent); background:var(--accent-soft)}
+.due-quick .dq-sep{width:1px; align-self:stretch; margin:1px 3px; background:var(--border-soft)}
 .due-editor input:focus,.due-editor textarea:focus,.rename-editor input:focus{border-color:var(--accent); outline:none}
 .due-actions{display:flex; gap:7px; flex-wrap:wrap}
 .todo-bar{margin-bottom:9px; display:flex; gap:8px; align-items:center; flex-wrap:wrap}
@@ -2106,7 +2113,7 @@ function syncUI(mode, txt){
    reaparece) y si Recargar está activo. El descarte ✕ vive solo en memoria de la sesión.
    Demora asumida: la CDN de Pages puede servir la versión vieja hasta ~10 min aun con
    no-store (gobierna la caché del navegador, no la CDN); para pestañas de días, irrelevante. */
-const APP_VERSION = "0.84.0";
+const APP_VERSION = "0.85.0";
 let newVersionDetected = null;   // versión superior detectada; detiene futuras consultas
 let verDismissed = false;        // ✕: solo esta sesión — nunca persistido en disco
 let verCheckInflight = false;    // sin consultas concurrentes
@@ -7092,6 +7099,7 @@ function bodyTodo(w, el){
        agéntica cambia lo que significa el campo que tiene justo encima. Separarlas en otro sitio
        obligaría a recordar que una modifica a la otra. */
     ed.innerHTML = `<div class="due-grid"><label>Fecha<input class="dd" type="date" value="${esc(it.due || "")}"></label><label>Aviso<input class="hh" type="time" value="${esc(it.remind || "")}"></label></div>
+      <div class="due-quick"><button class="dq" type="button" data-d="0">Hoy</button><button class="dq" type="button" data-d="1">Mañana</button><button class="dq" type="button" data-d="7">+1 sem</button><span class="dq-sep"></span><button class="dq" type="button" data-m="15">+15 min</button><button class="dq" type="button" data-m="60">+1 h</button><button class="dq" type="button" data-h="08:00">08:00</button></div>
       <label class="due-check"><input class="xx" type="checkbox" ${it.exec ? "checked" : ""}><span>⚙ Fecha de ejecución agéntica</span></label>
       <div class="due-hint">Un agente la ejecutará en esa fecha o después, la primera vez que trabaje aquí. No se ejecuta sola: necesita que abras una sesión y lo autorices.</div>
       <label class="due-check"><input class="ff" type="checkbox" ${it.fill ? "checked" : ""}><span>▪ Relleno: hacer cuando sobren tokens</span></label>
@@ -7100,6 +7108,58 @@ function bodyTodo(w, el){
     li.appendChild(ed);
     const date = ed.querySelector(".dd"), time = ed.querySelector(".hh"), note = ed.querySelector(".nn");
     const exec = ed.querySelector(".xx"), fill = ed.querySelector(".ff");
+    /* 0.85.0 — LA USABILIDAD QUE PEDÍA, Y ES LO QUE SUSTITUYE A LA ALARMA RETIRADA. Apunte suyo
+       del 16/08: «el rediseño del reloj de alarma podría ser un benchmarking para el reloj de
+       tarea, que carece de usabilidad». Retirar la alarma sin esto habría sido quitar sin dar
+       nada a cambio: el recordatorio doméstico puntual que la alarma cubría ahora vive aquí, y
+       ponerlo tiene que costar un clic, no pelearse con el selector nativo.
+
+       DOS COSAS, y las dos salen de lo que él ya conocía del temporizador:
+       1. LA RUEDA Y LAS FLECHAS mueven el valor, como los diales de la cuenta atrás (`bindDial`).
+          En la fecha van días; en la hora, tramos de cinco minutos. Sobre un campo VACÍO no
+          empiezan en 1970: siembran hoy / la hora en punto siguiente, que es lo que se quiere
+          decir al girar la rueda sobre un campo vacío.
+       2. LOS ATAJOS de una pulsación cubren lo que de verdad se teclea. «+15 min» y «+1 h» son
+          relativos AL RELOJ, no al campo: es la forma de la alarma doméstica que se retiró.
+       No se toca el esquema: siguen siendo `due` (fecha) y `remind` (hora), y las dos escrituras
+       pasan por el mismo `commit`. */
+    const hoyIso = () => new Date().toISOString().slice(0, 10);
+    const isoDe = d => new Date(d.getTime() - d.getTimezoneOffset() * 6e4).toISOString().slice(0, 10);
+    const hhmm = d => String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
+    const moverDia = paso => {
+      const base = date.value ? new Date(date.value + "T12:00:00") : new Date();
+      if (date.value) base.setDate(base.getDate() + paso);
+      date.value = isoDe(base);
+    };
+    const moverMin = paso => {
+      if (!time.value){ const n = new Date(); n.setMinutes(0, 0, 0); n.setHours(n.getHours() + 1); time.value = hhmm(n); return; }
+      const [H, M] = time.value.split(":").map(Number);
+      let t = (H * 60 + M + paso + 1440) % 1440;
+      time.value = String(Math.floor(t / 60)).padStart(2, "0") + ":" + String(t % 60).padStart(2, "0");
+    };
+    const bindPaso = (inp, mover, paso) => {
+      inp.addEventListener("wheel", e => { e.preventDefault(); mover(e.deltaY < 0 ? paso : -paso); }, { passive: false });
+      inp.addEventListener("keydown", e => {
+        if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+        // sobre un campo vacío las flechas nativas no tienen de dónde partir; con valor, mandan ellas
+        if (inp.value) return;
+        e.preventDefault(); mover(e.key === "ArrowUp" ? paso : -paso);
+      });
+    };
+    bindPaso(date, moverDia, 1);
+    bindPaso(time, moverMin, 5);
+    ed.querySelectorAll(".dq").forEach(b => b.addEventListener("click", () => {
+      const d = b.dataset;
+      if (d.d !== undefined){
+        const t = new Date(); t.setDate(t.getDate() + +d.d); date.value = isoDe(t);
+      } else if (d.h !== undefined){
+        time.value = d.h; if (!date.value) date.value = hoyIso();
+      } else {
+        // relativo al reloj, no al campo: es la alarma doméstica que se retiró, en una pulsación
+        const t = new Date(); t.setMinutes(t.getMinutes() + +d.m, 0, 0);
+        time.value = hhmm(t); date.value = isoDe(t);
+      }
+    }));
     const commit = () => {
       let d = date.value.trim(), h = time.value.trim();
       const oldKey = [it.due || "", it.remind || ""].join("T");
@@ -8805,7 +8865,7 @@ function fmtClock(ms, withHours = false){
 }
 function bodyTimer(w, el){
   el.innerHTML = `<div class="tmr">
-    <div class="tmr-tabs"><button data-t="cd" class="mini">Cuenta</button><button data-t="sw" class="mini">Crono</button><button data-t="al" class="mini">Alarma</button></div>
+    <div class="tmr-tabs"><button data-t="cd" class="mini">Cuenta</button><button data-t="sw" class="mini">Crono</button></div>
     <div class="tmr-body" style="flex:1;display:flex;flex-direction:column;gap:8px;min-height:0"></div></div>`;
   const body = el.querySelector(".tmr-body");
   let iv = null, mode = w.data.tab || "cd", endAt = 0, startedAt = 0, acc = 0, total = 0, laps = [];
@@ -8890,82 +8950,38 @@ function bodyTimer(w, el){
     body.querySelector(".lap").addEventListener("click", () => { laps.unshift(acc + (iv ? Date.now() - startedAt : 0)); laps = laps.slice(0, 6); drawLaps(); });
     body.querySelector(".st").addEventListener("click", () => { stop(); acc = 0; laps = []; draw(); drawLaps(); });
   };
-  const paintAl = () => {
-    const now = new Date(), hh = String(now.getHours()).padStart(2, "0"), mm = String((now.getMinutes() + 1) % 60).padStart(2, "0");
-    body.innerHTML = `<div class="tmr-face"><div><div class="tmr-big al-big">--:--</div><div class="tmr-sub">alarma local mientras Cabecera esté abierta</div></div></div>
-      <div class="tmr-row"><label class="tmr-setting">Hora <input class="at" type="time" value="${esc(w.data.alarmTime || `${hh}:${mm}`)}"></label></div>
-      <div class="tmr-row"><input class="al-label" type="text" maxlength="80" placeholder="Etiqueta" value="${esc(w.data.alarmLabel || "")}"></div>
-      <div class="tmr-row tight"><label class="tmr-setting">Sonido <select class="snd"><option value="soft">suave</option><option value="beep">beep</option><option value="double">doble</option></select></label></div>
-      <div class="tmr-row"><button class="mini go">Activar</button><button class="mini st">Quitar</button></div>`;
-    const big = body.querySelector(".al-big"), sub = body.querySelector(".tmr-sub");
-    body.querySelector(".snd").value = w.data.sound || "soft";
-    body.querySelector(".snd").addEventListener("change", e => { w.data.sound = e.target.value; markDirty(); });
-    const setLabel = () => { w.data.alarmLabel = body.querySelector(".al-label").value.trim().slice(0, 80); markDirty(); };
-    body.querySelector(".al-label").addEventListener("change", setLabel);
+  /* 0.85.0 — LA PESTAÑA «ALARMA» SE RETIRA. Decisión suya del 16/08 («pues sí, retira») sobre el
+     análisis de qué aportaba frente a una tarea con fecha y hora de aviso: nada que la tarea no
+     diera mejor. La alarma solo servía para HOY, sin texto, y solo sonaba con Cabecera abierta;
+     una tarea con vencimiento cruza días, sobrevive a cerrar el navegador, entra en el aviso ⏰
+     de la barra, se puede buscar y dice QUÉ era.
 
-    /* 0.77.0 — LA ALARMA SE REARMA SOLA, y cuando no puede LO DICE. Deuda vieja, con la causa
-       localizada en julio de 2026 y sin decidir hasta hoy: `w.data.alarmTime` persistía y se pintaba
-       en el campo, pero el `setInterval` que dispara solo nacía al pulsar «Activar». Tras recargar,
-       **el campo mostraba la hora y no había ninguna alarma puesta**: el widget mentía en silencio,
-       que es peor que no tener la función.
+     LO QUE LA SEÑAL SIGNIFICABA, INVENTARIADO ANTES DE QUITARLA (R46 — casi nunca es una sola
+     cosa). Eran tres, y las tres tienen destino:
+     1. «avísame dentro de un rato» → ya lo cubre mejor la CUENTA ATRÁS de este mismo widget;
+     2. «recordatorio doméstico puntual, sin ser una tarea de trabajo» → lo cubre una tarea con
+        fecha y hora, y por eso 0.85.0 le arregla la usabilidad al editor de fecha (apunte suyo
+        del 16/08: «el reloj de tarea carece de usabilidad»). Retirar sin eso habría sido quitar
+        sin sustituir;
+     3. «mover los números con la rueda» → era su apunte bueno, y viaja al editor de la tarea.
 
-       LA DECISIÓN QUE ESTABA ABIERTA era «¿rearmar sola, o exigir Activar y pintar "no activa"?».
-       Se hacen LAS DOS, porque son casos distintos y solo juntas dejan de mentir:
-       · si el instante guardado SIGUE EN EL FUTURO → se rearma sola y se dice que está activa;
-       · si YA PASÓ mientras Cabecera estaba cerrada → **no suena retroactivamente** (una alarma que
-         salta al abrir el portátil por la mañana por algo de anoche es ruido, no aviso) y se pinta
-         «no sonó», con la hora, para que se sepa qué ocurrió y se pueda volver a armar.
-
-       Se guarda el INSTANTE (`alarmAt`), no solo la hora: con «07:30» a secas no se puede distinguir
-       «faltan diez minutos» de «pasó hace veintitrés horas», que es justo lo que hay que distinguir.
-       Y `armar` es UNA sola función para el botón y para el rearme: dos caminos que arman de formas
-       distintas acaban con dos alarmas distintas (el defecto que ya salió por cuatro sitios). */
-    const armar = (at, v) => {
-      stop();
-      big.textContent = v;
-      sub.textContent = w.data.alarmLabel || "alarma activa";
-      iv = setInterval(() => {
-        if (!guard()) return;
-        if (Date.now() < at) return;
-        stop(); sound();
-        toast("Alarma: " + (w.data.alarmLabel || v));
-        marcarAlarma(w, "Alarma · " + (w.data.alarmLabel || v));
-        // la alarma consumida se borra: dejarla puesta la rearmaría al recargar, sin haberlo pedido
-        delete w.data.alarmAt; markDirty();
-        big.textContent = "--:--"; sub.textContent = "alarma finalizada";
-      }, 1000);
-    };
-
-    body.querySelector(".go").addEventListener("click", () => {
-      const v = body.querySelector(".at").value; if (!v) return;
-      const [H, M] = v.split(":").map(Number);
-      const t = new Date(); t.setHours(H, M, 0, 0);
-      if (t <= new Date()) t.setDate(t.getDate() + 1);
-      w.data.alarmTime = v; w.data.alarmAt = t.getTime(); setLabel(); markDirty();
-      armar(t.getTime(), v);
-    });
-    body.querySelector(".st").addEventListener("click", () => {
-      stop(); delete w.data.alarmTime; delete w.data.alarmAt;
-      big.textContent = "--:--"; sub.textContent = "alarma local mientras Cabecera esté abierta"; markDirty();
-    });
-
-    // REARME al pintar: es lo que convierte el campo en una promesa cumplida o en un aviso honesto
-    if (Number.isFinite(w.data.alarmAt)){
-      if (w.data.alarmAt > Date.now()) armar(w.data.alarmAt, w.data.alarmTime || "--:--");
-      else {
-        big.textContent = "--:--";
-        sub.textContent = `no sonó (${w.data.alarmTime || "?"}): Cabecera no estaba abierta — pulsa Activar`;
-        delete w.data.alarmAt;   // no se arrastra: o se rearma a mano, o deja de prometer nada
-      }
-    }
-  };
+     Con la pestaña se caen sus tres partes de fallo abiertos (se rearma mal al mover el widget,
+     recuadro transparente al activarla, no avisa abajo hasta pulsar) y el widget queda más bajo,
+     que era su tercera queja. `marcarAlarma` SE QUEDA: lo usa la cuenta atrás, no era de aquí. */
   const paint = () => {
-    stop(); w.data.tab = mode;
+    stop();
+    if (mode !== "cd" && mode !== "sw") mode = "cd";   // guardado con la pestaña retirada
+    w.data.tab = mode;
     if (mode === "cd") paintCd();
-    else if (mode === "sw") paintSw();
-    else paintAl();
+    else paintSw();
     setTabs();
   };
+  // datos huérfanos de la alarma: se sueltan al abrir, sin ruido. Dejarlos no arma nada y solo
+  // engorda el archivo; no se avisa porque no queda nada armado que se pueda perder — el rearme
+  // vivía en la pintura de esa pestaña, que ya no existe
+  if (w.data.alarmAt !== undefined || w.data.alarmTime !== undefined || w.data.alarmLabel !== undefined){
+    delete w.data.alarmAt; delete w.data.alarmTime; delete w.data.alarmLabel; markDirty();
+  }
   el.querySelectorAll(".tmr-tabs .mini").forEach(b => b.addEventListener("click", () => { mode = b.dataset.t; paint(); markDirty(); }));
   paint();
 }
@@ -10123,17 +10139,33 @@ function paletteEntries(terms, dest){
     const m = /^#?(\d{1,6})$/.exec(t);
     return !!m && it.n === +m[1];
   };
+  /* 0.85.0 — «#128» ES UNA CITA, NO UNA CADENA. Parte de fallo suya del 16/08: escribir «#128»
+     aterrizaba en la tarea **#13**, y su hipótesis («el falso positivo igual es por un OR entre
+     números») era exacta. `casa()` daba por equivalentes «el texto contiene *#128*» y «el número
+     es 128», y ganaba la primera de la lista — la #13, cerrada, cuyo título menciona «#128».
+     El número es una IDENTIDAD y el texto una coincidencia difusa; empatarlos hace inservible lo
+     único para lo que se pidió el número: citar una tarea sin pegar su texto.
+     Se reparte por la almohadilla, que es la marca de que se está citando:
+     · `#128` → SOLO cuenta el número. Nunca cae en un texto que lo mencione.
+     · `128` a secas → el número manda, pero el texto sigue valiendo de respaldo (se teclea así
+       sin pensar, y ahí sí puede querer decir «128 pacientes»).
+     La regla de 0.76.0 se conserva DENTRO de cada pasada: las pendientes mandan sobre las hechas. */
   const tareaQueCasa = w => {
     if (!ts.length || w.type !== "todo") return null;
     const items = w.data.items || [];
-    const casa = i => {
+    const citaNum = t => /^#\d{1,6}$/.test(t);
+    const casa = (i, soloNumero) => {
       const t = String(i.t || "").toLowerCase();
-      return ts.every(x => t.includes(x) || casaNum(i, x));
+      return ts.every(x => casaNum(i, x) || (!soloNumero && !citaNum(x) && t.includes(x)));
     };
-    const viva = items.find(i => !i.done && casa(i));
-    if (viva) return { it: viva, hecha: false };
-    const hecha = items.find(i => i.done && casa(i));
-    return hecha ? { it: hecha, hecha: true } : null;
+    // pasada 1: identidad (todos los términos casan por número). pasada 2: se admite el texto
+    for (const soloNumero of [true, false]){
+      const viva = items.find(i => !i.done && casa(i, soloNumero));
+      if (viva) return { it: viva, hecha: false };
+      const hecha = items.find(i => i.done && casa(i, soloNumero));
+      if (hecha) return { it: hecha, hecha: true };
+    }
+    return null;
   };
   const multi = state.spaces.length > 1;
   state.spaces.forEach((sp, si) => {
