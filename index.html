@@ -497,7 +497,7 @@ ul.plain{list-style:none}
 }
 /* en una tarea de varias líneas, la fecha se ancla ARRIBA, junto a la primera línea del texto y a
    la altura del asa ⋮⋮ — centrada quedaba flotando a media altura, que es donde pasa la banda. */
-.todo-it .alta,.todo-it .due,.todo-it .task-note-mark,.todo-it .att-mark{align-self:flex-start; margin-top:2px}
+.todo-it .alta,.todo-it .due,.todo-it .task-note-mark,.todo-it .att-mark,.todo-it .orig-chip{align-self:flex-start; margin-top:2px}
 .todo-it:hover{background:rgba(255,255,255,.04)}
 .todo-it.has-task-color{box-shadow:inset 3px 0 0 var(--task-color); padding-left:8px}
 .todo-it input[type=checkbox]{width:16px; height:16px; accent-color:var(--accent); cursor:pointer; flex-shrink:0}
@@ -645,6 +645,12 @@ ul.plain{list-style:none}
    pero es un chip aparte: dicen cosas distintas y se cuentan por separado. */
 .todo-it .att-mark{font-size:11px; color:var(--text-dim); cursor:pointer; flex-shrink:0; font-variant-numeric:tabular-nums}
 .todo-it .att-mark:hover{color:var(--accent)}
+/* 0.87.0 — de qué lista viene, solo en la vista agregada. Discreta a propósito: es contexto, no el
+   dato principal, y en una vista de cientos de filas una insignia fuerte compite con el texto. */
+.todo-it .orig-chip{font-size:10px; padding:1px 7px; border-radius:20px; white-space:nowrap; flex-shrink:0;
+  max-width:130px; overflow:hidden; text-overflow:ellipsis; cursor:pointer;
+  background:rgba(255,255,255,.05); color:var(--text-dim); border:1px solid var(--border-soft)}
+.todo-it .orig-chip:hover{color:var(--text); border-color:var(--accent)}
 /* 0.74.0 — una petición que lleva días esperándole. NO cambia de color ni de tamaño: el ámbar de
    `.me-toca` ya dice «te toca» y el rojo ya significa «vencido» en este producto. Lo único que se
    añade es el número de días, en tono ligeramente más firme. Si esto pesara más que el vencimiento
@@ -2117,7 +2123,7 @@ function syncUI(mode, txt){
    reaparece) y si Recargar está activo. El descarte ✕ vive solo en memoria de la sesión.
    Demora asumida: la CDN de Pages puede servir la versión vieja hasta ~10 min aun con
    no-store (gobierna la caché del navegador, no la CDN); para pestañas de días, irrelevante. */
-const APP_VERSION = "0.86.0";
+const APP_VERSION = "0.87.0";
 let newVersionDetected = null;   // versión superior detectada; detiene futuras consultas
 let verDismissed = false;        // ✕: solo esta sesión — nunca persistido en disco
 let verCheckInflight = false;    // sin consultas concurrentes
@@ -6681,6 +6687,56 @@ const TODO_GROUPS = {
   mes:    { etiqueta: "▤ Por mes",         clave: (it, v) => claveMes(msDe(it, v)) }
 };
 const groupDe = w => (TODO_GROUPS[w && w.data && w.data.group] ? w.data.group : "no");
+
+/* 0.87.0 — EL ORIGEN DE LA LISTA. Petición suya del 16/08: «un widget global de tareas que agregue
+   en portada todas las tareas de todos los escritorios… debe utilizar exactamente la misma
+   taxonomía de los widgets individuales».
+
+   LA DECISIÓN DE DISEÑO, Y ES LA QUE HACE QUE ESTO NO SEA UN SEGUNDO PRODUCTO: no se crea un tipo
+   de widget nuevo. Se le añade al de tareas un ORIGEN, y con «Todas» el mismo widget se llena con
+   los ítems de todos los demás. Así no hay taxonomía que replicar —filtros, orden, agrupación,
+   pestañas, 📌, 💬, 📎, ⚙, ▪, el editor de fecha— porque es literalmente el mismo render. Un tipo
+   nuevo habría sido un segundo modelo de tarea condenado a divergir del primero (R47 a escala de
+   producto).
+
+   Y NO ES UNA COPIA: una fila de la vista agregada ES la tarea real, la misma referencia en
+   memoria. Marcarla hecha, responderla o cambiarle la fecha escribe en su widget de origen. Un
+   agregador de solo lectura obligaría a saltar al origen para cada gesto, que es justo la fricción
+   que se quiere quitar.
+
+   `fuenteTodo` es la ÚNICA puerta: devuelve las listas visibles, el array plano y —lo que de verdad
+   importa— `arrDe(it)`, el array al que pertenece cada tarea. Toda mutación pasa por ahí. Sin eso,
+   borrar en la vista agregada borraría del array equivocado, que es el fallo de escribir por
+   posición sobre una proyección filtrada, otra vez y a lo grande. */
+const ORIGEN_TODO = { self: "▤ Esta lista", all: "🌐 Todas las listas" };
+const origenDe = w => (w && w.data && w.data.src === "all" ? "all" : "self");
+function fuenteTodo(w){
+  if (origenDe(w) === "self"){
+    if (!Array.isArray(w.data.items)) w.data.items = [];
+    return { modo: "self", items: w.data.items, arrDe: () => w.data.items, origenDe: () => null };
+  }
+  const listas = [], dueno = new Map();
+  for (const sp of state.spaces){
+    for (const ww of sp.widgets || []){
+      if (ww.type !== "todo") continue;
+      // un widget privado no aporta ni una tarea con la privacidad escénica puesta: su contenido
+      // ya está tapado en su propia ventana y aquí saldría en claro
+      if (privacyOn && ww.priv) continue;
+      // agregarse a sí mismo sería un bucle: la vista agregada no tiene ítems propios
+      if (ww === w || origenDe(ww) === "all") continue;
+      if (!Array.isArray(ww.data.items)) continue;
+      const et = { sp, w: ww, nombre: (ww.t || "Tareas"), esp: (sp.name || "") };
+      listas.push(et);
+      for (const it of ww.data.items) dueno.set(it, et);
+    }
+  }
+  return {
+    modo: "all", listas,
+    items: listas.flatMap(l => l.w.data.items),
+    arrDe: it => { const d = dueno.get(it); return d ? d.w.data.items : null; },
+    origenDe: it => dueno.get(it) || null
+  };
+}
 // lunes de la semana de ese instante. Se usa como clave Y como etiqueta, así que una sola función
 // decide las dos: si divergieran, dos tareas de la misma semana caerían en cabeceras distintas
 function lunesDe(ms){
@@ -6743,14 +6799,21 @@ function bodyTodo(w, el){
   el.innerHTML = (desc ? `${descHtml(desc, w.id)}` : "")
     + `
     <div class="todo-add"><input type="text" placeholder="Nueva tarea…"><button class="mini add-due" title="Crear y ponerle fecha, aviso o marca de agente en el mismo gesto (Ctrl+Enter)">📅</button><button class="mini add-now" title="Crear la tarea (Enter)">＋</button></div>
-    <div class="todo-bar"><div class="todo-tabs todo-toggle"></div><input type="search" class="todo-search" placeholder="Buscar…"><select class="todo-sort mini" title="Cómo se ordenan las tareas pendientes"></select><select class="todo-group mini" title="Si las tareas se ven por bloques de tiempo"></select></div>
+    <div class="todo-bar"><div class="todo-tabs todo-toggle"></div><input type="search" class="todo-search" placeholder="Buscar…"><select class="todo-src mini" title="De qué listas salen las tareas"></select><select class="todo-sort mini" title="Cómo se ordenan las tareas pendientes"></select><select class="todo-group mini" title="Si las tareas se ven por bloques de tiempo"></select><select class="todo-dest mini" title="En qué lista se crean las tareas nuevas"></select></div>
     <ul class="plain todo-list"></ul>`;
   if (!Array.isArray(w.data.items)) w.data.items = [];
+  /* 0.87.0 — LA FUENTE SE RECALCULA EN CADA PINTADO, no una vez al abrir. Con el origen «Todas»,
+     lo que se agrega depende de qué widgets existan AHORA: si él crea una lista en otro escritorio
+     o borra una, la vista tiene que enterarse sin recargar. Y se recalcula ANTES de leer nada,
+     porque `arrDe` guarda a qué array pertenece cada tarea y ese mapa caduca con cada cambio. */
+  let src = fuenteTodo(w);
   wireDesc(el, w);
   const inp = el.querySelector(".todo-add input"), ul = el.querySelector(".todo-list");
   const toggle = el.querySelector(".todo-toggle"), search = el.querySelector(".todo-search");
   const orden = el.querySelector(".todo-sort");
   const agrupa = el.querySelector(".todo-group");
+  const origen = el.querySelector(".todo-src");
+  const destino = el.querySelector(".todo-dest");
   const bar = el.querySelector(".todo-bar");
   // 0.44.0: página visible cuando las tareas no caben ni creciendo el widget.
   // 0.49.0/0.59.0: pestaña, lupa, filtro 🤖 y página viven en `todoUI` para sobrevivir al
@@ -6780,12 +6843,27 @@ function bodyTodo(w, el){
      `conFecha` crea la tarea y abre SU editor de fecha, que es el mismo de siempre y ya trae dentro
      la hora de aviso y las casillas ⚙/▪. No se duplica ningún formulario: se encadena el que hay.
      Se resuelve la fila DESPUÉS de pintar, porque hasta entonces no se sabe en qué página cayó. */
+  /* 0.87.0 — DÓNDE NACE UNA TAREA CREADA DESDE LA VISTA AGREGADA. Con el origen «Todas» este
+     widget no tiene lista propia, así que hay que decir a cuál va. Se elige UNA VEZ (`w.data.dest`,
+     el id del widget destino, igual que el dictado elige nota receptora) y se ve en el marcador de
+     posición del campo, para que no haya que recordarlo.
+     `destinoTodo` devuelve `null` si no hay destino válido —no elegido, borrado, o ya no es una
+     lista—, y entonces NO se crea nada y se dice por qué. Caer al primero que haya sería adivinar
+     dónde quiere él sus tareas, y una tarea en la lista equivocada es peor que una tarea no
+     creada: la segunda se nota al momento. */
+  const destinoTodo = () => {
+    if (src.modo === "self") return { arr: w.data.items, data: w.data };
+    const et = src.listas.find(l => l.w.id === w.data.dest);
+    return et ? { arr: et.w.data.items, data: et.w.data, nombre: et.nombre, esp: et.esp } : null;
+  };
   const add = (conFecha = false) => {
     const t = inp.value.trim(); if (!t) return;
+    const dst = destinoTodo();
+    if (!dst){ toast("Elige antes en qué lista se crean las tareas (el selector 🌐 de la barra)", true); return; }
     const it = { t, done: false, created: todayIso(), createdT: horaCorta() };
     // 0.75.0 — el número se asigna AL NACER, con la misma función que lo repara al cargar: dos
     // caminos que numeran de formas distintas acaban dando dos numeraciones (R47)
-    w.data.items.push(it); numerarTareas(w.data);
+    dst.arr.push(it); numerarTareas(dst.data);
     inp.value = ""; todoDraft.delete(w.id);
     // una tarea recién creada no tiene conversación: con el filtro 🤖 puesto no se vería ninguna
     ui.view = "pend"; ui.soloBot = false;
@@ -6829,6 +6907,16 @@ function bodyTodo(w, el){
   // el criterio es una preferencia tuya de esa lista, no estado de sesión: vive en `w.data.sort`
   // y viaja entre equipos, igual que `w.data.view` del Markdown
   orden.addEventListener("change", () => { w.data.sort = orden.value; setPage(0); paint(); markDirty(); });
+  /* 0.87.0 — el origen y el destino se guardan como AUSENCIA cuando valen lo de siempre, igual que
+     el resto del estado del widget: nada de lo ya escrito cambia de significado ni engorda. */
+  origen.addEventListener("change", () => {
+    if (origen.value === "self") delete w.data.src; else w.data.src = "all";
+    setPage(0); paint(); markDirty();
+  });
+  destino.addEventListener("change", () => {
+    if (destino.value) w.data.dest = destino.value; else delete w.data.dest;
+    paint(); markDirty();
+  });
   // 0.82.0 — «sin agrupar» es el defecto y se guarda como AUSENCIA, igual que el resto del estado
   agrupa.addEventListener("change", () => {
     if (agrupa.value === "no") delete w.data.group; else w.data.group = agrupa.value;
@@ -6836,7 +6924,12 @@ function bodyTodo(w, el){
   });
   // marcador o enlace soltado sobre la lista → una tarea por enlace (la URL queda clicable)
   wireLinkCapture(el, links => {
-    for (const l of links) w.data.items.push({ t: linkCaptureText(l), done: false, created: todayIso(), createdT: horaCorta() });
+    // 0.87.0 — mismo destino que el campo de alta, y misma negativa si no lo hay: soltar un enlace
+    // no puede elegir lista por su cuenta cuando el campo de alta no se lo permite
+    const dst = destinoTodo();
+    if (!dst){ toast("Elige antes en qué lista se crean las tareas (el selector 🌐 de la barra)", true); return; }
+    for (const l of links) dst.arr.push({ t: linkCaptureText(l), done: false, created: todayIso(), createdT: horaCorta() });
+    numerarTareas(dst.data);
     ui.view = "pend"; ui.soloBot = false;
     toast(links.length === 1 ? "Tarea creada desde el enlace" : links.length + " tareas creadas desde los enlaces");
     paint(); markDirty();
@@ -7282,27 +7375,36 @@ function bodyTodo(w, el){
      delante — y entonces pulsar ↑ movía el dato sin mover nada en pantalla. Se salta hasta el
      primero del MISMO grupo (mismo `done`, mismo `pin`). */
   const moveItem = (it, dir) => {
-    const idx = w.data.items.indexOf(it);
+    // 0.87.0 — se mueve dentro de SU array, que con el origen «Todas» no es el de este widget
+    const arr = src.arrDe(it); if (!arr) return;
+    const idx = arr.indexOf(it);
     if (idx < 0) return;
     let ni = idx + dir;
-    while (ni >= 0 && ni < w.data.items.length){
-      const otra = w.data.items[ni];
+    while (ni >= 0 && ni < arr.length){
+      const otra = arr[ni];
       if (!!otra.done === !!it.done && !!otra.pin === !!it.pin) break;
       ni += dir;
     }
-    if (ni < 0 || ni >= w.data.items.length) return;
-    [w.data.items[idx], w.data.items[ni]] = [w.data.items[ni], w.data.items[idx]];
+    if (ni < 0 || ni >= arr.length) return;
+    [arr[idx], arr[ni]] = [arr[ni], arr[idx]];
     paint(); markDirty();
   };
-  const moveItemNear = (src, dst, after) => {
-    if (!src || !dst || src === dst) return;
-    const from = w.data.items.indexOf(src), to = w.data.items.indexOf(dst);
+  const moveItemNear = (a, b, after) => {
+    if (!a || !b || a === b) return;
+    /* 0.87.0 — reordenar SOLO dentro de una misma lista. Arrastrar una tarea de una lista a otra
+       en la vista agregada parecería moverla de escritorio, y no lo haría: la pertenencia la
+       decide su widget de origen, no dónde la sueltes. El arrastre ya está desactivado en modo
+       agregado (ver `reordenable`), pero la guarda va también AQUÍ, porque una comprobación que
+       vive solo en el render se pierde en cuanto alguien llame a la función desde otro sitio. */
+    const arr = src.arrDe(a);
+    if (!arr || src.arrDe(b) !== arr) return;
+    const from = arr.indexOf(a), to = arr.indexOf(b);
     if (from < 0 || to < 0) return;
-    const [moved] = w.data.items.splice(from, 1);
+    const [moved] = arr.splice(from, 1);
     let at = to;
     if (from < to) at--;
     if (after) at++;
-    w.data.items.splice(Math.max(0, Math.min(at, w.data.items.length)), 0, moved);
+    arr.splice(Math.max(0, Math.min(at, arr.length)), 0, moved);
     paint(); markDirty();
   };
   const editTaskColor = (it, li) => {
@@ -7322,22 +7424,23 @@ function bodyTodo(w, el){
   };
 
   function paint(){
-    const doneN = w.data.items.filter(i => i.done).length;
+    src = fuenteTodo(w);   // ver la nota de arriba: el mapa de pertenencia caduca en cada cambio
+    const doneN = src.items.filter(i => i.done).length;
     // 0.50.0 — lo que llegó DESPUÉS de que la dieras por hecha. Es información, no trabajo: por eso
     // no reabre la tarea (cerrar es tuyo) y por eso el aviso vive aquí, en la puerta de «Hechas».
-    const avisoN = w.data.items.filter(agenteTrasCierre).length;
+    const avisoN = src.items.filter(agenteTrasCierre).length;
     // 0.52.0 — DOS PESTAÑAS CON SU RECUENTO, no un botón que alterna. Su crítica del 07/08, y es
     // de fondo, no cosmética: se estaban mezclando dos cosas distintas —el ACCESO a una vista y el
     // RECUENTO de esa vista—, así que «Hechas (12)» desde Pendientes se leía como si el 12 fuera de
     // donde estás. Con dos pestañas, cada número dice de lo suyo y se ve dónde estás sin pensar.
     // El 🤖 va en las DOS: en Hechas es lo que llegó tras cerrar; en Pendientes, lo que espera
     // respuesta tuya. Antes solo existía el de Hechas y por eso «veía un robot y no lo encontraba».
-    const pendN = w.data.items.filter(i => !i.done).length;
+    const pendN = src.items.filter(i => !i.done).length;
     // 0.65.0 — cuenta los robots que SE VEN (ámbar y gris). El color del contador dice si alguno
     // de ellos te pide algo; el número, cuántos hay. Antes contaba solo los ámbar y escondía el resto.
-    const pendBot = w.data.items.filter(i => !i.done && hayRobot(i)).length;
-    const pendUrge = w.data.items.some(i => !i.done && esperaRespuestaSuya(i));
-    const doneUrge = w.data.items.some(i => i.done && esperaRespuestaSuya(i));
+    const pendBot = src.items.filter(i => !i.done && hayRobot(i)).length;
+    const pendUrge = src.items.some(i => !i.done && esperaRespuestaSuya(i));
+    const doneUrge = src.items.some(i => i.done && esperaRespuestaSuya(i));
     /* 0.59.0 — EL CONTADOR 🤖 ES EL BOTÓN QUE LLEVA A ESAS TAREAS. Parte suya del 09/08: «cuando
        quiero verlas, tengo que buscar en muchas pantallas. ¿No se podría pulsar en el robot de los
        contadores si quiero filtrar solo por esas?». Sí, y es lo canónico: un recuento que te dice
@@ -7405,6 +7508,29 @@ function bodyTodo(w, el){
        mientras se BUSCA, y ese sí es el caso que 0.82.0 acotó bien: buscando, la lista ya va
        agrupada por estado (pendientes / hechas) y un segundo criterio de bloques encima sería
        ilegible. */
+    /* 0.87.0 — EL ORIGEN Y EL DESTINO. El de origen se ve siempre: es lo que convierte cualquier
+       lista en la vista global sin tener que crear un widget aparte. El de destino solo aparece
+       en modo agregado, porque en una lista normal la respuesta es obvia (esta) y un selector con
+       una sola opción es ruido. */
+    origen.innerHTML = Object.entries(ORIGEN_TODO)
+      .map(([k, v]) => `<option value="${k}"${k === src.modo ? " selected" : ""}>${v}</option>`).join("");
+    origen.classList.toggle("auto", src.modo !== "self");
+    origen.title = src.modo === "self"
+      ? "Esta lista: solo las tareas de esta ventana. Puedes verlas TODAS, de todos los escritorios, sin dejar de usar los mismos filtros."
+      : `Todas las listas: ${src.listas.length} ventanas de tareas de todos los escritorios, en una sola. `
+        + "Cada tarea sigue viviendo en la suya —marcarla, responderla o fecharla escribe allí— y por eso aquí no se arrastra.";
+    destino.style.display = src.modo === "all" ? "" : "none";
+    if (src.modo === "all"){
+      destino.innerHTML = `<option value="">＋ ¿dónde creo?…</option>`
+        + src.listas.map(l => `<option value="${esc(l.w.id)}"${l.w.id === w.data.dest ? " selected" : ""}>＋ ${esc(l.esp ? l.esp + " · " + l.nombre : l.nombre)}</option>`).join("");
+      const dst = destinoTodo();
+      destino.title = dst
+        ? `Las tareas que escribas aquí se crean en «${dst.nombre}». Cambia la lista cuando quieras.`
+        : "Aún no has dicho en qué lista se crean las tareas nuevas. Hasta que lo elijas, no se crea ninguna: caer en una cualquiera sería peor.";
+      destino.classList.toggle("auto", !dst);
+      inp.placeholder = dst ? `Nueva tarea en «${dst.nombre}»…` : "Elige antes dónde se crea…";
+    } else inp.placeholder = "Nueva tarea…";
+
     const gk = groupDe(w);
     agrupa.style.display = buscando ? "none" : "";
     agrupa.innerHTML = Object.entries(TODO_GROUPS)
@@ -7447,8 +7573,8 @@ function bodyTodo(w, el){
        Solo en Pendientes: «Hechas» es un histórico cronológico y flotar cosas ahí sería mentir sobre
        cuándo las cerraste. La marca 📌 sí se sigue viendo allí. */
     const anclarPrimero = l => l.filter(i => i.pin).concat(l.filter(i => !i.pin));
-    const pendientes = () => { const l = w.data.items.filter(i => !i.done && casaBot(i) && casaQ(i)); if (cmpPend) l.sort(cmpPend); return anclarPrimero(l); };
-    const hechas = () => w.data.items.filter(i => i.done && casaBot(i) && casaQ(i)).sort((a, b) => (b.doneAt || 0) - (a.doneAt || 0));
+    const pendientes = () => { const l = src.items.filter(i => !i.done && casaBot(i) && casaQ(i)); if (cmpPend) l.sort(cmpPend); return anclarPrimero(l); };
+    const hechas = () => src.items.filter(i => i.done && casaBot(i) && casaQ(i)).sort((a, b) => (b.doneAt || 0) - (a.doneAt || 0));
     let list, vacio;
     if (buscando){
       // las hechas van DETRÁS y tachadas, como en Microsoft: lo cerrado es contexto, no trabajo
@@ -7541,7 +7667,11 @@ function bodyTodo(w, el){
     // su sitio. Dejar el gesto disponible sería prometer algo que no ocurre.
     // 0.60.0 — y buscando tampoco: la lista mezcla pendientes y hechas, así que «arriba» no
     // significa nada en el array de verdad.
-    const reordenable = ui.view === "pend" && sortDe(w) === "manual" && !grupos;
+    /* 0.87.0 — en modo agregado NO se reordena, por el mismo motivo que ya apagó el arrastre con un
+       orden automático o agrupando (0.53.0/0.82.0): el sitio de una tarea lo decide su lista de
+       origen, así que soltarla entre dos de otra lista no la dejaría movida. Prometer un gesto que
+       no ocurre cuesta más que no ofrecerlo. */
+    const reordenable = ui.view === "pend" && sortDe(w) === "manual" && !grupos && src.modo === "self";
     /* 0.60.0 — el subtítulo de grupo. Se repite al principio de CADA página: paginar por dentro de
        un grupo dejaría páginas huérfanas sin decir de qué son. El número es el del grupo ENTERO,
        no el de la página, porque lo que se busca saber es cuántas hay. */
@@ -7600,8 +7730,13 @@ function bodyTodo(w, el){
          conversación («mira la #128»), no para leerlo cien veces: pintarlo en cada fila costaría
          ancho a las 475 tareas para servir en una. Se busca pasando el ratón, que es cuando hace
          falta. La cabecera de la conversación sí lo lleva a la vista, porque ahí sí se cita. */
-      const alta = am ? ` title="${esc((it.n ? "#" + it.n + " · " : "") + am.largo)}"`
-        : it.n ? ` title="#${it.n}"` : "";
+      /* 0.87.0 — en modo agregado, el número solo se puede citar CON su lista: cada lista numera
+         la suya, así que hay una #13 en la bandeja y otra #13 en «probar». El tooltip lo dice
+         entero para que citar siga sirviendo, que era para lo que se pidió el número. */
+      const org = src.origenDe(it);
+      const cita = it.n ? "#" + it.n + (org ? " de «" + org.nombre + "»" : "") + " · " : "";
+      const alta = am ? ` title="${esc(cita + am.largo)}"`
+        : it.n ? ` title="${esc(cita.replace(/ · $/, ""))}"` : "";
       li.innerHTML = `<span class="it-drag" draggable="${reordenable}" title="${reordenable ? "Arrastrar para reordenar (o usa ↑ ↓)" : (ui.view === "pend" ? "Con un orden automático no se reordena a mano: elige «↕ A mano»" : "En «Hechas» no se reordena")}">⋮⋮</span><input type="checkbox" ${it.done ? "checked" : ""}>`
         // la marca de anclada se ve SIEMPRE, y solo la pagan las filas ancladas: una fila normal no
         // pierde ni un píxel de texto por una señal que no le toca (R43)
@@ -7622,6 +7757,11 @@ function bodyTodo(w, el){
               ? "Adjunto: " + (it.att[0].n || it.att[0].f) + " — clic para abrirlo desde la conversación"
               : it.att.length + " adjuntos — clic para verlos en la conversación")}">📎${it.att.length > 1 ? " " + it.att.length : ""}</span>`
           : "")
+        /* 0.87.0 — DE DÓNDE VIENE, y solo en modo agregado: en una lista normal la respuesta es
+           «de aquí» y el chip sería ruido en todas las filas (R43 — antes de aplicar algo a todo,
+           preguntarse dónde hace falta de verdad). Va antes de la fecha y se puede pulsar: lleva a
+           la tarea en su propia ventana, que es donde se ve su contexto. */
+        + (org ? `<span class="orig-chip" title="${esc("Vive en «" + org.nombre + "»" + (org.esp ? ", en el escritorio " + org.esp : "") + " — clic para ir allí")}">${esc(org.nombre)}</span>` : "")
         + (am ? `<span class="alta" title="${esc(am.largo)}">${esc(am.corto)}</span>` : "")
         // 0.69.0 — el chip de relleno va junto a la fecha de ALTA, no junto al vencimiento: no
         // habla de cuándo vence nada, habla de cuándo conviene gastarlo
@@ -7704,12 +7844,22 @@ function bodyTodo(w, el){
       // sale es justo el contexto que se pierde
       const clip = li.querySelector(".att-mark");
       if (clip) clip.addEventListener("click", e => { e.stopPropagation(); replyTo(it, li); });
+      // 0.87.0 — la insignia de procedencia salta a la tarea en SU ventana, por la puerta única de
+      // 0.70.0 (`focusTask`), que ya sabe abrir la página y quitar los filtros que la esconderían
+      const chipOrg = li.querySelector(".orig-chip");
+      if (chipOrg && org) chipOrg.addEventListener("click", e => {
+        e.stopPropagation();
+        focusTask(org.w.id, state.spaces.indexOf(org.sp), it);
+      });
       li.querySelector(".it-del").addEventListener("click", () => {
-        const idx = w.data.items.indexOf(it);
+        // 0.87.0 — se borra del array de SU widget, y la papelera guarda el id de ESE widget para
+        // que Deshacer la devuelva a su lista y no a esta vista, que puede no tener ítems propios
+        const arr = src.arrDe(it), org = src.origenDe(it);
+        const idx = arr ? arr.indexOf(it) : -1;
         if (idx >= 0){
           const copy = plainClone(it);
-          w.data.items.splice(idx, 1);
-          const tr = pushTrash("todo", copy.t || "Tarea", { widgetId: w.id, item: copy });
+          arr.splice(idx, 1);
+          const tr = pushTrash("todo", copy.t || "Tarea", { widgetId: org ? org.w.id : w.id, item: copy });
           toastAction("Tarea enviada a la papelera.", "Deshacer", () => restoreTrash(tr));
         }
         paint(); markDirty();

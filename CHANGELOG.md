@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.87.0] - 2026-08-17 — una vista con TODAS tus tareas, de todos los escritorios
+
+- **Cualquier lista de tareas puede enseñar las de todos los escritorios a la vez.** En su barra hay
+  un selector nuevo: `▤ Esta lista` (lo de siempre) o `🌐 Todas las listas`.
+- **No es un widget nuevo, y eso es lo importante**: es la misma lista de tareas con otro origen, así
+  que todo lo que ya sabes hacer sigue funcionando igual — buscar, filtrar por 🤖, ordenar, agrupar
+  por semana o mes, las pestañas Pendientes y Hechas, 📌, la conversación, los adjuntos, el editor de
+  fecha con sus casillas ⚙ y ▪.
+- **Cada tarea sigue viviendo en su lista.** Marcarla hecha, responderla, adjuntarle algo o cambiarle
+  la fecha desde la vista global escribe en su ventana de origen: no hay copias que se desincronicen.
+  Cada fila lleva una insignia con el nombre de su lista, y al pulsarla te lleva a esa tarea en su
+  propia ventana.
+- **Ahí no se arrastra**, por el mismo motivo por el que tampoco se arrastra con un orden automático
+  o con la lista agrupada: el sitio de una tarea lo decide su lista, y soltarla aquí no la dejaría
+  movida.
+- **Y para crear tareas nuevas, eliges una vez en qué lista nacen** (otro selector, al lado). Hasta
+  que lo elijas no se crea ninguna y se te dice: una tarea en la lista equivocada es peor que una
+  tarea sin crear.
+- Con la vista de privacidad puesta, las listas privadas no aportan ninguna tarea a la vista global.
+- Enviar a la papelera desde la vista global y pulsar Deshacer devuelve la tarea a **su** lista.
+
 ## [0.86.0] - 2026-08-17 — el adjunto se ve sin abrir la conversación, y las hechas se agrupan
 
 - **Una tarea con adjunto lo enseña en su fila**, con un 📎 junto a la marca de conversación, y el

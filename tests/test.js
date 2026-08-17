@@ -1726,7 +1726,12 @@ if (!src.includes('zone._linkCapture = onLinks;')) throw new Error('regresión: 
 if (!src.includes('if (zone.dataset.linkCapture) return;')) throw new Error('regresión: los listeners de captura pueden acumularse al repintar');
 if (!src.match(/e\.preventDefault\(\); e\.stopPropagation\(\);[\s\S]{0,200}parseLinkDrop/)) throw new Error('regresión: el drop de captura no detiene su propagación (duplicaría en Enlaces)');
 if (!src.match(/wireLinkCapture\(el, links => \{[\s\S]{0,400}w\.data\.text/)) throw new Error('regresión: la Nota ya no acepta enlaces soltados');
-if (!src.match(/wireLinkCapture\(el, links => \{[\s\S]{0,400}w\.data\.items\.push/)) throw new Error('regresión: la lista de Tareas ya no acepta enlaces soltados');
+// 0.87.0 — el ancla cambia (ya no escribe en `w.data.items` sino en la lista de DESTINO, que con
+// el origen «Todas» puede ser otra ventana), pero lo que se vigila es lo mismo: que soltar un
+// enlace siga creando tarea. Se exige además que pase por `destinoTodo`, o soltarlo elegiría lista
+// por su cuenta cuando el campo de alta no se lo permite.
+if (!src.match(/wireLinkCapture\(el, links => \{[\s\S]{0,600}dst\.arr\.push/)) throw new Error('regresión: la lista de Tareas ya no acepta enlaces soltados');
+if (!src.match(/wireLinkCapture\(el, links => \{[\s\S]{0,400}const dst = destinoTodo\(\);/)) throw new Error('soltar un enlace no puede elegir lista por su cuenta: pasa por el mismo destino que el campo de alta');
 if (!html.includes('.win-body.ext-drop')) throw new Error('regresión: la zona de captura no se resalta al arrastrar encima');
 console.log('OK captura por arrastre en Nota/Tareas (texto compuesto, sin dominio redundante, cableado sin fugas)');
 
@@ -2546,7 +2551,11 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
     if (/toISOString/.test(pickFn('todayIso', '')))
       throw new Error('created: todayIso NO puede usar toISOString — daría UTC y una tarea de madrugada nacería con la fecha de ayer');
     // TODOS los puntos de alta ponen fecha: si aparece uno nuevo sin ella, esto lo caza
-    const altas = (src.match(/data\.items\.push\(\{ t[^\n]*/g) || []).filter(x => !/plainClone/.test(x));
+    /* 0.87.0 — el patrón admite también `dst.arr.push`, porque el alta desde un enlace soltado ya
+       no escribe en `w.data.items` sino en la lista de DESTINO (con el origen «Todas» puede ser
+       otra ventana). La guarda sigue diciendo lo mismo —toda vía de alta pone fecha— y sigue
+       contando las mismas tres; lo que se ensancha es el ancla, no el contrato. */
+    const altas = (src.match(/(?:data\.items|\barr)\.push\(\{ t[^\n]*/g) || []).filter(x => !/plainClone/.test(x));
     const sinFecha = altas.filter(x => !/created: todayIso\(\)/.test(x));
     if (sinFecha.length) throw new Error('created: hay ' + sinFecha.length + ' alta(s) de tarea sin fecha: ' + sinFecha.join(' | '));
     if (altas.length !== 3) throw new Error('created: se esperaban 3 altas en línea (enlaces, captura Ctrl+K, inbox), hay ' + altas.length + ' — si has añadido una vía nueva, dale fecha y actualiza esta cuenta');
@@ -2681,7 +2690,10 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
     // el color sale de si ALGUNO pide algo, y eso sí distingue info
     if (esperaRespuestaSuya({ replies: [{ at: 1, by: 'agente', info: 1 }] }) !== false)
       throw new Error('la urgencia sí distingue lo informativo: es lo que da el color');
-    if (!/const pendBot = w\.data\.items\.filter\(i => !i\.done && hayRobot\(i\)\)\.length;/.test(src))
+    // 0.87.0 — cuenta sobre `src.items`, que es la lista VISIBLE (la propia, o la de todos los
+    // escritorios con el origen «Todas»). El contrato no cambia: lo que cuenta el contador tiene
+    // que ser exactamente lo que devuelve su filtro, y las dos leen de la misma fuente
+    if (!/const pendBot = src\.items\.filter\(i => !i\.done && hayRobot\(i\)\)\.length;/.test(src))
       throw new Error('el contador de Pendientes debe contar robots, no urgencias');
     if (!/const casaBot = i => !soloBot \|\| hayRobot\(i\);/.test(src))
       throw new Error('el filtro debe devolver EXACTAMENTE lo que cuenta su contador (contrato 0.59.0)');
@@ -2705,7 +2717,9 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
       throw new Error('el aviso de Hechas debe reusar hayRobot, no reimplementar la regla');
     if (!/return hayRobot\(it\) && !it\.replies\[it\.replies\.length - 1\]\.info;/.test(src))
       throw new Error('la urgencia debe derivarse de la misma base, o las tres señales pueden divergir');
-    if (!/const avisoN = w\.data\.items\.filter\(agenteTrasCierre\)\.length/.test(src))
+    // 0.87.0 — sobre `src.items`, como el de Pendientes: los dos contadores y sus filtros leen de
+    // la misma fuente, que es lo que impide que el número y la lista digan cosas distintas
+    if (!/const avisoN = src\.items\.filter\(agenteTrasCierre\)\.length/.test(src))
       throw new Error('el contador de «Hechas» debe derivarse de agenteTrasCierre');
     // y NO reabre la tarea: cerrar es del usuario (regla suya, 06/08)
     if (/agenteTrasCierre[\s\S]{0,400}?\bit\.done = false/.test(src))
@@ -2921,9 +2935,10 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
     // dejando el aviso de Pendientes clavado en cero sin que nada se quejara.
     // 0.65.0 — el contador cuenta ROBOTS (`hayRobot`), los mismos que se ven en las filas; la
     // urgencia pasó a ser el COLOR, y de ahí sale `pendUrge` con `esperaRespuestaSuya`.
-    if (!/const pendBot = w\.data\.items\.filter\(i => !i\.done && hayRobot\(i\)\)\.length/.test(src))
+    // 0.87.0 — sobre `src.items` (la lista visible: la propia, o todas con el origen «Todas»)
+    if (!/const pendBot = src\.items\.filter\(i => !i\.done && hayRobot\(i\)\)\.length/.test(src))
       throw new Error('el contador de Pendientes debe USAR hayRobot sobre las tareas vivas');
-    if (!/const pendUrge = w\.data\.items\.some\(i => !i\.done && esperaRespuestaSuya\(i\)\);/.test(src))
+    if (!/const pendUrge = src\.items\.some\(i => !i\.done && esperaRespuestaSuya\(i\)\);/.test(src))
       throw new Error('el color del contador debe derivarse de si alguno pide algo');
     if (/it\.leido|lastRead|leidoAt/.test(src))
       throw new Error('I4: el turno se deriva del orden, nunca se guarda un «leído»');
@@ -3006,8 +3021,11 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
     const SORTS = src.match(/const TODO_SORTS = \{[\s\S]*?\n\};/)[0];
     if (/En cola|▶/.test(SORTS)) throw new Error('la ordenación no puede conocer los prefijos de la superficie: es workflow, no producto');
     if (!/manual:\s*\{[^}]*cmp: null/.test(SORTS)) throw new Error('«a mano» debe ser un criterio sin comparador, y el que manda por defecto');
-    if (!/const l = w\.data\.items\.filter\([^\n]*\); if \(cmpPend\) l\.sort\(cmpPend\)/.test(src))
-      throw new Error('ordenar sobre la lista FILTRADA (copia), nunca sobre w.data.items: volver a «A mano» debe devolver tu orden');
+    /* 0.87.0 — `src.items` es SIEMPRE una copia o el array propio, y `.filter` devuelve otra: lo
+       que se vigila —que no se ordene el array real— vale igual. Con el origen «Todas», `src.items`
+       es ya un array nuevo (`flatMap`), así que ordenarlo tampoco tocaría ninguna lista suya. */
+    if (!/const l = src\.items\.filter\([^\n]*\); if \(cmpPend\) l\.sort\(cmpPend\)/.test(src))
+      throw new Error('ordenar sobre la lista FILTRADA (copia), nunca sobre el array real: volver a «A mano» debe devolver tu orden');
     const paintFn = src.match(/function paint\(\)\{[\s\S]*?\n    let list, vacio;/)[0];
     if (/w\.data\.items\.sort/.test(paintFn)) throw new Error('reordenar el array real destruye el orden manual del usuario');
     if (!/w\.data\.sort = orden\.value/.test(src)) throw new Error('el criterio es preferencia del usuario y viaja en w.data, como w.data.view del Markdown');
@@ -3429,8 +3447,9 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
       throw new Error('el filtro 🤖 debe usar la MISMA condición que pinta los dos recuentos, o el número y la lista pueden divergir');
     if (/esperaRespuestaSuya\(i\)/.test(casaBot))
       throw new Error('el filtro no puede esconder los robots grises: el contador los cuenta');
-    if (!/const pendBot = w\.data\.items\.filter\(i => !i\.done && hayRobot\(i\)\)/.test(todoFn2)
-        || !/const avisoN = w\.data\.items\.filter\(agenteTrasCierre\)/.test(todoFn2))
+    // 0.87.0 — la fuente es `src.items`; lo que importa sigue siendo que contador y filtro lean lo mismo
+    if (!/const pendBot = src\.items\.filter\(i => !i\.done && hayRobot\(i\)\)/.test(todoFn2)
+        || !/const avisoN = src\.items\.filter\(agenteTrasCierre\)/.test(todoFn2))
       throw new Error('los recuentos deben salir de esas mismas funciones');
     if (!/data-bot="\$\{v\}"/.test(todoFn2))
       throw new Error('el contador 🤖 debe ser pulsable: es la mitad de su petición del 09/08 («tengo que buscar en muchas pantallas»)');
@@ -3523,7 +3542,9 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
     if (!/if \(li\.getBoundingClientRect\(\)\.bottom > limite \+ 1\) break;/.test(gc))
       throw new Error('hay que recorrerlos igualmente para saber dónde acaba lo que cabe');
     // arrastrar en una lista que mezcla pendientes y hechas no significa nada en el array real
-    if (!/const reordenable = ui\.view === "pend" && sortDe\(w\) === "manual" && !grupos;/.test(todoFn3))
+    // 0.87.0 — se suma la cuarta condición: en la vista agregada tampoco, porque el sitio de una
+    // tarea lo decide su lista de origen y soltarla aquí no la dejaría movida
+    if (!/const reordenable = ui\.view === "pend" && sortDe\(w\) === "manual" && !grupos && src\.modo === "self";/.test(todoFn3))
       throw new Error('buscando no se reordena: «arriba» no significa nada en una lista que mezcla los dos estados');
     console.log('OK 0.60.0 (buscar cruza las dos vistas, las separa con su recuento y no descuadra la paginación)');
   }
@@ -4124,8 +4145,14 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
 
     // se numera AL NACER con la misma función que repara al cargar (R47: un solo sitio)
     const addT = src.match(/const add = \([^)]*\) => \{[\s\S]*?todoDraft[\s\S]*?\n  \};/)[0];
-    if (!/numerarTareas\(w\.data\)/.test(addT))
-      throw new Error('crear una tarea tiene que numerarla con la MISMA función que la repara, o habrá dos numeraciones');
+    /* 0.87.0 — se numera sobre `dst.data`, que es el widget DESTINO. Es la corrección importante
+       del agregador: cada lista lleva su propia numeración, así que numerar sobre `w.data` desde
+       la vista global habría renumerado la lista equivocada — o ninguna, porque esa vista puede
+       no tener ítems propios. */
+    if (!/numerarTareas\(dst\.data\)/.test(addT))
+      throw new Error('crear una tarea tiene que numerarla con la MISMA función que la repara, y sobre la lista DESTINO');
+    if (!/const dst = destinoTodo\(\);[\s\S]{0,200}if \(!dst\)\{[\s\S]{0,160}return; \}/.test(addT))
+      throw new Error('sin destino elegido NO se crea nada: caer en una lista cualquiera es peor que no crear');
     if (!/numerarTareas\(d\)/.test(src.match(/function bootstrapElementIds[\s\S]*?\n\}/)[0]))
       throw new Error('al cargar hay que numerar y reparar colisiones, o la fusión deja duplicados para siempre');
 
@@ -4760,7 +4787,8 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
        de 0.75.0 —que él pagó— es que el aviso va donde se DECIDE, no donde se sufre. */
     if (!/NO se puede arrastrar/.test(todoFn.match(/agrupa\.title = [\s\S]*?;/)[0]))
       throw new Error('hay que avisar de que agrupar apaga el arrastre, en el selector y no en el asa');
-    if (!/const reordenable = ui\.view === "pend" && sortDe\(w\) === "manual" && !grupos;/.test(todoFn))
+    // 0.87.0 — cuarta condición: la vista agregada tampoco (ver el bloque de 0.87.0)
+    if (!/const reordenable = ui\.view === "pend" && sortDe\(w\) === "manual" && !grupos && src\.modo === "self";/.test(todoFn))
       throw new Error('con grupos puestos no se arrastra: el bloque de una tarea lo decide su fecha');
 
     console.log('OK 0.82.0 (agrupar por semana o mes envuelve al orden sin sustituirlo, y los meses no se comparan como decimales)');
@@ -4991,6 +5019,93 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
       throw new Error('la clave del grupo se ata a la vista actual: dos ejes en la misma lista es el defecto de R47');
 
     console.log('OK 0.86.0 (el adjunto se ve sin abrir el hilo; «Hechas» se agrupa por cuándo la cerraste)');
+  }
+
+  // --- 0.87.0: la vista global de tareas ---------------------------------------------------------
+  {
+    /* Su petición del 16/08: «un widget global de tareas que agregue en portada todas las tareas de
+       todos los escritorios… debe utilizar exactamente la misma taxonomía de los widgets
+       individuales y permitir también crear tareas nuevas compatibles con ellos».
+       NO es un tipo de widget nuevo: es un ORIGEN dentro del de tareas. Eso es lo que garantiza la
+       «misma taxonomía» por construcción y no por disciplina — un segundo tipo habría sido un
+       segundo modelo condenado a divergir del primero. Se prueba `fuenteTodo`, que es la puerta. */
+    const fuente = new Function('state', 'privacyOn', 'w', `
+      ${src.match(/const origenDe = w => [^\n]+/)[0]}
+      ${src.match(/function fuenteTodo\(w\)\{[\s\S]*?\n\}/)[0]}
+      return fuenteTodo(w);`);
+    const mk = (id, items, extra = {}) => ({ id, type: 'todo', t: 'L' + id, data: { items, ...extra } });
+    const a1 = { t: 'a1' }, a2 = { t: 'a2' }, b1 = { t: 'b1' };
+    const A = mk('A', [a1, a2]), B = mk('B', [b1]);
+    const VISTA = mk('V', [], { src: 'all' });
+    const st = { spaces: [{ name: 'Uno', widgets: [A, VISTA] }, { name: 'Dos', widgets: [B] }] };
+
+    // (1) POR DEFECTO NADA CAMBIA: sin `src`, la fuente es la lista propia y `arrDe` su array
+    const propio = fuente(st, false, A);
+    if (propio.modo !== 'self' || propio.items !== A.data.items)
+      throw new Error('sin origen declarado, la lista sigue siendo la suya: nada de lo ya creado cambia');
+    if (propio.arrDe(a1) !== A.data.items) throw new Error('en modo propio, toda tarea pertenece a su array');
+    if (propio.origenDe(a1) !== null) throw new Error('en modo propio no hay procedencia que enseñar: sería ruido en todas las filas');
+
+    // (2) AGREGADO: salen las de todos los escritorios, y CADA UNA SABE DE QUÉ ARRAY ES.
+    //     Es lo que impide que borrar desde aquí borre del array equivocado — escribir por
+    //     posición sobre una proyección filtrada es el incidente que ya ocurrió una vez.
+    const todo = fuente(st, false, VISTA);
+    if (todo.modo !== 'all') throw new Error('con src:"all" la fuente es agregada');
+    if (todo.items.length !== 3) throw new Error('se agregan las tareas de TODOS los escritorios, no solo del activo');
+    if (todo.arrDe(a1) !== A.data.items || todo.arrDe(b1) !== B.data.items)
+      throw new Error('cada tarea tiene que resolver a SU array: sin eso, borrar aquí borra en otra lista');
+    if (todo.origenDe(b1).esp !== 'Dos' || todo.origenDe(b1).nombre !== 'LB')
+      throw new Error('la procedencia dice ventana y escritorio: es lo que se pinta y lo que lleva de vuelta');
+    // una tarea que no es de ninguna lista agregada no resuelve a ninguna: mejor nada que la primera
+    if (todo.arrDe({ t: 'huérfana' }) !== null)
+      throw new Error('una tarea desconocida NO puede caer en el primer array: sería escribir en la lista de otro');
+
+    // (3) NO SE AGREGA A SÍ MISMA ni a otra vista agregada: sería un bucle y un doble conteo
+    if (todo.listas.some(l => l.w === VISTA)) throw new Error('la vista agregada no puede incluirse a sí misma');
+    const VISTA2 = mk('V2', [], { src: 'all' });
+    st.spaces[0].widgets.push(VISTA2);
+    if (fuente(st, false, VISTA).listas.some(l => l.w === VISTA2))
+      throw new Error('dos vistas agregadas no se agregan entre sí: cada tarea saldría dos veces');
+    st.spaces[0].widgets.pop();
+
+    // (4) LA PRIVACIDAD ESCÉNICA MANDA: un widget privado no aporta ni una tarea en claro
+    B.priv = 1;
+    if (fuente(st, true, VISTA).items.length !== 2)
+      throw new Error('con la privacidad puesta, un widget privado no puede filtrar su contenido por la vista global');
+    if (fuente(st, false, VISTA).items.length !== 3)
+      throw new Error('y sin la privacidad puesta sí entra: el filtro es escénico, no un borrado');
+    delete B.priv;
+
+    // (5) EL DESTINO DE ALTA. Sin elegirlo no se crea nada; elegido, se resuelve a ESA lista.
+    const dest = new Function('src', 'w', `
+      const state = null;
+      ${src.match(/const destinoTodo = \(\) => \{[\s\S]*?\n  \};/)[0]}
+      return destinoTodo();`);
+    if (dest(todo, VISTA) !== null)
+      throw new Error('sin destino elegido, `destinoTodo` devuelve null: no se adivina dónde quiere sus tareas');
+    VISTA.data.dest = 'B';
+    if (dest(todo, VISTA).arr !== B.data.items)
+      throw new Error('con destino elegido, la tarea nueva nace en ESA lista');
+    VISTA.data.dest = 'BORRADA';
+    if (dest(todo, VISTA) !== null)
+      throw new Error('un destino que ya no existe es como no tenerlo: no se cae al primero que haya');
+
+    // (6) LAS MUTACIONES PASAN POR `arrDe`, no por `w.data.items`. Es la garantía de todo lo demás.
+    const todoFn4 = src.match(/function bodyTodo\(w, el\)\{[\s\S]*?\n\}\n/)[0];
+    for (const [re, m] of [
+      [/const arr = src\.arrDe\(it\); if \(!arr\) return;/, 'mover con ↑↓'],
+      [/const arr = src\.arrDe\(a\);\s*\n\s*if \(!arr \|\| src\.arrDe\(b\) !== arr\) return;/, 'reordenar arrastrando'],
+      [/const arr = src\.arrDe\(it\), org = src\.origenDe\(it\);/, 'borrar']
+    ]) if (!re.test(todoFn4)) throw new Error(`la mutación «${m}» tiene que resolver el array por arrDe, no dar por hecho el propio`);
+    // y la papelera guarda el id del widget de ORIGEN, o Deshacer devolvería la tarea a esta vista
+    if (!/pushTrash\("todo", copy\.t \|\| "Tarea", \{ widgetId: org \? org\.w\.id : w\.id, item: copy \}\)/.test(todoFn4))
+      throw new Error('Deshacer tiene que devolver la tarea a SU lista, no a la vista desde la que se borró');
+
+    // (7) LA FUENTE SE RECALCULA EN CADA PINTADO: el mapa de pertenencia caduca con cada cambio
+    if (!/function paint\(\)\{\n    src = fuenteTodo\(w\);/.test(src))
+      throw new Error('la fuente se recalcula al pintar: si no, una lista creada o borrada después no se ve y `arrDe` miente');
+
+    console.log('OK 0.87.0 (la vista global es un ORIGEN del widget de tareas, no un tipo nuevo: misma taxonomía, y cada tarea sigue viviendo en su lista)');
   }
 
   console.log('\nTODO EN VERDE');
