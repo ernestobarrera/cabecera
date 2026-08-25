@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.89.0] - 2026-08-25 — decides con un botón si tus asistentes pueden anotar en un widget
+
+- **Nuevo interruptor «🤖 Permitir anotaciones»** en los widgets de notas y de markdown que tengan
+  una etiqueta `ia-*`. Actívalo y tus asistentes podrán **añadir** notas firmadas y fechadas al
+  final. Nunca pueden tocar lo que hayas escrito tú: solo se añade, nunca se sustituye.
+- Desactivarlo devuelve el widget a intocable, y no es una promesa: la orden del asistente falla y
+  no escribe nada. Si al desactivar se quitan anotaciones, se te dice cuántas y puedes deshacerlo.
+- **Por qué un botón.** Esto ya se podía hacer, pero había que escribir a mano una sección con un
+  título exacto que la aplicación no mencionaba en ninguna parte. Era una convención que había que
+  recordar. Ahora la decisión vive donde se toma.
+- **Lo anotado se distingue de lo tuyo**: en vista, el bloque se pinta con el mismo lenguaje visual
+  que el hilo de una tarea, en vez de inventar una señal nueva para decir lo mismo.
+- **Las etiquetas `ia-*` ahora dicen cuánto lee cada asistente**, que era información que no estaba
+  en ningún sitio y cambia cuál eliges: con **ideas** leen el texto **entero**; con **estado** y
+  **archivo**, solo el principio; de **glosario**, solo tus líneas que empiezan por «?».
+  Si quieres que conozcan unas instrucciones o una chuleta, la etiqueta es **ideas**.
+- **Corregida una ⓘ que llevaba meses diciendo algo falso**: la de bandeja afirmaba que el orden de
+  la lista era la cola de trabajo. No lo es desde que ordenas por antigüedad automáticamente, que
+  apaga el arrastre. La cola la escribe el asistente y el puesto se dice dentro de cada tarea.
+
 ## [0.88.0] - 2026-08-17 — la página incrustada se cambia sin vaciar el widget
 
 - **En el widget Incrustar, la dirección se puede editar donde está.** Pulsa sobre ella arriba,
