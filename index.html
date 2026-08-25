@@ -2138,7 +2138,7 @@ function syncUI(mode, txt){
    reaparece) y si Recargar está activo. El descarte ✕ vive solo en memoria de la sesión.
    Demora asumida: la CDN de Pages puede servir la versión vieja hasta ~10 min aun con
    no-store (gobierna la caché del navegador, no la CDN); para pestañas de días, irrelevante. */
-const APP_VERSION = "0.89.0";
+const APP_VERSION = "0.89.1";
 let newVersionDetected = null;   // versión superior detectada; detiene futuras consultas
 let verDismissed = false;        // ✕: solo esta sesión — nunca persistido en disco
 let verCheckInflight = false;    // sin consultas concurrentes
@@ -4341,6 +4341,20 @@ function aplicarEfectoEtiquetas(w){
   return tocado;
 }
 
+/* 0.89.1 — la contraparte de `aplicarEfectoEtiquetas`: al quitar la etiqueta hay que retirar lo que
+   ELLA puso, y solo eso. La simetría importa — una cabecera ⓘ derivada que sobrevive a su etiqueta
+   sigue diciendo «bandeja compartida con tus asistentes» en un widget que ya no lo es, y ninguno de
+   ellos volverá a leerlo. Es una señal que miente, no un resto cosmético.
+   El color NO se toca: al ponerlo pasó a ser suyo de hecho —lo ve cada día— y quitarlo sería
+   cambiarle el escritorio por un motivo que no entendería. La ⓘ se retira solo si `descAuto` dice
+   que la escribió el producto; si la escribió él, jamás. */
+function limpiarEfectoEtiquetas(w, rolAntes){
+  if (!rolAntes || rolIa(w)) return false;      // no había rol, o sigue habiéndolo
+  if (!w.data || !w.data.descAuto) return true;  // nada que limpiar, pero el rol cambió: hay que repintar
+  delete w.data.desc; delete w.data.descAuto;
+  return true;
+}
+
 function editWidgetTags(w, el){
   // el editor mostraría las etiquetas reales de un widget enmascarado
   if (privacyOn && w.priv){ toast("Desactiva el modo privacidad para editar etiquetas", true); return; }
@@ -4382,12 +4396,22 @@ function editWidgetTags(w, el){
      resto. El motivo queda escrito por si se prefiere lo contrario. */
   const aplicar = () => {
     const tags = normTags(input.value);
+    // el rol PREVIO, leído antes de sobrescribir. El campo sigue siendo la única verdad de las
+    // etiquetas nuevas: esto solo mira lo que había, para saber qué hay que retirar.
+    const rolAntes = rolIa(w);
     w.tags = tags.length ? tags : undefined;
     // 0.53.0 — poner una ia-* aplica sola su cabecera ⓘ y su color. Si tocó algo, hay que repintar
     // el widget entero, no solo la tira de etiquetas: la ⓘ vive dentro del cuerpo.
     const efecto = aplicarEfectoEtiquetas(w);
+    /* 0.89.1 — QUITAR una etiqueta también tiene efecto, y hasta hoy no repintaba nada.
+       `aplicarEfectoEtiquetas` devuelve false cuando ya no hay rol, así que el cuerpo se quedaba
+       como estaba: con el interruptor de anotaciones puesto en un widget que ya no es de nadie.
+       Parte de fallo suya del 25/08. El defecto es de 0.53.0 y llevaba ahí desde entonces —el
+       botón solo lo hizo VISIBLE, porque es lo primero cuya presencia depende de la etiqueta—.
+       La condición correcta no es «¿la etiqueta produjo efecto?» sino «¿cambió el rol?». */
+    const limpiado = limpiarEfectoEtiquetas(w, rolAntes);
     paintWinTags(el, w);
-    if (efecto) refreshWidget(w);
+    if (efecto || limpiado) refreshWidget(w);
     markDirty();
     return efecto;
   };
@@ -4415,9 +4439,12 @@ function editWidgetTags(w, el){
   });
   ed.querySelector(".ok").addEventListener("click", commit);
   ed.querySelector(".clear").addEventListener("click", () => {
+    const rolAntes = rolIa(w);
     w.tags = undefined;
     ed.remove();
     paintWinTags(el, w);
+    // mismo defecto que en `aplicar`: vaciar TODAS las etiquetas también quita el rol
+    if (limpiarEfectoEtiquetas(w, rolAntes)) refreshWidget(w);
     markDirty();
   });
   input.focus(); input.select();

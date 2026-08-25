@@ -5126,5 +5126,44 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
     console.log('OK 0.87.0 (la vista global es un ORIGEN del widget de tareas, no un tipo nuevo: misma taxonomía, y cada tarea sigue viviendo en su lista)');
   }
 
+  // ---- 0.89.1: quitar una etiqueta ia-* tambien es un efecto ----
+  {
+    /* Parte de fallo suya del 25/08: al quitar la etiqueta, el interruptor de anotaciones seguia
+       ahi. Causa: refreshWidget colgaba de «la etiqueta produjo efecto», y quitarla no produce
+       ninguno. El defecto es de 0.53.0; el boton de 0.89.0 solo lo hizo visible. */
+    const ap = src.match(/const aplicar = \(\) => \{[\s\S]*?\n  \};/)[0];
+    if (!/const rolAntes = rolIa\(w\);/.test(ap))
+      throw new Error('E: aplicar tiene que recordar el rol PREVIO: sin el no se sabe que hay que retirar');
+    if (!/if \(efecto \|\| limpiado\) refreshWidget\(w\);/.test(ap))
+      throw new Error('E: el repintado no puede colgar solo de efecto: quitar la etiqueta no produce efecto y aun asi cambia el cuerpo');
+
+    const cl = src.match(/ed\.querySelector\("\.clear"\)\.addEventListener\([\s\S]*?\n  \}\);/)[0];
+    if (!/limpiarEfectoEtiquetas\(w, rolAntes\)/.test(cl))
+      throw new Error('E: vaciar TODAS las etiquetas quita el rol igual que quitar una: mismo arreglo');
+
+    // el COMPORTAMIENTO, no la forma: se ejecuta la funcion real extraida del fuente
+    const fnLimpiar = src.match(/function limpiarEfectoEtiquetas\(w, rolAntes\)\{[\s\S]*?\n\}/)[0];
+    const rolIaTest = w => { const t = (w.tags || []).map(String).find(x => /^ia-/.test(x)); return t ? t.slice(3) : null; };
+    const limpiar = new Function('rolIa', fnLimpiar + String.fromCharCode(59) + ' return limpiarEfectoEtiquetas;')(rolIaTest);
+
+    const w1 = { tags: undefined, data: { desc: 'derivada', descAuto: true } };
+    if (limpiar(w1, 'ideas') !== true || w1.data.desc)
+      throw new Error('E: al quitar el rol, la cabecera DERIVADA se retira y se repinta');
+
+    const w2 = { tags: undefined, data: { desc: 'MIA A MANO' } };
+    if (limpiar(w2, 'ideas') !== true || w2.data.desc !== 'MIA A MANO')
+      throw new Error('E: una cabecera escrita por el usuario NO se toca jamas, ni al quitar la etiqueta');
+
+    const w3 = { tags: ['ia-ideas'], data: { desc: 'x', descAuto: true } };
+    if (limpiar(w3, 'ideas') !== false || !w3.data.desc)
+      throw new Error('E: si sigue habiendo rol no se limpia nada');
+
+    const w4 = { tags: ['ia-estado'], data: { desc: 'x', descAuto: true } };
+    if (limpiar(w4, 'ideas') !== false)
+      throw new Error('E: CAMBIAR de rol no es quitarlo: de eso ya se encarga aplicarEfectoEtiquetas');
+
+    console.log('OK 0.89.1 (quitar la etiqueta repinta el cuerpo y retira la cabecera derivada; la escrita a mano, nunca)');
+  }
+
   console.log('\nTODO EN VERDE');
 })().catch(e => { console.error(e && e.stack || e); process.exitCode = 1; });

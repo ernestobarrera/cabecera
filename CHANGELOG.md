@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.89.1] - 2026-08-25 — al quitar una etiqueta, la ventana se entera
+
+- **Parte de fallo tuya.** Quitabas la etiqueta `ia-` de una ventana y el interruptor de
+  anotaciones seguía ahí, como si nada hubiera cambiado.
+- El fallo **no era del interruptor**: venía de 0.53.0. La ventana se repintaba solo cuando poner
+  una etiqueta **producía** algo (su cabecera ⓘ, su color), y quitarla no produce nada. El botón
+  nuevo solo lo hizo visible, porque es lo primero cuya presencia depende de la etiqueta.
+- Ahora **quitar también cuenta como cambio**, y con ello se retira la cabecera ⓘ que había puesto
+  Cabecera — una que dijera «bandeja compartida con tus asistentes» en una ventana que ya no lo es
+  sería una señal que miente. **Si la cabecera la escribiste tú, no se toca nunca.**
+- El color se queda: lo llevas viendo días y ya es tuyo de hecho.
+- Vale igual para «Quitar todas».
+
 ## [0.89.0] - 2026-08-25 — decides con un botón si tus asistentes pueden anotar en un widget
 
 - **Nuevo interruptor «🤖 Permitir anotaciones»** en los widgets de notas y de markdown que tengan
