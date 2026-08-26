@@ -455,6 +455,12 @@ textarea.dlg-inp{resize:vertical; min-height:46px}
 #conflict{position:fixed; top:12px; left:50%; transform:translateX(-50%); z-index:960; display:none; align-items:center; gap:12px;
   padding:10px 16px; border-radius:12px; background:var(--glass); border:1px solid rgba(240,194,94,.5); font-size:13px; box-shadow:var(--shadow)}
 #conflict.open{display:flex}
+/* Barra de copias en conflicto de la nube: informa, no decide. Por eso NO comparte el borde ámbar
+   de #conflict, que significa «te toca elegir algo», y se coloca debajo para no taparla. */
+#copias{position:fixed; top:62px; left:50%; transform:translateX(-50%); z-index:959; display:none; align-items:center; gap:12px;
+  padding:10px 16px; border-radius:12px; background:var(--glass); border:1px solid var(--border); font-size:13px;
+  box-shadow:var(--shadow); max-width:min(680px, 92vw)}
+#copias.open{display:flex}
 
 /* ---------- contenido de widgets ---------- */
 textarea.notes{width:100%; height:100%; min-height:110px; resize:none; border:none; outline:none; background:transparent;
@@ -1502,6 +1508,11 @@ ul.plain{list-style:none}
   <button class="mini warn" id="cf-force">Mantener lo mío</button>
 </div>
 
+<div id="copias">
+  🗂️ <span id="copias-msg"></span>
+  <button class="mini" id="cp-ok" title="Ocultar hasta la próxima vez que abras Cabecera">Entendido</button>
+</div>
+
 <div id="toasts"></div>
 
 <div id="tour"><div class="tour-ring"></div><div class="tour-card"></div></div>
@@ -2138,7 +2149,7 @@ function syncUI(mode, txt){
    reaparece) y si Recargar está activo. El descarte ✕ vive solo en memoria de la sesión.
    Demora asumida: la CDN de Pages puede servir la versión vieja hasta ~10 min aun con
    no-store (gobierna la caché del navegador, no la CDN); para pestañas de días, irrelevante. */
-const APP_VERSION = "0.89.1";
+const APP_VERSION = "0.90.0";
 let newVersionDetected = null;   // versión superior detectada; detiene futuras consultas
 let verDismissed = false;        // ✕: solo esta sesión — nunca persistido en disco
 let verCheckInflight = false;    // sin consultas concurrentes
@@ -3005,6 +3016,110 @@ function mergeStates(base, local, remote, prefer){
   return { merged, conflicts };
 }
 
+/* 0.90.0 — COPIAS EN CONFLICTO DE LA NUBE: DETECTARLAS Y DECIR SI FALTA ALGO.
+
+   Cuando OneDrive encuentra el archivo cambiado en los dos lados no pierde nada: se queda con una
+   versión y deja la otra al lado, renombrada con el nombre del equipo. El problema es que NO SE LO
+   DICE A NADIE. El 26/08 se midió su carpeta y había TRES copias así —del 17/08, del 18/08 y de esa
+   misma mañana— que llevaban ahí sin que nadie las mirara. Un fallo que no deja rastro visible acaba
+   pareciendo que no existe, y por eso lo primero que hay que arreglar no es la bifurcación: es la
+   ceguera.
+
+   `CONTRATO:` ESTO NO TOCA NI BORRA NADA. Ni la copia, ni el archivo vivo. Compara y cuenta, que es
+   lo que convierte «hay una copia» en información accionable — sin eso es un aviso que suele venir
+   vacío, y esos se aprenden a ignorar enteros. Reincorporar lo que falte sigue siendo decisión suya.
+
+   LO QUE COMPARA, dicho entero para que nadie confíe de más: tareas (por su `id` estable, nunca por
+   texto ni por posición), respuestas dentro de cada conversación, y ventanas ausentes. NO compara
+   palabra por palabra el contenido de una nota o de un markdown, porque esos se reescriben enteros
+   y una diferencia ahí casi siempre es trabajo posterior, no una pérdida. Si dice «no falta nada»,
+   eso es lo que significa: nada de lo que sabe mirar. */
+function esCopiaConflicto(nombre){
+  if (!/\.json$/i.test(String(nombre))) return false;
+  const base = String(nombre).slice(0, -5);
+  if (base.toLowerCase() === "datos") return false;                 // el archivo vivo, nunca
+  // OneDrive bifurca como «datos-NOMBREEQUIPO.json», y añade «-2» si el nombre ya estaba cogido.
+  // Otras versiones y otras nubes usan la forma con paréntesis, en el idioma del sistema.
+  return /^datos-.+$/i.test(base) || /^datos[ _]?\(.+\)$/i.test(base);
+}
+
+// PURA (tests). La única pregunta que importa de una copia bifurcada: ¿hay algo DENTRO que ya no
+// esté aquí? Se responde por `id`, que es lo que identifica; el número «#n» solo sirve para nombrar.
+function compararCopia(vivo, copia){
+  const tareasVivas = new Map(), ventanasVivas = new Set();
+  for (const sp of (vivo && vivo.spaces) || []) for (const w of (sp.widgets || [])){
+    ventanasVivas.add(w.id);
+    if (w.type === "todo") for (const it of ((w.data && w.data.items) || [])) if (it && it.id) tareasVivas.set(it.id, it);
+  }
+  const tareas = [], hilos = [], ventanas = [];
+  for (const sp of (copia && copia.spaces) || []) for (const w of (sp.widgets || [])){
+    if (w.id && !ventanasVivas.has(w.id)) ventanas.push({ esp: sp.name || "", titulo: w.t || w.type || "" });
+    if (w.type !== "todo") continue;
+    for (const it of ((w.data && w.data.items) || [])){
+      if (!it || !it.id) continue;
+      const aqui = tareasVivas.get(it.id);
+      if (!aqui){ tareas.push({ esp: sp.name || "", lista: w.t || "", n: it.n || null, texto: it.t || "" }); continue; }
+      // la tarea sigue existiendo, pero su conversación puede haber quedado más corta en el vivo
+      if (((it.replies || []).length) > ((aqui.replies || []).length))
+        hilos.push({ esp: sp.name || "", lista: w.t || "", n: it.n || null, texto: it.t || "" });
+    }
+  }
+  return { tareas, hilos, ventanas };
+}
+
+// PURA (tests). El texto de la barra. Separado del escaneo para poder fijar las dos frases que
+// importan —«no falta nada» y «faltan N»— sin montar una carpeta de mentira.
+function textoCopias(informes){
+  const conFalta = informes.filter(i => i.tareas.length || i.hilos.length || i.ventanas.length);
+  const nombres = informes.map(i => i.nombre + " (" + i.cuando + ")").join(", ");
+  const plural = informes.length === 1 ? "una copia" : informes.length + " copias";
+  if (!conFalta.length)
+    return "Tu nube dejó " + plural + " de datos.json al lado del tuyo: " + nombres
+      + ". Las he comparado y no le falta nada a tu escritorio de ahora, así que puedes borrarlas cuando quieras desde el explorador. Cabecera no las toca.";
+  const i = conFalta[0];
+  const q = [];
+  if (i.tareas.length) q.push(i.tareas.length + (i.tareas.length === 1 ? " tarea" : " tareas"));
+  if (i.hilos.length) q.push(i.hilos.length + (i.hilos.length === 1 ? " conversación" : " conversaciones"));
+  if (i.ventanas.length) q.push(i.ventanas.length + (i.ventanas.length === 1 ? " ventana" : " ventanas"));
+  const ej = (i.tareas[0] || i.hilos[0]);
+  return "Tu nube dejó " + plural + " de datos.json al lado del tuyo, y «" + i.nombre + "» (" + i.cuando + ") contiene "
+    + q.join(" y ") + " que aquí ya no están"
+    + (ej ? " — por ejemplo, en «" + (ej.lista || i.nombre) + "»: «" + String(ej.texto).slice(0, 70) + "»" : "")
+    + ". No se ha tocado nada: dile a un asistente que la mire antes de borrarla.";
+}
+
+let copiasRevisadas = 0;      // instante del último escaneo; 0 = nunca
+let copiasDescartado = false; // ✕ de la sesión, como el aviso de versión: nunca se persiste
+const COPIAS_CADA_MS = 10 * 60 * 1000;
+
+/* Escaneo real. Enumerar la carpeta es barato y solo se hace al arrancar y cada diez minutos: una
+   copia nueva aparece cuando la nube sincroniza, no entre dos pulsaciones. */
+async function revisarCopias(force){
+  if (backend !== "fs" || !dirHandle || copiasDescartado) return;
+  if (!force && copiasRevisadas && Date.now() - copiasRevisadas < COPIAS_CADA_MS) return;
+  copiasRevisadas = Date.now();
+  const informes = [];
+  try{
+    for await (const [nombre, h] of dirHandle.entries()){
+      if (h.kind !== "file" || !esCopiaConflicto(nombre)) continue;
+      try{
+        const f = await h.getFile();
+        const copia = JSON.parse(await f.text());
+        informes.push({ nombre, cuando: new Date(f.lastModified).toLocaleDateString("es-ES", { day: "numeric", month: "short" }),
+          ...compararCopia(state, copia) });
+      }catch(e){
+        // ilegible o a medio bajar: se nombra igual, porque existir ya es la noticia
+        informes.push({ nombre, cuando: "sin leer", tareas: [], hilos: [], ventanas: [], ilegible: true });
+      }
+    }
+  }catch(e){ return; }   // sin permiso o transitorio de la nube: se reintenta en el siguiente ciclo
+  const bar = $("#copias");
+  if (!bar) return;
+  if (!informes.length){ bar.classList.remove("open"); return; }
+  $("#copias-msg").textContent = textoCopias(informes);
+  bar.classList.add("open");
+}
+
 // La barra de conflicto nombra lo que choca cuando la fusión encontró choques reales;
 // sin lista (null) vuelve al mensaje clásico de archivo entero.
 function renderConflictBar(conflicts){
@@ -3098,7 +3213,56 @@ function markAuto(){
 // bajando la versión de otro equipo. Sin modal: solo «comprobando sincronización…».
 let freshPending = false, hiddenAt = 0;
 
+/* 0.90.0 — CUARENTENA DE ARRANQUE. `freshPending`, justo arriba, frena el primer guardado
+   sincronizado al volver de segundo plano tras más de un minuto, porque la nube puede estar bajando
+   la versión del otro equipo. Pero se arma en `visibilitychange`, y EN UN ARRANQUE EN FRÍO ESE
+   EVENTO NO OCURRE: `hiddenAt` vale 0. Encender el ordenador, abrir el navegador y abrir Cabecera
+   —la mañana entera— quedaba sin freno. Es el hueco que él describió el 26/08 (#217 de «Cabecera ·
+   bandeja»): llega al trabajo, escribe antes de que OneDrive termine de bajar, los dos lados quedan
+   cambiados desde la última sincronía y OneDrive bifurca el archivo en una copia con el nombre del
+   equipo. Medido ese día: tres copias así en su carpeta desde el 17/08, ninguna vista por nadie.
+
+   La espera CASI NUNCA SE NOTA, porque tiene dos salidas anticipadas:
+     · se corta en cuanto el archivo cambia en disco (`poll`), que es la señal de que la nube ya
+       entregó — y ahí la fusión por widget hace su trabajo y no queda nada que bifurcar;
+     · se corta si él lo pide, con «Guardar ya». El gate es suyo: no se le retiene a la fuerza un
+       cambio que quiere en disco.
+
+   `CONTRATO:` ALCANCE HONESTO, para no prometer de más. El navegador NO puede preguntarle a
+   OneDrive si ha terminado — no hay API —, así que esto cubre el caso corriente (el cliente ya
+   arrancado bajando 1 MB), no una sincronía que tarde minutos. En el propio incidente del 26/08 la
+   entrega llegó fuera de esta ventana. Lo que cubre el resto NO es esta pieza: es la de abajo, que
+   hace VISIBLE la bifurcación en lugar de dejarla nueve días en la carpeta sin que nadie mire. */
+const ARRANQUE_MS = 30000;
+let arranqueHasta = 0;        // 0 = sin cuarentena
+let arranqueAvisado = false;  // el aviso con «Guardar ya» se da una vez, no en cada reintento
+// PURA (tests): milisegundos que aún hay que esperar, o 0 si ya no toca. Sin reloj propio a
+// propósito, para poder fijar sus salidas sin depender de la hora real.
+function esperaArranque(ahora, hasta){
+  return (hasta > 0 && ahora < hasta) ? hasta - ahora : 0;
+}
+// La nube tocó el archivo: sea con contenido nuevo o no, la pasada de descarga ya pasó por aquí.
+// Es una inferencia, no un dato de OneDrive, y por eso solo se usa para ACORTAR la espera.
+function finArranque(){ arranqueHasta = 0; }
+
 async function saveNow(){
+  // La cuarentena va DELANTE de `freshPending` porque decide lo mismo con menos información:
+  // si aún estamos dentro, no hay nada que comprobar todavía. Nunca se pierde el cambio — sigue en
+  // memoria y `dirty` puesto —, solo se retrasa el momento de tocar el archivo.
+  if (backend === "fs"){
+    const falta = esperaArranque(Date.now(), arranqueHasta);
+    if (falta){
+      syncUI("saving", "esperando a la nube… " + Math.ceil(falta / 1000) + " s");
+      if (!arranqueAvisado){
+        arranqueAvisado = true;
+        toastAction("Acabas de abrir Cabecera: espero unos segundos por si tu nube todavía está bajando el archivo del otro equipo.",
+          "Guardar ya", () => { finArranque(); saveNow(); });
+      }
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(saveNow, Math.min(falta, 1000));   // el reintento corto solo mueve el contador
+      return;
+    }
+  }
   if (backend === "fs" && freshPending){
     syncUI("saving", "comprobando sincronización…");
     const clean = await poll().catch(() => false);
@@ -3138,6 +3302,10 @@ async function poll(){   // devuelve true si completó una lectura válida (haya
     const fh = await dirHandle.getFileHandle(DATA_FILE);   // sin create: vigilar nunca fabrica el archivo
     const f = await fh.getFile();
     if (f.lastModified > lastMtime){
+      // La nube ha tocado el archivo desde que cargamos: se acabó la espera de arranque, decida lo
+      // que decida el resto de este bloque (adoptar, fusionar o abrir la barra). Va aquí arriba, y
+      // no dentro de una rama, porque el hecho relevante es que HUBO entrega, no qué se hizo con ella.
+      finArranque();
       let remote = null, text = "";
       try{ text = await f.text(); remote = JSON.parse(text); }catch(e){ clean = false; }   // escritura a medias: reintentar en el siguiente ciclo, lectura NO válida
       if (remote && text === lastSavedText){
@@ -3195,6 +3363,7 @@ async function poll(){   // devuelve true si completó una lectura válida (haya
     }
   }catch(e){ clean = false; }   // transitorio de la nube, o archivo aún no creado: se reintenta en el siguiente ciclo, lectura NO válida
   await pollInbox();
+  revisarCopias(false);   // se autolimita a una pasada cada diez minutos
   return clean;
 }
 
@@ -3308,6 +3477,12 @@ async function startFS(){
         toast("Cargado el escritorio de la carpeta; tu versión local previa quedó guardada como copia");
       }
       localStorage.removeItem("cabecera-mode");
+      // 0.90.0 — el archivo acaba de cargarse de la carpeta: es exactamente el instante en que la
+      // nube puede estar todavía bajando la versión del otro equipo. Se arma aquí y no en `boot`
+      // porque este es el único camino que ha leído un `datos.json` de verdad — una carpeta vacía
+      // o un JSON ilegible no tienen nada que bifurcar.
+      arranqueHasta = Date.now() + ARRANQUE_MS;
+      arranqueAvisado = false;
       syncUI("ok", "sincronizado");
     } else {
       // sin datos.json: puede ser carpeta nueva, o que la nube aún no la haya bajado.
@@ -3329,6 +3504,7 @@ async function finishStartFS(){
   await handleAddParam();
   await pollInbox();
   armPoll();
+  revisarCopias(true);   // sin await: mirar la carpeta no debe retrasar ni un frame el arranque
 }
 
 /* Un solo sitio donde se arma el sondeo, con la cadencia que toque. Idempotente: reload, reconnect
@@ -11337,6 +11513,9 @@ function wireUI(){
       return true;
     }catch(e){ return false; }
   };
+  // El ✕ de las copias vive SOLO en memoria de la sesión, igual que el del aviso de versión: una
+  // copia bifurcada sigue en la carpeta mañana, y descartarla para siempre sería devolver la ceguera.
+  $("#cp-ok").addEventListener("click", () => { copiasDescartado = true; $("#copias").classList.remove("open"); });
   $("#cf-reload").addEventListener("click", async () => {
     if (resolveMergeConflict("remote")) return;
     conflictPending = false; dirty = false; pendingMerge = null; $("#conflict").classList.remove("open");

@@ -1,5 +1,34 @@
 # Changelog
 
+## [0.90.0] - 2026-08-26 — el primer guardado de la mañana espera a la nube, y las copias que deja OneDrive dejan de ser invisibles
+
+- **Parte de fallo tuya, y esta vez con las copias delante.** Llegabas al trabajo, abrías Cabecera
+  antes de que OneDrive terminara de bajar, y OneDrive acababa dejando una copia del archivo con el
+  nombre de tu equipo al lado del tuyo. Tenías **tres**, del 17, del 18 y del 26 de agosto, y no lo
+  sabías porque nada te lo decía. Comparadas todas contra tu escritorio de ahora: **no les falta ni
+  una tarea ni una conversación**. La combinación por ventanas hizo su trabajo las tres veces.
+- **Abrir Cabecera ya no adelanta a tu nube.** Cabecera esperaba antes de guardar cuando volvías a
+  la pestaña tras un rato fuera, pero **no al abrirla del todo**, que es justo la situación de la
+  mañana. Ahora también. La espera **casi nunca se nota**: se corta sola en cuanto el archivo cambia
+  en disco —la señal de que tu nube ya entregó—, y mientras tanto el aviso trae **«Guardar ya»** por
+  si prefieres no esperar. **No se pierde nada:** lo escrito sigue ahí, solo tarda unos segundos más
+  en llegar al archivo.
+- **Y lo que esa espera no alcance, ahora se ve.** Si tu nube deja una copia en conflicto junto a tu
+  `datos.json`, Cabecera la encuentra, **la compara con tu escritorio de ahora** y te dice en una
+  frase lo único que necesitas saber: si no le falta nada —y entonces puedes borrarla tranquilo— o
+  qué tareas o conversaciones tiene que aquí ya no están, con un ejemplo. **Cabecera no toca ni
+  borra ninguna copia**, ni la tuya ni la suya: solo mira y cuenta.
+- Lo que compara son **tareas** (por su identificador, no por su texto: reescribir una tarea no la
+  cuenta como perdida), **respuestas dentro de cada conversación** y **ventanas ausentes**. No
+  compara palabra por palabra una nota, porque esas se reescriben enteras y casi toda diferencia ahí
+  es trabajo posterior, no una pérdida. Si te dice «no falta nada», eso es exactamente lo que
+  significa.
+- **Límite honesto, para que no confíes de más:** el navegador no puede preguntarle a OneDrive si ha
+  terminado —no existe forma—, así que la espera cubre el caso corriente, no una sincronización que
+  tarde varios minutos. En tu propio incidente del 26 la entrega llegó fuera de esa ventana. Por eso
+  las dos piezas van juntas: la primera evita la bifurcación cuando puede, y la segunda hace que la
+  veas cuando no.
+
 ## [0.89.1] - 2026-08-25 — al quitar una etiqueta, la ventana se entera
 
 - **Parte de fallo tuya.** Quitabas la etiqueta `ia-` de una ventana y el interruptor de

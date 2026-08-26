@@ -5165,5 +5165,99 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
     console.log('OK 0.89.1 (quitar la etiqueta repinta el cuerpo y retira la cabecera derivada; la escrita a mano, nunca)');
   }
 
+  // ---- 0.90.0: cuarentena de arranque y copias en conflicto de la nube ----
+  {
+    eval('globalThis.esperaArranque = ' + pickFn('esperaArranque', 'ahora, hasta'));
+    eval('globalThis.esCopiaConflicto = ' + pickFn('esCopiaConflicto', 'nombre'));
+    eval('globalThis.compararCopia = ' + pickFn('compararCopia', 'vivo, copia'));
+    eval('globalThis.textoCopias = ' + pickFn('textoCopias', 'informes'));
+
+    // --- la espera ---
+    if (esperaArranque(1000, 0) !== 0) throw new Error('090: sin cuarentena armada no se espera nunca');
+    if (esperaArranque(1000, 4000) !== 3000) throw new Error('090: debe devolver lo que falta, no un booleano');
+    if (esperaArranque(9000, 4000) !== 0) throw new Error('090: pasada la ventana se guarda sin preguntar');
+    // el corte anticipado es lo que hace que la espera casi nunca se note: si esto deja de valer 0,
+    // la nube ya entrego y aun asi le estariamos reteniendo el guardado
+    if (esperaArranque(1000, 0) !== 0) throw new Error('090: finArranque() debe poder cortarla poniendo 0');
+
+    // --- que ficheros son una copia bifurcada ---
+    for (const n of ['datos-ASUS.json', 'datos-10C131W011.json', 'datos-10C131W011-2.json', 'datos (copia en conflicto).json'])
+      if (!esCopiaConflicto(n)) throw new Error('090: no reconoce una copia real de OneDrive: ' + n);
+    for (const n of ['datos.json', 'DATOS.JSON', 'inbox.txt', 'pack.json', 'datos.json.bak-20260807-003952', 'otro-datos.json'])
+      if (esCopiaConflicto(n)) throw new Error('090: confunde con una copia un fichero que no lo es: ' + n);
+
+    // --- la comparacion: por id, nunca por texto ni por posicion ---
+    const lista090 = items => ({ id: 'w1', type: 'todo', t: 'Cabecera . bandeja', data: { items } });
+    const vivo090 = { spaces: [{ name: 'Cabecera', widgets: [lista090([
+      { id: 't_a', t: 'sigue aqui', replies: [{ by: 'yo', t: 'una' }] },
+      { id: 't_b', t: 'REESCRITA EN EL VIVO' }
+    ])] }] };
+    const copia090 = { spaces: [{ name: 'Cabecera', widgets: [lista090([
+      { id: 't_a', t: 'sigue aqui', replies: [{ by: 'yo', t: 'una' }, { by: 'agente', t: 'dos' }] },
+      { id: 't_b', t: 'con otro texto' },
+      { id: 't_c', n: 218, t: 'esta solo esta en la copia' }
+    ])] }] };
+    const r090 = compararCopia(vivo090, copia090);
+    if (r090.tareas.length !== 1 || r090.tareas[0].n !== 218)
+      throw new Error('090: tiene que cazar la tarea que solo esta en la copia, y decir su numero');
+    if (r090.hilos.length !== 1 || r090.hilos[0].texto !== 'sigue aqui')
+      throw new Error('090: una conversacion mas corta en el vivo es una perdida, y es la que menos se ve');
+    // el mismo id con otro texto NO es una perdida: es una reescritura posterior, y contarla
+    // convertiria el aviso en ruido que se aprende a ignorar entero
+    if (r090.tareas.some(t => t.texto === 'con otro texto'))
+      throw new Error('090: mismo id con texto distinto NO es una tarea perdida');
+
+    // el caso real medido el 26/08: las tres copias de su carpeta no le faltaban nada al vivo
+    const limpio090 = compararCopia(vivo090, { spaces: [{ name: 'Cabecera', widgets: [lista090([
+      { id: 't_a', t: 'sigue aqui', replies: [{ by: 'yo', t: 'una' }] }
+    ])] }] });
+    if (limpio090.tareas.length || limpio090.hilos.length || limpio090.ventanas.length)
+      throw new Error('090: una copia sin nada que falte no debe generar ni un hallazgo');
+
+    // una ventana entera que ya no existe aqui
+    const sinV090 = compararCopia(vivo090, { spaces: [{ name: 'Consulta', widgets: [
+      { id: 'w9', type: 'notes', t: 'Cosas de la consulta', data: { text: 'x' } }
+    ] }] });
+    if (sinV090.ventanas.length !== 1 || sinV090.ventanas[0].titulo !== 'Cosas de la consulta')
+      throw new Error('090: una ventana ausente en el vivo tiene que salir nombrada');
+
+    // --- el texto de la barra: las dos frases que cambian lo que el hace ---
+    const t1 = textoCopias([{ nombre: 'datos-ASUS.json', cuando: '17 ago', tareas: [], hilos: [], ventanas: [] }]);
+    if (!/no le falta nada/.test(t1) || !/puedes borrarlas/.test(t1))
+      throw new Error('090: si no falta nada hay que DECIRLO, o el aviso es ruido que no sabe resolver');
+    if (!/datos-ASUS[.]json [(]17 ago[)]/.test(t1))
+      throw new Error('090: sin el nombre y la fecha no puede ir a buscarla al explorador');
+    const t2 = textoCopias([{ nombre: 'datos-PC2.json', cuando: '26 ago',
+      tareas: [{ lista: 'Cabecera . bandeja', n: 218, texto: 'esta se perdio' }], hilos: [], ventanas: [] }]);
+    const t2sin = t2.normalize('NFD').replace(/[̀-ͯ]/g, '');
+    if (!/1 tarea que aqui ya no estan/.test(t2sin))
+      throw new Error('090: cuando SI falta algo, tiene que decir cuanto');
+    if (!/esta se perdio/.test(t2))
+      throw new Error('090: y ensenar un ejemplo, o no sabe si le importa');
+    if (/borrarlas cuando quieras/.test(t2))
+      throw new Error('090: JAMAS invitar a borrar una copia a la que le falta algo');
+
+
+    /* Las dos piezas de CABLEADO no son puras y no se pueden ejecutar aisladas aqui: viven dentro
+       de saveNow() y poll(), que tocan el disco y media docena de globales. Se comprueban sobre la
+       fuente, que es lo unico honesto que se puede hacer sin un navegador — y por eso se comprueba
+       tambien el ORDEN, que es donde estaria el fallo silencioso: una cuarentena colocada detras
+       del freno de freshPending no frenaria el arranque en frio, que es justo el caso que existe
+       para cubrir. Es una invariante estructural, NO una prueba de que ocurra. */
+    const cuerpoSave = src.match(/async function saveNow\(\)\{[\s\S]*?\n\}/)[0];
+    if (!/esperaArranque\(/.test(cuerpoSave))
+      throw new Error('090: saveNow tiene que consultar la cuarentena, o la pieza es decorativa');
+    // se compara contra el USO, no contra la palabra: el comentario de arriba la nombra antes
+    if (cuerpoSave.indexOf('esperaArranque(') > cuerpoSave.indexOf('freshPending){'))
+      throw new Error('090: la cuarentena va ANTES de freshPending, que es el freno que no cubre el arranque en frio');
+    const cuerpoPoll = src.match(/async function poll\(\)\{[\s\S]*?\n\}/)[0];
+    if (!/finArranque\(\)/.test(cuerpoPoll))
+      throw new Error('090: sin corte anticipado en poll, la espera se cobra entera cada manana');
+    if (!/arranqueHasta = Date\.now\(\) [+] ARRANQUE_MS/.test(src))
+      throw new Error('090: nadie arma la cuarentena al cargar datos.json de la carpeta');
+
+    console.log('OK 0.90.0 (el arranque en frio tambien frena el primer guardado; las copias que deja la nube se ven y dicen si les falta algo)');
+  }
+
   console.log('\nTODO EN VERDE');
 })().catch(e => { console.error(e && e.stack || e); process.exitCode = 1; });
