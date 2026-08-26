@@ -5253,6 +5253,10 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
     const cuerpoPoll = src.match(/async function poll\(\)\{[\s\S]*?\n\}/)[0];
     if (!/finArranque\(\)/.test(cuerpoPoll))
       throw new Error('090: sin corte anticipado en poll, la espera se cobra entera cada manana');
+    // y va DESPUES del parse: un mtime que avanza con el JSON a medio escribir es una escritura EN
+    // CURSO, y levantar ahi la cuarentena nos deja escribir justo encima de ella
+    if (cuerpoPoll.indexOf('finArranque()') < cuerpoPoll.indexOf('JSON.parse(text)'))
+      throw new Error('090: la cuarentena no puede levantarse con una lectura que no ha llegado a completarse');
     if (!/arranqueHasta = Date\.now\(\) [+] ARRANQUE_MS/.test(src))
       throw new Error('090: nadie arma la cuarentena al cargar datos.json de la carpeta');
 

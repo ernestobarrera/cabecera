@@ -3327,12 +3327,15 @@ async function poll(){   // devuelve true si completó una lectura válida (haya
     const fh = await dirHandle.getFileHandle(DATA_FILE);   // sin create: vigilar nunca fabrica el archivo
     const f = await fh.getFile();
     if (f.lastModified > lastMtime){
-      // La nube ha tocado el archivo desde que cargamos: se acabó la espera de arranque, decida lo
-      // que decida el resto de este bloque (adoptar, fusionar o abrir la barra). Va aquí arriba, y
-      // no dentro de una rama, porque el hecho relevante es que HUBO entrega, no qué se hizo con ella.
-      finArranque();
       let remote = null, text = "";
       try{ text = await f.text(); remote = JSON.parse(text); }catch(e){ clean = false; }   // escritura a medias: reintentar en el siguiente ciclo, lectura NO válida
+      /* La nube ha tocado el archivo desde que cargamos Y hemos podido leerlo entero: eso es la
+         entrega, y se acaba la espera de arranque decida lo que decida el resto de este bloque
+         (adoptar, fusionar o abrir la barra) — el hecho relevante es que HUBO entrega, no qué se
+         hizo con ella. Va DESPUÉS del `parse` a propósito: un `lastModified` que avanza con el JSON
+         a medio escribir es una escritura EN CURSO, no una terminada, y levantar ahí la cuarentena
+         nos dejaría escribir justo encima de ella — el fallo que esta pieza existe para evitar. */
+      if (remote) finArranque();
       if (remote && text === lastSavedText){
         // idéntico al último texto que leímos/escribimos (p. ej. OneDrive tocó el mtime):
         // no es conflicto. Se compara el TEXTO CRUDO, no una reserialización de state ni
