@@ -3088,16 +3088,24 @@ function textoCopias(informes){
     + ". No se ha tocado nada: dile a un asistente que la mire antes de borrarla.";
 }
 
-let copiasRevisadas = 0;      // instante del último escaneo; 0 = nunca
+// PURA (tests). El tercer estado. Dice lo que NO sabe y qué hacer, no un error técnico.
+function textoCopiasInconcluso(){
+  return "No he podido comprobar si tu nube dejó copias de datos.json junto al tuyo — no consigo leer la carpeta. "
+    + "Esto NO significa que no las haya: significa que no lo sé. Mira la carpeta a mano, o reconecta la carpeta desde el indicador de sincronización.";
+}
+let copiasRevisadas = 0;      // instante del último escaneo COMPLETADO; 0 = nunca
 let copiasDescartado = false; // ✕ de la sesión, como el aviso de versión: nunca se persiste
+let copiasFallos = 0;         // escaneos seguidos que no pudieron mirar la carpeta
 const COPIAS_CADA_MS = 10 * 60 * 1000;
+/* Tres intentos antes de decir que no se pudo: el primero suele caer en un transitorio de la nube
+   —la carpeta ocupada mientras sincroniza— y avisar de eso sería el aviso que suele venir vacío. */
+const COPIAS_FALLOS_MAX = 3;
 
 /* Escaneo real. Enumerar la carpeta es barato y solo se hace al arrancar y cada diez minutos: una
    copia nueva aparece cuando la nube sincroniza, no entre dos pulsaciones. */
 async function revisarCopias(force){
   if (backend !== "fs" || !dirHandle || copiasDescartado) return;
   if (!force && copiasRevisadas && Date.now() - copiasRevisadas < COPIAS_CADA_MS) return;
-  copiasRevisadas = Date.now();
   const informes = [];
   try{
     for await (const [nombre, h] of dirHandle.entries()){
@@ -3112,7 +3120,24 @@ async function revisarCopias(force){
         informes.push({ nombre, cuando: "sin leer", tareas: [], hilos: [], ventanas: [], ilegible: true });
       }
     }
-  }catch(e){ return; }   // sin permiso o transitorio de la nube: se reintenta en el siguiente ciclo
+  }catch(e){
+    /* NO SE PUDO MIRAR LA CARPETA: permiso retirado, o un transitorio de la nube. Y aquí estaba el
+       defecto que este propio proyecto tiene escrito como regla y que se coló igual: callarse.
+       La guía promete «Cabecera las busca sola y te avisa», así que un fallo mudo convierte esa
+       promesa en mentira — la ausencia de barra se lee como «no hay copias» cuando en realidad es
+       «no lo sé». Un comprobador que aprueba por no haber podido mirar es peor que no tenerlo,
+       porque además da confianza. Contrato de tres estados: hay copias / no hay / INCONCLUSO.
+       Nótese que `copiasRevisadas` NO se ha sellado todavía: un fallo se reintenta en el siguiente
+       ciclo de sondeo, no dentro de diez minutos. */
+    copiasFallos++;
+    if (copiasFallos >= COPIAS_FALLOS_MAX && $("#copias")){
+      $("#copias-msg").textContent = textoCopiasInconcluso();
+      $("#copias").classList.add("open");
+    }
+    return;
+  }
+  copiasFallos = 0;
+  copiasRevisadas = Date.now();   // se sella SOLO tras una pasada completa
   const bar = $("#copias");
   if (!bar) return;
   if (!informes.length){ bar.classList.remove("open"); return; }

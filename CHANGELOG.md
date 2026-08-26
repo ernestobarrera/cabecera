@@ -23,6 +23,10 @@
   compara palabra por palabra una nota, porque esas se reescriben enteras y casi toda diferencia ahí
   es trabajo posterior, no una pérdida. Si te dice «no falta nada», eso es exactamente lo que
   significa.
+- **Y si no puede mirar la carpeta, te lo dice.** Si Cabecera no consigue leerla —permiso retirado,
+  o tu nube ocupada— no se calla: tras tres intentos te avisa de que **no ha podido comprobarlo**,
+  que no es lo mismo que «no hay copias». Callarse ahí habría convertido la frase de la guía en una
+  promesa falsa.
 - **Límite honesto, para que no confíes de más:** el navegador no puede preguntarle a OneDrive si ha
   terminado —no existe forma—, así que la espera cubre el caso corriente, no una sincronización que
   tarde varios minutos. En tu propio incidente del 26 la entrega llegó fuera de esa ventana. Por eso

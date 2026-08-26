@@ -5256,6 +5256,24 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
     if (!/arranqueHasta = Date\.now\(\) [+] ARRANQUE_MS/.test(src))
       throw new Error('090: nadie arma la cuarentena al cargar datos.json de la carpeta');
 
+
+    /* El TERCER ESTADO. La guia promete que Cabecera busca las copias sola y avisa; si el escaneo
+       no puede mirar la carpeta y se calla, la ausencia de barra se lee como «no hay copias»
+       cuando en realidad es «no lo se», y la guia pasa a mentir. Un comprobador que aprueba por no
+       haber podido mirar es peor que no tenerlo, porque ademas da confianza. */
+    eval('globalThis.textoCopiasInconcluso = ' + pickFn('textoCopiasInconcluso', ''));
+    const inc = textoCopiasInconcluso();
+    if (!/no lo se/.test(inc.normalize('NFD').replace(/[̀-ͯ]/g, '')))
+      throw new Error('090: el tercer estado tiene que decir que NO SABE, no fingir un error tecnico');
+    if (/no hay/.test(inc.replace(/NO significa que no las haya/, '')))
+      throw new Error('090: inconcluso JAMAS puede leerse como «no hay copias»');
+    const cuerpoRev = src.match(/async function revisarCopias\(force\)\{[\s\S]*?\n\}/)[0];
+    if (!/copiasFallos[+][+]/.test(cuerpoRev) || !/textoCopiasInconcluso\(\)/.test(cuerpoRev))
+      throw new Error('090: el fallo de escaneo tiene que contarse y acabar diciendose, no morir en un catch mudo');
+    // y el sellado va DESPUES del try: si se sella antes, un fallo bloquea el reintento diez minutos
+    if (cuerpoRev.indexOf('copiasRevisadas = Date.now()') < cuerpoRev.indexOf('catch'))
+      throw new Error('090: sellar el escaneo antes de completarlo convierte un fallo en diez minutos de silencio');
+
     console.log('OK 0.90.0 (el arranque en frio tambien frena el primer guardado; las copias que deja la nube se ven y dicen si les falta algo)');
   }
 
