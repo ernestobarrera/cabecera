@@ -1,37 +1,35 @@
 # Changelog
 
-## [0.90.0] - 2026-08-26 — el primer guardado de la mañana espera a la nube, y las copias que deja OneDrive dejan de ser invisibles
+## [0.90.0] - 2026-08-27 — las copias que deja OneDrive dejan de ser invisibles
 
 - **Parte de fallo tuya, y esta vez con las copias delante.** Llegabas al trabajo, abrías Cabecera
   antes de que OneDrive terminara de bajar, y OneDrive acababa dejando una copia del archivo con el
   nombre de tu equipo al lado del tuyo. Tenías **tres**, del 17, del 18 y del 26 de agosto, y no lo
   sabías porque nada te lo decía. Comparadas todas contra tu escritorio de ahora: **no les falta ni
   una tarea ni una conversación**. La combinación por ventanas hizo su trabajo las tres veces.
-- **Abrir Cabecera ya no adelanta a tu nube.** Cabecera esperaba antes de guardar cuando volvías a
-  la pestaña tras un rato fuera, pero **no al abrirla del todo**, que es justo la situación de la
-  mañana. Ahora también. La espera **casi nunca se nota**: se corta sola en cuanto el archivo cambia
-  en disco —la señal de que tu nube ya entregó—, y mientras tanto el aviso trae **«Guardar ya»** por
-  si prefieres no esperar. **No se pierde nada:** lo escrito sigue ahí, solo tarda unos segundos más
-  en llegar al archivo.
-- **Y lo que esa espera no alcance, ahora se ve.** Si tu nube deja una copia en conflicto junto a tu
-  `datos.json`, Cabecera la encuentra, **la compara con tu escritorio de ahora** y te dice en una
-  frase lo único que necesitas saber: si no le falta nada —y entonces puedes borrarla tranquilo— o
-  qué tareas o conversaciones tiene que aquí ya no están, con un ejemplo. **Cabecera no toca ni
-  borra ninguna copia**, ni la tuya ni la suya: solo mira y cuenta.
-- Lo que compara son **tareas** (por su identificador, no por su texto: reescribir una tarea no la
-  cuenta como perdida), **respuestas dentro de cada conversación** y **ventanas ausentes**. No
-  compara palabra por palabra una nota, porque esas se reescriben enteras y casi toda diferencia ahí
-  es trabajo posterior, no una pérdida. Si te dice «no falta nada», eso es exactamente lo que
-  significa.
-- **Y si no puede mirar la carpeta, te lo dice.** Si Cabecera no consigue leerla —permiso retirado,
-  o tu nube ocupada— no se calla: tras tres intentos te avisa de que **no ha podido comprobarlo**,
-  que no es lo mismo que «no hay copias». Callarse ahí habría convertido la frase de la guía en una
-  promesa falsa.
+- **Ahora Cabecera las encuentra y te dice si les falta algo.** Busca sola los archivos con forma de
+  copia junto a tu `datos.json`, los compara con tu escritorio y lo resume en una frase: si están
+  cubiertos —y entonces puedes borrarlos tranquilo— o qué tareas o conversaciones tienen que aquí ya
+  no están, con un ejemplo. **Cabecera nunca toca ni borra ninguno.**
+- **Y solo te invita a borrar cuando de verdad ha podido comprobarlo.** Si un archivo no se puede
+  abrir, o no tiene forma de escritorio, o la carpeta entera no se deja leer, te dice exactamente
+  eso: que **no lo sabe**, que no es lo mismo que decirte que no falta nada. Nunca vas a leer
+  «puedes borrarlo» sobre algo que Cabecera no ha conseguido mirar.
+- Compara **tareas** (por su identificador, no por su texto), **las respuestas de cada
+  conversación** —una por una, no por cuántas hay: dos conversaciones distintas del mismo largo son
+  una respuesta perdida, no un empate— y **ventanas ausentes**. Si además reescribiste alguna tarea
+  después de la bifurcación, te lo advierte aparte: no es una pérdida, pero el texto antiguo solo
+  vive dentro de la copia.
+- **Se probó una espera al abrir Cabecera y se ha retirado antes de publicarla.** La idea era que el
+  primer guardado de la mañana esperase a que tu nube terminara. Dos datos la tumbaron: **no habría
+  evitado tu incidente** —la copia lleva las 07:49 y tu tarea las 08:08, o sea que OneDrive entregó
+  mucho después— y a cambio dejaba hasta 30 segundos un texto **ya escrito por ti** solo en memoria,
+  de modo que cerrar la pestaña lo perdía. Cambiar una bifurcación que nunca te ha costado una tarea
+  por una pérdida silenciosa de algo que acabas de teclear es un mal negocio. El motivo queda escrito
+  en el código para que nadie la reconstruya sin leerlo.
 - **Límite honesto, para que no confíes de más:** el navegador no puede preguntarle a OneDrive si ha
-  terminado —no existe forma—, así que la espera cubre el caso corriente, no una sincronización que
-  tarde varios minutos. En tu propio incidente del 26 la entrega llegó fuera de esa ventana. Por eso
-  las dos piezas van juntas: la primera evita la bifurcación cuando puede, y la segunda hace que la
-  veas cuando no.
+  terminado, así que **seguirán apareciendo copias**. Lo que cambia no es que dejen de aparecer: es
+  que dejas de enterarte nueve días tarde.
 
 ## [0.89.1] - 2026-08-25 — al quitar una etiqueta, la ventana se entera
 

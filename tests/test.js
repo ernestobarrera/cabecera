@@ -5165,35 +5165,71 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
     console.log('OK 0.89.1 (quitar la etiqueta repinta el cuerpo y retira la cabecera derivada; la escrita a mano, nunca)');
   }
 
-  // ---- 0.90.0: cuarentena de arranque y copias en conflicto de la nube ----
+  // ---- 0.90.0: las copias que deja la nube se ven y NUNCA se certifican de mas ----
   {
-    eval('globalThis.esperaArranque = ' + pickFn('esperaArranque', 'ahora, hasta'));
     eval('globalThis.esCopiaConflicto = ' + pickFn('esCopiaConflicto', 'nombre'));
+    eval('globalThis.hiloCubierto = ' + pickFn('hiloCubierto', 'deCopia, deVivo'));
     eval('globalThis.compararCopia = ' + pickFn('compararCopia', 'vivo, copia'));
+    eval('globalThis.copiaCertificada = ' + pickFn('copiaCertificada', 'i'));
     eval('globalThis.textoCopias = ' + pickFn('textoCopias', 'informes'));
+    eval('globalThis.textoCopiasInconcluso = ' + pickFn('textoCopiasInconcluso', ''));
 
-    // --- la espera ---
-    if (esperaArranque(1000, 0) !== 0) throw new Error('090: sin cuarentena armada no se espera nunca');
-    if (esperaArranque(1000, 4000) !== 3000) throw new Error('090: debe devolver lo que falta, no un booleano');
-    if (esperaArranque(9000, 4000) !== 0) throw new Error('090: pasada la ventana se guarda sin preguntar');
-    // el corte anticipado es lo que hace que la espera casi nunca se note: si esto deja de valer 0,
-    // la nube ya entrego y aun asi le estariamos reteniendo el guardado
-    if (esperaArranque(1000, 0) !== 0) throw new Error('090: finArranque() debe poder cortarla poniendo 0');
+    /* LA CUARENTENA DE ARRANQUE SE RETIRO tras el contraste de Codex (27/08): no habria evitado el
+       incidente real —copia a las 07:49, tarea a las 08:08— y a cambio retenia hasta 30 s en
+       memoria un cambio TECLEADO por el, en una app sin `beforeunload` ni `pagehide`. Este test
+       existe para que no vuelva sin leer antes por que se fue: el motivo esta escrito junto a
+       `freshPending` en el fuente. */
+    if (/ARRANQUE_MS|arranqueHasta|esperaArranque\(/.test(src))
+      throw new Error('090: la cuarentena de arranque se retiro a proposito; si vuelve, lee antes el porque en index.html');
+    if (!/LA CUARENTENA DE ARRANQUE SE PROB/.test(src))
+      throw new Error('090: sin la nota de por que se retiro, el siguiente que vea el hueco la reconstruye igual');
 
-    // --- que ficheros son una copia bifurcada ---
+    // --- que ficheros tienen forma de copia ---
     for (const n of ['datos-ASUS.json', 'datos-10C131W011.json', 'datos-10C131W011-2.json', 'datos (copia en conflicto).json'])
       if (!esCopiaConflicto(n)) throw new Error('090: no reconoce una copia real de OneDrive: ' + n);
     for (const n of ['datos.json', 'DATOS.JSON', 'inbox.txt', 'pack.json', 'datos.json.bak-20260807-003952', 'otro-datos.json'])
       if (esCopiaConflicto(n)) throw new Error('090: confunde con una copia un fichero que no lo es: ' + n);
 
-    // --- la comparacion: por id, nunca por texto ni por posicion ---
+    /* HALLAZGO 1 DE CODEX, EL GRAVE: una copia que no se pudo leer llegaba con las tres listas
+       vacias y salia por la rama de «no le falta nada... puedes borrarlas». Recomendar borrar un
+       archivo que no has conseguido abrir es el peor fallo posible de esta funcion. */
+    const ileg = textoCopias([{ nombre: 'datos-PC.json', cuando: 'sin leer', tareas: [], hilos: [], ventanas: [], comparable: false, ilegible: true }]);
+    if (/puedes borrarl/.test(ileg))
+      throw new Error('090: JAMAS invitar a borrar una copia que no se ha podido leer');
+    if (!/NO puedo decirte/.test(ileg) || !/No borres/.test(ileg))
+      throw new Error('090: una copia ilegible es INCONCLUSA y tiene que decirlo con esas dos cosas');
+    // y un esquema que no es un escritorio tampoco se certifica
+    const noEsquema = compararCopia({ spaces: [] }, { version: 2 });
+    if (noEsquema.comparable !== false)
+      throw new Error('090: sin `spaces` no hay comparacion posible, y eso NO es «no falta nada»');
+    if (/puedes borrarl/.test(textoCopias([{ nombre: 'x.json', cuando: 'hoy', ...noEsquema }])))
+      throw new Error('090: un esquema no comparable tampoco puede acabar en una invitacion a borrar');
+    // basta UNA sin leer para que el conjunto deje de certificarse
+    const mixto = textoCopias([
+      { nombre: 'a.json', cuando: '17 ago', tareas: [], hilos: [], ventanas: [], reescritas: 0, comparable: true },
+      { nombre: 'b.json', cuando: 'sin leer', tareas: [], hilos: [], ventanas: [], comparable: false, ilegible: true }
+    ]);
+    if (/puedes borrarl/.test(mixto))
+      throw new Error('090: una sola copia ilegible tiene que tumbar la certificacion de todo el conjunto');
+
+    /* HALLAZGO 2 DE CODEX: hilos bifurcados de IGUAL longitud. Vivo [A] y copia [B] son la misma
+       longitud y se daban por identicos, cuando es una respuesta perdida. Las respuestas de esta
+       app solo se anaden y no se reescriben, asi que la relacion correcta es de PREFIJO. */
+    const rA = { by: 'yo', at: 1, t: 'RESPUESTA A' }, rB = { by: 'yo', at: 1, t: 'RESPUESTA B' };
+    if (hiloCubierto([rB], [rA])) throw new Error('090: dos hilos distintos de igual longitud NO estan cubiertos');
+    if (!hiloCubierto([rA], [rA, rB])) throw new Error('090: un hilo que es el principio del vivo SI esta cubierto');
+    if (hiloCubierto([rA, rB], [rA])) throw new Error('090: la copia con MAS respuestas nunca esta cubierta');
+    if (!hiloCubierto([], [])) throw new Error('090: sin conversacion en ninguno de los dos lados no hay hallazgo');
+    if (!hiloCubierto(undefined, undefined)) throw new Error('090: ausencia de `replies` no puede reventar la comparacion');
+
+    // --- la comparacion completa: por id, nunca por texto ni por posicion ---
     const lista090 = items => ({ id: 'w1', type: 'todo', t: 'Cabecera . bandeja', data: { items } });
     const vivo090 = { spaces: [{ name: 'Cabecera', widgets: [lista090([
-      { id: 't_a', t: 'sigue aqui', replies: [{ by: 'yo', t: 'una' }] },
+      { id: 't_a', t: 'sigue aqui', replies: [rA] },
       { id: 't_b', t: 'REESCRITA EN EL VIVO' }
     ])] }] };
     const copia090 = { spaces: [{ name: 'Cabecera', widgets: [lista090([
-      { id: 't_a', t: 'sigue aqui', replies: [{ by: 'yo', t: 'una' }, { by: 'agente', t: 'dos' }] },
+      { id: 't_a', t: 'sigue aqui', replies: [rA, rB] },
       { id: 't_b', t: 'con otro texto' },
       { id: 't_c', n: 218, t: 'esta solo esta en la copia' }
     ])] }] };
@@ -5201,17 +5237,23 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
     if (r090.tareas.length !== 1 || r090.tareas[0].n !== 218)
       throw new Error('090: tiene que cazar la tarea que solo esta en la copia, y decir su numero');
     if (r090.hilos.length !== 1 || r090.hilos[0].texto !== 'sigue aqui')
-      throw new Error('090: una conversacion mas corta en el vivo es una perdida, y es la que menos se ve');
-    // el mismo id con otro texto NO es una perdida: es una reescritura posterior, y contarla
-    // convertiria el aviso en ruido que se aprende a ignorar entero
+      throw new Error('090: una conversacion no cubierta es una perdida, y es la que menos se ve');
+    /* Mismo id con otro texto: NO es una tarea perdida —contarla como tal llenaria el aviso de
+       ruido— pero TAMPOCO es nada: el texto viejo solo vive en la copia. Se cuenta aparte y se
+       advierte sin bloquear, que es lo que impide que «no falta nada» lo tape en silencio. */
     if (r090.tareas.some(t => t.texto === 'con otro texto'))
-      throw new Error('090: mismo id con texto distinto NO es una tarea perdida');
+      throw new Error('090: mismo id con texto distinto NO se cuenta como tarea perdida');
+    if (r090.reescritas !== 1)
+      throw new Error('090: pero SI se cuenta aparte: la version antigua solo existe en la copia');
+    const conReesc = textoCopias([{ nombre: 'a.json', cuando: 'hoy', tareas: [], hilos: [], ventanas: [], reescritas: 2, comparable: true }]);
+    if (!/2 tareas el texto es distinto/.test(conReesc) || !/puedes borrarl/.test(conReesc))
+      throw new Error('090: una reescritura se ADVIERTE pero no bloquea: son cosas distintas');
 
     // el caso real medido el 26/08: las tres copias de su carpeta no le faltaban nada al vivo
     const limpio090 = compararCopia(vivo090, { spaces: [{ name: 'Cabecera', widgets: [lista090([
-      { id: 't_a', t: 'sigue aqui', replies: [{ by: 'yo', t: 'una' }] }
+      { id: 't_a', t: 'sigue aqui', replies: [rA] }, { id: 't_b', t: 'REESCRITA EN EL VIVO' }
     ])] }] });
-    if (limpio090.tareas.length || limpio090.hilos.length || limpio090.ventanas.length)
+    if (limpio090.tareas.length || limpio090.hilos.length || limpio090.ventanas.length || limpio090.reescritas)
       throw new Error('090: una copia sin nada que falte no debe generar ni un hallazgo');
 
     // una ventana entera que ya no existe aqui
@@ -5221,64 +5263,55 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
     if (sinV090.ventanas.length !== 1 || sinV090.ventanas[0].titulo !== 'Cosas de la consulta')
       throw new Error('090: una ventana ausente en el vivo tiene que salir nombrada');
 
-    // --- el texto de la barra: las dos frases que cambian lo que el hace ---
-    const t1 = textoCopias([{ nombre: 'datos-ASUS.json', cuando: '17 ago', tareas: [], hilos: [], ventanas: [] }]);
-    if (!/no le falta nada/.test(t1) || !/puedes borrarlas/.test(t1))
-      throw new Error('090: si no falta nada hay que DECIRLO, o el aviso es ruido que no sabe resolver');
+    // --- el texto de la barra en la unica rama que invita a borrar ---
+    const t1 = textoCopias([{ nombre: 'datos-ASUS.json', cuando: '17 ago', tareas: [], hilos: [], ventanas: [], reescritas: 0, comparable: true }]);
+    if (!/no les falta ninguna tarea/.test(t1) || !/puedes borrarl/.test(t1))
+      throw new Error('090: si esta todo comparado y no falta nada hay que DECIRLO, o el aviso es ruido que no sabe resolver');
     if (!/datos-ASUS[.]json [(]17 ago[)]/.test(t1))
       throw new Error('090: sin el nombre y la fecha no puede ir a buscarla al explorador');
-    const t2 = textoCopias([{ nombre: 'datos-PC2.json', cuando: '26 ago',
+    /* No se afirma quien creo el fichero: el detector reconoce la FORMA, y un `datos-viejo.json`
+       suyo pasa igual. Decir «tu nube dejo» seria inventarselo (Codex, 27/08). */
+    if (/[Tt]u nube dej/.test(t1))
+      throw new Error('090: el detector no sabe quien creo el fichero: describe la forma, no el origen');
+    const t2 = textoCopias([{ nombre: 'datos-PC2.json', cuando: '26 ago', reescritas: 0, comparable: true,
       tareas: [{ lista: 'Cabecera . bandeja', n: 218, texto: 'esta se perdio' }], hilos: [], ventanas: [] }]);
     const t2sin = t2.normalize('NFD').replace(/[̀-ͯ]/g, '');
     if (!/1 tarea que aqui ya no estan/.test(t2sin))
       throw new Error('090: cuando SI falta algo, tiene que decir cuanto');
     if (!/esta se perdio/.test(t2))
       throw new Error('090: y ensenar un ejemplo, o no sabe si le importa');
-    if (/borrarlas cuando quieras/.test(t2))
+    if (/puedes borrarl/.test(t2))
       throw new Error('090: JAMAS invitar a borrar una copia a la que le falta algo');
 
-
-    /* Las dos piezas de CABLEADO no son puras y no se pueden ejecutar aisladas aqui: viven dentro
-       de saveNow() y poll(), que tocan el disco y media docena de globales. Se comprueban sobre la
-       fuente, que es lo unico honesto que se puede hacer sin un navegador — y por eso se comprueba
-       tambien el ORDEN, que es donde estaria el fallo silencioso: una cuarentena colocada detras
-       del freno de freshPending no frenaria el arranque en frio, que es justo el caso que existe
-       para cubrir. Es una invariante estructural, NO una prueba de que ocurra. */
-    const cuerpoSave = src.match(/async function saveNow\(\)\{[\s\S]*?\n\}/)[0];
-    if (!/esperaArranque\(/.test(cuerpoSave))
-      throw new Error('090: saveNow tiene que consultar la cuarentena, o la pieza es decorativa');
-    // se compara contra el USO, no contra la palabra: el comentario de arriba la nombra antes
-    if (cuerpoSave.indexOf('esperaArranque(') > cuerpoSave.indexOf('freshPending){'))
-      throw new Error('090: la cuarentena va ANTES de freshPending, que es el freno que no cubre el arranque en frio');
-    const cuerpoPoll = src.match(/async function poll\(\)\{[\s\S]*?\n\}/)[0];
-    if (!/finArranque\(\)/.test(cuerpoPoll))
-      throw new Error('090: sin corte anticipado en poll, la espera se cobra entera cada manana');
-    // y va DESPUES del parse: un mtime que avanza con el JSON a medio escribir es una escritura EN
-    // CURSO, y levantar ahi la cuarentena nos deja escribir justo encima de ella
-    if (cuerpoPoll.indexOf('finArranque()') < cuerpoPoll.indexOf('JSON.parse(text)'))
-      throw new Error('090: la cuarentena no puede levantarse con una lectura que no ha llegado a completarse');
-    if (!/arranqueHasta = Date\.now\(\) [+] ARRANQUE_MS/.test(src))
-      throw new Error('090: nadie arma la cuarentena al cargar datos.json de la carpeta');
-
-
-    /* El TERCER ESTADO. La guia promete que Cabecera busca las copias sola y avisa; si el escaneo
-       no puede mirar la carpeta y se calla, la ausencia de barra se lee como «no hay copias»
-       cuando en realidad es «no lo se», y la guia pasa a mentir. Un comprobador que aprueba por no
-       haber podido mirar es peor que no tenerlo, porque ademas da confianza. */
-    eval('globalThis.textoCopiasInconcluso = ' + pickFn('textoCopiasInconcluso', ''));
+    /* EL TERCER ESTADO DEL ESCANEO ENTERO (distinto del de una copia suelta). La guia promete que
+       Cabecera busca las copias sola y avisa; si no puede leer la carpeta y se calla, la ausencia
+       de barra se lee como «no hay copias» cuando en realidad es «no lo se». */
     const inc = textoCopiasInconcluso();
     if (!/no lo se/.test(inc.normalize('NFD').replace(/[̀-ͯ]/g, '')))
       throw new Error('090: el tercer estado tiene que decir que NO SABE, no fingir un error tecnico');
-    if (/no hay/.test(inc.replace(/NO significa que no las haya/, '')))
-      throw new Error('090: inconcluso JAMAS puede leerse como «no hay copias»');
     const cuerpoRev = src.match(/async function revisarCopias\(force\)\{[\s\S]*?\n\}/)[0];
     if (!/copiasFallos[+][+]/.test(cuerpoRev) || !/textoCopiasInconcluso\(\)/.test(cuerpoRev))
       throw new Error('090: el fallo de escaneo tiene que contarse y acabar diciendose, no morir en un catch mudo');
-    // y el sellado va DESPUES del try: si se sella antes, un fallo bloquea el reintento diez minutos
     if (cuerpoRev.indexOf('copiasRevisadas = Date.now()') < cuerpoRev.indexOf('catch'))
       throw new Error('090: sellar el escaneo antes de completarlo convierte un fallo en diez minutos de silencio');
 
-    console.log('OK 0.90.0 (el arranque en frio tambien frena el primer guardado; las copias que deja la nube se ven y dicen si les falta algo)');
+    /* HALLAZGO 4 DE CODEX: sin cerrojo, y como el sellado ocurre al TERMINAR, el sondeo de 4 s
+       puede arrancar un segundo escaneo mientras el primero sigue leyendo copias de 1 MB —mas aun
+       si OneDrive tiene que hidratarlas—. El cerrojo se suelta en `finally` o es peor que nada. */
+    if (!/copiasEnCurso/.test(cuerpoRev) || !/finally\{ copiasEnCurso = false; \}/.test(cuerpoRev))
+      throw new Error('090: el escaneo necesita cerrojo de reentrada, y soltarlo tambien en el camino de error');
+
+    /* HALLAZGO 3 DE CODEX: las dos barras se solapaban ~197 px a 390x844, porque `top:62px` daba
+       por hecho que la de conflicto medía menos de 50. Apilar flotantes obliga a predecir el alto
+       del texto. Son excluyentes por CSS —sin estado en JS que se pueda desincronizar— y manda la
+       de conflicto, que pide una decision ahora; la de copias solo informa. */
+    // se comprueba sobre `html`, no sobre `src`: esto es CSS y vive en la hoja, no en el script
+    if (!/#conflict\.open ~ #copias\.open\{display:none\}/.test(html))
+      throw new Error('090: las dos barras no pueden poder mostrarse a la vez');
+    if (/#copias\{[^}]*top:62px/.test(html))
+      throw new Error('090: apilar la barra de copias bajo la de conflicto es lo que las solapaba');
+
+    console.log('OK 0.90.0 (las copias de la nube se ven, se comparan por contenido y NUNCA se certifican de mas; cuarentena retirada tras el contraste)');
   }
 
   console.log('\nTODO EN VERDE');

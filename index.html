@@ -457,10 +457,17 @@ textarea.dlg-inp{resize:vertical; min-height:46px}
 #conflict.open{display:flex}
 /* Barra de copias en conflicto de la nube: informa, no decide. Por eso NO comparte el borde ámbar
    de #conflict, que significa «te toca elegir algo», y se coloca debajo para no taparla. */
-#copias{position:fixed; top:62px; left:50%; transform:translateX(-50%); z-index:959; display:none; align-items:center; gap:12px;
+#copias{position:fixed; top:12px; left:50%; transform:translateX(-50%); z-index:959; display:none; align-items:center; gap:12px;
   padding:10px 16px; border-radius:12px; background:var(--glass); border:1px solid var(--border); font-size:13px;
   box-shadow:var(--shadow); max-width:min(680px, 92vw)}
 #copias.open{display:flex}
+/* EXCLUYENTES, no apiladas. La primera versión ponía «copias» en top:62px dando por hecho que la
+   barra de conflicto medía menos de 50 px; Codex lo midió a 390×844 y con texto real ocupa ~247 px,
+   así que tapaba unos 197 px de la de abajo. Apilar dos barras flotantes obliga a predecir el alto
+   del texto, que es justo lo que no se puede hacer. Y la jerarquía es clara: el conflicto PIDE una
+   decisión ahora, las copias solo informan de algo que lleva días ahí. Mientras haya conflicto,
+   «copias» se calla; al resolverse reaparece sola, porque su clase `.open` no se ha tocado. */
+#conflict.open ~ #copias.open{display:none}
 
 /* ---------- contenido de widgets ---------- */
 textarea.notes{width:100%; height:100%; min-height:110px; resize:none; border:none; outline:none; background:transparent;
@@ -3052,40 +3059,101 @@ function compararCopia(vivo, copia){
     if (w.type === "todo") for (const it of ((w.data && w.data.items) || [])) if (it && it.id) tareasVivas.set(it.id, it);
   }
   const tareas = [], hilos = [], ventanas = [];
-  for (const sp of (copia && copia.spaces) || []) for (const w of (sp.widgets || [])){
+  let reescritas = 0;
+  // Sin `spaces` no hay nada que comparar: NO es «no falta nada», es que esto no es un escritorio.
+  if (!Array.isArray(copia && copia.spaces) || !Array.isArray(vivo && vivo.spaces))
+    return { tareas, hilos, ventanas, reescritas, comparable: false };
+  for (const sp of copia.spaces) for (const w of ((sp && sp.widgets) || [])){
     if (w.id && !ventanasVivas.has(w.id)) ventanas.push({ esp: sp.name || "", titulo: w.t || w.type || "" });
     if (w.type !== "todo") continue;
     for (const it of ((w.data && w.data.items) || [])){
       if (!it || !it.id) continue;
       const aqui = tareasVivas.get(it.id);
       if (!aqui){ tareas.push({ esp: sp.name || "", lista: w.t || "", n: it.n || null, texto: it.t || "" }); continue; }
-      // la tarea sigue existiendo, pero su conversación puede haber quedado más corta en el vivo
-      if (((it.replies || []).length) > ((aqui.replies || []).length))
+      /* Mismo `id`, texto distinto: la tarea NO se ha perdido, la reescribió después. No es un
+         hallazgo —contarlo como tal llenaría el aviso de ruido y el ruido se aprende a ignorar
+         entero—, pero tampoco es nada: el texto viejo solo existe dentro de la copia. Se cuenta
+         aparte y se menciona como advertencia, sin bloquear. La frase «no le falta nada» no puede
+         cubrir esto en silencio. */
+      if (String(it.t || "") !== String(aqui.t || "")) reescritas++;
+      /* La tarea sigue existiendo, pero su conversación puede haber DIVERGIDO. Contar solo la
+         longitud era el fallo que encontró Codex el 27/08: una respuesta A aquí y una respuesta B
+         en la copia son la misma longitud y se declaraban idénticas, cuando en realidad es una
+         respuesta perdida. Las respuestas de esta app **solo se añaden y no se reescriben nunca**,
+         así que la relación correcta es de PREFIJO: la copia está cubierta si su hilo es el
+         principio del hilo vivo. Cualquier otra cosa es divergencia. */
+      if (!hiloCubierto(it.replies, aqui.replies))
         hilos.push({ esp: sp.name || "", lista: w.t || "", n: it.n || null, texto: it.t || "" });
     }
   }
-  return { tareas, hilos, ventanas };
+  return { tareas, hilos, ventanas, reescritas, comparable: true };
+}
+
+// PURA (tests). ¿El hilo de la copia es el principio del hilo vivo? Se compara por contenido, no
+// por longitud; una entrada se identifica por autor + instante + texto, que es lo que la app fija.
+function hiloCubierto(deCopia, deVivo){
+  const a = Array.isArray(deCopia) ? deCopia : [], b = Array.isArray(deVivo) ? deVivo : [];
+  if (a.length > b.length) return false;
+  const clave = r => [r && r.by, r && r.at, r && r.t].join(" ");
+  return a.every((r, i) => clave(r) === clave(b[i]));
 }
 
 // PURA (tests). El texto de la barra. Separado del escaneo para poder fijar las dos frases que
 // importan —«no falta nada» y «faltan N»— sin montar una carpeta de mentira.
+/* PURA (tests). ¿Se ha podido comparar esta copia DE VERDAD? Existe porque la primera versión no
+   lo preguntaba: una copia que no se pudo abrir llegaba aquí con las tres listas vacías y salía por
+   la rama de «no le falta nada… puedes borrarlas». **Recomendar borrar un archivo que no has
+   conseguido leer** es el peor fallo posible en esta función, y el que encontró Codex el 27/08. Es
+   la misma clase que ya se había arreglado un nivel más arriba, para el escaneo entero, y que se
+   coló otra vez por fichero: un comprobador que aprueba por no haber podido mirar es peor que no
+   tenerlo, porque además da confianza. */
+function copiaCertificada(i){
+  return !i.ilegible && i.comparable === true;
+}
+
+/* PURA (tests). El texto de la barra, con TRES salidas y no dos. La regla que las ordena, y que no
+   se puede relajar: **solo se invita a borrar cuando TODAS las copias se han comparado enteras y
+   ninguna tiene nada.** Basta una que no se haya podido leer para que la respuesta pase a
+   «inconcluso», porque la frase que él va a leer decide si borra o no un archivo. */
 function textoCopias(informes){
-  const conFalta = informes.filter(i => i.tareas.length || i.hilos.length || i.ventanas.length);
   const nombres = informes.map(i => i.nombre + " (" + i.cuando + ")").join(", ");
-  const plural = informes.length === 1 ? "una copia" : informes.length + " copias";
-  if (!conFalta.length)
-    return "Tu nube dejó " + plural + " de datos.json al lado del tuyo: " + nombres
-      + ". Las he comparado y no le falta nada a tu escritorio de ahora, así que puedes borrarlas cuando quieras desde el explorador. Cabecera no las toca.";
-  const i = conFalta[0];
-  const q = [];
-  if (i.tareas.length) q.push(i.tareas.length + (i.tareas.length === 1 ? " tarea" : " tareas"));
-  if (i.hilos.length) q.push(i.hilos.length + (i.hilos.length === 1 ? " conversación" : " conversaciones"));
-  if (i.ventanas.length) q.push(i.ventanas.length + (i.ventanas.length === 1 ? " ventana" : " ventanas"));
-  const ej = (i.tareas[0] || i.hilos[0]);
-  return "Tu nube dejó " + plural + " de datos.json al lado del tuyo, y «" + i.nombre + "» (" + i.cuando + ") contiene "
-    + q.join(" y ") + " que aquí ya no están"
-    + (ej ? " — por ejemplo, en «" + (ej.lista || i.nombre) + "»: «" + String(ej.texto).slice(0, 70) + "»" : "")
-    + ". No se ha tocado nada: dile a un asistente que la mire antes de borrarla.";
+  const plural = informes.length === 1 ? "un archivo" : informes.length + " archivos";
+  /* «con forma de copia» y no «tu nube dejó»: el detector reconoce el patrón que usa OneDrive,
+     pero no puede saber quién creó el fichero — un `datos-viejo.json` guardado a mano por él pasa
+     igual (Codex, 27/08). Afirmar el origen sería inventárselo; describir la forma es cierto en los
+     dos casos y no cambia lo único que importa, que es si le falta algo. */
+  const cabeza = "Hay " + plural + " con forma de copia de datos.json junto al tuyo";
+  const conFalta = informes.filter(i => copiaCertificada(i) && (i.tareas.length || i.hilos.length || i.ventanas.length));
+  const sinLeer = informes.filter(i => !copiaCertificada(i));
+
+  // 1) Algo falta, y está comprobado: es lo más grave, y va primero aunque además haya ilegibles.
+  if (conFalta.length){
+    const i = conFalta[0];
+    const q = [];
+    if (i.tareas.length) q.push(i.tareas.length + (i.tareas.length === 1 ? " tarea" : " tareas"));
+    if (i.hilos.length) q.push(i.hilos.length + (i.hilos.length === 1 ? " conversación" : " conversaciones"));
+    if (i.ventanas.length) q.push(i.ventanas.length + (i.ventanas.length === 1 ? " ventana" : " ventanas"));
+    const ej = (i.tareas[0] || i.hilos[0]);
+    return cabeza + ", y «" + i.nombre + "» (" + i.cuando + ") contiene " + q.join(" y ") + " que aquí ya no están"
+      + (ej ? " — por ejemplo, en «" + (ej.lista || i.nombre) + "»: «" + String(ej.texto).slice(0, 70) + "»" : "")
+      + ". No se ha tocado nada: dile a un asistente que la mire antes de borrarla.";
+  }
+
+  // 2) Alguna no se ha podido leer o comparar: inconcluso. NUNCA se invita a borrar aquí.
+  if (sinLeer.length){
+    const cuales = sinLeer.map(i => "«" + i.nombre + "»").join(", ");
+    return cabeza + ": " + nombres + ". " + (sinLeer.length === 1 ? "No he podido abrir " + cuales : "No he podido abrir " + cuales)
+      + ", así que NO puedo decirte si le falta algo — y eso no es lo mismo que decirte que no le falta nada."
+      + (informes.length > sinLeer.length ? " Las demás sí las he comparado y están cubiertas." : "")
+      + " No borres esa hasta que alguien la mire.";
+  }
+
+  // 3) Todas comparadas enteras y ninguna con nada que falte: la única rama que invita a borrar.
+  const reesc = informes.reduce((a, i) => a + (i.reescritas || 0), 0);
+  return cabeza + ": " + nombres
+    + ". Las he comparado enteras: no les falta ninguna tarea, ninguna conversación ni ninguna ventana que tú no tengas ya, así que puedes borrarlas cuando quieras desde el explorador. Cabecera no las toca."
+    + (reesc ? " (Ojo a una cosa: en " + reesc + (reesc === 1 ? " tarea el texto es distinto porque la reescribiste" : " tareas el texto es distinto porque las reescribiste")
+        + " después. No es una pérdida, pero la versión antigua solo está dentro de la copia.)" : "");
 }
 
 // PURA (tests). El tercer estado. Dice lo que NO sabe y qué hacer, no un error técnico.
@@ -3096,6 +3164,12 @@ function textoCopiasInconcluso(){
 let copiasRevisadas = 0;      // instante del último escaneo COMPLETADO; 0 = nunca
 let copiasDescartado = false; // ✕ de la sesión, como el aviso de versión: nunca se persiste
 let copiasFallos = 0;         // escaneos seguidos que no pudieron mirar la carpeta
+/* Cerrojo de reentrada. `copiasRevisadas` solo se sella al TERMINAR —y así tiene que ser, para que
+   un fallo se reintente enseguida en vez de dentro de diez minutos—, pero eso deja la puerta
+   abierta a que el sondeo de 4 s arranque un segundo escaneo mientras el primero sigue leyendo. Con
+   copias de ~1 MB en una carpeta de la nube, y más aún si OneDrive tiene que hidratarlas, esa
+   lectura puede tardar mucho más de 4 s y apilarse. Hallazgo de Codex, 27/08. */
+let copiasEnCurso = false;
 const COPIAS_CADA_MS = 10 * 60 * 1000;
 /* Tres intentos antes de decir que no se pudo: el primero suele caer en un transitorio de la nube
    —la carpeta ocupada mientras sincroniza— y avisar de eso sería el aviso que suele venir vacío. */
@@ -3104,8 +3178,9 @@ const COPIAS_FALLOS_MAX = 3;
 /* Escaneo real. Enumerar la carpeta es barato y solo se hace al arrancar y cada diez minutos: una
    copia nueva aparece cuando la nube sincroniza, no entre dos pulsaciones. */
 async function revisarCopias(force){
-  if (backend !== "fs" || !dirHandle || copiasDescartado) return;
+  if (backend !== "fs" || !dirHandle || copiasDescartado || copiasEnCurso) return;
   if (!force && copiasRevisadas && Date.now() - copiasRevisadas < COPIAS_CADA_MS) return;
+  copiasEnCurso = true;
   const informes = [];
   try{
     for await (const [nombre, h] of dirHandle.entries()){
@@ -3117,7 +3192,7 @@ async function revisarCopias(force){
           ...compararCopia(state, copia) });
       }catch(e){
         // ilegible o a medio bajar: se nombra igual, porque existir ya es la noticia
-        informes.push({ nombre, cuando: "sin leer", tareas: [], hilos: [], ventanas: [], ilegible: true });
+        informes.push({ nombre, cuando: "sin leer", tareas: [], hilos: [], ventanas: [], comparable: false, ilegible: true });
       }
     }
   }catch(e){
@@ -3135,7 +3210,7 @@ async function revisarCopias(force){
       $("#copias").classList.add("open");
     }
     return;
-  }
+  }finally{ copiasEnCurso = false; }   // un cerrojo que no se suelta en el camino de error es peor que no tenerlo
   copiasFallos = 0;
   copiasRevisadas = Date.now();   // se sella SOLO tras una pasada completa
   const bar = $("#copias");
@@ -3238,56 +3313,30 @@ function markAuto(){
 // bajando la versión de otro equipo. Sin modal: solo «comprobando sincronización…».
 let freshPending = false, hiddenAt = 0;
 
-/* 0.90.0 — CUARENTENA DE ARRANQUE. `freshPending`, justo arriba, frena el primer guardado
-   sincronizado al volver de segundo plano tras más de un minuto, porque la nube puede estar bajando
-   la versión del otro equipo. Pero se arma en `visibilitychange`, y EN UN ARRANQUE EN FRÍO ESE
-   EVENTO NO OCURRE: `hiddenAt` vale 0. Encender el ordenador, abrir el navegador y abrir Cabecera
-   —la mañana entera— quedaba sin freno. Es el hueco que él describió el 26/08 (#217 de «Cabecera ·
-   bandeja»): llega al trabajo, escribe antes de que OneDrive termine de bajar, los dos lados quedan
-   cambiados desde la última sincronía y OneDrive bifurca el archivo en una copia con el nombre del
-   equipo. Medido ese día: tres copias así en su carpeta desde el 17/08, ninguna vista por nadie.
+/* 0.90.0 — LA CUARENTENA DE ARRANQUE SE PROBÓ Y SE RETIRÓ. Merece quedar escrito, porque el
+   agujero que intentaba tapar SIGUE ABIERTO y la próxima persona que lo vea va a proponer esto
+   mismo. `freshPending`, justo arriba, no se arma en un arranque en frío (`hiddenAt` vale 0), así
+   que la primera escritura de la mañana puede caer sobre un `datos.json` que la nube aún está
+   bajando, y OneDrive bifurca. Se construyó una cuarentena de 30 s para el primer guardado.
 
-   La espera CASI NUNCA SE NOTA, porque tiene dos salidas anticipadas:
-     · se corta en cuanto el archivo cambia en disco (`poll`), que es la señal de que la nube ya
-       entregó — y ahí la fusión por widget hace su trabajo y no queda nada que bifurcar;
-     · se corta si él lo pide, con «Guardar ya». El gate es suyo: no se le retiene a la fuerza un
-       cambio que quiere en disco.
+   POR QUÉ SE FUE, con las dos razones medidas (contraste de Codex, 27/08/2026):
+     · NO HABRÍA EVITADO EL INCIDENTE REAL. En el caso del 26/08 la copia bifurcada lleva las 07:49
+       y la tarea que él escribió las 08:08: la entrega de OneDrive llegó fuera de cualquier ventana
+       razonable. Cubría un caso estrecho —editar y guardar en los primeros 30 s, con la entrega
+       cayendo dentro de esos mismos 30 s— y lo vendía como si cubriera la mañana.
+     · COBRABA CARO ESE CASO ESTRECHO. Retenía en memoria un cambio TECLEADO POR ÉL hasta 30 s, y
+       esta app no tiene `beforeunload` ni `pagehide` en ninguna parte: cerrar la pestaña dentro de
+       la ventana lo perdía. Cambiar una bifurcación —que hasta hoy nunca ha costado una tarea— por
+       una pérdida silenciosa de texto suyo es un mal negocio.
+   Y la red que lo arreglaría no es barata: un `localStorage` restaurado a la ligera pisaría una
+   fusión posterior; hacerlo bien pide diario de borrador, base y refusión. Eso es un proyecto, no
+   un parche, y no se hace de paso.
 
-   `CONTRATO:` ALCANCE HONESTO, para no prometer de más. El navegador NO puede preguntarle a
-   OneDrive si ha terminado — no hay API —, así que esto cubre el caso corriente (el cliente ya
-   arrancado bajando 1 MB), no una sincronía que tarde minutos. En el propio incidente del 26/08 la
-   entrega llegó fuera de esta ventana. Lo que cubre el resto NO es esta pieza: es la de abajo, que
-   hace VISIBLE la bifurcación en lugar de dejarla nueve días en la carpeta sin que nadie mire. */
-const ARRANQUE_MS = 30000;
-let arranqueHasta = 0;        // 0 = sin cuarentena
-let arranqueAvisado = false;  // el aviso con «Guardar ya» se da una vez, no en cada reintento
-// PURA (tests): milisegundos que aún hay que esperar, o 0 si ya no toca. Sin reloj propio a
-// propósito, para poder fijar sus salidas sin depender de la hora real.
-function esperaArranque(ahora, hasta){
-  return (hasta > 0 && ahora < hasta) ? hasta - ahora : 0;
-}
-// La nube tocó el archivo: sea con contenido nuevo o no, la pasada de descarga ya pasó por aquí.
-// Es una inferencia, no un dato de OneDrive, y por eso solo se usa para ACORTAR la espera.
-function finArranque(){ arranqueHasta = 0; }
+   LO QUE SÍ QUEDA es la pieza de abajo: no evita la bifurcación, la hace VISIBLE. Es lo que sí
+   habría avisado el 26/08. */
+
 
 async function saveNow(){
-  // La cuarentena va DELANTE de `freshPending` porque decide lo mismo con menos información:
-  // si aún estamos dentro, no hay nada que comprobar todavía. Nunca se pierde el cambio — sigue en
-  // memoria y `dirty` puesto —, solo se retrasa el momento de tocar el archivo.
-  if (backend === "fs"){
-    const falta = esperaArranque(Date.now(), arranqueHasta);
-    if (falta){
-      syncUI("saving", "esperando a la nube… " + Math.ceil(falta / 1000) + " s");
-      if (!arranqueAvisado){
-        arranqueAvisado = true;
-        toastAction("Acabas de abrir Cabecera: espero unos segundos por si tu nube todavía está bajando el archivo del otro equipo.",
-          "Guardar ya", () => { finArranque(); saveNow(); });
-      }
-      clearTimeout(saveTimer);
-      saveTimer = setTimeout(saveNow, Math.min(falta, 1000));   // el reintento corto solo mueve el contador
-      return;
-    }
-  }
   if (backend === "fs" && freshPending){
     syncUI("saving", "comprobando sincronización…");
     const clean = await poll().catch(() => false);
@@ -3329,13 +3378,6 @@ async function poll(){   // devuelve true si completó una lectura válida (haya
     if (f.lastModified > lastMtime){
       let remote = null, text = "";
       try{ text = await f.text(); remote = JSON.parse(text); }catch(e){ clean = false; }   // escritura a medias: reintentar en el siguiente ciclo, lectura NO válida
-      /* La nube ha tocado el archivo desde que cargamos Y hemos podido leerlo entero: eso es la
-         entrega, y se acaba la espera de arranque decida lo que decida el resto de este bloque
-         (adoptar, fusionar o abrir la barra) — el hecho relevante es que HUBO entrega, no qué se
-         hizo con ella. Va DESPUÉS del `parse` a propósito: un `lastModified` que avanza con el JSON
-         a medio escribir es una escritura EN CURSO, no una terminada, y levantar ahí la cuarentena
-         nos dejaría escribir justo encima de ella — el fallo que esta pieza existe para evitar. */
-      if (remote) finArranque();
       if (remote && text === lastSavedText){
         // idéntico al último texto que leímos/escribimos (p. ej. OneDrive tocó el mtime):
         // no es conflicto. Se compara el TEXTO CRUDO, no una reserialización de state ni
@@ -3505,12 +3547,6 @@ async function startFS(){
         toast("Cargado el escritorio de la carpeta; tu versión local previa quedó guardada como copia");
       }
       localStorage.removeItem("cabecera-mode");
-      // 0.90.0 — el archivo acaba de cargarse de la carpeta: es exactamente el instante en que la
-      // nube puede estar todavía bajando la versión del otro equipo. Se arma aquí y no en `boot`
-      // porque este es el único camino que ha leído un `datos.json` de verdad — una carpeta vacía
-      // o un JSON ilegible no tienen nada que bifurcar.
-      arranqueHasta = Date.now() + ARRANQUE_MS;
-      arranqueAvisado = false;
       syncUI("ok", "sincronizado");
     } else {
       // sin datos.json: puede ser carpeta nueva, o que la nube aún no la haya bajado.
