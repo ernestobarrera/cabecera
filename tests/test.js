@@ -5314,5 +5314,102 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
     console.log('OK 0.90.0 (las copias de la nube se ven, se comparan por contenido y NUNCA se certifican de mas; cuarentena retirada tras el contraste)');
   }
 
+  // --- 0.91.0: un adjunto de texto se LEE dentro de la tarea (#218) ------------------------------
+  {
+    /* Su tarea #218: «no me convence que las tareas no puedan adjuntar notas de texto larga, como lo
+       hacen las de to-do, para respuestas largas de un agente o similar me vendría bien».
+
+       La propuesta inicial era subir el tope de la respuesta de 2000 a 20.000, y su matiz la tumbó:
+       eso mete el texto DENTRO del hilo, y con varias respuestas largas el widget se vuelve
+       impracticable. Lo que se prueba aquí es la conducta que sustituyó a aquello, y se prueba
+       EJECUTÁNDOLA (R71): analizar el fuente diría que el código está escrito, no que formatee. */
+    eval('globalThis.' + src.match(/const ADJ_TEXTO_MAX\s*=[^\n]*;/)[0].replace('const ', ''));
+    eval('globalThis.' + src.match(/const ADJ_MD_RE\s*=[^\n]*;/)[0].replace('const ', ''));
+    eval('globalThis.' + src.match(/const ADJ_TXT_RE\s*=[^\n]*;/)[0].replace('const ', ''));
+    eval('globalThis.' + src.match(/const esAdjuntoTexto\s*=[^\n]*;/)[0].replace('const ', ''));
+    globalThis.ADJ_DIR = 'cabecera-adjuntos';
+    const fn = src.match(/async function leerAdjuntoTexto\(a\)\{[\s\S]*?\n\}/);
+    if (!fn) throw new Error('091: la lectura del adjunto de texto tiene que ser una función propia y localizable');
+    eval('globalThis.leerAdjuntoTexto = ' + fn[0].replace('async function leerAdjuntoTexto', 'async function'));
+
+    // el fichero se sirve desde un doble de la carpeta: nada de esto toca el disco de Ernesto
+    let pedido = null;
+    const carpeta = new Map();
+    globalThis.abrirDeCarpeta = async (dir, nombre) => {
+      pedido = dir + '/' + nombre;
+      if (!carpeta.has(nombre)) throw new Error('no-existe');
+      const t = carpeta.get(nombre);
+      return { size: Buffer.byteLength(t, 'utf8'), text: async () => t };
+    };
+
+    // 1 · UN .md SE FORMATEA, y con el MISMO renderizador del widget Documento (R47: dos
+    //     renderizadores del mismo formato divergen siempre)
+    carpeta.set('adj-1.md', '# Informe\n- uno\n- dos\n**negrita**');
+    const rMd = await leerAdjuntoTexto({ f: 'adj-1.md', n: 'informe.md' });
+    if (!rMd.includes('<h3>') || !rMd.includes('<li>') || !rMd.includes('<b>'))
+      throw new Error('091: un .md adjunto tiene que salir formateado, no como texto crudo');
+    if (rMd !== mdToHtml('# Informe\n- uno\n- dos\n**negrita**'))
+      throw new Error('091: tiene que usar mdToHtml tal cual, no una copia que pueda divergir de él');
+    if (pedido !== 'cabecera-adjuntos/adj-1.md')
+      throw new Error('091: se lee de la carpeta de adjuntos y por el NOMBRE guardado, nunca por una ruta');
+
+    // 2 · UN .txt NO SE INTERPRETA. Un texto que no pidió formato no se convierte en formato
+    //     (misma razón que los escapes de 0.46.0)
+    carpeta.set('adj-2.txt', '# esto no es un titulo\n* ni esto una lista');
+    const rTxt = await leerAdjuntoTexto({ f: 'adj-2.txt', n: 'notas.txt' });
+    if (/<h3>|<li>/.test(rTxt))
+      throw new Error('091: un .txt no puede pasar por Markdown: le inventaría formato que su autor no puso');
+    if (!rTxt.includes('rp-doc-plano') || !rTxt.includes('# esto no es un titulo'))
+      throw new Error('091: el .txt sale tal cual, en el bloque que conserva sus saltos de línea');
+
+    // 3 · Y NO ES UNA PUERTA DE XSS. El contenido lo puede haber escrito cualquiera —un agente, una
+    //     descarga— así que la ruta plana escapa igual que lo hace mdToHtml en la otra
+    carpeta.set('adj-3.txt', '<img src=x onerror=alert(1)>');
+    const rEvil = await leerAdjuntoTexto({ f: 'adj-3.txt', n: 'malo.txt' });
+    if (rEvil.includes('<img'))
+      throw new Error('091: XSS — el texto plano de un adjunto tiene que escaparse antes de pintarse');
+
+    // 4 · UN DOCUMENTO ENORME NO SE INTENTA PINTAR, y el motivo se distingue del de «no está»:
+    //     se arreglan de formas distintas y un mensaje único obliga a adivinar cuál es
+    carpeta.set('adj-4.md', 'x'.repeat(ADJ_TEXTO_MAX + 1));
+    let motivo = null;
+    try { await leerAdjuntoTexto({ f: 'adj-4.md', n: 'enorme.md' }); }
+    catch (e) { motivo = e.message; }
+    if (motivo !== 'grande')
+      throw new Error('091: por encima del tope tiene que negarse diciendo QUE ES GRANDE, no fallar como si faltara');
+    if (ADJ_TEXTO_MAX < 100 * 1024 || ADJ_TEXTO_MAX > 2 * 1024 * 1024)
+      throw new Error('091: tope irrazonable — por debajo de 100 KB no cabe un informe y por encima de 2 MB no se lee en un panel');
+
+    // 5 · QUÉ CUENTA COMO TEXTO. Un PDF sigue abriéndose fuera: pintarlo aquí sería ilegible
+    for (const [f, esperado] of [['a.md', true], ['a.txt', true], ['a.csv', true], ['a.pdf', false], ['a.png', false], ['a', false]])
+      if (esAdjuntoTexto({ f }) !== esperado)
+        throw new Error(`091: «${f}» clasificado mal como ${esperado ? 'no-texto' : 'texto'}`);
+
+    /* 6 · EL PANEL NO PUEDE EMPUJAR LA CAJA DE ESCRIBIR FUERA DE LA VENTANA. Es literalmente la
+       objeción de Ernesto que descartó la propuesta anterior, así que si esto se cae, el cambio ha
+       vuelto al defecto que venía a quitar. Es CSS: se comprueba sobre `html`. */
+    const cssDoc = html.match(/\.rp-doc-body\{[^}]*\}/);
+    if (!cssDoc || !/max-height:\s*\d+px/.test(cssDoc[0]) || !/overflow:\s*auto/.test(cssDoc[0]))
+      throw new Error('091: el panel necesita alto acotado y scroll propio, o un documento largo hunde la caja de responder');
+
+    /* 7 · UN SOLO PANEL, NO UNA PILA. Leer un segundo documento sustituye al primero: apilarlos
+       reconstruiría la pila de textos largos por otra vía. */
+    const manejador = src.match(/ed\.querySelectorAll\("\.rp-a-open"\)[\s\S]*?\n    \}\)\);/)[0];
+    if (!/doc\.innerHTML = /.test(manejador) || /insertAdjacentHTML|appendChild\(doc/.test(manejador))
+      throw new Error('091: el panel se REEMPLAZA, no se apila');
+    if (!/if \(doc\.dataset\.a === String\(idx\)\)\{ cerrarDoc\(\); return; \}/.test(manejador))
+      throw new Error('091: volver a pulsar el mismo documento tiene que cerrarlo');
+    if (!/if \(!esAdjuntoTexto\(a\)\)\{/.test(manejador) || !/await abrirAdjunto\(a\)/.test(manejador))
+      throw new Error('091: lo que NO es texto se sigue abriendo fuera, como hasta ahora');
+
+    /* 8 · Y NO SE TOCA EL CONTRATO DE 0.80.0: el adjunto sigue viviendo en la carpeta y jamás dentro
+       de datos.json. Todo este cambio existe para NO engordar el archivo que sus dos equipos releen
+       cada cuatro segundos. */
+    if (/it\.att.*\bcontenido\b|att\.push\([^)]*texto/.test(src))
+      throw new Error('091: el texto del adjunto no puede acabar dentro de datos.json');
+
+    console.log('OK 0.91.0 (un adjunto de texto se lee formateado dentro de la tarea, acotado, sin interpretar el .txt y sin entrar en datos.json)');
+  }
+
   console.log('\nTODO EN VERDE');
 })().catch(e => { console.error(e && e.stack || e); process.exitCode = 1; });

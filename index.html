@@ -624,6 +624,18 @@ ul.plain{list-style:none}
 .rp-a-kb{color:var(--text-dim); flex:0 0 auto; font-variant-numeric:tabular-nums}
 .rp-a-cp,.rp-a-rm{flex:0 0 auto; background:none; border:none; color:var(--text-dim); cursor:pointer; padding:2px 4px; font-size:11.5px}
 .rp-a-cp:hover,.rp-a-rm:hover{color:var(--text)}
+/* 0.91.0 — panel de lectura del adjunto de texto (#218). Altura acotada y scroll propio: un
+   documento largo no puede empujar la caja de escribir fuera de la ventana, que es exactamente la
+   objeción que descartó meter el texto dentro de la respuesta. */
+.rp-doc{margin-bottom:8px; border:1px solid var(--border-soft); border-radius:9px; background:rgba(0,0,0,.25)}
+.rp-doc-head{display:flex; align-items:center; gap:6px; padding:5px 8px; border-bottom:1px solid var(--border-soft); font-size:11.5px}
+.rp-doc-head b{flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.rp-doc-x{background:none; border:none; color:var(--text-dim); cursor:pointer; font-size:11.5px; padding:0 2px}
+.rp-doc-x:hover{color:var(--text)}
+.rp-doc-body{max-height:320px; overflow:auto; padding:7px 9px; font-size:12.5px; line-height:1.45}
+.rp-doc-body>*:first-child{margin-top:0}
+.rp-doc-body>*:last-child{margin-bottom:0}
+.rp-doc-plano{white-space:pre-wrap; font-family:var(--font-mono,ui-monospace,Consolas,monospace); font-size:12px}
 .rp-t{width:100%; box-sizing:border-box; min-height:52px; resize:vertical; padding:7px 9px; border-radius:9px;
   border:1px solid var(--border-soft); background:rgba(0,0,0,.25); color:var(--text); font-family:var(--font); font-size:12.5px}
 .rp-t:focus{border-color:var(--accent); outline:none}
@@ -2156,7 +2168,7 @@ function syncUI(mode, txt){
    reaparece) y si Recargar está activo. El descarte ✕ vive solo en memoria de la sesión.
    Demora asumida: la CDN de Pages puede servir la versión vieja hasta ~10 min aun con
    no-store (gobierna la caché del navegador, no la CDN); para pestañas de días, irrelevante. */
-const APP_VERSION = "0.90.0";
+const APP_VERSION = "0.91.0";
 let newVersionDetected = null;   // versión superior detectada; detiene futuras consultas
 let verDismissed = false;        // ✕: solo esta sesión — nunca persistido en disco
 let verCheckInflight = false;    // sin consultas concurrentes
@@ -2526,6 +2538,41 @@ async function abrirAdjunto(a){
   const u = URL.createObjectURL(f);
   window.open(u, "_blank", "noopener");
   setTimeout(() => URL.revokeObjectURL(u), 30000);
+}
+/* 0.91.0 — UN ADJUNTO DE TEXTO SE LEE AQUÍ DENTRO, no en otra pestaña. Nace de su tarea #218:
+   «no me convence que las tareas no puedan adjuntar notas de texto larga, como lo hacen las de
+   to-do, para respuestas largas de un agente o similar me vendría bien».
+
+   Su matiz corrigió la propuesta anterior, que era subir el tope de la respuesta de 2000 a 20.000:
+   con varias respuestas largas el hilo se vuelve impracticable, y además engorda el archivo que
+   sus dos equipos releen cada cuatro segundos (su bandeja ya pesa 348 KB de 1,09 MB). El modelo de
+   To Do es otro: la nota larga es un DOCUMENTO adjunto que se abre en su sitio. Y eso el proyecto
+   ya lo tenía medio hecho — el adjunto vive en la carpeta y NUNCA dentro de datos.json (contrato
+   de 0.80.0) — pero pulsarlo abría el fichero en otra pestaña, que para un .md es texto crudo.
+
+   `CONTRATO:` el .md se formatea con `mdToHtml`, el MISMO renderizador del widget Markdown. Dos
+   renderizadores del mismo formato divergen siempre (R47), y uno propio aquí se habría saltado
+   además el escapado que aquel ya hace sobre texto que no es suyo.
+
+   `CONTRATO:` un .txt NO pasa por Markdown. Un texto que no pidió formato no se convierte en
+   formato: sale tal cual, con sus saltos de línea. Es la misma razón por la que 0.46.0 añadió los
+   escapes con barra invertida.
+
+   `CONTRATO:` se lee, no se edita. En esta primera versión el documento es un fichero normal de su
+   carpeta y se edita con su editor; abrir aquí la edición traería el problema de dos equipos
+   escribiendo el mismo fichero sin el CAS que sí protege a datos.json. Si echa de menos editarlo
+   dentro, se construye entonces — con el uso delante, no por suposición. */
+const ADJ_TEXTO_MAX = 400 * 1024;   // más que esto no cabe legible en un panel: se ofrece abrir fuera
+const ADJ_MD_RE  = /\.(md|markdown|mdown)$/i;
+const ADJ_TXT_RE = /\.(md|markdown|mdown|txt|text|log|csv)$/i;
+const esAdjuntoTexto = a => ADJ_TXT_RE.test(String((a && a.f) || ""));
+async function leerAdjuntoTexto(a){
+  const f = await abrirDeCarpeta(ADJ_DIR, a.f);
+  if (f.size > ADJ_TEXTO_MAX) throw new Error("grande");
+  const src = await f.text();
+  return ADJ_MD_RE.test(String(a.f || ""))
+    ? mdToHtml(src)
+    : `<div class="rp-doc-plano">${esc(src)}</div>`;   // .txt: sin interpretar
 }
 /* Convierte la `data:` que produce `imgFromBlob` en binario SIN pasar por la API de red del
    navegador. Se hizo primero con esa API —funciona, y sobre una `data:` no sale a internet— pero el
@@ -7309,15 +7356,18 @@ function bodyTodo(w, el){
     /* 0.80.0 — los adjuntos se pintan ENTRE el hilo y la caja de escribir, no en una pestaña aparte:
        lo que se adjunta se adjunta mientras se contesta, y separarlos obligaría a dos gestos para
        una sola intención. El tamaño va a la vista porque es lo que decide si merece la pena. */
-    const adj = (Array.isArray(it.att) ? it.att : []).map((a, i) =>
-      `<div class="rp-a" data-a="${i}"><button class="rp-a-open" type="button" title="Abrir «${esc(a.n)}» desde tu carpeta ${ADJ_DIR}">📎 ${esc(a.n)}</button>`
+    const adj = (Array.isArray(it.att) ? it.att : []).map((a, i) => {
+      const txtDoc = esAdjuntoTexto(a);
+      return `<div class="rp-a" data-a="${i}"><button class="rp-a-open${txtDoc ? " doc" : ""}" type="button" title="${txtDoc ? `Leer «${esc(a.n)}» aquí mismo` : `Abrir «${esc(a.n)}» desde tu carpeta ${ADJ_DIR}`}">${txtDoc ? "📄" : "📎"} ${esc(a.n)}</button>`
       + `<span class="rp-a-kb">${kb(a.s || 0)}</span>`
       + `<button class="rp-a-cp" type="button" title="Copiar el nombre del fichero para buscarlo en tu carpeta">⧉</button>`
-      + `<button class="rp-a-rm" type="button" title="Quitarlo de la tarea — el fichero NO se borra de tu carpeta">✕</button></div>`).join("");
+      + `<button class="rp-a-rm" type="button" title="Quitarlo de la tarea — el fichero NO se borra de tu carpeta">✕</button></div>`;
+    }).join("");
     ed.innerHTML = `<div class="rp-head"><b>Conversación${it.n ? ` <span class="rp-n" title="Número de esta tarea en la lista: cítalo tal cual cuando hables de ella con un asistente">#${it.n}</span>` : ""}</b><button class="rp-x" type="button" title="Cerrar (Esc)">✕</button></div>
       <div class="rp-hilo">${hilo || `<div class="rp-vacio">Aún no hay respuestas. Lo que escribas se guarda con su fecha y no se sobrescribe.</div>`}</div>
       ${it.note ? `<div class="rp-nota"><b>Nota:</b> ${esc(it.note)}</div>` : ""}
       ${adj ? `<div class="rp-adj">${adj}</div>` : ""}
+      <div class="rp-doc" hidden></div>
       <textarea class="rp-t" placeholder="Escribe tu respuesta…  (Ctrl+Enter para enviar)"></textarea>
       <div class="rp-actions"><button class="mini send" type="button">Responder</button><button class="mini ok" type="button" title="Responder «Vale» sin escribir — apaga el 🤖 y deja constancia de que lo leíste">👍 Vale</button>${it.done ? "" : `<button class="mini okdone" type="button" title="Responder y dar la tarea por hecha, en un gesto — si ya has escrito algo, se manda lo tuyo">👍 Vale y hecha</button>`}<button class="mini adj" type="button" title="Colgar un PDF o una captura en esta tarea: se guarda en tu carpeta, no dentro de datos.json">📎 Adjuntar</button><button class="mini" type="button" data-x="1">Cerrar</button></div>`;
     li.appendChild(ed);
@@ -7448,13 +7498,37 @@ function bodyTodo(w, el){
       if (n){ markDirty(); paint(); reabrir(); toast(`${n} adjunto${n === 1 ? "" : "s"} en la carpeta «${ADJ_DIR}»`); }
       if (fallo) toast(fallo, true);
     });
+    /* 0.91.0 — el panel de lectura. Un solo panel por editor: leer un segundo documento sustituye
+       al primero en vez de apilarlos, que es lo que convertiría la ficha en una pila de textos
+       largos — justo lo que su objeción a la propuesta anterior pedía evitar. Volver a pulsar el
+       mismo documento lo cierra. */
+    const doc = ed.querySelector(".rp-doc");
+    const cerrarDoc = () => { doc.hidden = true; doc.innerHTML = ""; delete doc.dataset.a; };
     ed.querySelectorAll(".rp-a-open").forEach(b => b.addEventListener("click", async e => {
       e.stopPropagation();
-      const a = it.att[+b.closest(".rp-a").dataset.a];
-      /* Si el fichero no está —carpeta distinta, o aún sin sincronizar en el otro equipo— se DICE
-         cuál falta, igual que en las imágenes: un fallo mudo parece un adjunto perdido. */
-      try{ await abrirAdjunto(a); }
-      catch(err){ toast(`No encuentro «${a.f}» en la carpeta «${ADJ_DIR}»`, true); }
+      const idx = +b.closest(".rp-a").dataset.a, a = it.att[idx];
+      if (!esAdjuntoTexto(a)){
+        /* Si el fichero no está —carpeta distinta, o aún sin sincronizar en el otro equipo— se DICE
+           cuál falta, igual que en las imágenes: un fallo mudo parece un adjunto perdido. */
+        try{ await abrirAdjunto(a); }
+        catch(err){ toast(`No encuentro «${a.f}» en la carpeta «${ADJ_DIR}»`, true); }
+        return;
+      }
+      if (doc.dataset.a === String(idx)){ cerrarDoc(); return; }
+      try{
+        const html = await leerAdjuntoTexto(a);
+        doc.innerHTML = `<div class="rp-doc-head"><b>📄 ${esc(a.n)}</b><button class="rp-doc-x" type="button" title="Cerrar el documento">✕</button></div>`
+          + `<div class="rp-doc-body">${html}</div>`;
+        doc.dataset.a = String(idx);
+        doc.hidden = false;
+        doc.querySelector(".rp-doc-x").addEventListener("click", ev => { ev.stopPropagation(); cerrarDoc(); });
+        doc.scrollIntoView({ block: "nearest" });
+      }
+      catch(err){
+        // el motivo se distingue: «no está» y «es demasiado largo» se arreglan de formas distintas
+        if (String(err && err.message) === "grande") toast(`«${a.n}» pasa de ${Math.round(ADJ_TEXTO_MAX / 1024)} KB: ábrelo desde tu carpeta «${ADJ_DIR}»`, true);
+        else toast(`No encuentro «${a.f}» en la carpeta «${ADJ_DIR}»`, true);
+      }
     }));
     ed.querySelectorAll(".rp-a-cp").forEach(b => b.addEventListener("click", async e => {
       e.stopPropagation();

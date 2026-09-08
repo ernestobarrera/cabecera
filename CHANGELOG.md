@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.91.0] - 2026-09-08 — una nota larga se cuelga de la tarea y se lee dentro
+
+- **Lo que pedías: notas de texto largo en una tarea, como las de To Do.** Una respuesta no da para
+  un informe, y meterlo dentro tampoco valdría: con dos o tres textos largos la ventana se vuelve
+  impracticable. Así que el texto largo **no entra en la tarea, se cuelga de ella** — igual que ya
+  se cuelga un PDF.
+- **Y ahora se lee sin salir de Cabecera.** Un adjunto de texto (`.md`, `.txt`, `.csv`) aparece con
+  📄 y se abre en un panel dentro de la propia conversación, **formateado**: títulos, listas,
+  negritas y tablas, con el mismo motor que tu ventana Documento. Vuelves a pulsarlo y se cierra.
+  Antes se abría en otra pestaña del navegador como texto crudo.
+- **El panel no te tapa la caja de responder**: tiene su alto y su barra de desplazamiento, y solo
+  se ve un documento a la vez.
+- **Un `.txt` sale tal cual.** No se interpreta como formato: si escribiste `# algo`, verás `# algo`.
+- **El documento sigue viviendo en tu carpeta, nunca dentro de `datos.json`.** Es la razón de todo
+  esto: el archivo que tus dos equipos releen cada cuatro segundos no engorda ni un byte.
+- Un documento por encima de 400 KB no se abre aquí dentro: se te dice y lo abres desde tu carpeta.
+
 ## [0.90.0] - 2026-08-27 — las copias que deja OneDrive dejan de ser invisibles
 
 - **Parte de fallo tuya, y esta vez con las copias delante.** Llegabas al trabajo, abrías Cabecera
