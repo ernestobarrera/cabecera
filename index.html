@@ -588,15 +588,85 @@ ul.plain{list-style:none}
    tarea normal ocupaba quince líneas (parte de fallo de Ernesto, 07/08). `.due-editor` ya lo hacía
    bien desde su versión; esto es la misma regla, que se quedó sin copiar al añadir la conversación
    en 0.48.2. Si añades un tercer editor colgado del `li`, necesita esta línea. */
-.reply-editor{margin:6px 0 2px; padding:9px 10px; border-radius:10px; border:1px solid var(--border-soft); background:rgba(0,0,0,.22);
-  position:static; width:100%; flex:1 0 100%}
-.rp-head{display:flex; align-items:center; justify-content:space-between; font-size:12px; color:var(--text-dim); margin-bottom:7px}
 /* 0.75.0 — el número de la tarea, a la vista donde se cita. Se selecciona con doble clic para
    poder copiarlo, y en tono apagado: acompaña al título, no compite con él. */
-.rp-n{font-weight:400; opacity:.65; font-variant-numeric:tabular-nums; user-select:all; margin-left:4px}
-.rp-x{border:none; background:none; color:var(--text-dim); cursor:pointer; font-size:13px; padding:0 4px; border-radius:6px}
-.rp-x:hover{color:var(--text); background:rgba(255,255,255,.1)}
-.rp-hilo{max-height:190px; overflow:auto; display:flex; flex-direction:column; gap:6px; margin-bottom:8px}
+/* ═══ VISTA DE DETALLE DE TAREA (0.93.0) ═════════════════════════════════════════════════════
+   SUSTITUYE a la lista dentro del widget; no se abre debajo de una fila. Ver el porqué junto a
+   `renderTaskDetail` en el script: un panel dentro de una fila paginada hereda su paginación y su
+   repintado, que es lo que hacía impracticable al anterior.
+
+   `CONTRATO:` UN SOLO desplazamiento. Cabecera y pie son fijos; el único `overflow:auto` de la
+   vista es `.td-body`. Un scroll dentro de otro es una trampa, sobre todo táctil — el hilo tenía
+   el suyo de 190 px y por eso convivían tres. Si aparece un segundo, cae una prueba. */
+.win-body.con-detalle{position:relative; overflow:hidden; padding:0}
+.win-body.con-detalle > .todo-add,
+.win-body.con-detalle > .todo-bar,
+.win-body.con-detalle > .todo-list,
+.win-body.con-detalle > .w-desc{display:none}
+.task-detail{position:absolute; inset:0; display:flex; flex-direction:column; min-height:0;
+  background:var(--panel, #12181f); border-radius:inherit; z-index:3}
+/* Pantalla completa cuando la caja no da: el umbral se decide en `modoDetalle`, no aquí, para que
+   se pueda probar sin navegador. En móvil es SIEMPRE éste, y ahí está la mitad del arreglo. */
+/* A pantalla completa va POR ENCIMA del dock (520) y de la barra de abajo (500), y además los
+   esconde: son accesos al escritorio, y aquí no hay escritorio que ver. Con la z-index por debajo,
+   el dock se montaba justo encima de la caja de responder — visto en una captura, no supuesto. */
+.task-detail.completa{position:fixed; inset:0; border-radius:0; z-index:600}
+body.detalle-completa #desk-dock,
+body.detalle-completa #taskbar{display:none}
+.td-head{display:flex; align-items:flex-start; gap:6px; padding:8px 10px; border-bottom:1px solid var(--border-soft); flex:0 0 auto}
+.td-back{background:none; border:none; color:var(--text-dim); font-size:18px; line-height:1; cursor:pointer; padding:0 4px}
+.td-back:hover{color:var(--text)}
+.td-done{display:flex; align-items:center; padding-top:2px}
+.td-title{flex:1; min-width:0; resize:none; overflow:hidden; background:none; border:1px solid transparent;
+  border-radius:7px; color:var(--text); font-family:var(--font); font-size:13.5px; font-weight:600;
+  line-height:1.35; padding:2px 6px}
+.td-title:hover{border-color:var(--border-soft)}
+.td-title:focus{border-color:var(--accent); background:rgba(0,0,0,.25); outline:none}
+.td-n{flex:0 0 auto; font-size:11px; color:var(--text-dim); padding-top:4px; font-variant-numeric:tabular-nums}
+.td-x{background:none; border:none; color:var(--text-dim); font-size:13px; cursor:pointer; padding:0 4px; border-radius:6px}
+.td-x:hover{color:var(--text); background:rgba(255,255,255,.1)}
+/* EL ÚNICO desplazamiento de la vista */
+.td-body{flex:1 1 auto; min-height:0; overflow:auto; padding:9px 10px; display:flex; flex-direction:column; gap:10px}
+.td-fecha{display:flex; flex-wrap:wrap; align-items:flex-end; gap:8px}
+.td-fecha label{display:flex; flex-direction:column; gap:3px; font-size:11.5px; color:var(--text-dim)}
+.td-fecha input{background:rgba(0,0,0,.25); border:1px solid var(--border-soft); border-radius:8px;
+  color:var(--text); font-family:var(--font); font-size:12.5px; padding:4px 7px}
+.td-fecha input:focus{border-color:var(--accent); outline:none}
+.td-quick{display:flex; flex-wrap:wrap; gap:4px; align-items:center}
+.td-quick .dq{background:rgba(255,255,255,.06); border:1px solid var(--border-soft); border-radius:7px;
+  color:var(--text-dim); font-family:var(--font); font-size:11px; padding:3px 7px; cursor:pointer}
+.td-quick .dq:hover{color:var(--text); border-color:var(--accent)}
+.dq-sep{width:1px; height:14px; background:var(--border-soft); margin:0 2px}
+/* Los adjuntos van SIEMPRE visibles, con su botón al lado. Su prevalencia es baja (0,4 % de sus
+   tareas) pero son material de ENTRADA: no descubrirlos cuesta mucho más que el sitio que ocupan. */
+.td-adj{display:flex; align-items:flex-start; gap:8px; flex-wrap:wrap}
+.td-adj-lista{flex:1 1 200px; min-width:0; display:flex; flex-direction:column; gap:4px}
+.td-vacio{font-size:11.5px; color:var(--text-dim)}
+.td-nota-cab{display:flex; align-items:baseline; gap:8px; font-size:11.5px; color:var(--text-dim); margin-bottom:3px}
+.td-nota-est{margin-left:auto; font-size:11px; color:var(--text-dim); font-variant-numeric:tabular-nums}
+.td-nota-t{width:100%; box-sizing:border-box; min-height:80px; resize:vertical; padding:7px 9px;
+  border-radius:9px; border:1px dashed var(--border-soft); background:rgba(0,0,0,.14); color:var(--text);
+  font-family:var(--font); font-size:12.5px; line-height:1.45}
+.td-nota-t:focus{border-style:solid; border-color:var(--accent); background:rgba(0,0,0,.25); outline:none}
+/* Lo que se usa en menos del 1,5 % de las tareas se relega, no se retira: sigue estando, plegado,
+   y con resumen visible cuando alguna marca está puesta. */
+.td-opts{border:1px solid var(--border-soft); border-radius:9px; padding:6px 9px; font-size:12px}
+.td-opts summary{cursor:pointer; color:var(--text-dim); font-size:11.5px}
+.td-opts-res{color:var(--accent)}
+.td-check{display:flex; align-items:center; gap:6px; margin-top:6px}
+.td-hint{font-size:11px; color:var(--text-dim); margin:2px 0 4px 22px}
+.td-colores{display:flex; align-items:center; gap:5px; margin-top:7px; font-size:11.5px; color:var(--text-dim)}
+.td-color{width:15px; height:15px; border-radius:50%; border:1px solid var(--border-soft); cursor:pointer; background:transparent}
+.td-color[data-c="amarillo"]{background:#d9c26a} .td-color[data-c="rosa"]{background:#d98aa8}
+.td-color[data-c="verde"]{background:#7fc08a} .td-color[data-c="azul"]{background:#6ea8d9}
+.td-color[data-c="naranja"]{background:#d99a5c}
+.td-color.on{outline:2px solid var(--accent); outline-offset:1px}
+.td-claim{margin-top:7px; font-size:11.5px; color:var(--text-dim)}
+.td-hilo-cab{font-size:11.5px; color:var(--text-dim)}
+/* El hilo FLUYE dentro del desplazamiento de la vista: ya no tiene caja propia de 190 px */
+.td-hilo{display:flex; flex-direction:column; gap:6px}
+.td-foot{flex:0 0 auto; padding:8px 10px; border-top:1px solid var(--border-soft); background:rgba(0,0,0,.12)}
+.td-acts{display:flex; flex-wrap:wrap; gap:6px; margin-top:7px}
 .rp{font-size:12.5px; line-height:1.5; padding:6px 9px; border-radius:10px; white-space:pre-wrap; word-break:break-word; max-width:92%}
 .rp-meta{display:flex; align-items:center; gap:6px; font-size:10.5px; color:var(--text-dim); margin-bottom:2px}
 .rp-txt{display:block; white-space:pre-wrap}
@@ -610,20 +680,11 @@ ul.plain{list-style:none}
 .rp.editando{max-width:100%; width:100%; align-self:stretch}
 .rp.de-mi{align-self:flex-end; background:var(--accent-soft); border:1px solid rgba(90,169,247,.28)}
 .rp.de-agente{align-self:flex-start; background:rgba(255,255,255,.05); border:1px solid var(--border-soft)}
-.rp-vacio{font-size:11.5px; color:var(--text-dim); line-height:1.45}
 /* 0.92.0 — la nota deja de ser una cita en gris y pasa a ser un campo. Va a la vista SIEMPRE,
    también vacía: un campo que solo aparece cuando ya tiene contenido no se puede descubrir. */
-.rp-nota{margin-bottom:8px}
-.rp-nota-cab{display:flex; align-items:baseline; gap:8px; font-size:11.5px; color:var(--text-dim); margin-bottom:3px}
-.rp-nota-est{margin-left:auto; font-size:11px; color:var(--text-dim); font-variant-numeric:tabular-nums}
-.rp-nota-t{width:100%; box-sizing:border-box; min-height:44px; max-height:260px; resize:vertical; padding:7px 9px;
-  border-radius:9px; border:1px dashed var(--border-soft); background:rgba(0,0,0,.14); color:var(--text);
-  font-family:var(--font); font-size:12.5px; line-height:1.45}
-.rp-nota-t:focus{border-style:solid; border-color:var(--accent); background:rgba(0,0,0,.25); outline:none}
 /* 0.80.0 — adjuntos. Van entre el hilo y la caja de escribir: se cuelgan mientras se contesta.
    El nombre ocupa el hueco que sobra y se recorta con puntos suspensivos en vez de partir la fila,
    que es lo que hacía ilegible el peso — y el peso es justo lo que decide si abrirlo. */
-.rp-adj{display:flex; flex-direction:column; gap:4px; margin-bottom:8px}
 .rp-a{display:flex; align-items:center; gap:6px; font-size:11.5px}
 .rp-a-open{flex:1; min-width:0; text-align:left; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
   background:none; border:1px solid var(--border-soft); border-radius:8px; padding:3px 7px; color:var(--text);
@@ -647,10 +708,8 @@ ul.plain{list-style:none}
 .rp-t{width:100%; box-sizing:border-box; min-height:52px; resize:vertical; padding:7px 9px; border-radius:9px;
   border:1px solid var(--border-soft); background:rgba(0,0,0,.25); color:var(--text); font-family:var(--font); font-size:12.5px}
 .rp-t:focus{border-color:var(--accent); outline:none}
-.rp-actions{display:flex; gap:6px; margin-top:7px}
 /* «👍 Vale»: responder de un clic. No es una acción menor disfrazada de atajo — deja una entrada
    fechada igual que cualquier otra, que es justo lo que un check no dejaría. */
-.rp-actions .ok{border-color:rgba(90,169,247,.35)}
 /* aviso de «Hechas»: hay respuestas que llegaron después de cerrar. Informa, no reclama.
    0.59.0 — y además LLEVA a ellas: el recuento es el filtro. Se subraya al pasar el ratón para que
    se lea como pulsable sin añadir un botón más a una barra que ya tiene cuatro cosas. */
@@ -775,29 +834,11 @@ ul.plain{list-style:none}
 .mark-custom-form input[type=text]{flex:1; padding:6px 9px; border-radius:8px; border:1px solid var(--border-soft); background:rgba(0,0,0,.25); color:var(--text); font-family:var(--font); font-size:12.5px; outline:none}
 .mark-custom-form input[type=text]:focus{border-color:var(--accent)}
 .mark-custom-form input[type=color]{width:34px; height:30px; border:none; background:none; padding:0; cursor:pointer}
-.due-editor,.rename-editor{position:absolute; z-index:25; display:grid; gap:8px; padding:10px;
-  background:rgba(20,24,32,.92); border:1px solid var(--border); border-radius:12px; box-shadow:var(--shadow)}
-.due-editor{position:static; width:100%; flex:1 0 100%}
 .rename-editor{left:8px; right:8px; top:32px}
-.due-grid{display:grid; grid-template-columns:1fr 92px; gap:8px}
-.due-editor label{display:flex; flex-direction:column; gap:4px; color:var(--text-dim); font-size:11.5px}
-.due-editor input,.due-editor textarea,.rename-editor input{padding:7px 9px; border-radius:9px; border:1px solid var(--border-soft); background:rgba(0,0,0,.26);
-  color:var(--text); font-family:var(--font); color-scheme:dark; min-width:0}
-.due-editor textarea{min-height:54px; resize:vertical; line-height:1.35}
 /* 0.69.0 — las dos casillas del panel de fecha. `label` en el editor es una columna (etiqueta
    encima del campo); una casilla es lo contrario, así que se declara aparte en vez de pelearse. */
-.due-editor label.due-check{flex-direction:row; align-items:center; gap:7px; color:var(--text); font-size:12px; cursor:pointer}
-.due-editor label.due-check input{width:auto; flex:0 0 auto; padding:0; margin:0; accent-color:var(--accent); cursor:pointer}
-.due-editor .due-hint{margin:-4px 0 0 22px; color:var(--text-dim); font-size:10.5px; line-height:1.35}
 /* 0.85.0 — atajos de fecha y hora: una fila baja, sin etiqueta propia. Lo que ahorran se entiende
    leyéndolos, y ponerles título los haría más altos justo en el panel del que él se quejaba. */
-.due-quick{display:flex; flex-wrap:wrap; align-items:center; gap:5px; margin-top:-2px}
-.due-quick .dq{border:1px solid var(--border-soft); background:rgba(255,255,255,.04); color:var(--text-dim);
-  font:inherit; font-size:11px; padding:3px 9px; border-radius:20px; cursor:pointer; white-space:nowrap}
-.due-quick .dq:hover{color:var(--text); border-color:var(--accent); background:var(--accent-soft)}
-.due-quick .dq-sep{width:1px; align-self:stretch; margin:1px 3px; background:var(--border-soft)}
-.due-editor input:focus,.due-editor textarea:focus,.rename-editor input:focus{border-color:var(--accent); outline:none}
-.due-actions{display:flex; gap:7px; flex-wrap:wrap}
 .todo-bar{margin-bottom:9px; display:flex; gap:8px; align-items:center; flex-wrap:wrap}
 .todo-pager{display:flex; gap:6px; align-items:center; margin-left:auto}
 .todo-pager .pg{font-size:11.5px; color:var(--text-dim); min-width:34px; text-align:center}
@@ -2176,7 +2217,7 @@ function syncUI(mode, txt){
    reaparece) y si Recargar está activo. El descarte ✕ vive solo en memoria de la sesión.
    Demora asumida: la CDN de Pages puede servir la versión vieja hasta ~10 min aun con
    no-store (gobierna la caché del navegador, no la CDN); para pestañas de días, irrelevante. */
-const APP_VERSION = "0.92.0";
+const APP_VERSION = "0.93.0";
 let newVersionDetected = null;   // versión superior detectada; detiene futuras consultas
 let verDismissed = false;        // ✕: solo esta sesión — nunca persistido en disco
 let verCheckInflight = false;    // sin consultas concurrentes
@@ -2541,6 +2582,41 @@ async function guardarAdjunto(file){
   const f = await escribirVerificado(ADJ_DIR, selloNombre("adj", ext), file, leido => leido.size === file.size);
   return { f, n: String(file.name || "archivo").slice(0, 120), s: file.size, at: Date.now() };
 }
+/* Pedir ficheros y colgarlos de una tarea. Vivía suelto dentro del editor de conversación; sale
+   aquí porque la vista de detalle es una sola y el diálogo de archivos no es asunto suyo.
+   Devuelve cuántos se adjuntaron: el aviso lo da quien llama, que es quien sabe si repintar. */
+async function pedirAdjuntos(it){
+  let files = [];
+  try{
+    if (window.showOpenFilePicker){
+      const hs = await window.showOpenFilePicker({ multiple: true });
+      files = await Promise.all(hs.map(h => h.getFile()));
+    } else {
+      files = await new Promise(res => {
+        const inp = document.createElement("input");
+        inp.type = "file"; inp.multiple = true;
+        inp.addEventListener("change", () => res([...(inp.files || [])]));
+        inp.click();
+      });
+    }
+  }catch(e){ return 0; }   // cancelar no es un error
+  let n = 0, fallo = "";
+  for (const f of files){
+    try{
+      const a = await guardarAdjunto(f);
+      if (!Array.isArray(it.att)) it.att = [];
+      it.att.push(a);   // solo se apunta DESPUÉS de que el fichero esté escrito y verificado
+      n++;
+    }catch(e){
+      fallo = e && e.message === "grande"
+        ? `«${f.name}» pasa de ${kb(ADJ_MAX)} y no se ha adjuntado`
+        : `No se pudo guardar «${f.name}»: no se ha adjuntado`;
+    }
+  }
+  if (n) markDirty();
+  if (fallo) toast(fallo, true);
+  return n;
+}
 async function abrirAdjunto(a){
   const f = await abrirDeCarpeta(ADJ_DIR, a.f);
   const u = URL.createObjectURL(f);
@@ -2578,6 +2654,22 @@ async function abrirAdjunto(a){
    `replyTo`. */
 const NOTA_MAX = 20000;
 const NOTA_GUARDA_MS = 700;      // se difiere para no escribir en cada tecla; al salir se guarda ya
+/* Topes de la CONVERSACIÓN. Estaban escritos a mano en cuatro sitios (dos al añadir, dos al
+   editar) y `cabecera-io` los tenía copiados por su lado. Un tope repetido es un tope que
+   divergirá (R47): aquí viven una vez y `cabecera-io` los exporta con el mismo valor. */
+const RESP_MAX = 2000;           // tope de UNA respuesta
+const RESP_HILO_MAX = 50;        // la app conserva las 50 últimas al guardar
+/* PUERTA ÚNICA DE LA NOTA (0.93.0). Vive aquí arriba, y no dentro de la vista de detalle, porque
+   hay DOS llamantes: la vista y el puntero que deja «convertir una tarea larga en nota». El defecto
+   que cierra estaba medido: `it.note` se escribía desde tres sitios distintos, cada uno con su tope
+   y su idea de qué hacer con el texto vacío. Devuelve si cambió algo, para que nadie marque sucio
+   ni repinte por nada. Hay una prueba que cuenta las escrituras de `it.note` y exige que sea UNA. */
+function ponerNota(it, v){
+  const t = String(v == null ? "" : v).trim().slice(0, NOTA_MAX);
+  if (t === (it.note || "")) return false;
+  if (t) it.note = t; else delete it.note;
+  markDirty(); return true;
+}
 const ADJ_TEXTO_MAX = 400 * 1024;   // más que esto no cabe legible en un panel: se ofrece abrir fuera
 const ADJ_MD_RE  = /\.(md|markdown|mdown)$/i;
 const ADJ_TXT_RE = /\.(md|markdown|mdown|txt|text|log|csv)$/i;
@@ -6706,7 +6798,7 @@ function offerTaskToNote(w, it, repaint){
     state.widgets.push(nota);
     $("#desktop").appendChild(buildWindow(nota));
     it.t = taskStub(full);
-    it.note = ((it.note ? it.note.trim() + "\n" : "") + taskNotePointer(titulo)).slice(0, NOTA_MAX);
+    ponerNota(it, (it.note ? it.note.trim() + "\n" : "") + taskNotePointer(titulo));
     repaint(); markDirty(); flashWidget(nota);
     toast("Movido a la nota «" + titulo + "». La tarea conserva el titular y su ⓘ dice dónde está.");
   });
@@ -7224,7 +7316,7 @@ function bodyTodo(w, el){
     offerTaskToNote(w, it, paint);   // pegar aquí una conversación entera tiene arreglo de un clic
     if (conFecha) {
       const fila = [...el.querySelectorAll(".todo-it")].find(li => li.__it === it);
-      if (fila) setDue(it, fila);
+      if (fila) abrirDetalle(it, "fecha");
     }
   };
   /* 0.76.1 — CADA BOTÓN POR SU CLASE PROPIA. Parte suyo del 15/08: «se guarda tarea, pero no se abre
@@ -7340,251 +7432,375 @@ function bodyTodo(w, el){
         : `Vence el ${corta}. Todavía no cuenta en el aviso de la barra.`) + avisoTxt
     };
   };
-  /* 0.92.0 — LA NOTA SE ESCRIBE DONDE SE LEE, y hasta hoy no era así.
+  /* ═══════════════════════════════════════════════════════════════════════════════════════════
+     VISTA DE DETALLE DE TAREA — DUEÑA ÚNICA DE LA SUPERFICIE (0.93.0)
 
-     Su veredicto sobre 0.91.0, entero porque nombra el fallo mejor que cualquier resumen:
-     «Horrible. Para empezar no tiene usabilidad. Te obliga a hacer otro clic… la foto de cómo se ve
-     en To Do se ve mucho más fluido». Y la foto zanjaba la discusión: en To Do la nota **no es un
-     adjunto**. Es un campo de texto que está **a la vista dentro de la tarea**, se escribe encima y
-     se guarda solo. No hay que abrir nada.
+     Sustituye a los dos editores que había —`replyTo` (💬) y `setDue` (📅)— y no se añade encima
+     de ellos. Nace de un encargo suyo, textual: *«estamos siendo víctimas de iteraciones sucesivas
+     sin gobernanza de revisión global, owner y visión de futuro y de reiteración completa, no capa
+     sobre capa»*, y de un contraste con Codex hecho ANTES de escribir código.
 
-     QUÉ HABÍA AQUÍ, que es lo que hacía falta mirar antes de construir nada: el campo ya existía
-     (`it.note`) desde 0.48.2 y llevaba desde entonces **enterrado dentro del editor de FECHA**, bajo
-     un rótulo que decía «Nota y respuestas», y en el panel de conversación **solo se leía**. O sea:
-     la función estaba, y lo que no estaba era el camino para usarla. Dos versiones se gastaron
-     construyendo alrededor de eso sin verlo — 0.91.0 llegó a inventar un lector de documentos para
-     resolver lo que resuelve un `<textarea>`.
+     LO QUE SE MIDIÓ ANTES DE DISEÑAR (no estimado):
+       · La tarea se editaba en TRES superficies: la fila, 💬 y 📅. Treinta botones.
+       · Los dos editores eran MUTUAMENTE EXCLUYENTES: no se podía ver la fecha mientras se
+         escribía la nota, y la nota vivía en los dos, con TRES escrituras de `it.note` en el código.
+       · Uso real sobre sus 682 tareas: conversación 27,3 % · fecha 18,9 % · nota 15,0 % · ⚙ 1,3 % ·
+         ▪ 0,7 % · adjuntos 0,4 % · color 0,4 %. La pantalla estaba repartida por el orden en que se
+         construyeron las cosas, no por lo que usa.
+       · Y se MIRÓ, con el banco visual: al abrir 💬, el hilo empujaba la fila fuera de la vista y
+         **no se veía ni el título de la tarea**; en móvil el panel se salía de la pantalla.
 
-     `CONTRATO:` la nota se pinta SIEMPRE, también vacía. Un campo que solo aparece cuando ya tiene
-     contenido no se puede descubrir: es la misma trampa que la marca `## Registro` que él tenía que
-     recordar y teclear, y que 0.89.0 subió a un interruptor visible (R74).
+     `CONTRATO:` esto NO va dentro de la fila. Veredicto de Codex, adoptado: un panel dentro de una
+     fila paginada convierte dos editores mal coordinados en uno monolítico con el mismo defecto.
+     La vista SUSTITUYE a la lista dentro del widget, y pasa a pantalla completa cuando no cabe.
 
-     `CONTRATO:` se guarda sola, sin botón. Escribir y tener que confirmar es el clic que sobra.
-     Se difiere para no escribir en cada tecla, y se guarda además al salir del campo.
+     `CONTRATO:` orden fijo — título → fecha/aviso → adjuntos → nota → conversación → responder.
+     La nota va ANTES de la conversación: es el estado estable de la tarea, y la conversación es
+     historia. Él había pedido «abajo de mi respuesta» (como en To Do); se le enseñaron las dos
+     disposiciones dibujadas y eligió ésta, porque en To Do no hay hilo y aquí un hilo de 19
+     respuestas dejaría la nota fuera de pantalla justo en las tareas más trabajadas.
 
-     `CONTRATO:` mientras escribe NO se repinta la lista. `paint()` reconstruye la fila entera y se
-     llevaría por delante el foco y lo tecleado. Se marca sucio —que es lo que dispara el guardado— y
-     el repintado espera a que salga del campo. */
-  /* 0.48.2 — RESPONDER es una cosa distinta de RECORDAR, y en 0.48.1 las mezclé: reutilicé el
-     editor de vencimiento y solo le cambié el icono. Mal. Un recordatorio lleva una fecha FUTURA
-     que tú eliges; una respuesta lleva el instante en que la escribiste, que no eliges nadie.
-     Meterlas en el mismo formulario obligaba a mirar un campo «Fecha» que no significaba nada
-     para lo que estabas haciendo.
-     Ahora son tres cosas separadas, como en cualquier gestor de tareas serio:
-       · vencimiento y aviso → `it.due` / `it.remind`, en su editor 📅
-       · anotación libre     → `it.note`, texto que amplías y editas cuando quieras
-       · conversación        → `it.replies[]`, entradas SELLADAS: fecha automática, autor, y no se
-                               editan (una conversación que se puede reescribir no sirve de prueba)
-     `by` distingue quién habló: así, cuando un agente conteste aquí, se ve de un vistazo. */
-  const replyTo = (it, li) => {
-    el.querySelectorAll(".due-editor, .reply-editor").forEach(x => x.remove());
-    const ed = document.createElement("div");
-    ed.className = "reply-editor";
+     `CONTRATO:` UN SOLO desplazamiento. El cuerpo scrollea; cabecera y caja de responder son fijas.
+     El hilo pierde su caja de 190 px: un scroll dentro de otro es una trampa, sobre todo táctil.
+
+     `CONTRATO:` UNA PUERTA DE MUTACIÓN POR CAMPO, y ninguna asignación suelta. No hay «Guardar
+     todo»: que la superficie sea una no significa que la transacción lo sea.
+
+     `CONTRATO:` MIENTRAS EL DETALLE ESTÉ ABIERTO, `paint()` NO RECONSTRUYE NADA. Es el requisito de
+     ciclo de vida que generaliza el parche de 0.92.0, donde solo se protegía la nota y el defecto
+     quedaba esperando en el campo siguiente. La lista no se ve, así que no hay nada que repintar, y
+     el foco, el borrador y la posición de scroll sobreviven por construcción y no por cuidado.
+     ═══════════════════════════════════════════════════════════════════════════════════════════ */
+
+  /* Mínimos MEDIDOS sobre el banco visual, no inventados (R42): por debajo de esto la vista no
+     puede enseñar a la vez el título, la nota y la caja de responder, que es lo mínimo para que
+     sirva de algo. Se comprueban con capturas a 1400×900, 760×900, 1400×520 y 390×844. */
+  const DETALLE_MIN_ANCHO = 420;
+  const DETALLE_MIN_ALTO = 380;
+  /** Decisión PURA, para poder probarla sin navegador: ¿cabe en la caja o va a pantalla completa?
+      Recibe el trozo de la ventana que SE VE, no el que la ventana dice medir. La primera versión
+      leía `getBoundingClientRect()` a secas y en móvil no saltaba nunca: la ventana medía 600 px de
+      ancho sobre una pantalla de 390, así que «cabe» era cierto para la caja y falso para el ojo —
+      la vista salía cortada por la derecha exactamente igual que el panel viejo. Se vio en una
+      captura, no razonando. */
+  const modoDetalle = ({ ancho, alto }) =>
+    (!(ancho >= DETALLE_MIN_ANCHO) || !(alto >= DETALLE_MIN_ALTO)) ? "completa" : "encajado";
+  /** Trozo VISIBLE de un rectángulo dentro del viewport. Pura y aparte, para poder probarla. */
+  const parteVisible = (r, vpAncho, vpAlto) => ({
+    ancho: Math.max(0, Math.min(r.right, vpAncho) - Math.max(r.left, 0)),
+    alto: Math.max(0, Math.min(r.bottom, vpAlto) - Math.max(r.top, 0))
+  });
+
+  /* ── PUERTAS DE MUTACIÓN. Una por campo, y son las ÚNICAS que escriben. ─────────────────────
+     El defecto que se está cerrando es literal: `it.note` se escribía desde tres sitios distintos.
+     Cada puerta devuelve si cambió algo, para no marcar sucio ni repintar por nada. */
+  /* `ponerNota` NO está aquí: vive a nivel de fichero, porque la comparte el puntero de «convertir
+     en nota». Una puerta por campo no significa una puerta por vista. */
+  const ponerTitulo = (it, v) => {
+    const t = String(v == null ? "" : v).trim();
+    if (!t || t === it.t) return false;
+    const old = it.t;
+    it.t = t;
+    rememberTextEdit(w, it, old, t);   // el texto anterior se recupera con Ctrl+Z, como en la fila
+    markDirty(); return true;
+  };
+  const ponerFecha = (it, { due, remind }) => {
+    const antes = [it.due || "", it.remind || ""].join("T");
+    let d = String(due || "").trim(), h = String(remind || "").trim();
+    if (!d && h) d = new Date().toISOString().slice(0, 10);   // una hora sin día no significa nada
+    if (d) it.due = d; else delete it.due;
+    if (h && d) it.remind = h; else delete it.remind;
+    const ahora = [it.due || "", it.remind || ""].join("T");
+    if (antes === ahora) return false;
+    delete it.alertedAt;   // fecha nueva, aviso nuevo: si no, la campanita no vuelve a sonar
+    markDirty(); return true;
+  };
+  const ponerMarcas = (it, { exec, fill }) => {
+    const antes = [!!it.exec, !!it.fill, it.claim ? 1 : 0].join();
+    // ausente = falso: se BORRA en vez de guardar `0`, para no engordar el archivo con el valor
+    // por omisión (mismo criterio que el zoom al 100 %)
+    if (exec) it.exec = 1; else delete it.exec;
+    if (fill) it.fill = 1; else delete it.fill;
+    // quitarle la ⚙ a una tarea ya tomada deja el reclamo colgando de nada
+    if (!it.exec) delete it.claim;
+    if (antes === [!!it.exec, !!it.fill, it.claim ? 1 : 0].join()) return false;
+    markDirty(); return true;
+  };
+  const ponerColor = (it, c) => {
+    if ((it.color || "") === (c || "")) return false;
+    if (c) it.color = c; else delete it.color;
+    markDirty(); return true;
+  };
+  const añadirRespuesta = (it, texto) => {
+    const t = String(texto || "").trim();
+    if (!t) return false;
+    if (!Array.isArray(it.replies)) it.replies = [];
+    it.replies.push({ at: Date.now(), by: "yo", t: t.slice(0, RESP_MAX) });
+    if (it.replies.length > RESP_HILO_MAX) it.replies.splice(0, it.replies.length - RESP_HILO_MAX);
+    markDirty(); return true;
+  };
+  const cerrarTarea = (it, hecha) => {
+    if (!!it.done === !!hecha) return false;
+    if (hecha){ it.done = true; it.doneAt = Date.now(); playDoneClick(); }
+    else { it.done = false; delete it.doneAt; }
+    markDirty(); return true;
+  };
+
+  /* ── LA VISTA ──────────────────────────────────────────────────────────────────────────────── */
+  let detalle = null;          // { it, nodo } — su existencia es lo que congela `paint()`
+  const detalleAbierto = () => !!detalle;
+
+  const cerrarDetalle = () => {
+    if (!detalle) return;
+    const nodo = detalle.nodo;
+    detalle = null;                       // PRIMERO, para que el `paint()` de abajo sí reconstruya
+    if (nodo && nodo.parentNode) nodo.remove();
+    el.classList.remove("con-detalle");
+    document.body.classList.remove("detalle-completa");
+    paint();
+  };
+
+  const abrirDetalle = (it, foco) => {
+    if (detalle) cerrarDetalle();
+    const nodo = document.createElement("div");
+    nodo.className = "task-detail";
+    const modo = modoDetalle(parteVisible(el.getBoundingClientRect(), innerWidth, innerHeight));
+    if (modo === "completa"){
+      /* A PANTALLA COMPLETA EL NODO SALE DEL WIDGET, y no es un capricho: las ventanas se colocan
+         con `transform`, y un ancestro transformado convierte `position:fixed` en `absolute`
+         respecto a él. Con el nodo dentro, «pantalla completa» se quedaba encerrado en la ventana
+         —y encima recortado— exactamente igual que el panel viejo. Se vio en una captura. */
+      nodo.classList.add("completa");
+      document.body.classList.add("detalle-completa");
+      document.body.appendChild(nodo);
+    } else {
+      el.classList.add("con-detalle");    // el CSS esconde alta, barra y lista: la vista SUSTITUYE
+      el.appendChild(nodo);
+    }
+    detalle = { it, nodo };
+    pintarDetalle(foco);
+  };
+
+  /* `pintarDetalle` reconstruye SOLO el nodo del detalle, y se llama a mano tras un cambio que
+     altere su contenido (una respuesta nueva, un adjunto). Nunca lo llama el sondeo. */
+  function pintarDetalle(foco){
+    if (!detalle) return;
+    const { it, nodo } = detalle;
+    const scroll = nodo.querySelector(".td-body");
+    const scrollY = scroll ? scroll.scrollTop : null;
+
     const hilo = (Array.isArray(it.replies) ? it.replies : []).map((r, i) => {
       const cuando = new Date(+r.at || 0);
       const fecha = isNaN(cuando) ? "" : cuando.toLocaleString("es-ES", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
-      /* 0.68.0 — FIRMA DE AGENTE (P3 del marco de bandejas multi-agente). `by` solo distingue
-         persona de máquina, y eso bastaba mientras hubo un único agente. Con Codex y Antigravity
-         leyendo la misma bandeja, «Agente» a secas hace indistinguibles dos criterios de triaje
-         distintos, y sin poder distinguirlos «un dueño por bandeja» no es auditable. `ag` lo
-         escribe el escritor canónico (`cabecera-io`, que ya recibía el autor y no lo guardaba);
-         lo anterior no lo lleva y sigue diciendo «Agente», que es exactamente lo que era. */
       const quien = r.by === "agente" ? (r.ag ? "Agente " + r.ag : "Agente") : "Tú";
-      return `<div class="rp ${r.by === "agente" ? "de-agente" : "de-mi"}" data-i="${i}"><span class="rp-meta">${esc(quien)} · ${esc(fecha)}${r.ed ? " · editado" : ""}`
-        + `<span class="rp-acts"><button class="rp-ed" type="button" title="Editar">✎</button><button class="rp-del" type="button" title="Borrar esta respuesta">✕</button></span></span>`
+      return `<div class="rp ${r.by === "agente" ? "de-agente" : "de-mi"}" data-i="${i}">`
+        + `<span class="rp-meta">${esc(quien)} · ${esc(fecha)}${r.ed ? " · editado" : ""}`
+        + `<span class="rp-acts"><button class="rp-ed" type="button" title="Editar">✎</button>`
+        + `<button class="rp-del" type="button" title="Borrar esta respuesta">✕</button></span></span>`
         + `<span class="rp-txt">${esc(r.t)}</span></div>`;
     }).join("");
-    /* 0.80.0 — los adjuntos se pintan ENTRE el hilo y la caja de escribir, no en una pestaña aparte:
-       lo que se adjunta se adjunta mientras se contesta, y separarlos obligaría a dos gestos para
-       una sola intención. El tamaño va a la vista porque es lo que decide si merece la pena. */
+
     const adj = (Array.isArray(it.att) ? it.att : []).map((a, i) => {
       const txtDoc = esAdjuntoTexto(a);
-      return `<div class="rp-a" data-a="${i}"><button class="rp-a-open${txtDoc ? " doc" : ""}" type="button" title="${txtDoc ? `Leer «${esc(a.n)}» aquí mismo` : `Abrir «${esc(a.n)}» desde tu carpeta ${ADJ_DIR}`}">${txtDoc ? "📄" : "📎"} ${esc(a.n)}</button>`
-      + `<span class="rp-a-kb">${kb(a.s || 0)}</span>`
-      + `<button class="rp-a-cp" type="button" title="Copiar el nombre del fichero para buscarlo en tu carpeta">⧉</button>`
-      + `<button class="rp-a-rm" type="button" title="Quitarlo de la tarea — el fichero NO se borra de tu carpeta">✕</button></div>`;
+      return `<div class="rp-a" data-a="${i}">`
+        + `<button class="rp-a-open${txtDoc ? " doc" : ""}" type="button" title="${txtDoc ? `Leer «${esc(a.n)}» aquí mismo` : `Abrir «${esc(a.n)}» desde tu carpeta ${ADJ_DIR}`}">${txtDoc ? "📄" : "📎"} ${esc(a.n)}</button>`
+        + `<span class="rp-a-kb">${kb(a.s || 0)}</span>`
+        + `<button class="rp-a-cp" type="button" title="Copiar el nombre del fichero para buscarlo en tu carpeta">⧉</button>`
+        + `<button class="rp-a-rm" type="button" title="Quitarlo de la tarea — el fichero NO se borra de tu carpeta">✕</button></div>`;
     }).join("");
-    ed.innerHTML = `<div class="rp-head"><b>Conversación${it.n ? ` <span class="rp-n" title="Número de esta tarea en la lista: cítalo tal cual cuando hables de ella con un asistente">#${it.n}</span>` : ""}</b><button class="rp-x" type="button" title="Cerrar (Esc)">✕</button></div>
-      <div class="rp-hilo">${hilo || `<div class="rp-vacio">Aún no hay respuestas. Lo que escribas se guarda con su fecha y no se sobrescribe.</div>`}</div>
-      <div class="rp-nota"><div class="rp-nota-cab"><b>📝 Nota</b><span class="rp-nota-est"></span></div><textarea class="rp-nota-t" maxlength="${NOTA_MAX}" placeholder="El texto largo de esta tarea. Se guarda solo.">${esc(it.note || "")}</textarea></div>
-      ${adj ? `<div class="rp-adj">${adj}</div>` : ""}
-      <div class="rp-doc" hidden></div>
-      <textarea class="rp-t" placeholder="Escribe tu respuesta…  (Ctrl+Enter para enviar)"></textarea>
-      <div class="rp-actions"><button class="mini send" type="button">Responder</button><button class="mini ok" type="button" title="Responder «Vale» sin escribir — apaga el 🤖 y deja constancia de que lo leíste">👍 Vale</button>${it.done ? "" : `<button class="mini okdone" type="button" title="Responder y dar la tarea por hecha, en un gesto — si ya has escrito algo, se manda lo tuyo">👍 Vale y hecha</button>`}<button class="mini adj" type="button" title="Colgar un PDF o una captura en esta tarea: se guarda en tu carpeta, no dentro de datos.json">📎 Adjuntar</button><button class="mini" type="button" data-x="1">Cerrar</button></div>`;
-    li.appendChild(ed);
-    const ta = ed.querySelector(".rp-t");
 
-    /* 0.92.0 — la nota: se escribe aquí y se guarda sola. Ver el contrato arriba.
-       `pendiente` existe para que cerrar el panel o marcar la tarea no se lleve por delante lo
-       último tecleado: mientras el temporizador no haya saltado, el texto solo está en el campo. */
-    const nota = ed.querySelector(".rp-nota-t"), notaEst = ed.querySelector(".rp-nota-est");
+    const marcasActivas = [it.exec ? "⚙ agéntica" : "", it.fill ? "▪ relleno" : "", it.color ? "● color" : ""].filter(Boolean).join(" · ");
+
+    /* La cabecera es FIJA y lleva el título: lo primero que falló en el panel anterior fue que al
+       abrirlo el hilo empujaba la fila fuera de la vista y no se sabía en qué tarea estabas. */
+    nodo.innerHTML =
+      `<div class="td-head">`
+      + `<button class="td-back" type="button" title="Volver a la lista (Esc)">‹</button>`
+      + `<label class="td-done" title="${it.done ? "Reabrir la tarea" : "Dar la tarea por hecha"}"><input type="checkbox" ${it.done ? "checked" : ""}></label>`
+      + `<textarea class="td-title" rows="1" placeholder="Título de la tarea">${esc(it.t || "")}</textarea>`
+      + (it.n ? `<span class="td-n" title="Número de esta tarea: cítalo tal cual cuando hables de ella con un asistente">#${it.n}</span>` : "")
+      + `<button class="td-x" type="button" title="Cerrar (Esc)">✕</button>`
+      + `</div>`
+      + `<div class="td-body">`
+      +   `<div class="td-fecha">`
+      +     `<label>📅 Fecha<input class="dd" type="date" value="${esc(it.due || "")}"></label>`
+      +     `<label>⏰ Aviso<input class="hh" type="time" value="${esc(it.remind || "")}"></label>`
+      +     `<div class="td-quick"><button class="dq" type="button" data-d="0">Hoy</button><button class="dq" type="button" data-d="1">Mañana</button><button class="dq" type="button" data-d="7">+1 sem</button><span class="dq-sep"></span><button class="dq" type="button" data-m="15">+15 min</button><button class="dq" type="button" data-m="60">+1 h</button><button class="dq" type="button" data-h="08:00">08:00</button><button class="dq quitar" type="button" title="Quitar fecha y aviso">Sin fecha</button></div>`
+      +   `</div>`
+      +   `<div class="td-adj"><div class="td-adj-lista">${adj || `<span class="td-vacio">Sin adjuntos</span>`}</div><button class="mini adj" type="button" title="Colgar un PDF, una captura o un texto: se guarda en tu carpeta, no dentro de datos.json">📎 Adjuntar</button></div>`
+      +   `<div class="td-doc" hidden></div>`
+      +   `<div class="td-nota"><div class="td-nota-cab"><b>📝 Nota</b><span class="td-nota-est"></span></div>`
+      +     `<textarea class="td-nota-t" maxlength="${NOTA_MAX}" placeholder="El texto largo de esta tarea. Se guarda solo.">${esc(it.note || "")}</textarea></div>`
+      +   `<details class="td-opts"${marcasActivas ? " open" : ""}><summary>⚙ Opciones de agentes${marcasActivas ? ` <span class="td-opts-res">${esc(marcasActivas)}</span>` : ""}</summary>`
+      +     `<label class="td-check"><input class="xx" type="checkbox" ${it.exec ? "checked" : ""}><span>⚙ Fecha de ejecución agéntica</span></label>`
+      +     `<div class="td-hint">Un agente la ejecutará en esa fecha o después, la primera vez que trabaje aquí. No se ejecuta sola: necesita que abras una sesión y lo autorices.</div>`
+      +     `<label class="td-check"><input class="ff" type="checkbox" ${it.fill ? "checked" : ""}><span>▪ Relleno: hacer cuando sobren tokens</span></label>`
+      +     `<div class="td-colores">Color: ${["", "amarillo", "rosa", "verde", "azul", "naranja"].map(c =>
+              `<button class="td-color${(it.color || "") === c ? " on" : ""}" type="button" data-c="${c}" title="${c || "sin color"}"></button>`).join("")}</div>`
+      +     (it.claim ? `<div class="td-claim">🔒 Tomada por <b>${esc(it.claim.ag || "un agente")}</b>${it.claim.at ? " el " + new Date(it.claim.at).toLocaleString("es-ES") : ""}</div>` : "")
+      +   `</details>`
+      +   `<div class="td-hilo-cab">💬 Conversación${it.replies && it.replies.length ? ` (${it.replies.length})` : ""}</div>`
+      +   `<div class="td-hilo">${hilo || `<div class="rp-vacio">Aún no hay respuestas. Lo que escribas se guarda con su fecha y no se sobrescribe.</div>`}</div>`
+      + `</div>`
+      + `<div class="td-foot">`
+      +   `<textarea class="rp-t" placeholder="Escribe tu respuesta…  (Ctrl+Enter para enviar)"></textarea>`
+      +   `<div class="td-acts"><button class="mini send" type="button">Responder</button>`
+      +     `<button class="mini ok" type="button" title="Responder «Vale» sin escribir — apaga el 🤖 y deja constancia de que lo leíste">👍 Vale</button>`
+      +     (it.done ? "" : `<button class="mini okdone" type="button" title="Responder y dar la tarea por hecha, en un gesto — si ya has escrito algo, se manda lo tuyo">👍 Vale y hecha</button>`)
+      +   `</div>`
+      + `</div>`;
+
+    const $$ = s => nodo.querySelector(s);
+    const titulo = $$(".td-title"), nota = $$(".td-nota-t"), notaEst = $$(".td-nota-est");
+    const date = $$(".dd"), time = $$(".hh"), ta = $$(".rp-t");
+    const exec = $$(".xx"), fill = $$(".ff"), doc = $$(".td-doc");
+
+    /* ── la nota: se guarda sola, sin botón ─────────────────────────────────────────────────── */
     let notaTimer = null, notaSucia = false;
     const guardarNota = () => {
       if (notaTimer){ clearTimeout(notaTimer); notaTimer = null; }
       if (!notaSucia) return false;
-      const v = nota.value.trim();
-      const antes = it.note || "";
-      if (v === antes){ notaSucia = false; return false; }
-      if (v) it.note = v; else delete it.note;
       notaSucia = false;
-      markDirty();
-      notaEst.textContent = "Guardada · " + new Date().toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
-      return true;
+      const cambio = ponerNota(it, nota.value);
+      if (cambio) notaEst.textContent = "Guardada · " + new Date().toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
+      return cambio;
     };
     nota.addEventListener("input", () => {
       notaSucia = true;
       notaEst.textContent = "Escribiendo…";
-      // al llegar al tope se DICE: el navegador dejaría de aceptar teclas sin explicar por qué, y
-      // un texto pegado se recortaría en silencio, que es el defecto que ya costó 45 respuestas
       if (nota.value.length >= NOTA_MAX) toast(`La nota llega al tope de ${NOTA_MAX.toLocaleString("es-ES")} caracteres`, true);
       if (notaTimer) clearTimeout(notaTimer);
       notaTimer = setTimeout(guardarNota, NOTA_GUARDA_MS);
     });
-    // salir del campo guarda YA y repinta: el repintado se aplaza hasta aquí a propósito
-    nota.addEventListener("blur", () => { if (guardarNota()) paint(); });
-    nota.addEventListener("keydown", e => { if (e.key === "Escape"){ e.stopPropagation(); nota.blur(); } });
+    nota.addEventListener("blur", guardarNota);
 
-    const cerrar = () => { if (guardarNota()) paint(); ed.remove(); };
-    /* 0.50.0 — el 🤖 se apaga SOLO respondiendo, y eso se queda así: una regla única, derivada del
-       orden, sin ningún «leído» que guardar (no sabría en cuál de sus dos equipos lo leyó). Lo que
-       se abarata es responder. Su objeción, que es la que decide: un robot que desaparece sin dejar
-       comentario es incongruente — un «Vale» fechado es trazabilidad, un check no lo es.
-       `enviar` acepta un texto por defecto: si ya había escrito algo, se manda LO SUYO. El botón
-       nunca puede tragarse lo que estaba escribiendo. */
-    /* 0.71.0 — `cerrarla` responde a una pregunta suya del 11/08, y la pregunta traía ya el motivo:
-       «además del vale, sería algo como vale y dar por hecha la tarea, porque si tengo un filtro de
-       robots, por ejemplo para contestar tareas, pierdo esa tarea de vista y la tengo que buscar de
-       nuevo para darla por hecha si es el caso».
-       Es exacto: contestar la saca del filtro 🤖 —deja de tener la última palabra el agente— así que
-       el segundo gesto, que es el que de verdad cierra, hay que hacerlo persiguiéndola. Dos gestos
-       que casi siempre van juntos y que el producto separaba sin ninguna razón.
-       Sigue siendo ÉL quien cierra (R21): es un botón suyo, no una deducción del agente. Y no
-       aparece si la tarea ya está hecha, porque ahí no cierra nada. */
+    /* ── el título: único editor (el ✎ de la fila abre aquí con el foco puesto) ──────────────── */
+    const crecer = t => { t.style.height = "auto"; t.style.height = t.scrollHeight + "px"; };
+    crecer(titulo);
+    titulo.addEventListener("input", () => crecer(titulo));
+    /* Reescribir el título conserva LAS DOS cosas que hacía el editor de la fila y que se perdieron
+       al reescribirlo (las devolvió el banco de pruebas, no una relectura): ofrecer convertir en
+       nota cuando el texto se pasa de largo —la lista guarda líneas, no textos— y el aviso con
+       Deshacer, que es lo que hace reversible un cambio de texto. */
+    titulo.addEventListener("blur", () => {
+      if (!ponerTitulo(it, titulo.value)){ titulo.value = it.t; return; }
+      if (it.t.length > TASK_LONG) offerTaskToNote(w, it, () => { cerrarDetalle(); });
+      else toastAction("Tarea reescrita.", "Deshacer", undoLastTextEdit);
+      pintarDetalle();
+    });
+    titulo.addEventListener("keydown", e => {
+      if (e.key === "Enter" && !e.shiftKey){ e.preventDefault(); titulo.blur(); }
+      if (e.key === "Escape"){ e.stopPropagation(); titulo.value = it.t; titulo.blur(); }
+    });
+
+    /* ── fecha y aviso: rueda y flechas, como los diales del temporizador ────────────────────── */
+    const hoyIso = () => new Date().toISOString().slice(0, 10);
+    const isoDe = d => new Date(d.getTime() - d.getTimezoneOffset() * 6e4).toISOString().slice(0, 10);
+    const hhmm = d => String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
+    const guardarFecha = () => { if (ponerFecha(it, { due: date.value, remind: time.value })) pintarDetalle(); };
+    const moverDia = paso => {
+      const base = date.value ? new Date(date.value + "T12:00:00") : new Date();
+      if (date.value) base.setDate(base.getDate() + paso);
+      date.value = isoDe(base); guardarFecha();
+    };
+    const moverMin = paso => {
+      if (!time.value){ const n = new Date(); n.setMinutes(0, 0, 0); n.setHours(n.getHours() + 1); time.value = hhmm(n); guardarFecha(); return; }
+      const [H, M] = time.value.split(":").map(Number);
+      const t = (H * 60 + M + paso + 1440) % 1440;
+      time.value = String(Math.floor(t / 60)).padStart(2, "0") + ":" + String(t % 60).padStart(2, "0");
+      guardarFecha();
+    };
+    const bindPaso = (inp, mover, paso) => {
+      inp.addEventListener("wheel", e => { e.preventDefault(); mover(e.deltaY < 0 ? paso : -paso); }, { passive: false });
+      inp.addEventListener("keydown", e => {
+        if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+        if (inp.value) return;   // con valor mandan las flechas nativas
+        e.preventDefault(); mover(e.key === "ArrowUp" ? paso : -paso);
+      });
+    };
+    bindPaso(date, moverDia, 1);
+    bindPaso(time, moverMin, 5);
+    date.addEventListener("change", guardarFecha);
+    time.addEventListener("change", guardarFecha);
+    nodo.querySelectorAll(".dq").forEach(b => b.addEventListener("click", () => {
+      const d = b.dataset;
+      if (b.classList.contains("quitar")){ date.value = ""; time.value = ""; }
+      else if (d.d !== undefined){ const t = new Date(); t.setDate(t.getDate() + +d.d); date.value = isoDe(t); }
+      else if (d.h !== undefined){ time.value = d.h; if (!date.value) date.value = hoyIso(); }
+      else { const t = new Date(); t.setMinutes(t.getMinutes() + +d.m, 0, 0); time.value = hhmm(t); date.value = isoDe(t); }
+      guardarFecha();
+    }));
+
+    /* ── opciones de agentes y color ─────────────────────────────────────────────────────────── */
+    const aplicarMarcas = () => { if (ponerMarcas(it, { exec: exec.checked, fill: fill.checked })) pintarDetalle(); };
+    exec.addEventListener("change", aplicarMarcas);
+    fill.addEventListener("change", aplicarMarcas);
+    nodo.querySelectorAll(".td-color").forEach(b => b.addEventListener("click", () => {
+      if (ponerColor(it, b.dataset.c)) pintarDetalle();
+    }));
+
+    /* ── la casilla de hecha: cerrar sigue siendo suyo ───────────────────────────────────────── */
+    $$(".td-done input").addEventListener("change", e => { cerrarTarea(it, e.target.checked); pintarDetalle(); });
+
+    /* ── conversación ────────────────────────────────────────────────────────────────────────── */
     const enviar = (porDefecto, cerrarla) => {
       const t = ta.value.trim() || (porDefecto || "");
-      if (!t){ cerrar(); return; }
-      if (!Array.isArray(it.replies)) it.replies = [];
-      it.replies.push({ at: Date.now(), by: "yo", t: t.slice(0, 2000) });
-      if (it.replies.length > 50) it.replies.splice(0, it.replies.length - 50);
-      // el cierre usa EXACTAMENTE los mismos campos que la casilla de la fila: dos caminos que
-      // cierran de formas distintas acaban dando dos «Hechas» diferentes (R47)
-      if (cerrarla && !it.done){ it.done = true; it.doneAt = Date.now(); playDoneClick(); }
-      // 0.92.0 — responder NO puede tragarse la nota a medio teclear: si el temporizador aún no ha
-      // saltado, lo escrito solo vive en el campo y `ed.remove()` se lo llevaría
-      guardarNota();
-      ed.remove(); paint(); markDirty();
+      guardarNota();                                   // responder no puede tragarse la nota
+      if (!t){ cerrarDetalle(); return; }
+      añadirRespuesta(it, t);
+      if (cerrarla) cerrarTarea(it, true);
+      ta.value = "";
+      pintarDetalle();
     };
-    /* 0.48.3 — Ernesto escribió «df» probando y no tenía forma de quitarlo: «esto es un problema».
-       Tenía razón y mi regla anterior era mala. La inmutabilidad protege un registro AJENO, pero
-       aquí el dueño del archivo es él: negarle borrar su propio error no protege nada, solo
-       ensucia. Se cambia por lo que hacen los mensajeros: **se puede editar y borrar, y lo editado
-       queda marcado**. La honestidad la da la marca, no la prohibición. */
-    /* 0.73.0 — EL BOTÓN DICE LO QUE VA A HACER. Su pregunta del 13/08: «me pregunto si tendría
-       sentido un "Responder y hecha"». La función ya existía desde 0.71.0 —si has escrito algo, se
-       manda lo tuyo y se cierra— pero el rótulo seguía diciendo «Vale y hecha», que es otra cosa:
-       un «Vale» es acusar recibo. Así que no faltaba función, faltaba que el botón no mintiera.
-       No se toca «👍 Vale»: con texto escrito ya está «Responder» al lado haciendo eso mismo, y
-       cambiarle el rótulo a los dos sería rediseñar el editor en vez de responder lo que preguntó. */
-    const okdone = ed.querySelector(".rp-actions .okdone");
-    if (okdone) ta.addEventListener("input", () => {
-      okdone.textContent = ta.value.trim() ? "👍 Responder y hecha" : "👍 Vale y hecha";
-    });
-    const reabrir = () => { guardarNota(); ed.remove(); replyTo(it, li); };
-    ed.querySelectorAll(".rp-del").forEach(b => b.addEventListener("click", e => {
+    $$(".send").addEventListener("click", () => enviar());
+    $$(".td-acts .ok").addEventListener("click", () => enviar("Vale"));
+    const okdone = $$(".td-acts .okdone");
+    if (okdone){
+      okdone.addEventListener("click", () => enviar("Vale", true));
+      ta.addEventListener("input", () => { okdone.textContent = ta.value.trim() ? "👍 Responder y hecha" : "👍 Vale y hecha"; });
+    }
+    nodo.querySelectorAll(".rp-del").forEach(b => b.addEventListener("click", e => {
       e.stopPropagation();
-      const i = +b.closest(".rp").dataset.i;
-      const borrada = it.replies[i];
+      const i = +b.closest(".rp").dataset.i, borrada = it.replies[i];
       it.replies.splice(i, 1);
       if (!it.replies.length) delete it.replies;
-      markDirty(); paint();
+      markDirty(); pintarDetalle();
       toastAction("Respuesta borrada.", "Deshacer", () => {
         if (!Array.isArray(it.replies)) it.replies = [];
         it.replies.splice(Math.min(i, it.replies.length), 0, borrada);
-        markDirty(); paint();
+        markDirty(); pintarDetalle();
       });
     }));
-    ed.querySelectorAll(".rp-ed").forEach(b => b.addEventListener("click", e => {
+    nodo.querySelectorAll(".rp-ed").forEach(b => b.addEventListener("click", e => {
       e.stopPropagation();
       const caja = b.closest(".rp"), i = +caja.dataset.i, txt = caja.querySelector(".rp-txt");
       if (caja.querySelector("textarea")) return;
-      // editar lo que dijo el agente se permite (el archivo es suyo) pero se avisa: la entrada
+      // editar lo que dijo el agente se permite —el archivo es suyo— pero se avisa: la entrada
       // conserva su autoría y quedará marcada, para que dentro de un mes no parezca que lo dijo él
       if (it.replies[i].by === "agente") toast("Vas a editar una respuesta del agente: seguirá figurando como suya, marcada como editada");
-      caja.classList.add("editando");
       const ta2 = document.createElement("textarea");
       ta2.className = "rp-t rp-edit";
       ta2.value = it.replies[i].t;
       txt.replaceWith(ta2);
       const guardar = () => {
         const v = ta2.value.trim();
-        if (!v){ ta2.replaceWith(txt); return; }
-        if (v !== it.replies[i].t){ it.replies[i].t = v.slice(0, 2000); it.replies[i].ed = 1; markDirty(); paint(); }
-        reabrir();
+        if (v && v !== it.replies[i].t){ it.replies[i].t = v.slice(0, RESP_MAX); it.replies[i].ed = 1; markDirty(); }
+        pintarDetalle();
       };
       ta2.addEventListener("keydown", ev => {
-        if (ev.key === "Escape"){ ev.stopPropagation(); reabrir(); }
+        if (ev.key === "Escape"){ ev.stopPropagation(); pintarDetalle(); }
         if (ev.key === "Enter" && (ev.ctrlKey || ev.metaKey)){ ev.preventDefault(); guardar(); }
       });
       ta2.addEventListener("blur", guardar);
       ta2.focus(); ta2.setSelectionRange(ta2.value.length, ta2.value.length);
     }));
-    // envuelto a propósito: pasar `enviar` pelado le colaría el MouseEvent como texto por defecto
-    ed.querySelector(".send").addEventListener("click", () => enviar());
-    ed.querySelector(".rp-actions .ok").addEventListener("click", () => enviar("Vale"));
-    const okDone = ed.querySelector(".rp-actions .okdone");
-    if (okDone) okDone.addEventListener("click", () => enviar("Vale", true));
-    /* 0.80.0 — ADJUNTAR. El diálogo de archivos se abre con `showOpenFilePicker` si está, y si no
-       con un <input type=file>, que es lo que hay en los navegadores que no la tienen. Sin carpeta
-       concedida NO se ofrece la alternativa de incrustar: se dice y se para (ver contrato arriba). */
-    const btAdj = ed.querySelector(".rp-actions .adj");
-    if (btAdj) btAdj.addEventListener("click", async () => {
-      if (backend !== "fs" || !dirHandle){
-        toast("Un adjunto vive en tu carpeta sincronizada, y ahora no hay ninguna conectada. Conéctala desde «📁 Sincronizar equipos»", true);
-        return;
-      }
-      let files = [];
-      try{
-        if (window.showOpenFilePicker){
-          const hs = await window.showOpenFilePicker({ multiple: true });
-          files = await Promise.all(hs.map(h => h.getFile()));
-        } else {
-          files = await new Promise(res => {
-            const inp = document.createElement("input");
-            inp.type = "file"; inp.multiple = true;
-            inp.addEventListener("change", () => res([...(inp.files || [])]));
-            inp.click();
-          });
-        }
-      }catch(e){ return; }   // cancelar no es un error
-      if (!files.length) return;
-      let n = 0, fallo = "";
-      for (const f of files){
-        try{
-          const a = await guardarAdjunto(f);
-          if (!Array.isArray(it.att)) it.att = [];
-          it.att.push(a);   // solo se apunta DESPUÉS de que el fichero esté escrito y verificado
-          n++;
-        }catch(e){
-          fallo = e && e.message === "grande"
-            ? `«${f.name}» pasa de ${kb(ADJ_MAX)} y no se ha adjuntado`
-            : `No se pudo guardar «${f.name}»: no se ha adjuntado`;
-        }
-      }
-      if (n){ markDirty(); paint(); reabrir(); toast(`${n} adjunto${n === 1 ? "" : "s"} en la carpeta «${ADJ_DIR}»`); }
-      if (fallo) toast(fallo, true);
-    });
-    /* 0.91.0 — el panel de lectura. Un solo panel por editor: leer un segundo documento sustituye
-       al primero en vez de apilarlos, que es lo que convertiría la ficha en una pila de textos
-       largos — justo lo que su objeción a la propuesta anterior pedía evitar. Volver a pulsar el
-       mismo documento lo cierra. */
-    const doc = ed.querySelector(".rp-doc");
+
+    /* ── adjuntos ────────────────────────────────────────────────────────────────────────────── */
     const cerrarDoc = () => { doc.hidden = true; doc.innerHTML = ""; delete doc.dataset.a; };
-    ed.querySelectorAll(".rp-a-open").forEach(b => b.addEventListener("click", async e => {
+    nodo.querySelectorAll(".rp-a-open").forEach(b => b.addEventListener("click", async e => {
       e.stopPropagation();
       const idx = +b.closest(".rp-a").dataset.a, a = it.att[idx];
       if (!esAdjuntoTexto(a)){
-        /* Si el fichero no está —carpeta distinta, o aún sin sincronizar en el otro equipo— se DICE
-           cuál falta, igual que en las imágenes: un fallo mudo parece un adjunto perdido. */
         try{ await abrirAdjunto(a); }
         catch(err){ toast(`No encuentro «${a.f}» en la carpeta «${ADJ_DIR}»`, true); }
         return;
@@ -7592,7 +7808,7 @@ function bodyTodo(w, el){
       if (doc.dataset.a === String(idx)){ cerrarDoc(); return; }
       try{
         const html = await leerAdjuntoTexto(a);
-        doc.innerHTML = `<div class="rp-doc-head"><b>📄 ${esc(a.n)}</b><button class="rp-doc-x" type="button" title="Cerrar el documento">✕</button></div>`
+        doc.innerHTML = `<div class="rp-doc-head"><b>📄 ${esc(a.n)}</b><button class="rp-doc-x" type="button" title="Volver">‹ Volver</button></div>`
           + `<div class="rp-doc-body">${html}</div>`;
         doc.dataset.a = String(idx);
         doc.hidden = false;
@@ -7600,212 +7816,57 @@ function bodyTodo(w, el){
         doc.scrollIntoView({ block: "nearest" });
       }
       catch(err){
-        // el motivo se distingue: «no está» y «es demasiado largo» se arreglan de formas distintas
         if (String(err && err.message) === "grande") toast(`«${a.n}» pasa de ${Math.round(ADJ_TEXTO_MAX / 1024)} KB: ábrelo desde tu carpeta «${ADJ_DIR}»`, true);
         else toast(`No encuentro «${a.f}» en la carpeta «${ADJ_DIR}»`, true);
       }
     }));
-    ed.querySelectorAll(".rp-a-cp").forEach(b => b.addEventListener("click", async e => {
+    nodo.querySelectorAll(".rp-a-cp").forEach(b => b.addEventListener("click", async e => {
       e.stopPropagation();
       const a = it.att[+b.closest(".rp-a").dataset.a];
       try{ await navigator.clipboard.writeText(a.f); toast(`Nombre copiado: búscalo en «${ADJ_DIR}»`); }
       catch(err){ toast(`Está en «${ADJ_DIR}/${a.f}»`); }
     }));
-    ed.querySelectorAll(".rp-a-rm").forEach(b => b.addEventListener("click", e => {
+    nodo.querySelectorAll(".rp-a-rm").forEach(b => b.addEventListener("click", e => {
       e.stopPropagation();
       const i = +b.closest(".rp-a").dataset.a, quitado = it.att[i];
       it.att.splice(i, 1);
       if (!it.att.length) delete it.att;
-      markDirty(); paint(); reabrir();
-      // el fichero de la carpeta NO se borra (contrato): por eso deshacer puede devolverlo entero
+      markDirty(); pintarDetalle();
+      // el fichero de la carpeta NO se borra (contrato de 0.80.0): por eso deshacer lo devuelve entero
       toastAction(`Quitado de la tarea. El fichero sigue en «${ADJ_DIR}».`, "Deshacer", () => {
         if (!Array.isArray(it.att)) it.att = [];
         it.att.splice(Math.min(i, it.att.length), 0, quitado);
-        markDirty(); paint(); reabrir();
+        markDirty(); pintarDetalle();
       });
     }));
-    ed.querySelector(".rp-x").addEventListener("click", cerrar);
-    ed.querySelector('[data-x="1"]').addEventListener("click", cerrar);
-    ed.addEventListener("keydown", e => {
-      if (e.key === "Escape"){ e.stopPropagation(); cerrar(); }
+    $$(".td-adj .adj").addEventListener("click", async () => {
+      if (backend !== "fs" || !dirHandle){
+        toast("Un adjunto vive en tu carpeta sincronizada, y ahora no hay ninguna conectada. Conéctala desde «📁 Sincronizar equipos»", true);
+        return;
+      }
+      const n = await pedirAdjuntos(it);
+      if (n){ pintarDetalle(); toast(`${n} adjunto${n === 1 ? "" : "s"} en la carpeta «${ADJ_DIR}»`); }
+    });
+
+    /* ── salidas ─────────────────────────────────────────────────────────────────────────────── */
+    const salir = () => { guardarNota(); cerrarDetalle(); };
+    $$(".td-x").addEventListener("click", salir);
+    $$(".td-back").addEventListener("click", salir);
+    nodo.addEventListener("keydown", e => {
+      if (e.key === "Escape"){ e.stopPropagation(); salir(); }
       if (e.key === "Enter" && (e.ctrlKey || e.metaKey)){ e.preventDefault(); enviar(); }
     });
-    const caja = ed.querySelector(".rp-hilo");
-    caja.scrollTop = caja.scrollHeight;
-    ta.focus();
-  };
-  const setDue = (it, li) => {
-    el.querySelectorAll(".due-editor").forEach(x => x.remove());
-    const ed = document.createElement("div");
-    ed.className = "due-editor";
-    /* 0.69.0 — las dos casillas van AQUÍ, en el mismo panel que la fecha, porque la de ejecución
-       agéntica cambia lo que significa el campo que tiene justo encima. Separarlas en otro sitio
-       obligaría a recordar que una modifica a la otra. */
-    ed.innerHTML = `<div class="due-grid"><label>Fecha<input class="dd" type="date" value="${esc(it.due || "")}"></label><label>Aviso<input class="hh" type="time" value="${esc(it.remind || "")}"></label></div>
-      <div class="due-quick"><button class="dq" type="button" data-d="0">Hoy</button><button class="dq" type="button" data-d="1">Mañana</button><button class="dq" type="button" data-d="7">+1 sem</button><span class="dq-sep"></span><button class="dq" type="button" data-m="15">+15 min</button><button class="dq" type="button" data-m="60">+1 h</button><button class="dq" type="button" data-h="08:00">08:00</button></div>
-      <label class="due-check"><input class="xx" type="checkbox" ${it.exec ? "checked" : ""}><span>⚙ Fecha de ejecución agéntica</span></label>
-      <div class="due-hint">Un agente la ejecutará en esa fecha o después, la primera vez que trabaje aquí. No se ejecuta sola: necesita que abras una sesión y lo autorices.</div>
-      <label class="due-check"><input class="ff" type="checkbox" ${it.fill ? "checked" : ""}><span>▪ Relleno: hacer cuando sobren tokens</span></label>
-      <label>📝 Nota<textarea class="nn" placeholder="La misma nota que ves con 💬. Aquí también se puede escribir.  (Ctrl+Enter para guardar)">${esc(it.note || "")}</textarea></label>
-      <div class="due-actions"><button class="mini ok" type="button">Guardar</button><button class="mini due-x" type="button">Cerrar</button><button class="mini clear" type="button">Quitar fecha</button><button class="mini note-clear" type="button">Quitar nota</button></div>`;
-    li.appendChild(ed);
-    const date = ed.querySelector(".dd"), time = ed.querySelector(".hh"), note = ed.querySelector(".nn");
-    const exec = ed.querySelector(".xx"), fill = ed.querySelector(".ff");
-    /* 0.85.0 — LA USABILIDAD QUE PEDÍA, Y ES LO QUE SUSTITUYE A LA ALARMA RETIRADA. Apunte suyo
-       del 16/08: «el rediseño del reloj de alarma podría ser un benchmarking para el reloj de
-       tarea, que carece de usabilidad». Retirar la alarma sin esto habría sido quitar sin dar
-       nada a cambio: el recordatorio doméstico puntual que la alarma cubría ahora vive aquí, y
-       ponerlo tiene que costar un clic, no pelearse con el selector nativo.
 
-       DOS COSAS, y las dos salen de lo que él ya conocía del temporizador:
-       1. LA RUEDA Y LAS FLECHAS mueven el valor, como los diales de la cuenta atrás (`bindDial`).
-          En la fecha van días; en la hora, tramos de cinco minutos. Sobre un campo VACÍO no
-          empiezan en 1970: siembran hoy / la hora en punto siguiente, que es lo que se quiere
-          decir al girar la rueda sobre un campo vacío.
-       2. LOS ATAJOS de una pulsación cubren lo que de verdad se teclea. «+15 min» y «+1 h» son
-          relativos AL RELOJ, no al campo: es la forma de la alarma doméstica que se retiró.
-       No se toca el esquema: siguen siendo `due` (fecha) y `remind` (hora), y las dos escrituras
-       pasan por el mismo `commit`. */
-    const hoyIso = () => new Date().toISOString().slice(0, 10);
-    const isoDe = d => new Date(d.getTime() - d.getTimezoneOffset() * 6e4).toISOString().slice(0, 10);
-    const hhmm = d => String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
-    const moverDia = paso => {
-      const base = date.value ? new Date(date.value + "T12:00:00") : new Date();
-      if (date.value) base.setDate(base.getDate() + paso);
-      date.value = isoDe(base);
-    };
-    const moverMin = paso => {
-      if (!time.value){ const n = new Date(); n.setMinutes(0, 0, 0); n.setHours(n.getHours() + 1); time.value = hhmm(n); return; }
-      const [H, M] = time.value.split(":").map(Number);
-      let t = (H * 60 + M + paso + 1440) % 1440;
-      time.value = String(Math.floor(t / 60)).padStart(2, "0") + ":" + String(t % 60).padStart(2, "0");
-    };
-    const bindPaso = (inp, mover, paso) => {
-      inp.addEventListener("wheel", e => { e.preventDefault(); mover(e.deltaY < 0 ? paso : -paso); }, { passive: false });
-      inp.addEventListener("keydown", e => {
-        if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
-        // sobre un campo vacío las flechas nativas no tienen de dónde partir; con valor, mandan ellas
-        if (inp.value) return;
-        e.preventDefault(); mover(e.key === "ArrowUp" ? paso : -paso);
-      });
-    };
-    bindPaso(date, moverDia, 1);
-    bindPaso(time, moverMin, 5);
-    ed.querySelectorAll(".dq").forEach(b => b.addEventListener("click", () => {
-      const d = b.dataset;
-      if (d.d !== undefined){
-        const t = new Date(); t.setDate(t.getDate() + +d.d); date.value = isoDe(t);
-      } else if (d.h !== undefined){
-        time.value = d.h; if (!date.value) date.value = hoyIso();
-      } else {
-        // relativo al reloj, no al campo: es la alarma doméstica que se retiró, en una pulsación
-        const t = new Date(); t.setMinutes(t.getMinutes() + +d.m, 0, 0);
-        time.value = hhmm(t); date.value = isoDe(t);
-      }
-    }));
-    const commit = () => {
-      let d = date.value.trim(), h = time.value.trim();
-      const oldKey = [it.due || "", it.remind || ""].join("T");
-      if (!d && h) d = new Date().toISOString().slice(0, 10);
-      if (d) it.due = d; else delete it.due;
-      if (h && d) it.remind = h; else delete it.remind;
-      const n = note.value.trim();
-      if (n) it.note = n.slice(0, NOTA_MAX); else delete it.note;
-      // ausente = falso: se BORRA en vez de guardar `0`, para no engordar el archivo con lo que ya
-      // es el valor por omisión (mismo criterio que el zoom al 100 %)
-      if (exec.checked) it.exec = 1; else delete it.exec;
-      if (fill.checked) it.fill = 1; else delete it.fill;
-      // quitarle la casilla ⚙ a una tarea ya tomada deja el reclamo colgando de nada
-      if (!it.exec) delete it.claim;
-      if (oldKey !== [it.due || "", it.remind || ""].join("T")) delete it.alertedAt;
-      ed.remove(); paint(); markDirty();
-    };
-    /* Marcar una casilla la APLICA sin pulsar Guardar —mismo criterio que 0.67.0 dejó en el selector
-       de etiquetas, y aquí pesa más porque la ⚙ cambia el sentido del campo que tiene encima—, pero
-       SIN repintar: `paint()` reconstruye la lista entera y se llevaría por delante este editor,
-       que es justo lo que 0.67.0 evitó para poder marcar varias seguidas. La fila se actualiza al
-       cerrar. */
-    const aplicarCasillas = () => {
-      if (exec.checked) it.exec = 1; else delete it.exec;
-      if (fill.checked) it.fill = 1; else delete it.fill;
-      if (!it.exec) delete it.claim;
-      markDirty();
-    };
-    exec.addEventListener("change", aplicarCasillas);
-    fill.addEventListener("change", aplicarCasillas);
-    ed.querySelector(".ok").addEventListener("click", commit);
-    ed.querySelector(".due-x").addEventListener("click", () => ed.remove());   // antes había que adivinar que se cerraba con Esc
-    ed.addEventListener("keydown", e => {
-      if (e.key === "Escape") ed.remove();
-      // Ctrl+Enter guarda desde CUALQUIER campo, textarea incluida. La tabla ATAJOS lo anuncia
-      // como «enviar una respuesta o guardar sin soltar el teclado» desde 0.55.0, y aquí no
-      // estaba implementado: parte de fallo suya del 07/08 escrita dentro de este mismo editor.
-      // Un atajo anunciado y no implementado gasta la confianza en la lista entera (0.56.0).
-      if (e.key === "Enter" && (e.ctrlKey || e.metaKey)){ e.preventDefault(); commit(); return; }
-      if (e.key === "Enter" && !e.target.closest("textarea")) commit();
-    });
-    ed.querySelector(".clear").addEventListener("click", () => {
-      delete it.due; delete it.remind; delete it.alertedAt; ed.remove(); paint(); markDirty();
-    });
-    ed.querySelector(".note-clear").addEventListener("click", () => {
-      delete it.note; note.value = ""; commit();
-    });
-    date.focus();
-    if (date.showPicker) try{ date.showPicker(); }catch(e){}
-  };
-  const editItem = (it, li) => {
-    const span = li.querySelector(".t");
-    if (!span || li.querySelector(".task-edit")) return;
-    const old = it.t;
-    // textarea (no input de una línea): una tarea larga se ve ENTERA al editarla, ajustando el alto al texto
-    const input = document.createElement("textarea");
-    input.className = "task-edit";
-    input.rows = 1;
-    input.value = old;
-    const grow = () => { input.style.height = "auto"; input.style.height = input.scrollHeight + "px"; };
-    span.replaceWith(input);
-    li.classList.add("editing");   // retira la banda de acciones mientras se escribe (ver CSS .it-actions)
-    grow();
-    /* Salir de la edición sin repintar la lista entera: si el texto no cambió, repintar mueve
-       todas las filas y puede repaginar por nada. Solo se repinta cuando hay cambio real. */
-    let cerrado = false;
-    const restore = () => {
-      if (cerrado) return; cerrado = true;
-      const s = document.createElement("span");
-      s.className = "t";
-      s.innerHTML = linkifyEsc(it.t);
-      s.addEventListener("dblclick", () => editItem(it, li));
-      input.replaceWith(s);
-      li.classList.remove("editing");
-    };
-    const commit = () => {
-      if (cerrado) return;
-      const v = input.value.replace(/\s+$/, "").trim();
-      if (!v){ it.t = old; restore(); return; }
-      if (v === old){ restore(); return; }
-      it.t = v;
-      cerrado = true;
-      li.classList.remove("editing");
-      paint(); markDirty();
-      // el texto anterior deja de perderse al confirmar: Ctrl+Z o el botón del aviso lo devuelven
-      rememberTextEdit(w, it, old, v);
-      if (v.length > TASK_LONG) offerTaskToNote(w, it, paint);   // un solo aviso: convertir en nota manda
-      else toastAction("Tarea reescrita.", "Deshacer", undoLastTextEdit);
-    };
-    const cancel = () => { it.t = old; restore(); };
-    input.addEventListener("input", grow);
-    input.addEventListener("keydown", e => {
-      if (e.key === "Enter" && !e.shiftKey){ e.preventDefault(); commit(); }   // Enter confirma; Mayús+Enter no aplica (la tarea es una línea lógica)
-      if (e.key === "Escape") cancel();
-    });
-    input.addEventListener("blur", commit);
-    input.focus(); input.select();
-  };
-  /* ↑ y ↓ intercambian con el vecino QUE SE VE, no con el de al lado en el array. Nacen de la misma
-     razón que la restricción de arrastre de 0.61.0: el array mezcla pendientes con hechas y, desde
-     hoy, ancladas con no ancladas, así que el vecino de índice puede no estar en la lista que tienes
-     delante — y entonces pulsar ↑ movía el dato sin mover nada en pantalla. Se salta hasta el
-     primero del MISMO grupo (mismo `done`, mismo `pin`). */
+    if (scrollY != null && scroll) nodo.querySelector(".td-body").scrollTop = scrollY;
+    if (foco === "titulo") { titulo.focus(); titulo.setSelectionRange(titulo.value.length, titulo.value.length); }
+    else if (foco === "fecha") date.focus();
+    else if (foco === "nota") nota.focus();
+    else if (foco === "responder") ta.focus();
+  }
+  /* 0.93.0 — editItem RETIRADO. Editar el título en la fila era el segundo editor del mismo
+     campo, y un campo editable en más de una superficie es el disparador nº 1 de la regla nueva.
+     Ahora el título se edita en la vista de detalle, que es su dueña única: ✎ y el doble clic
+     sobre el texto abren ahí, con el foco puesto en el título. */
   const moveItem = (it, dir) => {
     // 0.87.0 — se mueve dentro de SU array, que con el origen «Todas» no es el de este widget
     const arr = src.arrDe(it); if (!arr) return;
@@ -7856,6 +7917,17 @@ function bodyTodo(w, el){
   };
 
   function paint(){
+    /* 0.93.0 — REQUISITO DE CICLO DE VIDA. Con la vista de detalle abierta, la lista no se ve y
+       reconstruirla no arregla nada: solo puede destruir el nodo que tiene el foco, el borrador a
+       medio escribir y la posición de desplazamiento. El sondeo llama aquí cada 4 s.
+
+       Es lo que generaliza el parche de 0.92.0, donde se protegió LA NOTA y el defecto quedó
+       esperando en el campo siguiente. Ahora el foco y el borrador sobreviven POR CONSTRUCCIÓN
+       —nada los toca— y no por acordarse de protegerlos uno a uno.
+
+       `cerrarDetalle` pone `detalle = null` ANTES de llamar aquí, así que la vuelta a la lista sí
+       repinta. Si esta guarda desaparece, cae una prueba. */
+    if (detalleAbierto()) return;
     src = fuenteTodo(w);   // ver la nota de arriba: el mapa de pertenencia caduca en cada cambio
     const doneN = src.items.filter(i => i.done).length;
     // 0.50.0 — lo que llegó DESPUÉS de que la dieras por hecha. Es información, no trabajo: por eso
@@ -8239,9 +8311,8 @@ function bodyTodo(w, el){
         if (it.done) playDoneClick();
         paint(); markDirty();
       });
-      li.querySelector(".t").addEventListener("dblclick", () => editItem(it, li));
-      li.querySelector(".it-color").addEventListener("click", e => { e.stopPropagation(); editTaskColor(it, li); });
-      li.querySelector(".it-edit").addEventListener("click", e => { e.stopPropagation(); editItem(it, li); });
+      li.querySelector(".t").addEventListener("dblclick", () => abrirDetalle(it, "titulo"));
+      li.querySelector(".it-edit").addEventListener("click", e => { e.stopPropagation(); abrirDetalle(it, "titulo"); });
       /* 0.61.0 — ANCLAR. Su decisión de hoy entre tres opciones para «las encoladas arriba»: la
          genérica. El producto NO aprende su convención «▶ En cola ·» —la poda de 0.53.0 se mantiene
          y su test también—; aprende un concepto que tiene cualquier gestor de tareas, y quien decide
@@ -8266,11 +8337,11 @@ function bodyTodo(w, el){
       });
       li.querySelector(".it-up").addEventListener("click", e => { e.stopPropagation(); if (!reordenable){ toast("Con un orden automático no se reordena a mano: elige «↕ A mano»"); return; } moveItem(it, -1); });
       li.querySelector(".it-down").addEventListener("click", e => { e.stopPropagation(); if (!reordenable){ toast("Con un orden automático no se reordena a mano: elige «↕ A mano»"); return; } moveItem(it, 1); });
-      li.querySelector(".it-due").addEventListener("click", e => { e.stopPropagation(); setDue(it, li); });
-      // 0.48.2: responder tiene editor PROPIO. Ver hiloTarea/replyTo.
-      li.querySelector(".it-reply").addEventListener("click", e => { e.stopPropagation(); replyTo(it, li); });
+      li.querySelector(".it-due").addEventListener("click", e => { e.stopPropagation(); abrirDetalle(it, "fecha"); });
+      // 0.93.0: las tres entradas (✎, 💬, 📅) abren la MISMA vista de detalle, con distinto foco.
+      li.querySelector(".it-reply").addEventListener("click", e => { e.stopPropagation(); abrirDetalle(it, "responder"); });
       const marca = li.querySelector(".task-note-mark");
-      if (marca) marca.addEventListener("click", e => { e.stopPropagation(); replyTo(it, li); });
+      if (marca) marca.addEventListener("click", e => { e.stopPropagation(); abrirDetalle(it, "responder"); });
       // el 📎 lleva al mismo sitio que el 💬: los adjuntos viven DENTRO de la conversación y no se
       // abre el fichero desde aquí a propósito — un clic que abre un PDF sin enseñar de qué hilo
       // sale es justo el contexto que se pierde
@@ -10939,7 +11010,7 @@ function paletteEntries(terms, dest){
    Estaban duplicadas y eso es justo lo que no puede pasar aquí, porque el ancho medido es el que
    decide cuánto hueco se le reserva: dos copias que se separen dan una reserva que miente. */
 function bandaAccionesHtml(meToca, anclada, soloInforma){
-  return `<span class="it-actions"><button class="it-color" title="Color"><span class="cdot"></span></button><button class="it-edit" title="Editar">✎</button><button class="it-reply${meToca ? " me-toca" : ""}" title="${meToca ? "El agente te pide algo y no lo has contestado — clic para leerlo y responder" : soloInforma ? "El agente te ha contestado y no espera respuesta — clic para leerlo" : "Responder a esta tarea (se añade fechado, sin borrar lo anterior)"}">${meToca || soloInforma ? "🤖" : "💬"}</button><button class="it-pin${anclada ? " on" : ""}" title="${anclada ? "Desanclar: vuelve a su sitio en el orden" : "Anclar arriba: se queda la primera con cualquier orden"}">📌</button><button class="it-up" title="Subir">↑</button><button class="it-down" title="Bajar">↓</button><button class="it-due" title="Fecha, nota y aviso">📅</button><button class="it-del" title="Borrar">✕</button></span>`;
+  return `<span class="it-actions"><button class="it-edit" title="Editar">✎</button><button class="it-reply${meToca ? " me-toca" : ""}" title="${meToca ? "El agente te pide algo y no lo has contestado — clic para leerlo y responder" : soloInforma ? "El agente te ha contestado y no espera respuesta — clic para leerlo" : "Responder a esta tarea (se añade fechado, sin borrar lo anterior)"}">${meToca || soloInforma ? "🤖" : "💬"}</button><button class="it-pin${anclada ? " on" : ""}" title="${anclada ? "Desanclar: vuelve a su sitio en el orden" : "Anclar arriba: se queda la primera con cualquier orden"}">📌</button><button class="it-up" title="Subir">↑</button><button class="it-down" title="Bajar">↓</button><button class="it-due" title="Fecha, nota y aviso">📅</button><button class="it-del" title="Borrar">✕</button></span>`;
 }
 
 /* 0.58.2 — EL HUECO DE LA BANDA SE MIDE, NO SE ESTIMA. En 0.58.1 puse 104 px a ojo, calculados

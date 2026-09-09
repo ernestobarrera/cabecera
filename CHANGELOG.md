@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.93.0] - 2026-09-09 — una tarea se abre entera, en una sola vista
+
+- **Ya no hay dos editores de tarea.** Tenías uno para la conversación (💬) y otro para la fecha
+  (📅), y eran **excluyentes**: abrir uno cerraba el otro, así que no podías ver la fecha mientras
+  escribías la nota, y la nota vivía en los dos sitios. Ahora **💬, 📅 y ✎ abren la misma vista**,
+  cada uno con el cursor donde toca.
+- **La tarea se ve entera, y con su título arriba.** Antes, al abrir la conversación de una tarea con
+  hilo largo, el título se iba de la pantalla y no sabías dónde estabas.
+- **Orden fijo:** título · fecha y aviso · adjuntos · **📝 Nota** · conversación · caja de responder.
+  La nota va antes del hilo: es el contenido de la tarea, y al final de 19 respuestas no la verías.
+- **La vista ocupa la ventana y, cuando no cabe, pasa a pantalla completa** — en el móvil siempre.
+  Antes el panel se salía de la pantalla por la derecha.
+- **Un solo desplazamiento.** El hilo pierde su caja propia: cabecera y caja de responder se quedan
+  fijas y el resto se desplaza de una pieza. Ya no hay un scroll dentro de otro.
+- **Nada se guarda con un botón «Guardar todo»**: la nota se guarda sola, la fecha al cambiarla, la
+  respuesta al enviarla. Y **el editor ya no se te cierra solo**: mientras tengas algo escrito, la
+  actualización automática cada cuatro segundos no toca la vista.
+- **Lo que casi no usas deja de ocupar sitio, sin desaparecer:** ⚙ y ▪ van plegadas en «Opciones de
+  agentes» —con un resumen a la vista si alguna está puesta— y el color se mueve ahí también.
+  Los adjuntos siguen siempre visibles, con su botón al lado.
+- **El título tiene un solo editor.** Pulsar ✎ o hacer doble clic en el texto abre la vista.
+
 ## [0.92.0] - 2026-09-09 — la nota de una tarea se ve y se escribe en la propia tarea
 
 - **Lo de ayer no servía y esto lo sustituye.** Pediste notas de texto largo «como las de To Do», y

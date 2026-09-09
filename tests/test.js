@@ -24,6 +24,12 @@ const pickFn = (name, arg) => {
 };
 eval('globalThis.mdToHtml = ' + pickFn('mdToHtml', 'src'));
 
+/* 0.93.0 — la vista de detalle de tarea es la dueña única de esa superficie, y varias pruebas de
+   toda la suite necesitan su cuerpo. Vive aquí arriba, a nivel de fichero, porque los bloques que
+   la usan están repartidos: declararla dentro de uno la dejaba invisible para los demás. */
+const detalleDe = s => s.match(/function pintarDetalle\(foco\)\{[\s\S]*?\n  \}/)[0];
+const abrirDe = s => s.match(/const abrirDetalle = \(it, foco\) => \{[\s\S]*?\n  \};/)[0];
+
 // --- mdToHtml: XSS ---
 const evil = mdToHtml('<script>alert(1)</' + 'script>\n<img src=x onerror=alert(1)>\n[click](javascript:alert(1))\n[ok](https://pubmed.gov)');
 if (evil.includes('<script')) throw new Error('XSS: script sin escapar');
@@ -228,18 +234,32 @@ if (prop(eRule, 'font-size') !== 'inherit') throw new Error('editar tarea: el ed
 // 38,5 a 69 px). La banda de acciones era `flex-basis:100%` y aparecía con :hover y :focus-within,
 // es decir, como una segunda fila: mover el ratón por la lista ya empujaba a todas las de abajo.
 // Debe quedar FUERA DEL FLUJO, o el salto vuelve entero.
-const editFn = src.match(/const editItem = \(it, li\) => \{[\s\S]*?\n  \};/)[0];
+// 0.93.0 — la vista de detalle es la dueña única de la superficie de una tarea. Las pruebas que
+// antes miraban `replyTo` y `setDue` miran ahora aquí: lo que protegían sigue vigente, pero vive en
+// un sitio distinto. `editItem` ya no existe (un solo editor de título).
+const detalleFn = src.match(/function pintarDetalle\(foco\)\{[\s\S]*?\n  \}/)[0];
+const abrirFn = src.match(/const abrirDetalle = \(it, foco\) => \{[\s\S]*?\n  \};/)[0];
 const aRule = cssOf('.todo-it .it-actions');
 if (!/position:absolute/.test(aRule)) throw new Error('las acciones de la tarea deben flotar: en el flujo vuelven a empujar la lista');
 if (/flex-basis:100%/.test(aRule)) throw new Error('las acciones de la tarea no pueden ocupar una segunda fila');
 if (/:focus-within \.it-actions/.test(html)) throw new Error('el foco no debe desplegar la banda: era la otra mitad del salto al pulsar ✎');
 if (!/\.todo-it\.editing \.it-actions\{display:none\}/.test(html)) throw new Error('mientras se edita, la banda de acciones debe desaparecer');
-if (!/li\.classList\.add\("editing"\)/.test(editFn) || !/li\.classList\.remove\("editing"\)/.test(editFn))
-  throw new Error('editItem debe marcar y desmarcar la fila en edición');
-// y salir sin cambios no debe repintar la lista entera
-if (!/if \(v === old\)\{ restore\(\); return; \}/.test(editFn)) throw new Error('editar tarea: sin cambio real no debe repintar la lista');
-if (!/const cancel = \(\) => \{ it\.t = old; restore\(\); \};/.test(editFn)) throw new Error('editar tarea: Escape no debe repintar la lista');
-console.log('OK editar tarea (misma caja al leer y al editar, sin repintado innecesario)');
+// 0.93.0 — el título ya NO se edita en la fila: `editItem` se retiró porque un campo editable en
+// dos superficies es la duplicación que esta pasada vino a cerrar. Lo que se comprueba ahora es que
+// no haya vuelto por la puerta de atrás y que la ÚNICA vía sea la vista de detalle.
+if (/const editItem = /.test(src))
+  throw new Error('0.93.0: `editItem` está retirado — con dos editores de título vuelve la duplicación');
+if (!/li\.querySelector\("\.it-edit"\)\.addEventListener\("click", e => \{ e\.stopPropagation\(\); abrirDetalle\(it, "titulo"\); \}\);/.test(src))
+  throw new Error('0.93.0: ✎ tiene que abrir la vista de detalle con el foco en el título');
+if (!/li\.querySelector\("\.t"\)\.addEventListener\("dblclick", \(\) => abrirDetalle\(it, "titulo"\)\);/.test(src))
+  throw new Error('0.93.0: el doble clic sobre el texto tiene que llevar al mismo sitio que ✎');
+// y sigue sin repintar por nada: la puerta del título devuelve si cambió algo
+if (!/const ponerTitulo = \(it, v\) => \{[\s\S]*?if \(!t \|\| t === it\.t\) return false;/.test(src))
+  throw new Error('0.93.0: reescribir el mismo título no puede ensuciar el archivo ni repintar');
+// Escape sigue sin repintar: en la vista, cancelar devuelve el texto y suelta el foco, nada más
+if (!/if \(e\.key === "Escape"\)\{ e\.stopPropagation\(\); titulo\.value = it\.t; titulo\.blur\(\); \}/.test(src))
+  throw new Error('0.93.0: Escape en el título tiene que devolver el texto sin repintar la lista');
+console.log('OK editar tarea (un solo editor de título, en la vista de detalle, sin repintado innecesario)');
 }
 
 // --- normalizePack: pack malicioso ---
@@ -1146,7 +1166,10 @@ if (!html.includes('.dlg-panel') || !html.includes('.dlg-inp')) throw new Error(
 // bug maximizada+arrastre: arrastrar una maximizada la restaura
 if (!src.includes('const p = w.max; delete w.max;') || !src.match(/dragging = true;[\s\S]{0,120}if \(w\.max\)/)) throw new Error('regresión: arrastrar una maximizada ya no la restaura al iniciar el arrastre');
 // bug edición larga: el editor de tarea es un textarea que crece, no un input de una línea
-if (!src.includes('createElement("textarea")') || !src.match(/input\.style\.height = input\.scrollHeight/)) throw new Error('regresión: el editor de tarea vuelve a ser de una sola línea');
+/* El editor de tarea sigue siendo multilínea y creciendo con el texto, pero desde 0.93.0 vive en
+   la vista de detalle (`.td-title`) y no en la fila: un título largo se ve ENTERO al editarlo. */
+if (!/<textarea class="td-title" rows="1"/.test(src) || !/t\.style\.height = t\.scrollHeight \+ "px"/.test(src))
+  throw new Error('regresión: el editor de tarea vuelve a ser de una sola línea');
 console.log('OK v0.30.0 (modales propios sin confirm/prompt nativos, maximizada se restaura al arrastrar, edición de tarea multilínea)');
 
 // --- gradientAvgHex: acento de pestaña calculado del degradado de fondo (sin canvas, barato) ---
@@ -1542,9 +1565,16 @@ eval('globalThis.taskNotePointer = ' + pickFn('taskNotePointer', 'titulo, hoy'))
   if (!/offerTaskToNote/.test(add)) throw new Error('E: el alta de tarea no ofrece la conversión');
   // 0.46.0: el ancla cambió porque `commit` abre ahora con el guard `cerrado` (salir de la edición
   // sin cambio real ya no repinta la lista entera). La INTENCIÓN vigilada es la misma; no relajar.
-  const commit = src.match(/const commit = \(\) => \{\n      if \(cerrado\) return;[\s\S]*?\n    \};/)[0];
+  /* 0.93.0 — el ancla cambia otra vez porque el editor de título ya no vive en la fila sino en la
+     vista de detalle. La INTENCIÓN vigilada es la misma y no se relaja: reescribir un título que se
+     pasa de largo tiene que seguir ofreciendo convertirlo en nota. Esta prueba fue la que detectó
+     que la reescritura de 0.93.0 se había dejado esa conducta por el camino. */
+  const commit = src.match(/titulo\.addEventListener\("blur", \(\) => \{[\s\S]*?\n    \}\);/)[0];
   if (!/offerTaskToNote/.test(commit)) throw new Error('E: la edición de tarea no ofrece la conversión');
-  if (!/it\.note = /.test(body) || !/taskNotePointer\(/.test(body))
+  if (!/toastAction\("Tarea reescrita\.", "Deshacer", undoLastTextEdit\)/.test(commit))
+    throw new Error('E: reescribir un título tiene que seguir siendo reversible con Deshacer');
+  // 0.93.0 — el rastro sigue yendo a la nota, pero por la PUERTA única (`ponerNota`), no a mano
+  if (!/ponerNota\(it, /.test(body) || !/taskNotePointer\(/.test(body))
     throw new Error('E: la conversión debe dejar rastro en la nota de la tarea, no solo mudar el texto');
   if (/→ texto completo en la nota/.test(src)) throw new Error('E: el sufijo pegado al texto de la tarea debía retirarse (la lista guarda líneas)');
 }
@@ -1573,13 +1603,21 @@ console.log('OK tarea larga → nota (se ofrece, no se impone; titular acotado; 
   if (!/markDirty\(\)/.test(undo)) throw new Error('#90: restaurar el texto debe guardarse');
   // 0.46.0: el ancla cambió porque `commit` abre ahora con el guard `cerrado` (salir de la edición
   // sin cambio real ya no repinta la lista entera). La INTENCIÓN vigilada es la misma; no relajar.
-  const commit = src.match(/const commit = \(\) => \{\n      if \(cerrado\) return;[\s\S]*?\n    \};/)[0];
-  if (!/rememberTextEdit\(w, it, old, v\)/.test(commit)) throw new Error('#90: la edición no registra el texto anterior');
+  /* 0.93.0 — mismo cambio de ancla que arriba: el editor de título es la vista de detalle. Lo que
+     se vigila no cambia — un texto reescrito tiene que poder volver — y `rememberTextEdit` sigue
+     llamándose, ahora desde la puerta de mutación del título. */
+  const commit = src.match(/titulo\.addEventListener\("blur", \(\) => \{[\s\S]*?\n    \}\);/)[0];
+  if (!/rememberTextEdit\(w, it, old, t\)/.test(src)) throw new Error('#90: la edición no registra el texto anterior');
   if (!/toastAction\("Tarea reescrita\.", "Deshacer", undoLastTextEdit\)/.test(commit))
     throw new Error('#90: falta el botón Deshacer del aviso');
-  // 0.46.0: el string cambió (ahora además restaura el texto en su sitio sin repintar); la
-  // propiedad vigilada sigue siendo que confirmar sin cambio real sale antes de registrar nada.
-  if (!/if \(v === old\)\{ restore\(\); return; \}/.test(commit)) throw new Error('#90: confirmar sin cambiar nada no debe registrar nada');
+  /* La propiedad vigilada no cambia desde 0.46.0 —confirmar sin cambio real sale antes de registrar
+     nada—, pero desde 0.93.0 la sostiene la PUERTA de mutación y no el editor: `ponerTitulo` sale
+     con `false` si el texto es el mismo, y quien la llama no registra ni repinta. Que la guarda viva
+     en la puerta es más fuerte, porque la respeta cualquiera que escriba el campo. */
+  if (!/const ponerTitulo = \(it, v\) => \{[\s\S]*?if \(!t \|\| t === it\.t\) return false;/.test(src))
+    throw new Error('#90: confirmar sin cambiar nada no debe registrar nada');
+  if (!/if \(!ponerTitulo\(it, titulo\.value\)\)\{ titulo\.value = it\.t; return; \}/.test(commit))
+    throw new Error('#90: sin cambio real, el editor tiene que salir sin avisar ni repintar');
   // Ctrl+Z global: solo FUERA de un campo de texto (dentro manda el deshacer nativo del navegador)
   const key = src.match(/document\.addEventListener\("keydown", e => \{[\s\S]*?\n  \}\);/)[0];
   if (!/e\.key === "z" \|\| e\.key === "Z"/.test(key)) throw new Error('#90: falta el atajo Ctrl+Z');
@@ -2398,10 +2436,14 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
 
   // --- 0.48.1: responder a una tarea, y etiquetas que se ofrecen ---
   {
-    // RESPONDER tiene editor PROPIO: mezclarlo con el de vencimiento fue el error de 0.48.1
-    const rp = src.match(/const replyTo = \(it, li\) => \{[\s\S]*?\n  \};/)[0];
-    if (/setDue\(/.test(rp)) throw new Error('responder: no puede reutilizar el editor de vencimiento — recordar y responder son cosas distintas');
-    if (!/it\.replies\.push\(\{ at: Date\.now\(\), by: "yo"/.test(rp))
+    /* RESPONDER y RECORDAR siguen siendo cosas distintas —mezclarlas fue el error de 0.48.1—, pero
+       desde 0.93.0 la distinción NO la sostiene que haya dos editores, sino que hay dos PUERTAS DE
+       MUTACIÓN separadas dentro de una sola vista. Una superficie común no implica una transacción
+       común: eso es lo que se comprueba aquí. */
+    const rp = detalleDe(src);
+    if (!/const añadirRespuesta = \(it, texto\) =>/.test(src) || !/const ponerFecha = \(it, \{ due, remind \}\) =>/.test(src))
+      throw new Error('responder y fechar tienen que tener puertas propias: una sola puerta es un «Guardar todo» encubierto');
+    if (!/it\.replies\.push\(\{ at: Date\.now\(\), by: "yo"/.test(src))
       throw new Error('responder: cada entrada se sella con su instante y su autor, automáticamente');
     // 0.48.3: SÍ se edita y se borra —él es el dueño del archivo y escribir «df» sin poder
     // quitarlo es un problema real—, pero lo editado queda MARCADO (`ed`), como en un mensajero.
@@ -2435,12 +2477,19 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
     // editar una entrada del agente no puede borrar su autoría en silencio
     if (!/it\.replies\[i\]\.by === "agente"\) toast\(/.test(rp))
       throw new Error('turno: editar lo que dijo el agente debe avisar de que seguirá figurando como suyo');
-    if (!/it\.replies\.splice\(0, it\.replies\.length - 50\)/.test(rp))
+    if (!/it\.replies\.splice\(0, it\.replies\.length - RESP_HILO_MAX\)/.test(src))
       throw new Error('responder: el hilo debe tener tope, o una tarea puede engordar el archivo sin freno');
-    if (!/type="date"/.test(src.match(/const setDue = \(it, li\) => \{[\s\S]*?\n  \};/)[0]))
-      throw new Error('el editor de vencimiento sigue siendo el de la FECHA, y solo el de la fecha');
-    // el de vencimiento ya no obliga a adivinar que se cierra con Esc
-    if (!/class="mini due-x"/.test(src)) throw new Error('el editor de vencimiento necesita un cierre visible, no solo Esc');
+    // 0.93.0 — y el tope vive UNA vez: estaba escrito a mano en cuatro sitios
+    if (!/const RESP_HILO_MAX = 50;/.test(src) || !/const RESP_MAX = 2000;/.test(src))
+      throw new Error('0.93.0: los topes de la conversación son constantes únicas, no números repetidos');
+    if (!/type="date"/.test(rp))
+      throw new Error('la vista tiene que seguir ofreciendo el campo de FECHA');
+    /* La vista no obliga a adivinar que se cierra con Esc: tiene DOS salidas visibles, el ‹ de
+       volver y el ✕, las dos con su explicación. Era una queja suya de 0.48.x y sigue atendida. */
+    if (!/class="td-back" type="button" title="Volver a la lista \(Esc\)"/.test(src))
+      throw new Error('la vista necesita un «volver» visible, no solo Esc');
+    if (!/class="td-x" type="button" title="Cerrar \(Esc\)"/.test(src))
+      throw new Error('la vista necesita un cierre visible, no solo Esc');
     // la conversación NO viaja en packs ni en escritorios compartidos: la proyección rehace el ítem
     for (const m of src.match(/data\.items = \(Array\.isArray\(d\.items\)[^;]*;/g) || [])
       if (/replies/.test(m)) throw new Error('responder: la conversación no puede viajar en packs ni al compartir');
@@ -2657,7 +2706,7 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
     // mismo —que el texto por defecto solo entre si él no ha escrito nada—
     if (!/const enviar = \(porDefecto, cerrarla\) => \{\s*\n\s*const t = ta\.value\.trim\(\) \|\| \(porDefecto \|\| ""\);/.test(src))
       throw new Error('«Vale» debe ceder ante lo que el usuario ya había escrito');
-    if (!/\.rp-actions \.ok"\)\.addEventListener\("click", \(\) => enviar\("Vale"\)\)/.test(src))
+    if (!/\.td-acts \.ok"\)\.addEventListener\("click", \(\) => enviar\("Vale"\)\)/.test(src))
       throw new Error('falta el botón «Vale» o no manda una respuesta real');
     // pasar `enviar` pelado a addEventListener le colaría el MouseEvent como texto por defecto
     if (/\.send"\)\.addEventListener\("click", enviar\)/.test(src))
@@ -2859,13 +2908,16 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
     if (!/right:var\(--todo-acts-right\)/.test(actsRule))
       throw new Error('la separación de la banda al borde entra en el cálculo de la reserva: tiene que ser la variable, no un número suelto');
 
-    // (3) EL EDITOR DE CONVERSACIÓN OCUPA LA FILA ENTERA. Se cuelga del `li`, que es flex con wrap:
-    // sin `flex:1 0 100%` entra como hermano del texto y lo estruja en una columna estrecha.
-    const rep = cssOf('.reply-editor');
-    if (!/flex:1 0 100%/.test(rep) || !/width:100%/.test(rep))
-      throw new Error('el editor de conversación debe ocupar la fila entera, o estruja el texto de la tarea en una columna');
-    if (!/flex:1 0 100%/.test(cssOf('.due-editor')))
-      throw new Error('la misma regla vale para el editor de vencimiento: son hermanos del mismo li');
+    /* (3) EL PROBLEMA QUE ESTA GUARDA VIGILABA DESAPARECIÓ EN 0.93.0, y conviene decir cómo en vez
+       de borrar la prueba. El editor se colgaba del `li` —flex con wrap—, así que sin `flex:1 0 100%`
+       entraba como hermano del texto y lo estrujaba en una columna. La vista de detalle ya no se
+       cuelga de la fila: OCUPA la caja del widget. Lo que se comprueba ahora es eso, que es la
+       condición más fuerte: si alguien la devuelve dentro de la fila, cae aquí. */
+    const rep = cssOf('.task-detail');
+    if (!/position:absolute/.test(rep) || !/inset:0/.test(rep))
+      throw new Error('la vista de detalle ocupa la caja del widget: dentro de la fila vuelve a estrujar el texto');
+    if (!/\.win-body\.con-detalle > \.todo-list,?[\s\S]{0,120}display:none/.test(html))
+      throw new Error('la vista SUSTITUYE a la lista: si la lista sigue debajo, el panel vuelve a crecer dentro de ella');
 
     // (4) LAS PESTAÑAS DE LA CALCULADORA NO SE RECORTAN. Sin `min-height:0` el teclado no baja de su
     // contenido y empuja 🕘 Historial y 🧪 Unidades fuera del recorte: la función parece no existir.
@@ -3340,13 +3392,18 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
     if (!/#menu\.palette #menu-results\{max-height:none\}/.test(html))
       throw new Error('en la paleta el tope sobra: allí la lista ES el panel entero');
 
-    // (4) CTRL+ENTER GUARDA EN EL EDITOR DE FECHA Y NOTA. Estaba anunciado en la tabla ATAJOS
-    // desde 0.55.0 y no implementado aquí; su parte de fallo la escribió dentro de este editor.
-    const sd = src.match(/const setDue = \(it, li\) => \{[\s\S]*?\n  \};/)[0];
-    if (!/e\.key === "Enter" && \(e\.ctrlKey \|\| e\.metaKey\)[\s\S]{0,80}commit\(\)/.test(sd))
-      throw new Error('Ctrl+Enter está anunciado como «guardar sin soltar el teclado»: si no guarda aquí, la tabla de atajos deja de ser fiable');
-    if (!/Ctrl\+Enter para guardar/.test(sd))
+    /* (4) CTRL+ENTER SIGUE FUNCIONANDO SIN SOLTAR EL TECLADO, y la tabla ATAJOS lo anuncia desde
+       0.55.0. Lo que cambia en 0.93.0 es que ya no hay un botón «Guardar»: la nota se guarda sola y
+       la fecha al cambiarla, así que el atajo ENVÍA la respuesta, que es la única acción que aún
+       tiene botón. Un atajo anunciado y no implementado gasta la confianza en la tabla entera
+       (0.56.0), así que se comprueba que exista y que se muestre en el campo donde se usa. */
+    const sd = detalleDe(src);
+    if (!/e\.key === "Enter" && \(e\.ctrlKey \|\| e\.metaKey\)\)\{ e\.preventDefault\(\); enviar\(\); \}/.test(sd))
+      throw new Error('Ctrl+Enter está anunciado en la tabla de atajos: si no hace nada aquí, la tabla deja de ser fiable');
+    if (!/Ctrl\+Enter para enviar/.test(sd))
       throw new Error('R27: el atajo se muestra junto a la función, en el propio campo donde se usa');
+    if (!/Enviar una respuesta o guardar sin soltar el teclado/.test(src))
+      throw new Error('la tabla ATAJOS tiene que seguir describiendo lo que el atajo hace de verdad');
     console.log('OK 0.58.0 (un solo buscador, el tipo que casa sobrevive al corte, la rejilla no se aplasta y Ctrl+Enter guarda)');
   }
 
@@ -3832,19 +3889,31 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
     if (!/if \(!it\.exec\) delete it\.claim;/.test(src))
       throw new Error('quitar la casilla ⚙ tiene que soltar el reclamo, o queda colgando de nada');
 
-    // ── LAS CASILLAS: aplican al marcarlas y NO cierran el editor (mismo criterio que 0.67.0)
-    const ap = src.match(/const aplicarCasillas = \(\) => \{[\s\S]*?\n    \};/);
-    if (!ap) throw new Error('no se localiza aplicarCasillas');
-    if (/paint\(\)|ed\.remove\(\)/.test(ap[0]))
-      throw new Error('marcar una casilla no repinta ni cierra: paint() reconstruye la lista y se lleva el editor por delante');
-    if (!/if \(exec\.checked\) it\.exec = 1; else delete it\.exec;/.test(ap[0]))
+    /* ── LAS CASILLAS: aplican al marcarlas y NO cierran la vista (criterio de 0.67.0). En 0.93.0
+       la escritura pasa por su puerta, `ponerMarcas`, y el manejador solo decide si hay que
+       repintar. Sigue prohibido llamar a `paint()`: reconstruiría la lista con la vista abierta. */
+    const ap = src.match(/const ponerMarcas = \(it, \{ exec, fill \}\) => \{[\s\S]*?\n  \};/);
+    if (!ap) throw new Error('no se localiza la puerta de mutación de las casillas');
+    if (/paint\(\)/.test(ap[0]))
+      throw new Error('marcar una casilla no repinta la lista: con la vista abierta no hay lista que repintar');
+    if (!/if \(exec\) it\.exec = 1; else delete it\.exec;/.test(ap[0]))
       throw new Error('ausente = falso: la marca se BORRA en vez de guardarse como 0');
+    if (!/const aplicarMarcas = \(\) => \{ if \(ponerMarcas\(it, \{ exec: exec\.checked, fill: fill\.checked \}\)\) pintarDetalle\(\); \};/.test(src))
+      throw new Error('marcar una casilla tiene que aplicarse al momento, sin pulsar nada más');
 
-    // ── el editor no puede haber perdido lo que ya hacía
-    if (!/<label class="due-check"><input class="xx" type="checkbox"/.test(src))
-      throw new Error('falta la casilla de ejecución agéntica en el editor de fecha');
-    if (!/<label class="due-check"><input class="ff" type="checkbox"/.test(src))
-      throw new Error('falta la casilla de relleno en el editor de fecha');
+    // ── la vista no puede haber perdido lo que ya hacía el editor de fecha
+    if (!/<label class="td-check"><input class="xx" type="checkbox"/.test(src))
+      throw new Error('falta la casilla de ejecución agéntica');
+    if (!/<label class="td-check"><input class="ff" type="checkbox"/.test(src))
+      throw new Error('falta la casilla de relleno');
+    /* 0.93.0 — y las dos siguen siendo DOS: son ortogonales y fundirlas vaciaría a las dos de
+       significado. Lo que cambia es que se relegan a «Opciones de agentes», plegado, porque juntas
+       aparecen en el 2 % de sus tareas — pero con resumen a la vista cuando alguna está puesta, o
+       plegarlas sería esconderlas. */
+    if (!/<details class="td-opts"\$\{marcasActivas \? " open" : ""\}>/.test(src))
+      throw new Error('las opciones de agentes se pliegan, pero se abren solas si la tarea tiene alguna puesta');
+    if (!/const marcasActivas = /.test(src) || !/td-opts-res/.test(src))
+      throw new Error('plegar sin resumen visible es esconder: la vista tiene que decir qué marcas hay');
 
     console.log('OK 0.69.0 (⚙ y ▪ por tarea; la ⚙ cuenta aparte, no avisa antes de su fecha y el reclamo se ve)');
   }
@@ -3917,14 +3986,19 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
   {
     // ── «👍 Vale y hecha». Pregunta suya del 11/08: contestar la saca del filtro 🤖, así que el
     // segundo gesto —el que de verdad cierra— había que hacerlo persiguiendo la tarea.
-    if (!/if \(okDone\) okDone\.addEventListener\("click", \(\) => enviar\("Vale", true\)\)/.test(src))
+    if (!/okdone\.addEventListener\("click", \(\) => enviar\("Vale", true\)\);/.test(src))
       throw new Error('falta el botón «Vale y hecha», o no cierra la tarea al responder');
-    // cierra con LOS MISMOS campos que la casilla de la fila: dos caminos distintos darían dos
-    // «Hechas» distintas (mismo defecto que R47, un estado escrito en dos sitios)
-    if (!/if \(cerrarla && !it\.done\)\{ it\.done = true; it\.doneAt = Date\.now\(\); playDoneClick\(\); \}/.test(src))
-      throw new Error('cerrar desde la conversación debe fijar done+doneAt igual que la casilla de la fila');
+    /* Cierra por LA MISMA puerta que la casilla: dos caminos distintos darían dos «Hechas»
+       distintas (R47, un estado escrito en dos sitios). En 0.93.0 esa puerta es `cerrarTarea`, y
+       que sea una sola función es más fuerte que comprobar que dos trozos de código coincidan. */
+    if (!/const cerrarTarea = \(it, hecha\) => \{[\s\S]*?it\.done = true; it\.doneAt = Date\.now\(\); playDoneClick\(\);/.test(src))
+      throw new Error('cerrar tiene que fijar done+doneAt en un solo sitio');
+    if (!/if \(cerrarla\) cerrarTarea\(it, true\);/.test(src))
+      throw new Error('«Vale y hecha» tiene que cerrar por la misma puerta, no a mano');
+    if (!/\$\$\("\.td-done input"\)\.addEventListener\("change", e => \{ cerrarTarea\(it, e\.target\.checked\); pintarDetalle\(\); \}\);/.test(src))
+      throw new Error('la casilla de la vista tiene que cerrar por esa misma puerta');
     // y no se ofrece en una tarea ya hecha: ahí no cierra nada
-    if (!/\$\{it\.done \? "" : `<button class="mini okdone"/.test(src))
+    if (!/\(it\.done \? "" : `<button class="mini okdone"/.test(src))
       throw new Error('el botón no debe aparecer si la tarea ya está hecha');
     // R21 — sigue cerrando ÉL: es un botón suyo. Que no aparezca ningún cierre automático colado
     // en el camino del agente (el agente responde, no cierra lo suyo).
@@ -4173,7 +4247,7 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
       throw new Error('«mini» la llevan los dos botones: seleccionar por ella es el fallo que hubo');
     if (!/add\(e\.ctrlKey \|\| e\.metaKey\)/.test(src))
       throw new Error('Ctrl+Enter hace lo mismo que el botón: un atajo anunciado tiene que existir (R27)');
-    if (!/if \(conFecha\)[\s\S]{0,200}setDue\(it, fila\)/.test(addT))
+    if (!/if \(conFecha\)[\s\S]{0,200}abrirDetalle\(it, "fecha"\)/.test(addT))
       throw new Error('tiene que abrir el editor de fecha QUE YA EXISTE, no duplicar formulario');
     if (addT.indexOf('offerTaskToNote') > addT.indexOf('if (conFecha) {'))
       throw new Error('la oferta de convertir en nota va ANTES y siempre: cubre el caso de pegar un texto largo');
@@ -4273,7 +4347,7 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
        lo que la alarma tenía y él echaba en falta. Si alguien retira estos atajos, este test cae y
        obliga a mirar de nuevo la decisión entera.
        El guardián de que la pestaña no vuelva vive en el bloque 0.53.0, junto al rastro de alarmas. */
-    const setDue = src.match(/const setDue = \(it, li\) => \{[\s\S]*?\n    date\.focus\(\);/)[0];
+    const setDue = src.match(/function pintarDetalle\(foco\)\{[\s\S]*?\n  \}/)[0];
 
     // 1 · LA RUEDA, que era su apunte bueno sobre el reloj de alarma («muchos relojes te permiten
     //     mover números con la rueda»). Sin esto, retirar la alarma le quita y no le da nada.
@@ -4300,7 +4374,7 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
     if (!/data-d="0"|data-d="1"/.test(setDue))
       throw new Error('«Hoy» y «Mañana» son el caso que la alarma NO podía cubrir: cruzar el día');
     // un atajo relativo tiene que poner TAMBIÉN la fecha, o «+1 h» a las 23:40 apunta a hoy y ya pasó
-    const chips = setDue.match(/ed\.querySelectorAll\("\.dq"\)[\s\S]*?\n    \}\)\);/)[0];
+    const chips = setDue.match(/nodo\.querySelectorAll\("\.dq"\)[\s\S]*?\n    \}\)\);/)[0];
     if (!/time\.value = hhmm\(t\); date\.value = isoDe\(t\)/.test(chips))
       throw new Error('«+1 h» cerca de medianoche cae en el día siguiente: la fecha va con la hora');
     // y la hora fija sin fecha no puede quedar huérfana: sin `due`, `remind` no se guarda (ver commit)
@@ -4482,20 +4556,23 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
        imagen tiene un modo «solo navegador» que le funciona desde siempre; un adjunto es función
        nueva, y meterle un PDF dentro de datos.json sería rehacer a mano el problema que 0.78.0
        acaba de quitarle (1,17 MB → 780 KB). */
-    const panel = src.match(/const btAdj = ed\.querySelector\("\.rp-actions \.adj"\);[\s\S]*?\n    \}\);/)[0];
+    const panel = src.match(/\$\$\("\.td-adj \.adj"\)\.addEventListener\("click", async \(\) => \{[\s\S]*?\n    \}\);/)[0];
     if (/readAsDataURL|imgFromBlob|data:|\.att\.push\(\{[^}]*b64|dataUrl/.test(panel))
       throw new Error('un adjunto no puede acabar dentro de datos.json: deshace 0.78.0 en la misma pasada');
     if (!/backend !== "fs" \|\| !dirHandle/.test(panel))
       throw new Error('sin carpeta concedida se dice y se para: no hay alternativa que incruste');
 
-    // 3 · se apunta en la tarea DESPUÉS de que el fichero esté escrito y verificado
-    const iGuarda = panel.indexOf('await guardarAdjunto(f)'), iApunta = panel.indexOf('it.att.push(a)');
+    /* 3 · se apunta en la tarea DESPUÉS de que el fichero esté escrito y verificado. En 0.93.0 el
+       diálogo de archivos salió de la vista a `pedirAdjuntos`: la vista no tiene por qué saber de
+       ficheros, y el orden —guardar, verificar, y solo entonces apuntar— se comprueba donde ocurre. */
+    const pedir = src.match(/async function pedirAdjuntos\(it\)\{[\s\S]*?\n\}/)[0];
+    const iGuarda = pedir.indexOf('await guardarAdjunto(f)'), iApunta = pedir.indexOf('it.att.push(a)');
     if (iGuarda < 0 || iApunta < iGuarda)
       throw new Error('primero se guarda y se verifica, y solo entonces se apunta: al revés, la tarea '
         + 'referencia un fichero que puede no existir');
 
     // 4 · quitar de la tarea NO borra el fichero de su carpeta (mismo contrato que las imágenes)
-    const quitar = src.match(/ed\.querySelectorAll\("\.rp-a-rm"\)[\s\S]*?\n    \}\)\);/)[0];
+    const quitar = src.match(/nodo\.querySelectorAll\("\.rp-a-rm"\)[\s\S]*?\n    \}\)\);/)[0];
     if (/removeEntry/.test(quitar))
       throw new Error('quitar un adjunto de la tarea no puede borrar el fichero: es suyo y puede estar referenciado en otro sitio');
     if (!/toastAction/.test(quitar))
@@ -5119,9 +5196,14 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
     if (!/pushTrash\("todo", copy\.t \|\| "Tarea", \{ widgetId: org \? org\.w\.id : w\.id, item: copy \}\)/.test(todoFn4))
       throw new Error('Deshacer tiene que devolver la tarea a SU lista, no a la vista desde la que se borró');
 
-    // (7) LA FUENTE SE RECALCULA EN CADA PINTADO: el mapa de pertenencia caduca con cada cambio
-    if (!/function paint\(\)\{\n    src = fuenteTodo\(w\);/.test(src))
+    /* (7) LA FUENTE SE RECALCULA EN CADA PINTADO: el mapa de pertenencia caduca con cada cambio.
+       Desde 0.93.0 `paint()` abre con la guarda de ciclo de vida, así que el recálculo es lo
+       primero DESPUÉS de ella; el orden importa y por eso se comprueba, no solo su presencia. */
+    const cuerpoPaint = src.match(/function paint\(\)\{[\s\S]*?\n    const doneN =/)[0];
+    if (!/src = fuenteTodo\(w\);/.test(cuerpoPaint))
       throw new Error('la fuente se recalcula al pintar: si no, una lista creada o borrada después no se ve y `arrDe` miente');
+    if (cuerpoPaint.indexOf('if (detalleAbierto()) return;') > cuerpoPaint.indexOf('src = fuenteTodo(w);'))
+      throw new Error('0.93.0: la guarda del detalle va ANTES de recalcular, o se trabaja para nada');
 
     console.log('OK 0.87.0 (la vista global es un ORIGEN del widget de tareas, no un tipo nuevo: misma taxonomía, y cada tarea sigue viviendo en su lista)');
   }
@@ -5394,7 +5476,7 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
 
     /* 7 · UN SOLO PANEL, NO UNA PILA. Leer un segundo documento sustituye al primero: apilarlos
        reconstruiría la pila de textos largos por otra vía. */
-    const manejador = src.match(/ed\.querySelectorAll\("\.rp-a-open"\)[\s\S]*?\n    \}\)\);/)[0];
+    const manejador = src.match(/nodo\.querySelectorAll\("\.rp-a-open"\)[\s\S]*?\n    \}\)\);/)[0];
     if (!/doc\.innerHTML = /.test(manejador) || /insertAdjacentHTML|appendChild\(doc/.test(manejador))
       throw new Error('091: el panel se REEMPLAZA, no se apila');
     if (!/if \(doc\.dataset\.a === String\(idx\)\)\{ cerrarDoc\(\); return; \}/.test(manejador))
@@ -5411,106 +5493,179 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
     console.log('OK 0.91.0 (un adjunto de texto se lee formateado dentro de la tarea, acotado, sin interpretar el .txt y sin entrar en datos.json)');
   }
 
-  // --- 0.92.0: la nota se escribe donde se lee (#218, segunda pasada) ---------------------------
+  // --- 0.93.0: la vista de detalle es la dueña única de la tarea (#218/#219, tercera pasada) ----
   {
-    /* Su veredicto sobre 0.91.0, que es el que manda: «Horrible. Para empezar no tiene usabilidad.
-       Te obliga a hacer otro clic… la foto de cómo se ve en To Do se ve mucho más fluido». Y la foto
-       zanjó la discusión: en To Do la nota NO es un adjunto, es un campo a la vista dentro de la
-       tarea que se escribe encima y se guarda solo.
+    /* Encargo suyo, textual: «estamos siendo víctimas de iteraciones sucesivas sin gobernanza de
+       revisión global, owner y visión de futuro y de reiteración completa, no capa sobre capa».
+       Contraste con Codex ANTES de escribir código; él decidió dónde va la nota.
 
-       Lo que se fija aquí es que no se pueda volver a enterrar. */
+       Este bloque sustituye al de 0.92.0 y conserva TODO lo que aquel protegía —la nota se ve, se
+       escribe sola, ninguna salida se la traga y el tope es único— más los invariantes que Codex
+       pidió que la máquina hiciera imposibles de romper. */
 
-    // 1 · EL CAMPO SE PINTA SIEMPRE, TAMBIÉN VACÍO. Era un ternario `it.note ? … : ""`, y por eso
-    //     una tarea sin nota no enseñaba que pudiera tenerla: la función existía y el camino no.
-    const marca = src.match(/<div class="rp-nota">[\s\S]*?<\/div>`?/);
-    if (!marca) throw new Error('092: no encuentro el bloque de la nota en el panel');
-    if (/\$\{it\.note \? `<div class="rp-nota"/.test(src))
-      throw new Error('092: la nota NO puede pintarse solo cuando ya tiene texto: así no se descubre');
-    if (!src.includes('<textarea class="rp-nota-t"'))
-      throw new Error('092: la nota tiene que ser un campo editable, no texto de solo lectura');
-    if (!src.includes('maxlength="${NOTA_MAX}"'))
-      throw new Error('092: el campo declara su tope, y el tope es la constante única');
+    const det = detalleDe(src);
+    const abrir = abrirDe(src);
 
-    // 2 · SE GUARDA SOLA. Sin botón: pedir confirmación es justo el clic que sobra.
-    const cuerpo = src.match(/const guardarNota = \(\) => \{[\s\S]*?\n    \};/)[0];
-    if (!src.includes('nota.addEventListener("input"'))
-      throw new Error('092: tiene que guardarse al escribir, no al pulsar nada');
-    if (!src.includes('nota.addEventListener("blur", () => { if (guardarNota()) paint(); });'))
-      throw new Error('092: salir del campo tiene que guardar YA: el temporizador puede no haber saltado');
-    if (!/setTimeout\(guardarNota, NOTA_GUARDA_MS\)/.test(src))
-      throw new Error('092: el guardado se difiere con la constante, no con un número suelto');
+    /* ── 1 · UNA SOLA DUEÑA DE LA SUPERFICIE ────────────────────────────────────────────────────
+       Es el invariante raíz: mientras haya una sola función que pinta la tarea, no puede volver a
+       haber dos editores que se pisen. */
+    if ((src.match(/function pintarDetalle\(/g) || []).length !== 1)
+      throw new Error('093: tiene que haber UNA sola función que pinte el detalle de una tarea');
+    if (/const replyTo = |const setDue = |const editItem = /.test(src))
+      throw new Error('093: los editores antiguos están retirados — si vuelve uno, vuelve la duplicación');
+    for (const muerto of ['class="reply-editor"', 'class="due-editor"', '"due-grid"', '"due-check"'])
+      if (src.includes(muerto)) throw new Error('093: queda markup del editor retirado: ' + muerto);
 
-    /* 3 · Y NO SE REPINTA MIENTRAS ESCRIBE. `paint()` reconstruye la fila entera: llamarlo en cada
-       tecla se llevaría el foco y lo tecleado. Es el defecto más fácil de introducir «arreglando»
-       que la marca de la fila no se actualiza al momento. */
-    const alEscribir = src.match(/nota\.addEventListener\("input", \(\) => \{[\s\S]*?\n    \}\);/)[0];
-    if (/paint\(\)/.test(alEscribir))
-      throw new Error('092: repintar en cada tecla mata el foco y el texto a medio escribir');
+    /* ── 2 · UNA PUERTA DE MUTACIÓN POR CAMPO ───────────────────────────────────────────────────
+       El defecto medido era literal: `it.note` se escribía desde TRES sitios. Se comprueba que
+       cada campo tenga su puerta y que NADIE escriba `it.note` fuera de ella. */
+    for (const puerta of ['ponerTitulo', 'ponerFecha', 'ponerMarcas', 'ponerColor', 'añadirRespuesta', 'cerrarTarea'])
+      if (!new RegExp('const ' + puerta + ' = ').test(src))
+        throw new Error('093: falta la puerta de mutación `' + puerta + '`');
+    if (!/function ponerNota\(it, v\)\{/.test(src))
+      throw new Error('093: falta la puerta de mutación `ponerNota`');
+    const escrituras = (src.match(/it\.note = [^\n]*/g) || []);
+    if (escrituras.length !== 1)
+      throw new Error('093: `it.note` se escribe en ' + escrituras.length + ' sitios; tiene que haber UNA puerta. Era el defecto de origen');
+    if (!/function ponerNota\(it, v\)\{[\s\S]*?if \(t\) it\.note = t; else delete it\.note;/.test(src))
+      throw new Error('093: la única escritura de la nota tiene que estar dentro de su puerta');
 
-    /* 4 · NINGUNA SALIDA DEL PANEL SE TRAGA LO TECLEADO. Mientras el temporizador no salta, la nota
-       solo vive en el campo, así que todo lo que destruya el panel tiene que guardar antes. Son
-       tres caminos y los tres se comprueban: cerrar, responder y reabrir. */
-    if (!src.includes('const cerrar = () => { if (guardarNota()) paint(); ed.remove(); };'))
-      throw new Error('092: cerrar el panel tiene que guardar la nota antes de destruirlo');
-    if (!src.includes('const reabrir = () => { guardarNota(); ed.remove(); replyTo(it, li); };'))
-      throw new Error('092: reabrir el panel tiene que guardar la nota antes de destruirlo');
-    /* Se compara contra la SENTENCIA completa, no contra `ed.remove()` a secas: el comentario que
-       explica este mismo arreglo menciona `ed.remove()` unas líneas antes, así que buscar el trozo
-       suelto lo encontraba dentro del comentario y daba el orden por incumplido. Es la misma familia
-       del error del 16/08 —una comprobación que casa con algo que no es lo que quería mirar—, y por
-       eso aquí se ancla a la línea exacta que ejecuta. */
-    const env = src.match(/const enviar = \(porDefecto, cerrarla\) => \{[\s\S]*?\n    \};/)[0];
-    const iGuarda = env.indexOf('\n      guardarNota();'), iQuita = env.indexOf('\n      ed.remove(); paint(); markDirty();');
-    if (iGuarda < 0 || iQuita < 0 || iGuarda > iQuita)
-      throw new Error('092: responder tiene que guardar la nota ANTES de quitar el panel');
+    /* ── 3 · EL ORDEN FIJO QUE ÉL ELIGIÓ ────────────────────────────────────────────────────────
+       título → fecha → adjuntos → NOTA → conversación → responder. Él había pedido la nota «abajo
+       de mi respuesta» (como en To Do); se le dibujaron las dos y eligió ésta, porque en To Do no
+       hay conversación y aquí un hilo de 19 respuestas la dejaría fuera de pantalla. */
+    const orden = ['td-head', 'td-fecha', 'td-adj', 'td-nota', 'td-hilo-cab', 'td-foot']
+      .map(c => det.indexOf(c));
+    if (orden.some(i => i < 0)) throw new Error('093: falta alguna sección de la vista');
+    for (let i = 1; i < orden.length; i++)
+      if (orden[i] < orden[i - 1]) throw new Error('093: el orden de la vista no es el acordado (la nota va ANTES de la conversación)');
 
-    /* 5 · EL COMPORTAMIENTO, EJECUTADO (R71). Lo de arriba dice que el código está escrito; esto
-       dice que hace lo que promete. Se ejecuta `guardarNota` con dobles del campo y de la tarea. */
-    globalThis.notaTimer = null; globalThis.notaSucia = false;
-    globalThis.paint = () => {};
-    let dirty = 0; globalThis.markDirty = () => { dirty++; };
-    globalThis.notaEst = { textContent: '' };
-    globalThis.nota = { value: '' };
-    let it = {};
-    globalThis.it = it;
-    eval('globalThis.guardarNota = ' + cuerpo.replace('const guardarNota = ', '').replace(/;$/, ''));
+    /* ── 4 · LA NOTA: a la vista SIEMPRE, editable, y se guarda sola (lo de 0.92.0, intacto) ─── */
+    if (!det.includes('<textarea class="td-nota-t"'))
+      throw new Error('093: la nota tiene que ser un campo editable, no texto de solo lectura');
+    if (/\$\{it\.note \? /.test(det))
+      throw new Error('093: la nota se pinta también vacía: si solo aparece con texto, no se descubre');
+    if (!det.includes('maxlength="${NOTA_MAX}"'))
+      throw new Error('093: el campo declara su tope, y el tope es la constante única');
+    if (!/nota\.addEventListener\("input"/.test(det) || !/nota\.addEventListener\("blur", guardarNota\);/.test(det))
+      throw new Error('093: la nota se guarda al escribir y al salir del campo, sin botón');
+    const alEscribir = det.match(/nota\.addEventListener\("input", \(\) => \{[\s\S]*?\n    \}\);/)[0];
+    if (/paint\(\)|pintarDetalle\(\)/.test(alEscribir))
+      throw new Error('093: repintar en cada tecla mata el foco y el texto a medio escribir');
+    if (!/if \(!t \|\| t === it\.t\) return false;/.test(src) || !/if \(t === \(it\.note \|\| ""\)\) return false;/.test(src))
+      throw new Error('093: escribir lo mismo no puede ensuciar el archivo');
 
-    // sin tocar nada no escribe: un guardado que siempre escribe ensucia el archivo por abrir el panel
-    if (guardarNota() !== false || dirty !== 0) throw new Error('092: sin cambios no puede escribir ni marcar sucio');
+    /* ── 5 · NINGUNA SALIDA SE TRAGA LO TECLEADO ────────────────────────────────────────────── */
+    if (!/const salir = \(\) => \{ guardarNota\(\); cerrarDetalle\(\); \};/.test(det))
+      throw new Error('093: cerrar la vista tiene que guardar la nota antes');
+    const env = det.match(/const enviar = \(porDefecto, cerrarla\) => \{[\s\S]*?\n    \};/)[0];
+    if (env.indexOf('guardarNota();') < 0 || env.indexOf('guardarNota();') > env.indexOf('añadirRespuesta'))
+      throw new Error('093: responder tiene que guardar la nota ANTES de tocar el hilo');
 
-    // escribe lo tecleado, recortando los espacios de los bordes
-    globalThis.nota.value = '  texto largo de la nota  '; globalThis.notaSucia = true;
-    if (guardarNota() !== true) throw new Error('092: un cambio real tiene que guardarse');
-    if (it.note !== 'texto largo de la nota') throw new Error('092: la nota guardada no es la tecleada: ' + it.note);
-    if (dirty !== 1) throw new Error('092: guardar tiene que marcar el archivo como sucio, o no llega al disco');
-    if (!/^Guardada/.test(globalThis.notaEst.textContent)) throw new Error('092: tiene que DECIR que la guardó');
+    /* ── 6 · EL REQUISITO DE CICLO DE VIDA (Codex) ──────────────────────────────────────────────
+       Con la vista abierta, el sondeo de 4 s no puede reconstruir nada. Es lo que generaliza el
+       parche de 0.92.0, donde solo se protegía la nota y el defecto esperaba en el campo siguiente. */
+    if (!/if \(detalleAbierto\(\)\) return;/.test(src))
+      throw new Error('093: `paint()` tiene que rendirse mientras la vista esté abierta');
+    const paintFn = src.match(/function paint\(\)\{[\s\S]*?\n    const doneN =/)[0];
+    if (paintFn.indexOf('if (detalleAbierto()) return;') < 0)
+      throw new Error('093: la guarda va dentro de `paint()`, no en quien lo llama: llamadores hay muchos');
+    /* Al cerrar hay que SOLTAR la guarda antes de repintar, o la lista no vuelve nunca. La primera
+       versión de esta comprobación se ancló al comentario `// PRIMERO` y sobrevivió al mutante que
+       envolvía la asignación en `if (0)`: el comentario seguía ahí. Es la trampa del 16/08 otra vez
+       —casar con algo que no es lo que se quería mirar—, así que ahora se comprueba la SENTENCIA
+       exacta, que no esté condicionada, y que vaya antes del repintado. */
+    const cerrarFn = src.match(/const cerrarDetalle = \(\) => \{[\s\S]*?\n  \};/)[0];
+    const iSuelta = cerrarFn.indexOf('\n    detalle = null;'), iPinta = cerrarFn.indexOf('\n    paint();');
+    if (iSuelta < 0)
+      throw new Error('093: `detalle = null;` tiene que ser una sentencia suelta, sin condición que la pueda apagar');
+    if (iPinta < 0 || iSuelta > iPinta)
+      throw new Error('093: al cerrar hay que soltar la guarda ANTES de repintar, o la lista no vuelve');
 
-    // vaciarla la borra en vez de dejar una cadena vacía ocupando sitio en el archivo
-    globalThis.nota.value = '   '; globalThis.notaSucia = true;
-    guardarNota();
-    if ('note' in it) throw new Error('092: vaciar la nota tiene que quitar el campo, no guardar ""');
+    /* ── 7 · UN SOLO DESPLAZAMIENTO ─────────────────────────────────────────────────────────────
+       Con hilo, nota y documento, el panel viejo llegaba a tener tres scrolls anidados. */
+    /* Matcher propio, y no el `cssOf` de arriba, por dos motivos: hay varias definiciones de
+       `cssOf` en la suite y no todas miran lo mismo, y aquí la AUSENCIA de una regla no es un
+       error —lo que se persigue es que no haya un segundo `overflow:auto`, no que existan todas—. */
+    const reglaDe = sel => {
+      const m = html.match(new RegExp(sel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\{([^}]*)\\}'));
+      return m ? m[1] : '';
+    };
+    const scrolls = ['.td-body', '.td-hilo', '.td-foot', '.td-nota-t', '.task-detail']
+      .filter(sel => /overflow:\s*auto/.test(reglaDe(sel)));
+    if (scrolls.length !== 1 || scrolls[0] !== '.td-body')
+      throw new Error('093: la vista tiene que tener UN solo desplazamiento y ser el del cuerpo; hay: ' + scrolls.join(', '));
+    if (/max-height:\s*190px/.test(reglaDe('.td-hilo')))
+      throw new Error('093: el hilo ya no tiene caja propia: fluye dentro del desplazamiento de la vista');
 
-    // el mismo texto otra vez no vuelve a escribir
-    it.note = 'igual'; globalThis.nota.value = 'igual'; globalThis.notaSucia = true; dirty = 0;
-    if (guardarNota() !== false || dirty !== 0) throw new Error('092: reescribir lo mismo no puede ensuciar el archivo');
+    /* ── 8 · GEOMETRÍA: corta, estrecha y móvil (Codex) ──────────────────────────────────────────
+       `modoDetalle` es PURA a propósito, para poder probar la decisión sin navegador. Y se le da la
+       parte VISIBLE, no la que la ventana dice medir: la primera versión leía el rectángulo a secas
+       y en una pantalla de 390 px una ventana de 620 «cabía», así que la vista salía cortada. */
+    eval('globalThis.DETALLE_MIN_ANCHO = ' + src.match(/const DETALLE_MIN_ANCHO = (\d+);/)[1]);
+    eval('globalThis.DETALLE_MIN_ALTO = ' + src.match(/const DETALLE_MIN_ALTO = (\d+);/)[1]);
+    eval('globalThis.modoDetalle = ' + src.match(/const modoDetalle = (\([\s\S]*?)\n  \/\*\*/)[1].trim().replace(/;$/, ''));
+    eval('globalThis.parteVisible = ' + src.match(/const parteVisible = (\([\s\S]*?\}\);)/)[1].replace(/;$/, ''));
 
-    /* 6 · UN SOLO TOPE PARA UN SOLO CAMPO. Hay DOS sitios que escriben `it.note` —el editor y el
-       puntero de «convertir en nota»— y dos números distintos para el mismo campo divergen (R47).
-       El tope sube de 1000 a 20.000, el mismo que una ventana de Nota: es el mismo tipo de texto. */
-    const tope = src.match(/const NOTA_MAX = (\d+);/);
-    if (!tope) throw new Error('092: el tope de la nota tiene que estar declarado y ser legible');
-    if (+tope[1] !== 20000)
-      throw new Error(`092: el tope es ${tope[1]} y tiene que ser el mismo que una ventana de Nota (20.000)`);
-    const escrituras = src.match(/it\.note = [^\n]*slice\(0, [^)]*\)/g) || [];
-    for (const e of escrituras)
-      if (!e.includes('NOTA_MAX'))
-        throw new Error('092: hay una escritura de la nota con un tope propio, que acabará divergiendo: ' + e);
+    if (modoDetalle({ ancho: 900, alto: 700 }) !== 'encajado') throw new Error('093: en una ventana grande la vista va encajada');
+    if (modoDetalle({ ancho: 300, alto: 700 }) !== 'completa') throw new Error('093: estrecha → pantalla completa');
+    if (modoDetalle({ ancho: 900, alto: 200 }) !== 'completa') throw new Error('093: BAJA → pantalla completa (el caso que una regla solo por ancho no cubre)');
+    if (modoDetalle({ ancho: 0, alto: 0 }) !== 'completa') throw new Error('093: sin caja medible, pantalla completa');
+    // móvil: una ventana de 620 px sobre una pantalla de 390 solo enseña 370 → completa
+    const vis = parteVisible({ left: 20, top: 10, right: 640, bottom: 570 }, 390, 844);
+    if (vis.ancho !== 370) throw new Error('093: la parte visible se mide contra la pantalla, no contra la ventana: ' + vis.ancho);
+    if (modoDetalle(vis) !== 'completa') throw new Error('093: en móvil la vista tiene que ir a pantalla completa');
+    /* Y LO QUE DE VERDAD FALLÓ: que la decisión se tome sobre la parte visible EN EL SITIO DONDE SE
+       LLAMA. Probar las dos funciones por separado no lo caza — el mutante que medía el rectángulo
+       entero sobrevivía a las cuatro comprobaciones de arriba—, porque el defecto no estaba en
+       ninguna de las dos, sino en cómo se combinaban. */
+    if (!/modoDetalle\(parteVisible\(el\.getBoundingClientRect\(\), innerWidth, innerHeight\)\)/.test(abrir))
+      throw new Error('093: la vista decide sobre la parte VISIBLE de la ventana, no sobre lo que la ventana dice medir');
 
-    // 7 · y llegar al tope se DICE. Recortar callando es el defecto que ya costó 45 respuestas
-    if (!/if \(nota\.value\.length >= NOTA_MAX\) toast\(/.test(src))
-      throw new Error('092: al llegar al tope hay que avisar: quedarse mudo es como se pierde texto sin enterarse');
+    /* Y a pantalla completa el nodo SALE del widget: las ventanas se colocan con `transform`, y un
+       ancestro transformado convierte `position:fixed` en `absolute` respecto a él — la vista se
+       quedaba encerrada y recortada. Se vio en una captura, no razonando. */
+    if (!/document\.body\.appendChild\(nodo\);/.test(abrir))
+      throw new Error('093: a pantalla completa el nodo cuelga del body, o el transform de la ventana lo encierra');
+    if (!/\.task-detail\.completa\{[^}]*position:fixed/.test(html))
+      throw new Error('093: falta el modo a pantalla completa');
+    if (!/body\.detalle-completa #desk-dock,\s*\nbody\.detalle-completa #taskbar\{display:none\}/.test(html))
+      throw new Error('093: a pantalla completa el dock y la barra se esconden, o se montan sobre la caja de responder');
 
-    console.log('OK 0.92.0 (la nota se ve y se escribe en la propia tarea, se guarda sola, ninguna salida se la traga y el tope es único)');
+    /* ── 9 · LO QUE NO SE RETIRA, y por qué (D3 del contraste) ──────────────────────────────────
+       No se borran capacidades: se retira su COSTE de la superficie principal. */
+    if (!/it\.claim \? `<div class="td-claim">/.test(det))
+      throw new Error('093: el reclamo se muestra como ESTADO cuando existe; lo que no puede es ser un control');
+    if (/class="td-claim"[^`]*<button/.test(det))
+      throw new Error('093: el reclamo no es un botón del usuario: lo pone y lo quita un agente');
+    if (!/class="td-color/.test(det))
+      throw new Error('093: el color no se retira, se relega a opciones: tiene que seguir existiendo');
+    if (/class="it-color"/.test(src))
+      throw new Error('093: el color sale de la banda de la fila — un control permanente por un 0,4 % sí cobra');
+    if (!/class="mini adj"/.test(det) || !/td-adj-lista/.test(det))
+      throw new Error('093: los adjuntos siguen VISIBLES: su prevalencia es baja pero son material de entrada');
+
+    /* ── 10 · LA PROSA NO PUEDE CONTRADECIR AL CÓDIGO ───────────────────────────────────────────
+       Petición suya al autorizar la pasada: «entiendo que eso de la regla solo escrita también lo
+       arreglarás». Codex lo había señalado con un caso concreto: un comentario llamaba «SELLADAS» a
+       las respuestas mientras el código permitía editarlas y borrarlas desde 0.48.3. Una regla que
+       solo vive en prosa se incumple sola porque nada la mira.
+
+       Esto no puede vigilar toda la prosa —y decir que sí sería el guardián que aprueba en
+       silencio—, pero sí puede vigilar ESTA afirmación, que es falsa y estaba escrita. El alcance
+       se declara: si el código permite editar y borrar respuestas, ningún texto puede decir que son
+       inmutables. */
+    const sePuedeBorrar = /it\.replies\.splice\(i, 1\);/.test(src);
+    const sePuedeEditar = /it\.replies\[i\]\.ed = 1;/.test(src);
+    if (sePuedeBorrar && sePuedeEditar)
+      for (const mentira of [/entradas SELLADAS/i, /respuestas? selladas/i, /no se editan/i, /respuestas? inmutables/i])
+        if (mentira.test(src))
+          throw new Error('093: el código permite editar y borrar respuestas — ningún comentario puede llamarlas selladas ni inmutables');
+    // y lo que SÍ es cierto tiene que estar dicho: la autoría se conserva y lo editado se marca
+    if (!/marcada como editada/.test(src))
+      throw new Error('093: si se puede editar, hay que decir que queda marcado; es lo que sostiene la trazabilidad');
+
+    console.log('OK 0.93.0 (una sola vista dueña de la tarea, una puerta por campo, un scroll, el repintado no la toca, la geometría decide sin navegador y la prosa no miente)');
   }
 
   console.log('\nTODO EN VERDE');
