@@ -611,7 +611,15 @@ ul.plain{list-style:none}
 .rp.de-mi{align-self:flex-end; background:var(--accent-soft); border:1px solid rgba(90,169,247,.28)}
 .rp.de-agente{align-self:flex-start; background:rgba(255,255,255,.05); border:1px solid var(--border-soft)}
 .rp-vacio{font-size:11.5px; color:var(--text-dim); line-height:1.45}
-.rp-nota{font-size:11.5px; color:var(--text-dim); border-left:2px solid var(--border-soft); padding:2px 0 2px 8px; margin-bottom:8px; white-space:pre-wrap}
+/* 0.92.0 — la nota deja de ser una cita en gris y pasa a ser un campo. Va a la vista SIEMPRE,
+   también vacía: un campo que solo aparece cuando ya tiene contenido no se puede descubrir. */
+.rp-nota{margin-bottom:8px}
+.rp-nota-cab{display:flex; align-items:baseline; gap:8px; font-size:11.5px; color:var(--text-dim); margin-bottom:3px}
+.rp-nota-est{margin-left:auto; font-size:11px; color:var(--text-dim); font-variant-numeric:tabular-nums}
+.rp-nota-t{width:100%; box-sizing:border-box; min-height:44px; max-height:260px; resize:vertical; padding:7px 9px;
+  border-radius:9px; border:1px dashed var(--border-soft); background:rgba(0,0,0,.14); color:var(--text);
+  font-family:var(--font); font-size:12.5px; line-height:1.45}
+.rp-nota-t:focus{border-style:solid; border-color:var(--accent); background:rgba(0,0,0,.25); outline:none}
 /* 0.80.0 — adjuntos. Van entre el hilo y la caja de escribir: se cuelgan mientras se contesta.
    El nombre ocupa el hueco que sobra y se recorta con puntos suspensivos en vez de partir la fila,
    que es lo que hacía ilegible el peso — y el peso es justo lo que decide si abrirlo. */
@@ -2168,7 +2176,7 @@ function syncUI(mode, txt){
    reaparece) y si Recargar está activo. El descarte ✕ vive solo en memoria de la sesión.
    Demora asumida: la CDN de Pages puede servir la versión vieja hasta ~10 min aun con
    no-store (gobierna la caché del navegador, no la CDN); para pestañas de días, irrelevante. */
-const APP_VERSION = "0.91.0";
+const APP_VERSION = "0.92.0";
 let newVersionDetected = null;   // versión superior detectada; detiene futuras consultas
 let verDismissed = false;        // ✕: solo esta sesión — nunca persistido en disco
 let verCheckInflight = false;    // sin consultas concurrentes
@@ -2562,6 +2570,14 @@ async function abrirAdjunto(a){
    carpeta y se edita con su editor; abrir aquí la edición traería el problema de dos equipos
    escribiendo el mismo fichero sin el CAS que sí protege a datos.json. Si echa de menos editarlo
    dentro, se construye entonces — con el uso delante, no por suposición. */
+/* 0.92.0 — TOPE DE LA NOTA DE UNA TAREA. Sube de 1000 a 20.000, que es el mismo que una ventana de
+   Nota: es el mismo tipo de texto y no había razón para que el de una tarea fuera veinte veces menor.
+   Vive aquí arriba, y no dentro del panel, porque hay DOS sitios que escriben `it.note` —el panel de
+   la tarea y el puntero que deja convertir una tarea larga en nota— y dos topes distintos para el
+   mismo campo divergen (R47). El razonamiento de por qué la nota se edita en el panel está junto a
+   `replyTo`. */
+const NOTA_MAX = 20000;
+const NOTA_GUARDA_MS = 700;      // se difiere para no escribir en cada tecla; al salir se guarda ya
 const ADJ_TEXTO_MAX = 400 * 1024;   // más que esto no cabe legible en un panel: se ofrece abrir fuera
 const ADJ_MD_RE  = /\.(md|markdown|mdown)$/i;
 const ADJ_TXT_RE = /\.(md|markdown|mdown|txt|text|log|csv)$/i;
@@ -6690,7 +6706,7 @@ function offerTaskToNote(w, it, repaint){
     state.widgets.push(nota);
     $("#desktop").appendChild(buildWindow(nota));
     it.t = taskStub(full);
-    it.note = ((it.note ? it.note.trim() + "\n" : "") + taskNotePointer(titulo)).slice(0, 1000);
+    it.note = ((it.note ? it.note.trim() + "\n" : "") + taskNotePointer(titulo)).slice(0, NOTA_MAX);
     repaint(); markDirty(); flashWidget(nota);
     toast("Movido a la nota «" + titulo + "». La tarea conserva el titular y su ⓘ dice dónde está.");
   });
@@ -7324,6 +7340,31 @@ function bodyTodo(w, el){
         : `Vence el ${corta}. Todavía no cuenta en el aviso de la barra.`) + avisoTxt
     };
   };
+  /* 0.92.0 — LA NOTA SE ESCRIBE DONDE SE LEE, y hasta hoy no era así.
+
+     Su veredicto sobre 0.91.0, entero porque nombra el fallo mejor que cualquier resumen:
+     «Horrible. Para empezar no tiene usabilidad. Te obliga a hacer otro clic… la foto de cómo se ve
+     en To Do se ve mucho más fluido». Y la foto zanjaba la discusión: en To Do la nota **no es un
+     adjunto**. Es un campo de texto que está **a la vista dentro de la tarea**, se escribe encima y
+     se guarda solo. No hay que abrir nada.
+
+     QUÉ HABÍA AQUÍ, que es lo que hacía falta mirar antes de construir nada: el campo ya existía
+     (`it.note`) desde 0.48.2 y llevaba desde entonces **enterrado dentro del editor de FECHA**, bajo
+     un rótulo que decía «Nota y respuestas», y en el panel de conversación **solo se leía**. O sea:
+     la función estaba, y lo que no estaba era el camino para usarla. Dos versiones se gastaron
+     construyendo alrededor de eso sin verlo — 0.91.0 llegó a inventar un lector de documentos para
+     resolver lo que resuelve un `<textarea>`.
+
+     `CONTRATO:` la nota se pinta SIEMPRE, también vacía. Un campo que solo aparece cuando ya tiene
+     contenido no se puede descubrir: es la misma trampa que la marca `## Registro` que él tenía que
+     recordar y teclear, y que 0.89.0 subió a un interruptor visible (R74).
+
+     `CONTRATO:` se guarda sola, sin botón. Escribir y tener que confirmar es el clic que sobra.
+     Se difiere para no escribir en cada tecla, y se guarda además al salir del campo.
+
+     `CONTRATO:` mientras escribe NO se repinta la lista. `paint()` reconstruye la fila entera y se
+     llevaría por delante el foco y lo tecleado. Se marca sucio —que es lo que dispara el guardado— y
+     el repintado espera a que salga del campo. */
   /* 0.48.2 — RESPONDER es una cosa distinta de RECORDAR, y en 0.48.1 las mezclé: reutilicé el
      editor de vencimiento y solo le cambié el icono. Mal. Un recordatorio lleva una fecha FUTURA
      que tú eliges; una respuesta lleva el instante en que la escribiste, que no eliges nadie.
@@ -7365,14 +7406,45 @@ function bodyTodo(w, el){
     }).join("");
     ed.innerHTML = `<div class="rp-head"><b>Conversación${it.n ? ` <span class="rp-n" title="Número de esta tarea en la lista: cítalo tal cual cuando hables de ella con un asistente">#${it.n}</span>` : ""}</b><button class="rp-x" type="button" title="Cerrar (Esc)">✕</button></div>
       <div class="rp-hilo">${hilo || `<div class="rp-vacio">Aún no hay respuestas. Lo que escribas se guarda con su fecha y no se sobrescribe.</div>`}</div>
-      ${it.note ? `<div class="rp-nota"><b>Nota:</b> ${esc(it.note)}</div>` : ""}
+      <div class="rp-nota"><div class="rp-nota-cab"><b>📝 Nota</b><span class="rp-nota-est"></span></div><textarea class="rp-nota-t" maxlength="${NOTA_MAX}" placeholder="El texto largo de esta tarea. Se guarda solo.">${esc(it.note || "")}</textarea></div>
       ${adj ? `<div class="rp-adj">${adj}</div>` : ""}
       <div class="rp-doc" hidden></div>
       <textarea class="rp-t" placeholder="Escribe tu respuesta…  (Ctrl+Enter para enviar)"></textarea>
       <div class="rp-actions"><button class="mini send" type="button">Responder</button><button class="mini ok" type="button" title="Responder «Vale» sin escribir — apaga el 🤖 y deja constancia de que lo leíste">👍 Vale</button>${it.done ? "" : `<button class="mini okdone" type="button" title="Responder y dar la tarea por hecha, en un gesto — si ya has escrito algo, se manda lo tuyo">👍 Vale y hecha</button>`}<button class="mini adj" type="button" title="Colgar un PDF o una captura en esta tarea: se guarda en tu carpeta, no dentro de datos.json">📎 Adjuntar</button><button class="mini" type="button" data-x="1">Cerrar</button></div>`;
     li.appendChild(ed);
     const ta = ed.querySelector(".rp-t");
-    const cerrar = () => { ed.remove(); };
+
+    /* 0.92.0 — la nota: se escribe aquí y se guarda sola. Ver el contrato arriba.
+       `pendiente` existe para que cerrar el panel o marcar la tarea no se lleve por delante lo
+       último tecleado: mientras el temporizador no haya saltado, el texto solo está en el campo. */
+    const nota = ed.querySelector(".rp-nota-t"), notaEst = ed.querySelector(".rp-nota-est");
+    let notaTimer = null, notaSucia = false;
+    const guardarNota = () => {
+      if (notaTimer){ clearTimeout(notaTimer); notaTimer = null; }
+      if (!notaSucia) return false;
+      const v = nota.value.trim();
+      const antes = it.note || "";
+      if (v === antes){ notaSucia = false; return false; }
+      if (v) it.note = v; else delete it.note;
+      notaSucia = false;
+      markDirty();
+      notaEst.textContent = "Guardada · " + new Date().toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
+      return true;
+    };
+    nota.addEventListener("input", () => {
+      notaSucia = true;
+      notaEst.textContent = "Escribiendo…";
+      // al llegar al tope se DICE: el navegador dejaría de aceptar teclas sin explicar por qué, y
+      // un texto pegado se recortaría en silencio, que es el defecto que ya costó 45 respuestas
+      if (nota.value.length >= NOTA_MAX) toast(`La nota llega al tope de ${NOTA_MAX.toLocaleString("es-ES")} caracteres`, true);
+      if (notaTimer) clearTimeout(notaTimer);
+      notaTimer = setTimeout(guardarNota, NOTA_GUARDA_MS);
+    });
+    // salir del campo guarda YA y repinta: el repintado se aplaza hasta aquí a propósito
+    nota.addEventListener("blur", () => { if (guardarNota()) paint(); });
+    nota.addEventListener("keydown", e => { if (e.key === "Escape"){ e.stopPropagation(); nota.blur(); } });
+
+    const cerrar = () => { if (guardarNota()) paint(); ed.remove(); };
     /* 0.50.0 — el 🤖 se apaga SOLO respondiendo, y eso se queda así: una regla única, derivada del
        orden, sin ningún «leído» que guardar (no sabría en cuál de sus dos equipos lo leyó). Lo que
        se abarata es responder. Su objeción, que es la que decide: un robot que desaparece sin dejar
@@ -7397,6 +7469,9 @@ function bodyTodo(w, el){
       // el cierre usa EXACTAMENTE los mismos campos que la casilla de la fila: dos caminos que
       // cierran de formas distintas acaban dando dos «Hechas» diferentes (R47)
       if (cerrarla && !it.done){ it.done = true; it.doneAt = Date.now(); playDoneClick(); }
+      // 0.92.0 — responder NO puede tragarse la nota a medio teclear: si el temporizador aún no ha
+      // saltado, lo escrito solo vive en el campo y `ed.remove()` se lo llevaría
+      guardarNota();
       ed.remove(); paint(); markDirty();
     };
     /* 0.48.3 — Ernesto escribió «df» probando y no tenía forma de quitarlo: «esto es un problema».
@@ -7414,7 +7489,7 @@ function bodyTodo(w, el){
     if (okdone) ta.addEventListener("input", () => {
       okdone.textContent = ta.value.trim() ? "👍 Responder y hecha" : "👍 Vale y hecha";
     });
-    const reabrir = () => { ed.remove(); replyTo(it, li); };
+    const reabrir = () => { guardarNota(); ed.remove(); replyTo(it, li); };
     ed.querySelectorAll(".rp-del").forEach(b => b.addEventListener("click", e => {
       e.stopPropagation();
       const i = +b.closest(".rp").dataset.i;
@@ -7571,7 +7646,7 @@ function bodyTodo(w, el){
       <label class="due-check"><input class="xx" type="checkbox" ${it.exec ? "checked" : ""}><span>⚙ Fecha de ejecución agéntica</span></label>
       <div class="due-hint">Un agente la ejecutará en esa fecha o después, la primera vez que trabaje aquí. No se ejecuta sola: necesita que abras una sesión y lo autorices.</div>
       <label class="due-check"><input class="ff" type="checkbox" ${it.fill ? "checked" : ""}><span>▪ Relleno: hacer cuando sobren tokens</span></label>
-      <label>Nota y respuestas<textarea class="nn" placeholder="Escribe aquí tu respuesta o una nota. Lo anterior no se borra.  (Ctrl+Enter para guardar)">${esc(it.note || "")}</textarea></label>
+      <label>📝 Nota<textarea class="nn" placeholder="La misma nota que ves con 💬. Aquí también se puede escribir.  (Ctrl+Enter para guardar)">${esc(it.note || "")}</textarea></label>
       <div class="due-actions"><button class="mini ok" type="button">Guardar</button><button class="mini due-x" type="button">Cerrar</button><button class="mini clear" type="button">Quitar fecha</button><button class="mini note-clear" type="button">Quitar nota</button></div>`;
     li.appendChild(ed);
     const date = ed.querySelector(".dd"), time = ed.querySelector(".hh"), note = ed.querySelector(".nn");
@@ -7635,7 +7710,7 @@ function bodyTodo(w, el){
       if (d) it.due = d; else delete it.due;
       if (h && d) it.remind = h; else delete it.remind;
       const n = note.value.trim();
-      if (n) it.note = n.slice(0, 1000); else delete it.note;
+      if (n) it.note = n.slice(0, NOTA_MAX); else delete it.note;
       // ausente = falso: se BORRA en vez de guardar `0`, para no engordar el archivo con lo que ya
       // es el valor por omisión (mismo criterio que el zoom al 100 %)
       if (exec.checked) it.exec = 1; else delete it.exec;

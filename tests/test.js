@@ -5411,5 +5411,107 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
     console.log('OK 0.91.0 (un adjunto de texto se lee formateado dentro de la tarea, acotado, sin interpretar el .txt y sin entrar en datos.json)');
   }
 
+  // --- 0.92.0: la nota se escribe donde se lee (#218, segunda pasada) ---------------------------
+  {
+    /* Su veredicto sobre 0.91.0, que es el que manda: «Horrible. Para empezar no tiene usabilidad.
+       Te obliga a hacer otro clic… la foto de cómo se ve en To Do se ve mucho más fluido». Y la foto
+       zanjó la discusión: en To Do la nota NO es un adjunto, es un campo a la vista dentro de la
+       tarea que se escribe encima y se guarda solo.
+
+       Lo que se fija aquí es que no se pueda volver a enterrar. */
+
+    // 1 · EL CAMPO SE PINTA SIEMPRE, TAMBIÉN VACÍO. Era un ternario `it.note ? … : ""`, y por eso
+    //     una tarea sin nota no enseñaba que pudiera tenerla: la función existía y el camino no.
+    const marca = src.match(/<div class="rp-nota">[\s\S]*?<\/div>`?/);
+    if (!marca) throw new Error('092: no encuentro el bloque de la nota en el panel');
+    if (/\$\{it\.note \? `<div class="rp-nota"/.test(src))
+      throw new Error('092: la nota NO puede pintarse solo cuando ya tiene texto: así no se descubre');
+    if (!src.includes('<textarea class="rp-nota-t"'))
+      throw new Error('092: la nota tiene que ser un campo editable, no texto de solo lectura');
+    if (!src.includes('maxlength="${NOTA_MAX}"'))
+      throw new Error('092: el campo declara su tope, y el tope es la constante única');
+
+    // 2 · SE GUARDA SOLA. Sin botón: pedir confirmación es justo el clic que sobra.
+    const cuerpo = src.match(/const guardarNota = \(\) => \{[\s\S]*?\n    \};/)[0];
+    if (!src.includes('nota.addEventListener("input"'))
+      throw new Error('092: tiene que guardarse al escribir, no al pulsar nada');
+    if (!src.includes('nota.addEventListener("blur", () => { if (guardarNota()) paint(); });'))
+      throw new Error('092: salir del campo tiene que guardar YA: el temporizador puede no haber saltado');
+    if (!/setTimeout\(guardarNota, NOTA_GUARDA_MS\)/.test(src))
+      throw new Error('092: el guardado se difiere con la constante, no con un número suelto');
+
+    /* 3 · Y NO SE REPINTA MIENTRAS ESCRIBE. `paint()` reconstruye la fila entera: llamarlo en cada
+       tecla se llevaría el foco y lo tecleado. Es el defecto más fácil de introducir «arreglando»
+       que la marca de la fila no se actualiza al momento. */
+    const alEscribir = src.match(/nota\.addEventListener\("input", \(\) => \{[\s\S]*?\n    \}\);/)[0];
+    if (/paint\(\)/.test(alEscribir))
+      throw new Error('092: repintar en cada tecla mata el foco y el texto a medio escribir');
+
+    /* 4 · NINGUNA SALIDA DEL PANEL SE TRAGA LO TECLEADO. Mientras el temporizador no salta, la nota
+       solo vive en el campo, así que todo lo que destruya el panel tiene que guardar antes. Son
+       tres caminos y los tres se comprueban: cerrar, responder y reabrir. */
+    if (!src.includes('const cerrar = () => { if (guardarNota()) paint(); ed.remove(); };'))
+      throw new Error('092: cerrar el panel tiene que guardar la nota antes de destruirlo');
+    if (!src.includes('const reabrir = () => { guardarNota(); ed.remove(); replyTo(it, li); };'))
+      throw new Error('092: reabrir el panel tiene que guardar la nota antes de destruirlo');
+    /* Se compara contra la SENTENCIA completa, no contra `ed.remove()` a secas: el comentario que
+       explica este mismo arreglo menciona `ed.remove()` unas líneas antes, así que buscar el trozo
+       suelto lo encontraba dentro del comentario y daba el orden por incumplido. Es la misma familia
+       del error del 16/08 —una comprobación que casa con algo que no es lo que quería mirar—, y por
+       eso aquí se ancla a la línea exacta que ejecuta. */
+    const env = src.match(/const enviar = \(porDefecto, cerrarla\) => \{[\s\S]*?\n    \};/)[0];
+    const iGuarda = env.indexOf('\n      guardarNota();'), iQuita = env.indexOf('\n      ed.remove(); paint(); markDirty();');
+    if (iGuarda < 0 || iQuita < 0 || iGuarda > iQuita)
+      throw new Error('092: responder tiene que guardar la nota ANTES de quitar el panel');
+
+    /* 5 · EL COMPORTAMIENTO, EJECUTADO (R71). Lo de arriba dice que el código está escrito; esto
+       dice que hace lo que promete. Se ejecuta `guardarNota` con dobles del campo y de la tarea. */
+    globalThis.notaTimer = null; globalThis.notaSucia = false;
+    globalThis.paint = () => {};
+    let dirty = 0; globalThis.markDirty = () => { dirty++; };
+    globalThis.notaEst = { textContent: '' };
+    globalThis.nota = { value: '' };
+    let it = {};
+    globalThis.it = it;
+    eval('globalThis.guardarNota = ' + cuerpo.replace('const guardarNota = ', '').replace(/;$/, ''));
+
+    // sin tocar nada no escribe: un guardado que siempre escribe ensucia el archivo por abrir el panel
+    if (guardarNota() !== false || dirty !== 0) throw new Error('092: sin cambios no puede escribir ni marcar sucio');
+
+    // escribe lo tecleado, recortando los espacios de los bordes
+    globalThis.nota.value = '  texto largo de la nota  '; globalThis.notaSucia = true;
+    if (guardarNota() !== true) throw new Error('092: un cambio real tiene que guardarse');
+    if (it.note !== 'texto largo de la nota') throw new Error('092: la nota guardada no es la tecleada: ' + it.note);
+    if (dirty !== 1) throw new Error('092: guardar tiene que marcar el archivo como sucio, o no llega al disco');
+    if (!/^Guardada/.test(globalThis.notaEst.textContent)) throw new Error('092: tiene que DECIR que la guardó');
+
+    // vaciarla la borra en vez de dejar una cadena vacía ocupando sitio en el archivo
+    globalThis.nota.value = '   '; globalThis.notaSucia = true;
+    guardarNota();
+    if ('note' in it) throw new Error('092: vaciar la nota tiene que quitar el campo, no guardar ""');
+
+    // el mismo texto otra vez no vuelve a escribir
+    it.note = 'igual'; globalThis.nota.value = 'igual'; globalThis.notaSucia = true; dirty = 0;
+    if (guardarNota() !== false || dirty !== 0) throw new Error('092: reescribir lo mismo no puede ensuciar el archivo');
+
+    /* 6 · UN SOLO TOPE PARA UN SOLO CAMPO. Hay DOS sitios que escriben `it.note` —el editor y el
+       puntero de «convertir en nota»— y dos números distintos para el mismo campo divergen (R47).
+       El tope sube de 1000 a 20.000, el mismo que una ventana de Nota: es el mismo tipo de texto. */
+    const tope = src.match(/const NOTA_MAX = (\d+);/);
+    if (!tope) throw new Error('092: el tope de la nota tiene que estar declarado y ser legible');
+    if (+tope[1] !== 20000)
+      throw new Error(`092: el tope es ${tope[1]} y tiene que ser el mismo que una ventana de Nota (20.000)`);
+    const escrituras = src.match(/it\.note = [^\n]*slice\(0, [^)]*\)/g) || [];
+    for (const e of escrituras)
+      if (!e.includes('NOTA_MAX'))
+        throw new Error('092: hay una escritura de la nota con un tope propio, que acabará divergiendo: ' + e);
+
+    // 7 · y llegar al tope se DICE. Recortar callando es el defecto que ya costó 45 respuestas
+    if (!/if \(nota\.value\.length >= NOTA_MAX\) toast\(/.test(src))
+      throw new Error('092: al llegar al tope hay que avisar: quedarse mudo es como se pierde texto sin enterarse');
+
+    console.log('OK 0.92.0 (la nota se ve y se escribe en la propia tarea, se guarda sola, ninguna salida se la traga y el tope es único)');
+  }
+
   console.log('\nTODO EN VERDE');
 })().catch(e => { console.error(e && e.stack || e); process.exitCode = 1; });

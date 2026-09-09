@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.92.0] - 2026-09-09 — la nota de una tarea se ve y se escribe en la propia tarea
+
+- **Lo de ayer no servía y esto lo sustituye.** Pediste notas de texto largo «como las de To Do», y
+  te di un documento adjunto que había que abrir. Tu respuesta: *«te obliga a hacer otro clic»*. En
+  To Do la nota no es un adjunto: es un campo que está a la vista y se escribe encima.
+- **Ahora es eso.** Abre la conversación de cualquier tarea (💬) y arriba tienes **📝 Nota**, un campo
+  de texto **siempre visible, también vacío**, en el que escribes directamente. **Se guarda solo**,
+  sin botón, y te dice a qué hora lo guardó.
+- **El campo ya existía y estaba escondido**: vivía dentro del editor de fecha (📅), bajo un rótulo
+  que decía «Nota y respuestas». Sigue ahí, ahora bien nombrado, y es la misma nota.
+- **De 1.000 a 20.000 caracteres**, el mismo tope que una ventana de Nota — es el mismo tipo de
+  texto. Y si lo alcanzas, se te dice: nada se recorta en silencio.
+- Nada de lo que cierra la conversación se traga lo que estabas escribiendo: cerrar, responder o
+  reabrir guardan la nota antes.
+
 ## [0.91.0] - 2026-09-08 — una nota larga se cuelga de la tarea y se lee dentro
 
 - **Lo que pedías: notas de texto largo en una tarea, como las de To Do.** Una respuesta no da para
