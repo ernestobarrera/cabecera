@@ -1,5 +1,36 @@
 # Changelog
 
+## [0.95.0] - 2026-09-15 — el aviso de una tarea sale del navegador (tu #204)
+
+- **Lo que decía esa tarea era falso y tenías razón tú.** Estaba anotada como «bloqueada hasta tener
+  app instalable», y no hace falta ninguna app: los avisos del navegador funcionan **en una pestaña
+  normal**, con permiso concedido una vez, sobre https — que es como se sirve Cabecera. Queda
+  corregido donde estaba escrito.
+- **Cómo se activa:** pon hora de aviso en una tarea y, justo debajo, aparece **«Avisarme fuera de la
+  pestaña»**. Lo pulsas, el navegador pregunta, y en cuanto aceptas te enseña **un aviso de ejemplo**
+  para que veas cómo se ve sin tener que esperar a ninguna alarma. Concedido el permiso, el botón
+  **desaparece para siempre**: ya no sirve de nada.
+- **El botón está ahí y no en Ajustes** a propósito: aparece en el momento en que pones una hora, que
+  es cuando el permiso significa algo. Un ajuste escondido que hay que saber que existe es un ajuste
+  que no se usa.
+- **No cambia cuándo avisa Cabecera, solo por dónde.** El aviso ya existía —suena y sale dentro de la
+  página—; lo nuevo es que además salte al escritorio. Es el mismo momento, la misma tarea y, al
+  pulsarlo, te lleva **a esa fila**, como el «Ver» de siempre.
+- **Solo salta si no estás mirando Cabecera.** Si la tienes delante ya te has enterado, y doblar el
+  aviso es la forma de acabar ignorándolo.
+- **Con el modo privacidad puesto, una tarea privada no enseña su texto** tampoco aquí: dice «Aviso
+  en un widget privado», igual que dentro de la página. Una notificación del sistema se ve **sobre lo
+  que estés compartiendo en pantalla**, así que ahí no se relaja nada.
+- **Dos límites, para que puedas confiar en el aviso:** con la pestaña en segundo plano el navegador
+  frena los relojes a uno por minuto, así que puede llegar **hasta un minuto tarde**; y **hace falta
+  tener Cabecera abierta en alguna pestaña** — con el navegador cerrado no hay aviso, y eso sí
+  exigiría un servidor, que Cabecera no tiene por diseño.
+- **En Android todavía no**, por decisión tuya de dejarlo para más adelante: allí el navegador no
+  permite lanzar el aviso desde una pestaña. Si algún día lo pides, es otra pieza. Mientras tanto no
+  falla: allí el aviso sigue saliendo dentro de la página, como hasta ahora.
+- **Si lo deniegas, no se insiste.** En su lugar aparece una línea que dice dónde se cambia (el
+  candado de la barra de direcciones), y ya está. Un permiso que se pide dos veces se deniega dos.
+
 ## [0.94.1] - 2026-09-15 — parte de fallo tuya sobre 0.94.0: el teclado y el reloj
 
 - **Tras enviar con Enter te quedabas atrapado, y esa era la raíz de las dos cosas que contaste.**

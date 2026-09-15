@@ -687,6 +687,13 @@ body.detalle-completa #taskbar{display:none}
 .td-quick{display:flex; flex-direction:column; gap:4px; align-items:stretch; width:100%}
 .td-quick .qf{display:flex; flex-wrap:wrap; gap:4px; align-items:center}
 .td-quick .qet{font-size:11px; color:var(--text-dim); flex:0 0 auto; min-width:52px}
+/* 0.95.0 — el permiso de aviso vive DONDE SE DECIDE: en la fila del ⏰, y solo mientras haga
+   falta. Es R74 —una convención que él tiene que recordar es una convención perdida—: en vez de
+   un ajuste escondido en ⚙ que habría que saber que existe, el botón aparece junto al campo que
+   lo necesita, en el momento en que pone una hora, y DESAPARECE para siempre al concederlo. */
+.td-aviso-perm{display:flex; align-items:center; gap:6px; flex-wrap:wrap; font-size:11.5px; color:var(--text-dim)}
+.td-aviso-perm .pedir{background:var(--warn); border-color:var(--warn); color:#1b1205; font-weight:600}
+.td-aviso-perm.bloqueado{color:var(--text-dim)}
 .td-quick .dq{background:rgba(255,255,255,.06); border:1px solid var(--border-soft); border-radius:7px;
   color:var(--text-dim); font-family:var(--font); font-size:11px; padding:3px 7px; cursor:pointer}
 .td-quick .dq:hover{color:var(--text); border-color:var(--accent)}
@@ -2282,7 +2289,7 @@ function syncUI(mode, txt){
    reaparece) y si Recargar está activo. El descarte ✕ vive solo en memoria de la sesión.
    Demora asumida: la CDN de Pages puede servir la versión vieja hasta ~10 min aun con
    no-store (gobierna la caché del navegador, no la CDN); para pestañas de días, irrelevante. */
-const APP_VERSION = "0.94.1";
+const APP_VERSION = "0.95.0";
 let newVersionDetected = null;   // versión superior detectada; detiene futuras consultas
 let verDismissed = false;        // ✕: solo esta sesión — nunca persistido en disco
 let verCheckInflight = false;    // sin consultas concurrentes
@@ -7720,9 +7727,26 @@ function bodyTodo(w, el){
 
   /* `pintarDetalle` reconstruye SOLO el nodo del detalle, y se llama a mano tras un cambio que
      altere su contenido (una respuesta nueva, un adjunto). Nunca lo llama el sondeo. */
+  /* 0.95.0 — QUÉ SE PINTA EN LA FILA DEL PERMISO. Pura y separada para poder probarla: recibe si
+     la tarea tiene aviso y en qué estado está el permiso, y devuelve el html o cadena vacía.
+     · sin hora puesta        → NADA. Ofrecer avisos del sistema a quien no ha puesto ninguno es
+                                pedir un permiso antes de que sirva para algo, que es como se
+                                consigue que lo denieguen.
+     · concedido              → NADA. Ya funciona; un control que ya no sirve es ruido permanente.
+     · denegado               → una línea con dónde se cambia. No hay botón: el navegador no
+                                volvería a preguntar, así que un botón prometería lo que no puede.
+     · por decidir / ausente  → el botón. */
+  const avisoPermHtml = (tieneHora, permiso) => {
+    if (!tieneHora || permiso === "granted" || permiso === "no") return "";
+    if (permiso === "denied")
+      return `<div class="td-aviso-perm bloqueado">🔕 Los avisos del sistema están bloqueados para esta página. Se cambia en el candado de la barra de direcciones → Notificaciones.</div>`;
+    return `<div class="td-aviso-perm">🔔 El aviso solo sale dentro de Cabecera.<button class="mini pedir" type="button" title="Permite que el aviso salga como notificación del sistema cuando no estés mirando Cabecera. Hace falta tener Cabecera abierta en una pestaña.">Avisarme fuera de la pestaña</button></div>`;
+  };
+
   function pintarDetalle(foco){
     if (!detalle) return;
     const { it, nodo } = detalle;
+    const avisoHtml = () => avisoPermHtml(!!it.remind, avisoSistema());
     const scroll = nodo.querySelector(".td-body");
     const scrollY = scroll ? scroll.scrollTop : null;
 
@@ -7780,6 +7804,7 @@ function bodyTodo(w, el){
       +         `<button class="dq" type="button" data-m="360">+6 h</button>`
       +         `<button class="dq" type="button" data-h="08:00" title="Fijar el aviso a las 08:00 del día que tenga puesto">08:00</button></div>`
       +     `</div>`
+      +     `${avisoHtml()}`
       +   `</div>`
       +   `<div class="td-adj"><div class="td-adj-lista">${adj || `<span class="td-vacio">Sin adjuntos</span>`}</div><button class="mini adj" type="button" title="Colgar un PDF, una captura o un texto: se guarda en tu carpeta, no dentro de datos.json">📎 Adjuntar</button></div>`
       +   `<div class="td-doc" hidden></div>`
@@ -7809,6 +7834,17 @@ function bodyTodo(w, el){
 
     const $$ = s => nodo.querySelector(s);
     const titulo = $$(".td-title"), nota = $$(".td-nota-t"), notaEst = $$(".td-nota-est");
+    /* 0.95.0 — el permiso se ofrece SOLO si esta tarea tiene aviso puesto y aún no está concedido.
+       Concedido, no se pinta nada: un control que ya no sirve es ruido permanente. Denegado, una
+       línea que dice dónde se cambia y no se vuelve a insistir — el navegador tampoco preguntaría. */
+    const permAviso = $$(".td-aviso-perm");
+    if (permAviso){
+      const b = permAviso.querySelector(".pedir");
+      if (b) b.addEventListener("click", async () => {
+        await pedirAvisoSistema();
+        pintarDetalle("fecha");   // el bloque se repinta con el estado nuevo: concedido, desaparece
+      });
+    }
     const date = $$(".dd"), time = $$(".hh"), ta = $$(".rp-t");
     const exec = $$(".xx"), fill = $$(".ff"), doc = $$(".td-doc");
 
@@ -12142,6 +12178,67 @@ function paintInbox(){
   });
 }
 
+/* ═══ AVISO DEL SISTEMA (0.95.0 · su #204) ═══════════════════════════════════════════════════
+   Su encargo del 15/09, y con una corrección suya que hay que dejar escrita porque la tarea decía
+   lo contrario: **NO hace falta una app instalable.** La API de notificaciones funciona en una
+   PESTAÑA normal, sobre https —que es como se sirve Cabecera—, con permiso concedido una vez.
+   Lo que la #204 llamaba «bloqueo» era otra cosa, y esa sí es cierta: sin pestaña abierta no hay
+   aviso, porque eso exigiría un servidor de push y Cabecera no tiene servidor por diseño.
+
+   `CONTRATO:` esto NO es un canal nuevo. El aviso de tarea ya existía entero —lo detecta
+   `checkTaskAlerts`, suena y saca su toast con «Ver»—; lo único que se añade es que **salga de la
+   pestaña**. Si algún día hay dos sitios que decidan cuándo avisar, divergirán (R47).
+
+   `CONTRATO:` lo que el toast NO dice, la notificación tampoco. Con el modo privacidad puesto y el
+   widget marcado privado, el texto de la tarea no viaja: es la misma condición, leída una sola vez
+   en el llamador y pasada aquí ya resuelta. Una notificación del sistema es MÁS pública que un
+   toast —se ve en el escritorio, sobre lo que estés compartiendo—, así que aquí no se relaja nada.
+
+   LÍMITES, y se dicen porque él tiene que poder confiar en el aviso:
+   · Con la pestaña en segundo plano el navegador frena los temporizadores a uno por minuto, así
+     que el aviso puede llegar hasta ~1 min tarde. Para una hora fija basta; para un cronómetro no.
+   · En Android, `new Notification()` desde la página NO está permitido: exige un service worker.
+     Aplazado por decisión suya («lo de android lo veremos más adelante»). Por eso se construye
+     dentro de un `try`: en un navegador donde lance, el aviso de dentro de la página sigue igual.
+   · Si lo deniega, el navegador no vuelve a preguntar. No se insiste: se le dice UNA vez dónde
+     está el ajuste y no se vuelve a mencionar. Un permiso que se pide dos veces se deniega dos. */
+const avisoSistema = () => typeof Notification === "undefined" ? "no" : Notification.permission;
+/* Se notifica solo cuando NO está mirando Cabecera, que es para lo que existe esto. `hasFocus`
+   y no `document.hidden`: oculto es solo «otra pestaña o minimizado», y la ventana tapada por otra
+   aplicación —el caso normal— no cuenta como oculta. Si está delante, ya tiene el toast y el
+   sonido, y doblar la señal es como se aprende a ignorarla entera (R45). */
+function notificarSistema(titulo, cuerpo, alPulsar, clave){
+  if (avisoSistema() !== "granted") return false;
+  if (document.hasFocus()) return false;
+  try{
+    /* UNA ETIQUETA POR TAREA, y esto lo encontró la sonda: con una etiqueta fija, dos tareas que
+       vencen a la vez producen dos avisos de los que el sistema solo enseña el ÚLTIMO — el primero
+       desaparece sin que nadie se entere. Que un aviso tape a otro es peor que no tener aviso,
+       porque además da por avisado lo que no lo está. */
+    const n = new Notification(titulo, { body: cuerpo || "", tag: "cabecera-" + (clave || "aviso"), renotify: false });
+    n.onclick = () => { try{ window.focus(); }catch(e){} n.close(); if (alPulsar) alPulsar(); };
+    return true;
+  }catch(e){ return false; }   // Android y cualquier otro que exija service worker
+}
+/* Pedirlo es un gesto SUYO y con activación de usuario: los navegadores rechazan la petición hecha
+   al cargar, y además preguntar sin que lo haya pedido es la forma más rápida de que lo deniegue
+   para siempre. Devuelve el permiso resultante. */
+async function pedirAvisoSistema(){
+  if (typeof Notification === "undefined"){ toast("Este navegador no tiene avisos del sistema", true); return "no"; }
+  if (Notification.permission === "denied"){
+    toast("Los avisos están bloqueados para esta página. Se cambia en el candado de la barra de direcciones → Notificaciones", true);
+    return "denied";
+  }
+  let p = Notification.permission;
+  if (p === "default"){ try{ p = await Notification.requestPermission(); }catch(e){ p = Notification.permission; } }
+  if (p === "granted"){
+    // se enseña en el acto cómo se ve, para que no tenga que esperar a una alarma para saber si funciona
+    try{ new Notification("Cabecera — avisos activados", { body: "Así se verán los avisos de tus tareas.", tag: "cabecera-aviso" }); }
+    catch(e){ toast("Permiso concedido, pero este navegador no deja lanzar el aviso desde una pestaña", true); }
+  } else toast("Sin permiso, el aviso seguirá saliendo dentro de Cabecera", true);
+  return p;
+}
+
 function taskAlertTime(it){
   if (!it || !it.due || !it.remind || it.done) return null;
   const d = new Date(`${it.due}T${it.remind}:00`);
@@ -12164,7 +12261,12 @@ function checkTaskAlerts(){
       const oculto = privacyOn && w.priv;
       // 0.70.0 — «Ver» lleva a LA tarea que ha avisado, no a su lista. Es la cuarta entrada de
       // `focusTask` y la más obvia: el aviso ya sabe de cuál habla, sería raro no decírselo.
-      toastAction(oculto ? "Aviso en un widget privado" : "Aviso: " + snippet(it.t || "tarea"), "Ver", () => focusTask(w.id, si, it));
+      const irA = () => focusTask(w.id, si, it);
+      toastAction(oculto ? "Aviso en un widget privado" : "Aviso: " + snippet(it.t || "tarea"), "Ver", irA);
+      /* 0.95.0 — y el mismo aviso, fuera de la pestaña. MISMO momento, MISMA condición de
+         privacidad y MISMO destino al pulsarlo: esto no decide nada por su cuenta, solo saca por
+         otra puerta lo que ya se decidió aquí. */
+      notificarSistema("Cabecera", oculto ? "Aviso en un widget privado" : snippet(it.t || "tarea"), irA, it.id || stamp);
     });
   }));
   // alertedAt viaja con el siguiente guardado humano: los avisos que saltan al abrir

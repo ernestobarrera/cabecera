@@ -3977,8 +3977,14 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
     const chipExec = src.match(/\$\("#tb-exec"\)\.addEventListener\("click"[\s\S]*?\n  \}\);/)[0];
     if (!/focusTask\(h\.w\.id, h\.si, h\.it\)/.test(chipExec))
       throw new Error('el aviso ⚙ es gemelo del ⏰: dos chips iguales con dos comportamientos distintos es peor que ninguno');
-    if (!/"Ver", \(\) => focusTask\(w\.id, si, it\)/.test(src))
-      throw new Error('el «Ver» del aviso de una tarea ya sabe de cuál habla: tiene que llevar a ella');
+    /* 0.95.0 — el destino se extrajo a `irA` porque ahora lo comparten DOS puertas: el «Ver» del
+       toast y el clic en la notificación del sistema. Se comprueba que sea el mismo objeto y no dos
+       expresiones gemelas: dos destinos escritos por separado divergen (R47), y aquí divergir
+       significaría que pulsar el aviso del escritorio te deja en otro sitio que pulsar el de dentro. */
+    if (!/const irA = \(\) => focusTask\(w\.id, si, it\);/.test(src))
+      throw new Error('el aviso de una tarea ya sabe de cuál habla: su destino es `focusTask` sobre ESA tarea');
+    if (!/"Ver", irA\)/.test(src))
+      throw new Error('el «Ver» del toast tiene que usar ese mismo destino, no una copia');
     // 0.76.0 — `hit` pasó a ser `{ it, hecha }` para poder decir el estado antes de saltar; el
     // destino sigue siendo la tarea concreta, que es lo que esta guarda protege.
     if (!/hit \? \(\) => focusTask\(w\.id, si, hit\.it\)/.test(src))
@@ -5950,6 +5956,90 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
     if (/<span class="rp-txt">\${esc\(r\.t\)}/.test(det))
       throw new Error('0941: si se escapa sin enlazar, el enlace vuelve a ser texto muerto');
 
+
+    /* ── 9 · 0.95.0 · EL AVISO SALE DEL NAVEGADOR (su #204) ─────────────────────────────────────
+       Su encargo del 15/09, y viene con una corrección suya que el código tiene que sostener: la
+       tarea decía «bloqueada: sin app instalable». Era FALSO —la API funciona en una pestaña, sobre
+       https, con permiso— y lo desmontó él mirando el mundo, no el código: «hay páginas que te
+       permiten avisos si lo autorizas». Lo que sí es cierto es el otro límite: sin pestaña abierta
+       no hay aviso, porque eso exigiría un servidor de push. */
+
+    /* NO ES UN CANAL NUEVO: quien decide CUÁNDO se avisa sigue siendo uno solo. Si aparece un
+       segundo sitio que dispare avisos, divergirá del primero, y el usuario acabará recibiendo dos
+       —o ninguno— sin que nada lo cante. */
+    const alertas = src.match(/function checkTaskAlerts\(\)\{[\s\S]*?\n\}/)[0];
+    // el `(?!))` deja fuera la mención en prosa del comentario: se cuentan CONSTRUCCIONES, no palabras
+    if ((src.match(/new Notification\((?!\))/g) || []).length !== 2)
+      throw new Error('095: solo DOS sitios construyen una notificación: el disparador y el aviso de ejemplo al conceder el permiso');
+    if (!/notificarSistema\("Cabecera", oculto \? "Aviso en un widget privado" : snippet\(it\.t \|\| "tarea"\), irA, it\.id \|\| stamp\);/.test(alertas))
+      throw new Error('095: el aviso del sistema sale del MISMO disparador, con el mismo texto y el mismo destino que el toast');
+
+    /* LO QUE EL TOAST NO DICE, LA NOTIFICACIÓN TAMPOCO. Y aquí la exigencia es MAYOR: una
+       notificación del sistema se pinta sobre lo que esté compartiendo en pantalla. La condición se
+       lee UNA vez (\`oculto\`) y se pasa resuelta a las dos puertas, para que no puedan discrepar. */
+    if (!/const oculto = privacyOn && w\.priv;/.test(alertas))
+      throw new Error('095: la condición de privacidad se lee una sola vez y la comparten las dos puertas');
+    /* UNA ETIQUETA POR TAREA, y lo encontró la SONDA, no el razonamiento: con una etiqueta fija,
+       dos tareas que vencen a la vez producen dos avisos de los que el sistema solo enseña el
+       ÚLTIMO. Un aviso que tapa a otro es peor que no tener aviso, porque además da por avisado lo
+       que nadie ha visto (R46: antes de que una señal desaparezca, mirar qué estaba significando). */
+    if (!/tag: "cabecera-" \+ \(clave \|\| "aviso"\)/.test(src))
+      throw new Error('095: una etiqueta por tarea, o un aviso tapa a otro y encima lo da por avisado');
+    const linNotif = alertas.match(/notificarSistema\([^\n]*\)/)[0];
+    if (!/oculto \?/.test(linNotif) || !/"Aviso en un widget privado"/.test(linNotif))
+      throw new Error('095: con privacidad activa, el texto de una tarea privada NO puede viajar a una notificación del sistema');
+
+    /* SOLO SI NO ESTÁ MIRANDO. \`hasFocus\` y no \`hidden\`: «oculto» es solo otra pestaña o
+       minimizado, y la ventana tapada por otra aplicación —el caso normal— no cuenta como oculta. */
+    const notif = src.match(/function notificarSistema\([\s\S]*?\n\}/)[0];
+    if (!/if \(document\.hasFocus\(\)\) return false;/.test(notif))
+      throw new Error('095: si está mirando Cabecera ya tiene el toast: doblar la señal es como se aprende a ignorarla');
+    if (/document\.hidden/.test(notif))
+      throw new Error('095: \`hidden\` no sirve: una ventana tapada por otra aplicación no está oculta y es el caso normal');
+    if (!/if \(avisoSistema\(\) !== "granted"\) return false;/.test(notif))
+      throw new Error('095: sin permiso no se intenta nada');
+    if (!/try\{[\s\S]*?\}catch\(e\)\{ return false; \}/.test(notif))
+      throw new Error('095: en Android construirla LANZA; si no se atrapa, se lleva por delante el aviso de dentro de la página');
+
+    /* EL PERMISO SE PIDE CON GESTO SUYO, NUNCA AL CARGAR. Los navegadores rechazan la petición sin
+       activación de usuario, y además preguntar sin que lo haya pedido es la forma más rápida de que
+       lo deniegue para siempre — y denegado no se puede volver a pedir. */
+    const pedir = src.match(/async function pedirAvisoSistema\([\s\S]*?\n\}/)[0];
+    if (!/Notification\.requestPermission\(\)/.test(pedir))
+      throw new Error('095: falta la petición de permiso');
+    for (const arranque of ['startTaskAlerts', 'renderAll', 'finishStartFS'])
+      if (new RegExp(arranque + '\\([\\s\\S]{0,400}?pedirAvisoSistema').test(src))
+        throw new Error('095: el permiso NO se pide al arrancar (' + arranque + '): lo rechaza el navegador y se gasta la única oportunidad');
+    if (!/pedirAvisoSistema\(\);/.test(src) || !/b\.addEventListener\("click", async \(\) => \{/.test(src))
+      throw new Error('095: el permiso lo pide un botón, que es lo que da la activación de usuario');
+    /* Y al conceder se enseña en el acto cómo se ve: verificar no puede exigir esperar a una alarma. */
+    if (!/if \(p === "granted"\)\{[\s\S]{0,400}?new Notification\("Cabecera — avisos activados"/.test(pedir))
+      throw new Error('095: al conceder se lanza un aviso de ejemplo, o no hay forma de comprobarlo sin esperar a una alarma');
+    if (!/denied/.test(pedir))
+      throw new Error('095: denegado tiene su propio camino: el navegador no volvería a preguntar');
+
+    /* QUÉ SE PINTA, Y CUÁNDO. Pura y aparte para poder probar los cuatro estados sin navegador,
+       mismo criterio que \`modoDetalle\` y \`horaSugerida\`. */
+    eval('globalThis.avisoPermHtml = ' + src.match(/const avisoPermHtml = (\([\s\S]*?\n  \};)/)[1].replace(/;$/, ''));
+    if (avisoPermHtml(false, 'default') !== '')
+      throw new Error('095: sin hora puesta no se ofrece nada: pedir el permiso antes de que sirva es como se consigue que lo denieguen');
+    if (avisoPermHtml(true, 'granted') !== '')
+      throw new Error('095: concedido, el control desaparece: un botón que ya no sirve es ruido permanente');
+    if (avisoPermHtml(true, 'no') !== '')
+      throw new Error('095: en un navegador sin notificaciones no se ofrece un botón que no puede funcionar');
+    if (!/class="mini pedir"/.test(avisoPermHtml(true, 'default')))
+      throw new Error('095: con hora puesta y permiso por decidir, el botón tiene que estar');
+    const den = avisoPermHtml(true, 'denied');
+    if (/<button/.test(den))
+      throw new Error('095: denegado NO lleva botón: el navegador no volvería a preguntar y prometería lo que no puede');
+    if (!/candado/.test(den))
+      throw new Error('095: denegado tiene que decir DÓNDE se cambia, o es un callejón sin salida');
+
+    /* Y la prosa no puede seguir diciendo lo que él desmontó. R81 aplicada a lo que costó un mes. */
+    if (/sin app instalable/.test(src))
+      throw new Error('095: «sin app instalable» era FALSO y él lo desmontó: no puede quedar escrito en el código como si fuera cierto');
+
+    console.log('OK 0.95.0 (el aviso sale del navegador por la MISMA puerta que ya decidía, sin relajar la privacidad, con permiso pedido donde se decide y sin insistir si lo deniega)');
     console.log('OK 0.94.1 (el foco no se escapa al enviar, Escape cierra desde fuera del nodo por la misma puerta que la ✕, la hora sigue al día y un enlace de una respuesta se pulsa)');
     console.log('OK 0.94.0 (el reloj sugiere sin pisar, los atajos se agrupan, se sale sin ir a la cruz, Enter envía y la lista se queda al lado)');
   }
