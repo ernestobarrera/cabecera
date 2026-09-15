@@ -2282,7 +2282,7 @@ function syncUI(mode, txt){
    reaparece) y si Recargar está activo. El descarte ✕ vive solo en memoria de la sesión.
    Demora asumida: la CDN de Pages puede servir la versión vieja hasta ~10 min aun con
    no-store (gobierna la caché del navegador, no la CDN); para pestañas de días, irrelevante. */
-const APP_VERSION = "0.94.0";
+const APP_VERSION = "0.94.1";
 let newVersionDetected = null;   // versión superior detectada; detiene futuras consultas
 let verDismissed = false;        // ✕: solo esta sesión — nunca persistido en disco
 let verCheckInflight = false;    // sin consultas concurrentes
@@ -7661,6 +7661,7 @@ function bodyTodo(w, el){
   const cerrarDetalle = () => {
     if (!detalle) return;
     const nodo = detalle.nodo;
+    detalle.abortar.abort();              // se van con la vista los oyentes que puso fuera del nodo
     detalle = null;                       // PRIMERO, para que el `paint()` de abajo sí reconstruya
     if (nodo && nodo.parentNode) nodo.remove();
     el.classList.remove("con-detalle", "partida");
@@ -7693,7 +7694,27 @@ function bodyTodo(w, el){
       el.classList.add("con-detalle");    // el CSS esconde alta, barra y lista: la vista SUSTITUYE
       el.appendChild(nodo);
     }
-    detalle = { it, nodo, partida: modo === "partida" };
+    // `abortar` retira de golpe los oyentes que esta vista haya puesto FUERA de su nodo; sin él,
+    // cada apertura dejaría uno vivo en el documento y Escape acabaría cerrando vistas fantasma
+    detalle = { it, nodo, partida: modo === "partida", horaAuto: false, abortar: new AbortController() };
+    /* 0.94.1 — ESCAPE CON EL FOCO FUERA DEL NODO. El manejador de `pintarDetalle` solo oye lo que
+       pasa DENTRO de la vista, y en partida la lista está al lado: pulsar allí deja el foco fuera y
+       Escape no llegaba. Tres decisiones, y las tres importan:
+       · Va AQUÍ y no en `pintarDetalle`, que corre en cada cambio: allí dejaría un oyente por
+         repintado en vez de uno por apertura.
+       · Dispara la MISMA salida que la ✕ —su propio `click`— en vez de un segundo camino de cierre
+         que pudiera divergir de aquél (es el defecto que este proyecto ya ha pagado cuatro veces).
+       · Cede el turno a lo MÁS SUPERFICIAL: con un modal o el menú del clic derecho abiertos no
+         hace nada, igual que el Escape global.
+       Se retira con la vista, vía `AbortSignal`. */
+    document.addEventListener("keydown", e => {
+      if (e.key !== "Escape" || !detalle || detalle.nodo !== nodo) return;
+      if (nodo.contains(e.target)) return;                    // dentro ya lo atiende su propio nodo
+      if ($$(".overlay.open").length || $("#ctx-menu").classList.contains("open")) return;
+      e.stopPropagation();
+      const x = nodo.querySelector(".td-x");
+      if (x) x.click();
+    }, { signal: detalle.abortar.signal });
     pintarDetalle(foco);   // él marca la fila y refresca la lista al terminar: un solo sitio
   };
 
@@ -7713,7 +7734,11 @@ function bodyTodo(w, el){
         + `<span class="rp-meta">${esc(quien)} · ${esc(fecha)}${r.ed ? " · editado" : ""}`
         + `<span class="rp-acts"><button class="rp-ed" type="button" title="Editar">✎</button>`
         + `<button class="rp-del" type="button" title="Borrar esta respuesta">✕</button></span></span>`
-        + `<span class="rp-txt">${esc(r.t)}</span></div>`;
+        /* 0.94.1 — petición suya: «cuando pongo enlaces en tareas, conversaciones o notas,
+           ¿podrían funcionar como hipervínculos?». En el TEXTO de la tarea ya funcionaban desde
+           0.40.0; en la conversación, no. Se usa `linkifyEsc`, la MISMA función —escapa primero y
+           enlaza después, con su prueba de XSS—, y no una segunda copia que pudiera divergir. */
+        + `<span class="rp-txt">${linkifyEsc(r.t)}</span></div>`;
     }).join("");
 
     const adj = (Array.isArray(it.att) ? it.att : []).map((a, i) => {
@@ -7836,7 +7861,8 @@ function bodyTodo(w, el){
       date.value = isoDe(base); guardarFecha();
     };
     const moverMin = paso => {
-      if (!time.value){ const n = new Date(); n.setMinutes(0, 0, 0); n.setHours(n.getHours() + 1); time.value = hhmm(n); guardarFecha(); return; }
+      if (!time.value){ const n = new Date(); n.setMinutes(0, 0, 0); n.setHours(n.getHours() + 1); time.value = hhmm(n); detalle.horaAuto = false; guardarFecha(); return; }
+      detalle.horaAuto = false;      // moverla con la rueda o las flechas la hace suya
       const [H, M] = time.value.split(":").map(Number);
       const t = (H * 60 + M + paso + 1440) % 1440;
       time.value = String(Math.floor(t / 60)).padStart(2, "0") + ":" + String(t % 60).padStart(2, "0");
@@ -7853,23 +7879,35 @@ function bodyTodo(w, el){
     bindPaso(date, moverDia, 1);
     bindPaso(time, moverMin, 5);
     date.addEventListener("change", guardarFecha);
-    time.addEventListener("change", guardarFecha);
+    time.addEventListener("change", () => { detalle.horaAuto = false; guardarFecha(); });
     nodo.querySelectorAll(".dq").forEach(b => b.addEventListener("click", () => {
       const d = b.dataset;
-      if (b.classList.contains("quitar")){ date.value = ""; time.value = ""; }
+      if (b.classList.contains("quitar")){ date.value = ""; time.value = ""; detalle.horaAuto = false; }
       else if (d.d !== undefined){
         const t = new Date(); t.setDate(t.getDate() + +d.d); date.value = isoDe(t);
         /* 0.94.0 — y la hora se SUGIERE. Suya, 15/09: «que el reloj de programación sea a las 16
            por defecto si selecciono hoy por la mañana, o mañana a las 8 si es mañana».
-           `CONTRATO:` solo cuando la hora está VACÍA. Pisar una hora que él ya puso por pulsar un
-           atajo de día sería cambiarle un dato a traición, que es lo contrario de un atajo. */
-        if (!time.value){
+
+           0.94.1 — PARTE DE FALLO SUYA, y la guarda de 0.94.0 era la causa: «al cambiar de día en
+           la misma tarea, la hora no se actualiza». Con «solo si está vacía», el primer atajo la
+           llenaba y a partir de ahí ninguno podía corregirla: pulsabas Hoy (16:00) y luego Mañana
+           y te quedabas con las 16:00 de un día que empieza a las 8.
+
+           `CONTRATO:` lo que no se pisa NUNCA es una hora SUYA —tecleada, con la rueda, o puesta
+           con un atajo de ⏰—. Una hora que puso otro atajo de DÍA hace un segundo no es suya: es
+           la sugerencia anterior, y una sugerencia se sustituye. La marca vive en `detalle`, que
+           sobrevive al repintado; en el cierre de `pintarDetalle` no serviría, porque guardar la
+           fecha repinta y la borraría en cada pulsación. */
+        if (!time.value || detalle.horaAuto){
           const ahora = new Date();
-          time.value = horaSugerida(+d.d, ahora.getHours() * 60 + ahora.getMinutes());
+          const h = horaSugerida(+d.d, ahora.getHours() * 60 + ahora.getMinutes());
+          // sin sugerencia (pasada la última hora del día) se deja la que hubiera: vaciarla sería peor
+          if (h){ time.value = h; detalle.horaAuto = true; }
         }
       }
-      else if (d.h !== undefined){ time.value = d.h; if (!date.value) date.value = hoyIso(); }
-      else { const t = new Date(); t.setMinutes(t.getMinutes() + +d.m, 0, 0); time.value = hhmm(t); date.value = isoDe(t); }
+      // un atajo de ⏰ es una hora ELEGIDA por él: deja de ser sugerencia y ya nadie la sustituye
+      else if (d.h !== undefined){ time.value = d.h; if (!date.value) date.value = hoyIso(); detalle.horaAuto = false; }
+      else { const t = new Date(); t.setMinutes(t.getMinutes() + +d.m, 0, 0); time.value = hhmm(t); date.value = isoDe(t); detalle.horaAuto = false; }
       guardarFecha();
     }));
 
@@ -7892,7 +7930,12 @@ function bodyTodo(w, el){
       añadirRespuesta(it, t);
       if (cerrarla) cerrarTarea(it, true);
       ta.value = "";
-      pintarDetalle();
+      /* 0.94.1 — EL FOCO VUELVE A LA CAJA, y no es un detalle de comodidad: era su parte de fallo
+         entera. `pintarDetalle()` sin foco reconstruye el nodo y deja el cursor en el `body`, o
+         sea FUERA de la vista — y como Escape se escucha en el nodo del detalle, después de enviar
+         una respuesta no había NINGUNA salida por teclado: «después de enter, esc no hace nada».
+         Lo que él vivía como «Esc no cierra» era «el foco se ha ido». */
+      pintarDetalle("responder");
     };
     $$(".send").addEventListener("click", () => enviar());
     /* 0.94.0 — ENTER ENVÍA, que es lo canónico en cualquier caja de conversación. Su parte,
@@ -8027,6 +8070,7 @@ function bodyTodo(w, el){
       if (e.key === "Escape"){ e.stopPropagation(); salir(); }
       if (e.key === "Enter" && (e.ctrlKey || e.metaKey)){ e.preventDefault(); enviar(); }
     });
+
 
     if (scrollY != null && scroll) nodo.querySelector(".td-body").scrollTop = scrollY;
     if (foco === "titulo") { titulo.focus(); titulo.setSelectionRange(titulo.value.length, titulo.value.length); }

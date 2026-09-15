@@ -1619,7 +1619,13 @@ console.log('OK tarea larga → nota (se ofrece, no se impone; titular acotado; 
   if (!/if \(!ponerTitulo\(it, titulo\.value\)\)\{ titulo\.value = it\.t; return; \}/.test(commit))
     throw new Error('#90: sin cambio real, el editor tiene que salir sin avisar ni repintar');
   // Ctrl+Z global: solo FUERA de un campo de texto (dentro manda el deshacer nativo del navegador)
-  const key = src.match(/document\.addEventListener\("keydown", e => \{[\s\S]*?\n  \}\);/)[0];
+  /* 0.94.1 — este `match` cogía el PRIMER manejador de teclado del fichero, y daba por hecho que
+     solo había uno. Desde 0.94.1 la vista de detalle registra el suyo mientras está abierta, y pasó
+     a ser el primero: la prueba se caía sin que nada estuviera roto. Se ancla por CONTENIDO al que
+     de verdad quiere mirar —el global, el que cierra los menús—, que es lo que debió hacer siempre. */
+  const key = [...src.matchAll(/document\.addEventListener\("keydown", e => \{[\s\S]*?\n  \}\);/g)]
+    .map(m => m[0]).find(t => /closeMenu\(\)/.test(t));
+  if (!key) throw new Error('#90: no localizo el manejador GLOBAL de teclado (el que cierra menús)');
   if (!/e\.key === "z" \|\| e\.key === "Z"/.test(key)) throw new Error('#90: falta el atajo Ctrl+Z');
   if (!/input,textarea,\[contenteditable\]/.test(key)) throw new Error('#90: Ctrl+Z dentro de un campo CON texto debe seguir siendo el del navegador');
   // 0.45.1: un campo VACÍO no tiene nada que deshacer nativamente; tragarse ahí la pulsación dejaba
@@ -5759,13 +5765,31 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
       if (+h.slice(0, 2) * 60 < m) throw new Error('094: la hora sugerida para HOY no puede ser anterior a la actual (' + m + ' -> ' + h + ')');
     }
 
-    /* ── 2 · SUGERIR NO ES PISAR ────────────────────────────────────────────────────────────────
-       Cambiarle una hora que él había puesto por pulsar un atajo de DÍA sería perderle un dato sin
-       decírselo. La guarda es `if (!time.value)` y va DENTRO de la rama del día. */
+    /* ── 2 · SUGERIR NO ES PISAR, PERO UNA SUGERENCIA SÍ SE SUSTITUYE ──────────────────────────
+       0.94.0 puso la guarda en `if (!time.value)` y ÉL LA CAZÓ EN PRODUCCIÓN el 15/09: «al cambiar
+       de día en la misma tarea, la hora no se actualiza». Era demasiado ancha — el primer atajo
+       llenaba el campo y ningún otro podía ya corregirlo, así que Hoy (16:00) + Mañana te dejaba
+       las 16:00 en un día que empieza a las 8. La conducta buena tiene DOS mitades y se comprueban
+       las dos: se sugiere sobre el campo vacío **o sobre la sugerencia anterior**, y una hora SUYA
+       no se toca jamás. La prueba vieja se reescribe, no se borra: lo que cambió es la regla. */
     const ramaDia = det.match(/else if \(d\.d !== undefined\)\{[\s\S]*?\n      \}/);
     if (!ramaDia) throw new Error('094: no localizo la rama del atajo de día');
-    if (!/if \(!time\.value\)\{/.test(ramaDia[0]) || ramaDia[0].indexOf('if (!time.value)') > ramaDia[0].indexOf('horaSugerida'))
-      throw new Error('094: la hora solo se sugiere con el campo VACÍO, y la guarda va antes de calcularla');
+    if (!/if \(!time\.value \|\| detalle\.horaAuto\)\{/.test(ramaDia[0]))
+      throw new Error('0941: el atajo de día sugiere con el campo vacío O sobre su propia sugerencia anterior');
+    if (ramaDia[0].indexOf('if (!time.value || detalle.horaAuto)') > ramaDia[0].indexOf('horaSugerida'))
+      throw new Error('094: la guarda va ANTES de calcular la hora');
+    if (!/if \(h\)\{ time\.value = h; detalle\.horaAuto = true; \}/.test(ramaDia[0]))
+      throw new Error('0941: sin sugerencia (pasada la última hora) se deja la que hubiera; vaciarla sería peor');
+    /* Y LA MARCA VIVE EN `detalle`, NO EN EL CIERRE DE `pintarDetalle`. Es lo que la hace funcionar:
+       guardar la fecha repinta la vista, así que una variable local se borraría en cada pulsación
+       y la corrección no serviría de nada. */
+    if (!/detalle = \{ it, nodo, partida: modo === "partida", horaAuto: false/.test(src))
+      throw new Error('0941: la marca de «hora sugerida» vive en `detalle`, que sobrevive al repintado');
+    /* LOS CUATRO CAMINOS POR LOS QUE UNA HORA PASA A SER SUYA. Si aparece un quinto y no apaga la
+       marca, el atajo de día se la pisará: por eso se cuentan, no se nombran de memoria. */
+    const suya = (det.match(/detalle\.horaAuto = false/g) || []).length;
+    if (suya !== 6)
+      throw new Error('0941: una hora es SUYA por cuatro caminos en SEIS sitios (teclear; rueda/flechas, con valor y sin valor; los dos atajos de ⏰; quitar fecha); hay ' + suya + ' que apaguen la marca');
 
     /* ── 3 · LOS ATAJOS QUE PIDIÓ, Y AGRUPADOS ──────────────────────────────────────────────────
        Pidió MÁS botones y a la vez se quejó de Hick. No es contradictorio: la ley de Hick cuenta
@@ -5888,6 +5912,45 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
     if (/overflow:\s*auto/.test((html.match(/\.task-detail\.partida\{([^}]*)\}/) || ['', ''])[1]))
       throw new Error('094: el panel partido no estrena desplazamiento propio: el único de la vista sigue siendo .td-body');
 
+    /* ── 7 · 0.94.1 · EL TECLADO NO PUEDE DEJARTE ATRAPADO ──────────────────────────────────────
+       Parte de fallo suya el mismo día: «Esc no cierra… desde donde estás escribiendo» y «después
+       de enter, esc no hace nada». Las dos son LA MISMA: `enviar` repintaba sin foco, el cursor
+       caía en el `body` —fuera del nodo donde se escucha Escape— y no quedaba salida por teclado.
+       Reproducido con una sonda que pulsa teclas de verdad ANTES de tocar nada; el banco visual
+       mira cómo queda, no cómo se comporta, y por eso no lo había visto. */
+    if (!/ta\.value = "";[\s\S]{0,900}?pintarDetalle\("responder"\);/.test(det))
+      throw new Error('0941: tras enviar, el foco vuelve a la caja; si el repintado lo suelta, Escape deja de existir');
+    if (/pintarDetalle\(\);\n    \};/.test(det.match(/const enviar = \([\s\S]*?\n    \};/)[0]))
+      throw new Error('0941: «enviar» no puede repintar sin foco: es lo que dejaba el cursor en el body');
+    /* El cinturón: Escape también con el foco FUERA del nodo —en partida la lista está al lado—,
+       registrado UNA vez por apertura y no por repintado, y disparando la MISMA salida que la ✕. */
+    const esc = abrir.match(/document\.addEventListener\("keydown", e => \{[\s\S]*?\}, \{ signal: detalle\.abortar\.signal \}\);/);
+    if (!esc) throw new Error('0941: falta el Escape de documento, y tiene que registrarse al ABRIR, no en cada repintado');
+    if (!/nodo\.contains\(e\.target\)\) return;/.test(esc[0]))
+      throw new Error('0941: dentro del nodo manda su propio manejador: dos cierres a la vez es un cierre que no se entiende');
+    if (!/\$\$\(".overlay\.open"\)\.length \|\| \$\("#ctx-menu"\)\.classList\.contains\("open"\)\) return;/.test(esc[0]))
+      throw new Error('0941: Escape cierra lo MÁS SUPERFICIAL primero: con un modal o el menú abiertos, la vista no es la que se va');
+    if (!/const x = nodo\.querySelector\("\.td-x"\);/.test(esc[0]))
+      throw new Error('0941: el Escape de documento dispara la MISMA salida que la ✕, no un segundo camino de cierre');
+    if ((det.match(/document\.addEventListener\("keydown"/g) || []).length)
+      throw new Error('0941: el oyente de documento NO va en «pintarDetalle»: ahí se registraría uno por cada cambio de la tarea');
+    /* Y se retira con la vista. Sin esto, cada apertura deja uno vivo y Escape acaba cerrando
+       vistas que ya no existen. */
+    if (!/abortar: new AbortController\(\)/.test(src))
+      throw new Error('0941: la vista necesita con qué retirar los oyentes que pone fuera de su nodo');
+    if (!/detalle\.abortar\.abort\(\);/.test(src))
+      throw new Error('0941: al cerrar hay que retirar esos oyentes, o se acumulan uno por apertura');
+
+    /* ── 8 · 0.94.1 · UN ENLACE EN UNA RESPUESTA SE PUEDE PULSAR ────────────────────────────────
+       Petición suya: «cuando pongo enlaces en tareas, conversaciones o notas, ¿podrían funcionar
+       como hipervínculos?». En el texto de la tarea ya funcionaba. Se usa LA MISMA función, que ya
+       escapa antes de enlazar y tiene prueba de XSS: una segunda copia acabaría divergiendo. */
+    if (!/<span class="rp-txt">\${linkifyEsc\(r\.t\)}<\/span>/.test(det))
+      throw new Error('0941: los enlaces de una respuesta se pintan con «linkifyEsc»');
+    if (/<span class="rp-txt">\${esc\(r\.t\)}/.test(det))
+      throw new Error('0941: si se escapa sin enlazar, el enlace vuelve a ser texto muerto');
+
+    console.log('OK 0.94.1 (el foco no se escapa al enviar, Escape cierra desde fuera del nodo por la misma puerta que la ✕, la hora sigue al día y un enlace de una respuesta se pulsa)');
     console.log('OK 0.94.0 (el reloj sugiere sin pisar, los atajos se agrupan, se sale sin ir a la cruz, Enter envía y la lista se queda al lado)');
   }
 

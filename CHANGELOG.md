@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.94.1] - 2026-09-15 — parte de fallo tuya sobre 0.94.0: el teclado y el reloj
+
+- **Tras enviar con Enter te quedabas atrapado, y esa era la raíz de las dos cosas que contaste.**
+  Enviar reconstruye la tarea y el cursor se iba fuera de ella, al fondo de la página; como Esc se
+  escucha dentro de la tarea, después de Enter **ya no había ninguna salida por teclado** y había
+  que ir al botón. Ahora el cursor vuelve a la caja de escribir, así que Esc sigue cerrando.
+- **Y Esc ya no depende de dónde tengas el cursor.** Con la lista al lado es normal pulsar en ella;
+  si el cursor estaba allí, Esc no cerraba la tarea. Ahora sí, y sin quitarle el turno a nada: con
+  un cuadro de diálogo o el menú del clic derecho abiertos, Esc los cierra a ellos primero.
+- **Cambiar de día vuelve a cambiar la hora.** Pulsabas «Hoy» (16:00) y luego «Mañana» y te quedabas
+  con las 16:00 de un día que empieza a las 8. Era la guarda de ayer, demasiado ancha: no pisar «una
+  hora que ya había» incluía la que acababa de poner el atajo anterior. Ahora **una sugerencia se
+  sustituye y una hora tuya no se toca nunca** — tuya es la que tecleas, la que mueves con la rueda
+  o la que pones con un atajo de ⏰.
+- **Los enlaces de una conversación se pueden pulsar.** En el texto de una tarea ya funcionaban; en
+  las respuestas, no. Misma función de siempre, con su comprobación de seguridad. *(En la **nota** de
+  una tarea y en el widget **Nota** siguen sin ser pulsables: son campos que estás editando, y un
+  enlace dentro de un campo de edición no se puede pulsar sin dejar de poder escribir encima. Es otra
+  decisión, no un descuido.)*
+- **Banco de pruebas nuevo: una sonda de teclado.** Hasta ahora se miraba cómo QUEDA la interfaz,
+  nunca cómo se COMPORTA — y tus tres partes de fallo eran de comportamiento. Ahora hay una sonda que
+  pulsa las teclas de verdad y comprueba dónde queda el cursor. Las tres se reprodujeron con ella
+  antes de tocar una línea.
+
 ## [0.94.0] - 2026-09-15 — la tarea se abre al lado de las demás, y salir de ella deja de ser un viaje
 
 - **La lista ya no desaparece al abrir una tarea.** Si la ventana da ancho (desde 730 px), la tarea
