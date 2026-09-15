@@ -1,5 +1,47 @@
 # Changelog
 
+## [0.94.0] - 2026-09-15 — la tarea se abre al lado de las demás, y salir de ella deja de ser un viaje
+
+- **La lista ya no desaparece al abrir una tarea.** Si la ventana da ancho (desde 730 px), la tarea
+  se abre **a la derecha y la lista se queda a la izquierda**, como en To Do: sigues viendo qué más
+  tienes mientras trabajas en una. La tarea abierta se marca en la lista, y el panel va separado con
+  el color de acento y su cabecera teñida, para que se vea de un golpe qué es cada cosa. Por debajo
+  de ese ancho, todo sigue exactamente como en 0.93.0: la vista sustituye a la lista, y en móvil va
+  a pantalla completa.
+- **No es una segunda lista**, y es lo que lo hace barato y seguro: es la misma lista de siempre
+  puesta en otra columna, con los mismos filtros, el mismo orden y los mismos botones. Dos listas
+  del mismo dato acaban discrepando siempre.
+- **Y ahí la fila entera abre la tarea**, de un clic: con el panel al lado, el sitio al que apuntar
+  deja de ser un botón de trece píxeles que aparece al pasar el ratón y pasa a ser la fila. Fuera de
+  la vista partida no cambia nada, porque allí abrir taparía la lista.
+- **En la columna estrecha, la fecha de alta baja a su propia línea** para no estrujar el texto. No
+  es un retoque a ojo: entre 290 y 460 px de columna, la fecha se quedaba en la línea del texto y le
+  dejaba **treinta píxeles**, o sea una letra por línea. Por encima de eso el reparto normal ya es
+  bueno y no se toca, porque forzar el salto costaría una línea de alto en cada fila justo en la
+  vista que existe para enseñarte más tareas.
+- **Corregida de paso una regla que no escondía nada:** la cabecera ⓘ del widget («Bandeja de
+  entrada compartida con tus asistentes…») debía ocultarse al abrir una tarea y no lo hacía, porque
+  la regla nombraba una clase que no existe. No se notaba porque el panel la tapaba; con la lista al
+  lado, dejaba de taparla.
+- **Botón para salir, ancho y donde están las manos.** Tu parte era «tengo que ir a la cruz»: la ✕
+  mide trece píxeles y está en la esquina contraria. Ahora hay un **✓ Guardar y cerrar** debajo de
+  la caja de escribir, y si tenías algo escrito se llama **✓ Enviar y cerrar** y lo manda antes de
+  cerrar. La ✕, el ‹ y Esc siguen funcionando igual.
+- **Enter envía la respuesta.** Mayús+Enter salta de línea y Ctrl+Enter sigue valiendo. Solo en la
+  caja de responder: en el título Enter confirma y en la nota hace párrafo, como hasta ahora.
+- **El reloj se pone solo, y no te pisa.** Pulsas **Hoy** y el aviso se pone a las **16:00**; si ya
+  han pasado, a la siguiente hora en punto, porque un aviso que nace vencido es peor que ninguno.
+  **Mañana** y **+1 sem** se ponen a las **08:00**. Y solo ocurre si la hora estaba vacía: si la
+  habías puesto tú, no se toca.
+- **Tres avisos nuevos: +2 h, +4 h y +6 h**, junto a los de +15 min y +1 h.
+- **Y los atajos pasan a dos filas rotuladas** —📅 Día y ⏰ Aviso— en vez de una hilera de nueve
+  botones. Pediste más opciones y a la vez menos ruido, y no es contradictorio: lo que cansa no es
+  el número de botones, es tener que compararlos todos entre sí. Separados por lo que hacen, eliges
+  dos veces entre pocos.
+- **No se ha tocado nada de lo que cerró el diseño de 0.93.0**: el ✓ no guarda nada por su cuenta
+  —llama a los mismos sitios de siempre—, la nota se sigue guardando sola, la vista sigue teniendo
+  un solo desplazamiento y la actualización automática sigue sin poder tocarte la tarea abierta.
+
 ## [0.93.0] - 2026-09-09 — una tarea se abre entera, en una sola vista
 
 - **Ya no hay dos editores de tarea.** Tenías uno para la conversación (💬) y otro para la fecha

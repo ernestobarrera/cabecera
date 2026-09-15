@@ -2916,8 +2916,19 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
     const rep = cssOf('.task-detail');
     if (!/position:absolute/.test(rep) || !/inset:0/.test(rep))
       throw new Error('la vista de detalle ocupa la caja del widget: dentro de la fila vuelve a estrujar el texto');
-    if (!/\.win-body\.con-detalle > \.todo-list,?[\s\S]{0,120}display:none/.test(html))
-      throw new Error('la vista SUSTITUYE a la lista: si la lista sigue debajo, el panel vuelve a crecer dentro de ella');
+    /* 0.94.0 — la guarda se afina, no se afloja. Lo que tenía que impedir es que la lista quede
+       DEBAJO del detalle dentro del mismo flujo, que es lo que hacía crecer el panel dentro de ella.
+       Desde 0.94.0 hay dos disposiciones legítimas y ninguna es «siguen apiladas»: o la lista se
+       esconde (encajado y pantalla completa), o van en DOS COLUMNAS de un grid (partida), que es
+       otra cosa —ahí son hermanas, cada una con su ancho, y ninguna empuja a la otra—. */
+    if (!/\.win-body\.con-detalle:not\(\.partida\) > \.todo-list,?[\s\S]{0,160}display:none/.test(html))
+      throw new Error('sin vista partida, el detalle SUSTITUYE a la lista: si la lista sigue debajo, el panel vuelve a crecer dentro de ella');
+    const partidaLista = cssOf('.win-body.con-detalle.partida > .todo-list');
+    const partidaDet = cssOf('.win-body.con-detalle.partida > .task-detail');
+    if (!/grid-column:1/.test(partidaLista) || !/grid-column:2/.test(partidaDet))
+      throw new Error('en vista partida la lista y el detalle van en COLUMNAS distintas, no apilados');
+    if (!/display:grid/.test(cssOf('.win-body.con-detalle.partida')))
+      throw new Error('la vista partida se sostiene con grid: sin el, las dos columnas vuelven a ser dos bloques apilados');
 
     // (4) LAS PESTAÑAS DE LA CALCULADORA NO SE RECORTAN. Sin `min-height:0` el teclado no baja de su
     // contenido y empuja 🕘 Historial y 🧪 Unidades fuera del recorte: la función parece no existir.
@@ -2994,7 +3005,7 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
       throw new Error('el color del contador debe derivarse de si alguno pide algo');
     if (/it\.leido|lastRead|leidoAt/.test(src))
       throw new Error('I4: el turno se deriva del orden, nunca se guarda un «leído»');
-    const pintar = (src.match(/function paint\(\)\{[\s\S]*?\n    let list, vacio;/) || [''])[0];
+    const pintar = (src.match(/function paint\(\w*\)\{[\s\S]*?\n    let list, vacio;/) || [''])[0];
     for (const [re, m] of [[/data-v="pend"/, 'pestaña de Pendientes'], [/data-v="done"/, 'pestaña de Hechas'],
                            [/Pendientes \(\$\{pendN\}\)/, 'recuento de pendientes'], [/Hechas \(\$\{doneN\}\)/, 'recuento de hechas']])
       if (!re.test(pintar)) throw new Error(`falta ${m}: el acceso y el recuento son cosas distintas y las dos vistas necesitan ambas`);
@@ -3078,7 +3089,7 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
        es ya un array nuevo (`flatMap`), así que ordenarlo tampoco tocaría ninguna lista suya. */
     if (!/const l = src\.items\.filter\([^\n]*\); if \(cmpPend\) l\.sort\(cmpPend\)/.test(src))
       throw new Error('ordenar sobre la lista FILTRADA (copia), nunca sobre el array real: volver a «A mano» debe devolver tu orden');
-    const paintFn = src.match(/function paint\(\)\{[\s\S]*?\n    let list, vacio;/)[0];
+    const paintFn = src.match(/function paint\(\w*\)\{[\s\S]*?\n    let list, vacio;/)[0];
     if (/w\.data\.items\.sort/.test(paintFn)) throw new Error('reordenar el array real destruye el orden manual del usuario');
     if (!/w\.data\.sort = orden\.value/.test(src)) throw new Error('el criterio es preferencia del usuario y viaja en w.data, como w.data.view del Markdown');
 
@@ -3400,8 +3411,18 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
     const sd = detalleDe(src);
     if (!/e\.key === "Enter" && \(e\.ctrlKey \|\| e\.metaKey\)\)\{ e\.preventDefault\(\); enviar\(\); \}/.test(sd))
       throw new Error('Ctrl+Enter está anunciado en la tabla de atajos: si no hace nada aquí, la tabla deja de ser fiable');
-    if (!/Ctrl\+Enter para enviar/.test(sd))
-      throw new Error('R27: el atajo se muestra junto a la función, en el propio campo donde se usa');
+    /* 0.94.0 — el atajo PRIMARIO de esta caja pasó a ser Enter a secas, que es lo que pidió («no
+       hay una tecla enter») y lo que hace cualquier caja de conversación. R27 no cambia de fondo:
+       cada atajo sigue teniendo que verse junto a su función. Lo que cambia es que ahora son DOS y
+       se comprueban los dos —Enter en el propio campo, Ctrl+Enter en el botón que ejecuta lo
+       mismo—, porque la tabla ATAJOS sigue anunciando el segundo, y un atajo anunciado que no se
+       ve en ninguna parte es un atajo que no existe para quien lo usa. */
+    if (!/Enter envía/.test(sd))
+      throw new Error('R27: el atajo primario (Enter) se muestra en el propio campo donde se usa');
+    if (!/Ctrl\+Enter/.test(sd))
+      throw new Error('R27: Ctrl+Enter sigue anunciado en la tabla ATAJOS: tiene que verse también junto a lo que hace');
+    if (!/e\.key !== "Enter" \|\| e\.shiftKey \|\| e\.ctrlKey/.test(sd))
+      throw new Error('0.94.0: Enter envía SOLO a secas; con Mayús salta de línea y con Ctrl cae en el manejador de la vista');
     if (!/Enviar una respuesta o guardar sin soltar el teclado/.test(src))
       throw new Error('la tabla ATAJOS tiene que seguir describiendo lo que el atajo hace de verdad');
     console.log('OK 0.58.0 (un solo buscador, el tipo que casa sobrevive al corte, la rejilla no se aplasta y Ctrl+Enter guarda)');
@@ -5199,7 +5220,7 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
     /* (7) LA FUENTE SE RECALCULA EN CADA PINTADO: el mapa de pertenencia caduca con cada cambio.
        Desde 0.93.0 `paint()` abre con la guarda de ciclo de vida, así que el recálculo es lo
        primero DESPUÉS de ella; el orden importa y por eso se comprueba, no solo su presencia. */
-    const cuerpoPaint = src.match(/function paint\(\)\{[\s\S]*?\n    const doneN =/)[0];
+    const cuerpoPaint = src.match(/function paint\(\w*\)\{[\s\S]*?\n    const doneN =/)[0];
     if (!/src = fuenteTodo\(w\);/.test(cuerpoPaint))
       throw new Error('la fuente se recalcula al pintar: si no, una lista creada o borrada después no se ve y `arrDe` miente');
     if (cuerpoPaint.indexOf('if (detalleAbierto()) return;') > cuerpoPaint.indexOf('src = fuenteTodo(w);'))
@@ -5565,11 +5586,22 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
     /* ── 6 · EL REQUISITO DE CICLO DE VIDA (Codex) ──────────────────────────────────────────────
        Con la vista abierta, el sondeo de 4 s no puede reconstruir nada. Es lo que generaliza el
        parche de 0.92.0, donde solo se protegía la nota y el defecto esperaba en el campo siguiente. */
-    if (!/if \(detalleAbierto\(\)\) return;/.test(src))
-      throw new Error('093: `paint()` tiene que rendirse mientras la vista esté abierta');
-    const paintFn = src.match(/function paint\(\)\{[\s\S]*?\n    const doneN =/)[0];
-    if (paintFn.indexOf('if (detalleAbierto()) return;') < 0)
-      throw new Error('093: la guarda va dentro de `paint()`, no en quien lo llama: llamadores hay muchos');
+    /* 0.94.0 — LA GUARDA SIGUE, CON UNA SOLA EXCEPCIÓN Y CON NOMBRE. Lo que promete es que el
+       repintado PERIÓDICO no puede reconstruir la vista, y eso no se ha tocado: el sondeo llama a
+       `paint()` sin argumento. `pedido` existe porque en vista partida la lista sigue delante, y un
+       cambio hecho dentro del detalle que no llegara a su fila sería un estado escrito en dos
+       sitios que discrepan (R47), que es justo el defecto que este bloque persigue. Se comprueba
+       que la excepción tenga UN solo usuario: si aparece un segundo `paint(true)`, cae aquí. */
+    if (!/if \(detalleAbierto\(\) && !pedido\) return;/.test(src))
+      throw new Error('094: `paint()` tiene que rendirse mientras la vista esté abierta, salvo repintado pedido');
+    const paintFn = src.match(/function paint\(\w*\)\{[\s\S]*?\n    const doneN =/)[0];
+    if (paintFn.indexOf('if (detalleAbierto() && !pedido) return;') < 0)
+      throw new Error('094: la guarda va dentro de `paint()`, no en quien lo llama: llamadores hay muchos');
+    const forzados = (src.match(/paint\(true\)/g) || []).length;
+    if (forzados !== 1)
+      throw new Error('094: solo UN sitio puede forzar el repintado con la vista abierta (refrescarLista); hay ' + forzados);
+    if (!/const refrescarLista = \(\) => \{ if \(detalle && detalle\.partida\)\{ paint\(true\);/.test(src))
+      throw new Error('094: el repintado forzado vive en `refrescarLista`, solo actúa en vista partida y lo pide quien muta');
     /* Al cerrar hay que SOLTAR la guarda antes de repintar, o la lista no vuelve nunca. La primera
        versión de esta comprobación se ancló al comentario `// PRIMERO` y sobrevivió al mutante que
        envolvía la asignación en `if (0)`: el comentario seguía ahí. Es la trampa del 16/08 otra vez
@@ -5604,10 +5636,23 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
        y en una pantalla de 390 px una ventana de 620 «cabía», así que la vista salía cortada. */
     eval('globalThis.DETALLE_MIN_ANCHO = ' + src.match(/const DETALLE_MIN_ANCHO = (\d+);/)[1]);
     eval('globalThis.DETALLE_MIN_ALTO = ' + src.match(/const DETALLE_MIN_ALTO = (\d+);/)[1]);
+    eval('globalThis.DETALLE_LISTA_ANCHO = ' + src.match(/const DETALLE_LISTA_ANCHO = (\d+);/)[1]);
+    /* el umbral de la partida NO es un número suelto: es la SUMA de los dos mínimos ya medidos, y
+       se evalúa como EXPRESIÓN para que una cifra escrita a mano encima de ella caiga aquí (R42). */
+    eval('globalThis.DETALLE_MIN_ANCHO_PARTIDA = ' + src.match(/const DETALLE_MIN_ANCHO_PARTIDA = ([^;]+);/)[1]);
+    if (DETALLE_MIN_ANCHO_PARTIDA !== DETALLE_LISTA_ANCHO + DETALLE_MIN_ANCHO + 10)
+      throw new Error('094: el umbral de la vista partida tiene que SALIR de los dos mínimos, no elegirse a ojo');
     eval('globalThis.modoDetalle = ' + src.match(/const modoDetalle = (\([\s\S]*?)\n  \/\*\*/)[1].trim().replace(/;$/, ''));
     eval('globalThis.parteVisible = ' + src.match(/const parteVisible = (\([\s\S]*?\}\);)/)[1].replace(/;$/, ''));
 
-    if (modoDetalle({ ancho: 900, alto: 700 }) !== 'encajado') throw new Error('093: en una ventana grande la vista va encajada');
+    if (modoDetalle({ ancho: 900, alto: 700 }) !== 'partida') throw new Error('094: con ancho de sobra, la lista se queda al lado (maestro-detalle)');
+    if (modoDetalle({ ancho: 600, alto: 700 }) !== 'encajado') throw new Error('093: en una ventana mediana la vista va encajada y SUSTITUYE a la lista');
+    if (modoDetalle({ ancho: DETALLE_MIN_ANCHO_PARTIDA - 1, alto: 700 }) !== 'encajado')
+      throw new Error('094: un píxel por debajo del umbral NO se parte: la lista bajaría de su mínimo');
+    if (modoDetalle({ ancho: DETALLE_MIN_ANCHO_PARTIDA, alto: 700 }) !== 'partida')
+      throw new Error('094: justo en el umbral sí se parte, o el mínimo no es el mínimo');
+    if (modoDetalle({ ancho: 1400, alto: 200 }) !== 'completa')
+      throw new Error('094: el alto manda sobre el ancho: una caja anchísima y baja no se parte, va a pantalla completa');
     if (modoDetalle({ ancho: 300, alto: 700 }) !== 'completa') throw new Error('093: estrecha → pantalla completa');
     if (modoDetalle({ ancho: 900, alto: 200 }) !== 'completa') throw new Error('093: BAJA → pantalla completa (el caso que una regla solo por ancho no cubre)');
     if (modoDetalle({ ancho: 0, alto: 0 }) !== 'completa') throw new Error('093: sin caja medible, pantalla completa');
@@ -5666,6 +5711,184 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
       throw new Error('093: si se puede editar, hay que decir que queda marcado; es lo que sostiene la trazabilidad');
 
     console.log('OK 0.93.0 (una sola vista dueña de la tarea, una puerta por campo, un scroll, el repintado no la toca, la geometría decide sin navegador y la prosa no miente)');
+  }
+
+  // --- 0.94.0: el reloj sugiere, los atajos se agrupan, se sale sin ir a la cruz y la lista se queda -
+  {
+    /* Su parte del 15/09, sobre la tarea #204 y sobre la vista que acababa de estrenar 0.93.0:
+       «¿el reloj de programación a las 16 por defecto si selecciono hoy por la mañana, o mañana a
+       las 8 si es mañana?» · «añade más opciones horarias: 2, 4, 6 horas» · «tengo que ir a la cruz
+       y la ley de Hick y Fitts no se cumplen» · «no hay un botón de guardar, no hay una tecla
+       enter» · «¿se podría abrir sin colapsar otras tareas, para tener contexto?».
+
+       ESTO NO ES LA TERCERA CORRECCIÓN QUE R80 PROHÍBE: 0.93.0 fue la pasada de diseño y esto es su
+       primera verificación en producción. Pero DOS de sus peticiones tocan ACUERDOS de aquella
+       pasada —no había botón de guardar, y la vista sustituía a la lista—, así que lo que se fija
+       aquí no es solo la conducta nueva: es que la conducta nueva NO deshaga lo que aquellos
+       acuerdos protegían (una puerta de mutación por campo, un solo desplazamiento en el detalle). */
+
+    const det = detalleDe(src);
+    const abrir = abrirDe(src);
+
+    /* ── 1 · LA HORA SE SUGIERE, Y ES UNA FUNCIÓN PURA ──────────────────────────────────────────
+       Pura y con el reloj INYECTADO, mismo criterio que `modoDetalle`: una prueba que dependiera
+       de la hora a la que se corre la suite pasaría o fallaría según el momento del día, que es
+       otra forma del guardián que aprueba sin mirar. */
+    const cte = n => +src.match(new RegExp(n + ' = (\\d+)'))[1];
+    globalThis.HORA_HOY = cte('HORA_HOY');
+    globalThis.HORA_MANANA = cte('HORA_MANANA');
+    globalThis.HORA_TOPE = cte('HORA_TOPE');
+    eval('globalThis.horaSugerida = ' + src.match(/const horaSugerida = (\([\s\S]*?\n  \};)/)[1].replace(/;$/, ''));
+
+    if (HORA_HOY !== 16 || HORA_MANANA !== 8)
+      throw new Error('094: las horas son las que él pidió: 16 para hoy y 8 para un día futuro');
+    if (horaSugerida(1, 9 * 60) !== '08:00') throw new Error('094: mañana empieza a las 08:00');
+    if (horaSugerida(7, 23 * 60) !== '08:00') throw new Error('094: cualquier día futuro empieza a las 08:00, no solo mañana');
+    if (horaSugerida(0, 9 * 60) !== '16:00') throw new Error('094: hoy por la mañana va a las 16:00, que era su petición literal');
+    if (horaSugerida(0, 15 * 60 + 59) !== '16:00') throw new Error('094: un minuto antes de las 16 todavía son las 16');
+    /* EL CASO QUE SU PETICIÓN NO CUBRÍA, y que hay que resolver sin preguntarle: si ya pasaron las
+       16, poner las 16 programaría un aviso EN EL PASADO —nace vencido, que es peor que no tener
+       ninguno—. Se sube a la siguiente hora en punto. */
+    if (horaSugerida(0, 16 * 60) !== '17:00') throw new Error('094: a las 16:00 clavadas ya no valen las 16:00: se sube a la siguiente hora en punto');
+    if (horaSugerida(0, 18 * 60 + 20) !== '19:00') throw new Error('094: por la tarde, la siguiente hora en punto');
+    if (horaSugerida(0, 23 * 60 + 10) !== '') throw new Error('094: pasada la última hora del día no se inventa ninguna');
+    // y el invariante que engloba a los tres casos de hoy: NUNCA una hora ya pasada
+    for (let m = 0; m < 1440; m += 7){
+      const h = horaSugerida(0, m);
+      if (!h) continue;
+      if (+h.slice(0, 2) * 60 < m) throw new Error('094: la hora sugerida para HOY no puede ser anterior a la actual (' + m + ' -> ' + h + ')');
+    }
+
+    /* ── 2 · SUGERIR NO ES PISAR ────────────────────────────────────────────────────────────────
+       Cambiarle una hora que él había puesto por pulsar un atajo de DÍA sería perderle un dato sin
+       decírselo. La guarda es `if (!time.value)` y va DENTRO de la rama del día. */
+    const ramaDia = det.match(/else if \(d\.d !== undefined\)\{[\s\S]*?\n      \}/);
+    if (!ramaDia) throw new Error('094: no localizo la rama del atajo de día');
+    if (!/if \(!time\.value\)\{/.test(ramaDia[0]) || ramaDia[0].indexOf('if (!time.value)') > ramaDia[0].indexOf('horaSugerida'))
+      throw new Error('094: la hora solo se sugiere con el campo VACÍO, y la guarda va antes de calcularla');
+
+    /* ── 3 · LOS ATAJOS QUE PIDIÓ, Y AGRUPADOS ──────────────────────────────────────────────────
+       Pidió MÁS botones y a la vez se quejó de Hick. No es contradictorio: la ley de Hick cuenta
+       alternativas que hay que COMPARAR, no botones. En dos filas rotuladas por lo que hacen
+       —fijar el día, fijar la hora— se elige dos veces entre cuatro o seis, no una entre diez. */
+    for (const m of [15, 60, 120, 240, 360])
+      if (!det.includes('data-m="' + m + '"')) throw new Error('094: falta el atajo de +' + m + ' min');
+    for (const d of [0, 1, 7])
+      if (!det.includes('data-d="' + d + '"')) throw new Error('094: falta el atajo de día ' + d);
+    const filas = (det.match(/class="qf"/g) || []).length;
+    if (filas !== 2) throw new Error('094: los atajos van en DOS filas rotuladas (día y aviso); hay ' + filas);
+    if ((det.match(/class="qet"/g) || []).length !== 2)
+      throw new Error('094: cada fila lleva su rótulo, o agrupar no reduce nada: solo mueve los botones de sitio');
+    if (det.includes('class="dq-sep"'))
+      throw new Error('094: el separador suelto sobra donde ya hay filas rotuladas: dos señales para lo mismo');
+
+    /* ── 4 · FITTS: UNA SALIDA ANCHA, QUE NO ES UN «GUARDAR TODO» ───────────────────────────────
+       Su parte: «tengo que ir a la cruz». El acuerdo de 0.93.0 con Codex sigue en pie —una puerta
+       de mutación por campo, sin transacción única— y esta comprobación es la que impide que el
+       botón nuevo se convierta en la puerta número dos por el camino. */
+    if (!/class="mini guardar"/.test(det)) throw new Error('094: falta el botón ancho de salir, que es lo que sustituye al viaje hasta la cruz');
+    const gyc = det.match(/const guardarYCerrar = \(\) => \{[\s\S]*?\n    \};/);
+    if (!gyc) throw new Error('094: no localizo `guardarYCerrar`');
+    if (/it\.\w+ = /.test(gyc[0]))
+      throw new Error('094: el botón de salir NO escribe ningún campo por su cuenta: pasa por las puertas de mutación');
+    if (gyc[0].indexOf('guardarNota();') < 0)
+      throw new Error('094: salir tiene que guardar la nota antes de cerrar');
+    /* Y el borrador se manda BAJO SU CONDICIÓN, no solo "aparece nombrado": el mutante que envolvía
+       el envío en `if (false)` sobrevivía a una comprobación de presencia, y ese mutante es
+       exactamente el defecto —cerrar tragándose lo que él acababa de teclear—. */
+    if (!/if \(borrador\)\{ añadirRespuesta\(it, borrador\);/.test(gyc[0]))
+      throw new Error('094: salir manda el borrador si lo hay: si no, cerrar se traga texto ya escrito');
+    if (gyc[0].indexOf('cerrarDetalle();') < gyc[0].indexOf('añadirRespuesta'))
+      throw new Error('094: primero se guarda y se manda, y solo después se cierra');
+    /* La cruz y el ‹ NO se retiran: se les añade un destino mejor. R46 — antes de retirar una
+       señal, inventariar todo lo que estaba significando. */
+    if (!/class="td-x"/.test(det) || !/class="td-back"/.test(det))
+      throw new Error('094: el botón nuevo se SUMA a la cruz y a la flecha de volver, no los sustituye');
+    // y el botón dice lo que va a hacer: con borrador escrito, «guardar y cerrar» sería mentira
+    if (!/guardarBtn\.textContent = ta\.value\.trim\(\) \? "✓ Enviar y cerrar" : "✓ Guardar y cerrar"/.test(det))
+      throw new Error('094: con borrador escrito el botón tiene que anunciar que lo envía');
+
+    /* ── 5 · LA VISTA PARTIDA ───────────────────────────────────────────────────────────────────
+       «¿se podría abrir sin colapsar otras tareas, para tener contexto?». La respuesta es el
+       maestro-detalle de To Do, y la decisión que lo hace barato y seguro es que NO hay una segunda
+       lista: es la misma `ul`, el mismo renderizador, en otra columna. */
+    if (!/el\.classList\.add\("con-detalle", "partida"\)/.test(abrir))
+      throw new Error('094: la vista partida marca el cuerpo del widget, que es quien monta las dos columnas');
+    if (!/nodo\.classList\.add\("partida"\)/.test(abrir))
+      throw new Error('094: el nodo del detalle tiene que saber que va partido (borde y cabecera teñida)');
+    if (!/document\.body\.appendChild\(nodo\)/.test(abrir))
+      throw new Error('094: a pantalla completa el nodo sigue colgando del body');
+    if (/querySelector\("\.todo-list"\)\.innerHTML/.test(src))
+      throw new Error('094: no puede haber un segundo pintor de la lista: es la misma ul recolocada');
+    /* La fila abierta se localiza por REFERENCIA, nunca por índice: la lista va ordenada, filtrada
+       y paginada. Es el mismo error que costó el incidente del 16/08 con las posiciones. */
+    const marcar = src.match(/const marcarFilaAbierta = \(\) => \{[\s\S]*?\n  \};/);
+    if (!marcar) throw new Error('094: no localizo `marcarFilaAbierta`');
+    if (!/x\.__it === detalle\.it/.test(marcar[0]))
+      throw new Error('094: la fila abierta se localiza por referencia (__it), nunca por posición');
+    /* Las DOS tienen que existir antes de comparar posiciones: `indexOf` de algo ausente devuelve
+       -1, así que quitar la limpieza dejaba la comparación en verde. Misma trampa del 16/08. */
+    const iQuita = marcar[0].indexOf('classList.remove("abierta")');
+    const iPone = marcar[0].indexOf('classList.add("abierta")');
+    if (iQuita < 0) throw new Error('094: sin limpiar la marca anterior quedan dos filas «abiertas» a la vez');
+    if (iPone < 0) throw new Error('094: la fila abierta tiene que marcarse, o la vista partida no dice cuál estás mirando');
+    if (iQuita > iPone)
+      throw new Error('094: se limpia la marca anterior ANTES de poner la nueva, o la nueva se borra a sí misma');
+    if (!/if \(!detalle \|\| !detalle\.partida\) return;/.test(marcar[0]))
+      throw new Error('094: fuera de la vista partida no se marca ninguna fila: allí la lista ni se ve');
+    // cerrar deshace TODO lo que abrir puso; si no, el cuerpo se queda en dos columnas sin detalle
+    if (!/el\.classList\.remove\("con-detalle", "partida"\)/.test(src))
+      throw new Error('094: cerrar tiene que quitar también la partición, o el cuerpo se queda partido y vacío');
+    /* Y EL PAGINADO: en partida la lista vive en una columna con desplazamiento propio, así que
+       medir contra el cuerpo del widget daría páginas de más tareas de las que caben, y agrandar la
+       ventana por lo que no cabe en la columna la haría crecer sin fin —el que desborda es un hijo
+       con scroll propio, y el cuerpo no desborda nunca—. */
+    const grow = src.match(/function growAndCount\(total\)\{[\s\S]*?\n  \}/)[0];
+    if (!/const limite = \(partido \? ul : el\)\.getBoundingClientRect\(\)\.bottom;/.test(grow))
+      throw new Error('094: en vista partida el paginado mide la COLUMNA de la lista, no el cuerpo entero');
+    if (!/if \(ui\.view === "pend" && !partido\) growWidgetToContent/.test(grow))
+      throw new Error('094: en vista partida la ventana no se agranda sola: lo que desborda es un hijo con scroll propio');
+
+    /* La fila ENTERA abre, y SOLO en partida: es el blanco más grande que cabe en la columna, que
+       es la respuesta directa a su queja de Fitts. Fuera de partida abrir taparía la lista, y para
+       eso ya están el doble clic y la banda de botones. Lo que ya tiene su gesto queda excluido, o
+       marcar una tarea hecha abriría además su detalle. */
+    if (!/li\.addEventListener\("click", e => \{\n        if \(!\(detalle && detalle\.partida\)\) return;/.test(src))
+      throw new Error('094: el clic en la fila abre el detalle, y solo con la vista partida');
+    if (!/e\.target\.closest\("input, button, a, \.it-actions, \.it-drag, \.orig-chip"\)\) return;/.test(src))
+      throw new Error('094: el clic en la fila no puede robarle el gesto a la casilla, al asa, a los botones ni a los chips');
+
+    /* EL UMBRAL DE LA FILA ESTRECHA ESTÁ MEDIDO Y ES CONDICIONAL. Entre 290 y 460 px la fecha se
+       queda en la línea del texto y le deja 30 px —una letra por línea, visto en el banco—; por
+       encima el reparto natural ya es bueno y forzar el salto costaría una línea de alto en CADA
+       fila, en una lista que existe precisamente para enseñar más tareas (R43). */
+    if (!/@container \(max-width: 470px\)\{/.test(html))
+      throw new Error('094: la fila estrecha se arregla por consulta de contenedor, con umbral, no siempre');
+    if (!/\.win-body\.con-detalle\.partida > \.todo-list\{[^}]*container-type:inline-size/.test(html))
+      throw new Error('094: sin declarar el contenedor, la consulta de arriba no se aplica nunca y el texto se estruja en silencio');
+
+    /* Y UNA REGLA CSS QUE NOMBRA UNA CLASE QUE NADIE PINTA NO ESCONDE NADA. Es la familia de R81
+       —prosa que el código contradice— en CSS: la regla de 0.93.0 escondía `.w-desc`, que no existe
+       en ningún sitio; la cabecera ⓘ del widget es `.notes-desc`. No se notaba porque el detalle,
+       al ser `position:absolute; inset:0`, la tapaba; en vista partida deja de taparla y sale. */
+    if (!src.includes('notes-desc'))
+      throw new Error('094: la regla esconde una clase que el código no pinta en ninguna parte');
+    if (!/\.win-body\.con-detalle:not\(\.partida\) > \.notes-desc\{display:none\}/.test(html)
+     || !/\.win-body\.con-detalle\.partida > \.notes-desc\{display:none\}/.test(html))
+      throw new Error('094: la cabecera ⓘ se esconde en las tres colocaciones, y por su clase real');
+    if (/> \.w-desc\{/.test(html))
+      throw new Error('094: «.w-desc» no existe: una regla que nombra una clase inexistente es una regla que no hace nada');
+
+    /* ── 6 · LO QUE 0.93.0 PROTEGÍA Y ESTO NO PUEDE DESHACER ────────────────────────────────────
+       Dos peticiones suyas tocaban acuerdos cerrados con Codex, así que se vuelve a mirar aquí lo
+       que aquellos acuerdos garantizaban en vez de confiar en que el bloque de 0.93.0 lo cubra:
+       un desplazamiento nuevo, o una segunda escritura de la nota, entrarían por esta versión. */
+    if ((src.match(/it\.note = [^\n]*/g) || []).length !== 1)
+      throw new Error('094: sigue habiendo UNA sola escritura de la nota; el botón de salir no puede añadir otra');
+    if (/overflow:\s*auto/.test((html.match(/\.task-detail\.partida\{([^}]*)\}/) || ['', ''])[1]))
+      throw new Error('094: el panel partido no estrena desplazamiento propio: el único de la vista sigue siendo .td-body');
+
+    console.log('OK 0.94.0 (el reloj sugiere sin pisar, los atajos se agrupan, se sale sin ir a la cruz, Enter envía y la lista se queda al lado)');
   }
 
   console.log('\nTODO EN VERDE');

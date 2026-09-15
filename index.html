@@ -599,10 +599,10 @@ ul.plain{list-style:none}
    vista es `.td-body`. Un scroll dentro de otro es una trampa, sobre todo táctil — el hilo tenía
    el suyo de 190 px y por eso convivían tres. Si aparece un segundo, cae una prueba. */
 .win-body.con-detalle{position:relative; overflow:hidden; padding:0}
-.win-body.con-detalle > .todo-add,
-.win-body.con-detalle > .todo-bar,
-.win-body.con-detalle > .todo-list,
-.win-body.con-detalle > .w-desc{display:none}
+.win-body.con-detalle:not(.partida) > .todo-add,
+.win-body.con-detalle:not(.partida) > .todo-bar,
+.win-body.con-detalle:not(.partida) > .todo-list,
+.win-body.con-detalle:not(.partida) > .notes-desc{display:none}
 .task-detail{position:absolute; inset:0; display:flex; flex-direction:column; min-height:0;
   background:var(--panel, #12181f); border-radius:inherit; z-index:3}
 /* Pantalla completa cuando la caja no da: el umbral se decide en `modoDetalle`, no aquí, para que
@@ -613,6 +613,54 @@ ul.plain{list-style:none}
 .task-detail.completa{position:fixed; inset:0; border-radius:0; z-index:600}
 body.detalle-completa #desk-dock,
 body.detalle-completa #taskbar{display:none}
+/* ══ 0.94.0 · VISTA PARTIDA (la lista y el detalle a la vez) ════════════════════════
+   Petición suya del 15/09, textual: «me pregunto si esta ventana se podría abrir sin colapsar
+   otras tareas, para tener contexto, con colores algo diferenciados. En to-do es lateral».
+   Es el patrón maestro-detalle de To Do, Outlook, Mail y Notion: dos columnas cuando hay ancho,
+   una sola cuando no. Es una TERCERA geometría que se suma a las dos de 0.93.0, no las sustituye.
+
+   `CONTRATO:` NO hay una segunda lista. Es LA MISMA `ul`, el mismo renderizador y el mismo nodo de
+   detalle, recolocados con grid. Una lista compacta aparte habría sido un segundo pintor del mismo
+   dato, que es lo que R47 dice que siempre acaba divergiendo. Por eso aquí casi todo es CSS. */
+.win-body.con-detalle.partida{display:grid;
+  grid-template-columns:clamp(var(--td-lista, 300px), 34%, 520px) minmax(0, 1fr);
+  grid-template-rows:auto auto minmax(0, 1fr); padding:9px 0 0 10px}
+/* LA FILA SE REORDENA PARA CABER EN LA COLUMNA, y esto NO es cosmética: medido en el banco, entre
+   290 y 460 px la fecha —que reserva `--todo-fecha` y se pega al borde— se queda en la misma línea
+   que el texto y le deja 30 px, o sea una letra por línea. Mandando la fecha a su propia línea, el
+   texto recupera el ancho entero de la columna y la fila queda de dos líneas, que además es el
+   régimen en el que la banda de acciones ya no puede tapar la marca 💬 (esa aritmética es de
+   0.58.1 y no se toca: se entra en su caso bueno, no se cambia). */
+/* EL UMBRAL ESTÁ MEDIDO, y por eso es una consulta de contenedor y no «siempre». En el banco, con
+   la columna entre 290 y 460 px la fecha —que se pega al borde y reserva `--todo-fecha`— se queda
+   en la línea del texto y le deja 30 px: una letra por línea. Por encima de 470 el reparto natural
+   ya es bueno, y forzar ahí el salto costaría una línea de alto en CADA fila, que en una lista que
+   existe para dar contexto es justo lo que no se puede gastar (R43: antes de aplicar una regla a
+   todo, preguntarse dónde hace falta de verdad). */
+@container (max-width: 470px){
+  .todo-it .alta{flex-basis:100%; min-width:0; margin-left:0; text-align:left}
+  .todo-it .due{margin-left:0}
+}
+/* La fila ENTERA es el destino: en una vista maestro-detalle, pulsar una tarea la abre al lado.
+   Es la respuesta directa a Fitts —el blanco más grande que cabe en la columna— y es lo que hace
+   cualquier lista de este tipo. Solo en partida: sin panel al lado, un clic que abriera la tarea
+   taparía la lista, y eso ya lo hacen el doble clic y la banda de botones, que siguen igual. */
+.win-body.con-detalle.partida .todo-it{cursor:pointer}
+.win-body.con-detalle.partida > .notes-desc{display:none}
+.win-body.con-detalle.partida > .todo-add{grid-column:1; grid-row:1}
+.win-body.con-detalle.partida > .todo-bar{grid-column:1; grid-row:2}
+/* el desplazamiento de la lista es SUYO y vive FUERA del detalle: no es un scroll dentro de otro,
+   son dos paneles hermanos. El único de la vista de detalle sigue siendo `.td-body`. */
+.win-body.con-detalle.partida > .todo-list{grid-column:1; grid-row:3; min-height:0; overflow:auto; padding-right:9px;
+  container-type:inline-size}
+.win-body.con-detalle.partida > .task-detail{grid-column:2; grid-row:1 / -1}
+/* «colores algo diferenciados», que es lo que pidió: el detalle se separa con el color de acento y
+   su cabecera va teñida. La fila abierta se marca con la misma familia de color, para saber de un
+   golpe QUÉ tarea estás mirando dentro de la lista que ahora sigue ahí. */
+.task-detail.partida{position:relative; inset:auto; border-radius:0; border-left:2px solid var(--accent);
+  margin-left:2px; z-index:auto}
+.task-detail.partida .td-head{background:var(--accent-soft)}
+.todo-it.abierta{background:var(--accent-soft); box-shadow:inset 3px 0 0 var(--accent)}
 .td-head{display:flex; align-items:flex-start; gap:6px; padding:8px 10px; border-bottom:1px solid var(--border-soft); flex:0 0 auto}
 .td-back{background:none; border:none; color:var(--text-dim); font-size:18px; line-height:1; cursor:pointer; padding:0 4px}
 .td-back:hover{color:var(--text)}
@@ -632,7 +680,13 @@ body.detalle-completa #taskbar{display:none}
 .td-fecha input{background:rgba(0,0,0,.25); border:1px solid var(--border-soft); border-radius:8px;
   color:var(--text); font-family:var(--font); font-size:12.5px; padding:4px 7px}
 .td-fecha input:focus{border-color:var(--accent); outline:none}
-.td-quick{display:flex; flex-wrap:wrap; gap:4px; align-items:center}
+/* 0.94.0 — DOS FILAS ROTULADAS en vez de una hilera de nueve. Él pidió MÁS atajos (+2, +4, +6 h) y
+   a la vez se quejó de Hick, y no es contradictorio: la ley de Hick cuenta alternativas que hay que
+   COMPARAR, no botones. Rotuladas y separadas por lo que hacen —fijar el DÍA, fijar la HORA— se
+   eligen dos veces entre cuatro o cinco, no una vez entre nueve. */
+.td-quick{display:flex; flex-direction:column; gap:4px; align-items:stretch; width:100%}
+.td-quick .qf{display:flex; flex-wrap:wrap; gap:4px; align-items:center}
+.td-quick .qet{font-size:11px; color:var(--text-dim); flex:0 0 auto; min-width:52px}
 .td-quick .dq{background:rgba(255,255,255,.06); border:1px solid var(--border-soft); border-radius:7px;
   color:var(--text-dim); font-family:var(--font); font-size:11px; padding:3px 7px; cursor:pointer}
 .td-quick .dq:hover{color:var(--text); border-color:var(--accent)}
@@ -666,7 +720,18 @@ body.detalle-completa #taskbar{display:none}
 /* El hilo FLUYE dentro del desplazamiento de la vista: ya no tiene caja propia de 190 px */
 .td-hilo{display:flex; flex-direction:column; gap:6px}
 .td-foot{flex:0 0 auto; padding:8px 10px; border-top:1px solid var(--border-soft); background:rgba(0,0,0,.12)}
-.td-acts{display:flex; flex-wrap:wrap; gap:6px; margin-top:7px}
+.td-acts{display:flex; flex-wrap:wrap; gap:6px; margin-top:7px; align-items:center}
+/* 0.94.0 — FITTS. Su parte, textual: «tengo que ir a la cruz». La ✕ mide 13 px y vive en la esquina
+   opuesta a donde están las manos: por Fitts es el peor destino posible de la vista. Esto no la
+   sustituye —Esc y ✕ siguen—, le pone al lado del teclado un destino ancho y con etiqueta.
+   `CONTRATO:` NO es el «Guardar todo» que el diseño de 0.93.0 descartó. No escribe ningún campo:
+   llama a las MISMAS puertas de mutación (`ponerNota`, `añadirRespuesta`) y cierra. Las
+   transacciones siguen siendo una por campo; lo que añade es una salida visible y la certeza de
+   que nada queda sin guardar. */
+.td-foot .guardar{background:var(--accent); border-color:var(--accent); color:#0b1017; font-weight:600}
+.td-foot .guardar:hover{background:var(--accent); border-color:var(--accent); filter:brightness(1.08)}
+/* R27 — toda función con atajo lo enseña a su lado. Si el atajo no se ve, no existe. */
+.td-teclas{margin-left:auto; font-size:11px; color:var(--text-dim); white-space:nowrap}
 .rp{font-size:12.5px; line-height:1.5; padding:6px 9px; border-radius:10px; white-space:pre-wrap; word-break:break-word; max-width:92%}
 .rp-meta{display:flex; align-items:center; gap:6px; font-size:10.5px; color:var(--text-dim); margin-bottom:2px}
 .rp-txt{display:block; white-space:pre-wrap}
@@ -2217,7 +2282,7 @@ function syncUI(mode, txt){
    reaparece) y si Recargar está activo. El descarte ✕ vive solo en memoria de la sesión.
    Demora asumida: la CDN de Pages puede servir la versión vieja hasta ~10 min aun con
    no-store (gobierna la caché del navegador, no la CDN); para pestañas de días, irrelevante. */
-const APP_VERSION = "0.93.0";
+const APP_VERSION = "0.94.0";
 let newVersionDetected = null;   // versión superior detectada; detiene futuras consultas
 let verDismissed = false;        // ✕: solo esta sesión — nunca persistido en disco
 let verCheckInflight = false;    // sin consultas concurrentes
@@ -7477,14 +7542,40 @@ function bodyTodo(w, el){
      sirva de algo. Se comprueban con capturas a 1400×900, 760×900, 1400×520 y 390×844. */
   const DETALLE_MIN_ANCHO = 420;
   const DETALLE_MIN_ALTO = 380;
+  /* 0.94.0 — a partir de aquí caben LAS DOS COSAS y ninguna baja de su mínimo: la lista a la
+     izquierda con su ancho fijo y el detalle con los 420 px que ya se habían medido en 0.93.0.
+     300 + 420 + 10 de separación = 730. No es una cifra elegida «por ir seguro» (R42): sale de
+     sumar dos mínimos, y se miró en el banco visual antes de dejarla. */
+  const DETALLE_LISTA_ANCHO = 300;
+  const DETALLE_MIN_ANCHO_PARTIDA = DETALLE_LISTA_ANCHO + DETALLE_MIN_ANCHO + 10;
+  const HORA_HOY = 16, HORA_MANANA = 8, HORA_TOPE = 23;
+  /** 0.94.0 — QUÉ HORA SE PONE SOLA al pulsar un atajo de DÍA. Pura a propósito, como
+      `modoDetalle`: se puede probar sin navegador y sin depender del reloj de quien corre la suite.
+      Petición suya del 15/09: «que el reloj de programación sea a las 16 por defecto si selecciono
+      hoy por la mañana, o mañana a las 8 si es mañana». Un día futuro empieza a las 8; hoy, lo que
+      queda de jornada es la tarde. Y si ya pasaron las 16, poner las 16 sería programar un aviso
+      EN EL PASADO —que es peor que no poner ninguno, porque nace vencido—, así que se sube a la
+      siguiente hora en punto; pasada la última del día no se inventa nada y devuelve "".
+      Quien llama decide si la usa: NUNCA pisa una hora que él ya hubiera puesto. */
+  const horaSugerida = (dias, minAhora) => {
+    const dos = n => String(n).padStart(2, "0");
+    if (dias > 0) return dos(HORA_MANANA) + ":00";
+    if (dias < 0 || !(minAhora >= 0)) return "";
+    if (minAhora < HORA_HOY * 60) return dos(HORA_HOY) + ":00";
+    const sig = Math.floor(minAhora / 60) + 1;
+    return sig <= HORA_TOPE ? dos(sig) + ":00" : "";
+  };
   /** Decisión PURA, para poder probarla sin navegador: ¿cabe en la caja o va a pantalla completa?
       Recibe el trozo de la ventana que SE VE, no el que la ventana dice medir. La primera versión
       leía `getBoundingClientRect()` a secas y en móvil no saltaba nunca: la ventana medía 600 px de
       ancho sobre una pantalla de 390, así que «cabe» era cierto para la caja y falso para el ojo —
       la vista salía cortada por la derecha exactamente igual que el panel viejo. Se vio en una
       captura, no razonando. */
+  /* 0.94.0 — TRES modalidades, no dos. «Partida» es la de arriba del todo porque es la que da
+     contexto, y solo se ofrece cuando sobra ancho de verdad; por debajo, exactamente lo de 0.93.0. */
   const modoDetalle = ({ ancho, alto }) =>
-    (!(ancho >= DETALLE_MIN_ANCHO) || !(alto >= DETALLE_MIN_ALTO)) ? "completa" : "encajado";
+    (!(ancho >= DETALLE_MIN_ANCHO) || !(alto >= DETALLE_MIN_ALTO)) ? "completa"
+    : ancho >= DETALLE_MIN_ANCHO_PARTIDA ? "partida" : "encajado";
   /** Trozo VISIBLE de un rectángulo dentro del viewport. Pura y aparte, para poder probarla. */
   const parteVisible = (r, vpAncho, vpAlto) => ({
     ancho: Math.max(0, Math.min(r.right, vpAncho) - Math.max(r.left, 0)),
@@ -7550,12 +7641,29 @@ function bodyTodo(w, el){
   let detalle = null;          // { it, nodo } — su existencia es lo que congela `paint()`
   const detalleAbierto = () => !!detalle;
 
+  /* 0.94.0 — QUÉ FILA ESTÁ ABIERTA. Solo significa algo en vista partida, que es la única en la
+     que la lista sigue delante. La fila se localiza por `li.__it`, la referencia que ya guarda cada
+     fila desde 0.75.0: por índice no valdría, porque la lista va ordenada, filtrada y paginada. */
+  const marcarFilaAbierta = () => {
+    ul.querySelectorAll(".todo-it.abierta").forEach(li => li.classList.remove("abierta"));
+    if (!detalle || !detalle.partida) return;
+    const li = [...ul.querySelectorAll(".todo-it")].find(x => x.__it === detalle.it);
+    if (li){ li.classList.add("abierta"); li.scrollIntoView({ block: "nearest" }); }
+  };
+  /* 0.94.0 — con la lista A LA VISTA, un cambio hecho dentro del detalle tiene que llegar a su
+     fila: marcar hecha y que la fila siga sin tachar sería un estado escrito en dos sitios que
+     discrepan (R47). Lo pide QUIEN MUTA y solo en partida; el sondeo no lo pide nunca, así que la
+     guarda de ciclo de vida de 0.93.0 sigue entera: lo que no puede reconstruir la vista es el
+     repintado PERIÓDICO, y éste no lo es. Repintar la lista no toca el nodo del detalle —son
+     hermanos, y `pintar()` solo vacía `ul`—, así que el foco y el borrador siguen donde estaban. */
+  const refrescarLista = () => { if (detalle && detalle.partida){ paint(true); marcarFilaAbierta(); } };
+
   const cerrarDetalle = () => {
     if (!detalle) return;
     const nodo = detalle.nodo;
     detalle = null;                       // PRIMERO, para que el `paint()` de abajo sí reconstruya
     if (nodo && nodo.parentNode) nodo.remove();
-    el.classList.remove("con-detalle");
+    el.classList.remove("con-detalle", "partida");
     document.body.classList.remove("detalle-completa");
     paint();
   };
@@ -7573,12 +7681,20 @@ function bodyTodo(w, el){
       nodo.classList.add("completa");
       document.body.classList.add("detalle-completa");
       document.body.appendChild(nodo);
+    } else if (modo === "partida"){
+      /* 0.94.0 — la lista NO se esconde: el mismo cuerpo del widget pasa a dos columnas. El nodo
+         se queda dentro del widget (nada de `fixed`, así que el `transform` de la ventana no
+         estorba) y el CSS lo coloca en la segunda columna del grid. */
+      el.classList.add("con-detalle", "partida");
+      nodo.classList.add("partida");
+      el.style.setProperty("--td-lista", DETALLE_LISTA_ANCHO + "px");
+      el.appendChild(nodo);
     } else {
       el.classList.add("con-detalle");    // el CSS esconde alta, barra y lista: la vista SUSTITUYE
       el.appendChild(nodo);
     }
-    detalle = { it, nodo };
-    pintarDetalle(foco);
+    detalle = { it, nodo, partida: modo === "partida" };
+    pintarDetalle(foco);   // él marca la fila y refresca la lista al terminar: un solo sitio
   };
 
   /* `pintarDetalle` reconstruye SOLO el nodo del detalle, y se llama a mano tras un cambio que
@@ -7625,7 +7741,20 @@ function bodyTodo(w, el){
       +   `<div class="td-fecha">`
       +     `<label>📅 Fecha<input class="dd" type="date" value="${esc(it.due || "")}"></label>`
       +     `<label>⏰ Aviso<input class="hh" type="time" value="${esc(it.remind || "")}"></label>`
-      +     `<div class="td-quick"><button class="dq" type="button" data-d="0">Hoy</button><button class="dq" type="button" data-d="1">Mañana</button><button class="dq" type="button" data-d="7">+1 sem</button><span class="dq-sep"></span><button class="dq" type="button" data-m="15">+15 min</button><button class="dq" type="button" data-m="60">+1 h</button><button class="dq" type="button" data-h="08:00">08:00</button><button class="dq quitar" type="button" title="Quitar fecha y aviso">Sin fecha</button></div>`
+      +     `<div class="td-quick">`
+      +       `<div class="qf"><span class="qet">📅 Día</span>`
+      +         `<button class="dq" type="button" data-d="0" title="Hoy. Si aún no has puesto hora, se pone la de la tarde (${HORA_HOY}:00); si ya ha pasado, la siguiente hora en punto">Hoy</button>`
+      +         `<button class="dq" type="button" data-d="1" title="Mañana. Si aún no has puesto hora, se pone a las 0${HORA_MANANA}:00">Mañana</button>`
+      +         `<button class="dq" type="button" data-d="7" title="Dentro de una semana, a las 0${HORA_MANANA}:00 si aún no has puesto hora">+1 sem</button>`
+      +         `<button class="dq quitar" type="button" title="Quitar fecha y aviso">Sin fecha</button></div>`
+      +       `<div class="qf"><span class="qet">⏰ Aviso</span>`
+      +         `<button class="dq" type="button" data-m="15">+15 min</button>`
+      +         `<button class="dq" type="button" data-m="60">+1 h</button>`
+      +         `<button class="dq" type="button" data-m="120">+2 h</button>`
+      +         `<button class="dq" type="button" data-m="240">+4 h</button>`
+      +         `<button class="dq" type="button" data-m="360">+6 h</button>`
+      +         `<button class="dq" type="button" data-h="08:00" title="Fijar el aviso a las 08:00 del día que tenga puesto">08:00</button></div>`
+      +     `</div>`
       +   `</div>`
       +   `<div class="td-adj"><div class="td-adj-lista">${adj || `<span class="td-vacio">Sin adjuntos</span>`}</div><button class="mini adj" type="button" title="Colgar un PDF, una captura o un texto: se guarda en tu carpeta, no dentro de datos.json">📎 Adjuntar</button></div>`
       +   `<div class="td-doc" hidden></div>`
@@ -7643,10 +7772,13 @@ function bodyTodo(w, el){
       +   `<div class="td-hilo">${hilo || `<div class="rp-vacio">Aún no hay respuestas. Lo que escribas se guarda con su fecha y no se sobrescribe.</div>`}</div>`
       + `</div>`
       + `<div class="td-foot">`
-      +   `<textarea class="rp-t" placeholder="Escribe tu respuesta…  (Ctrl+Enter para enviar)"></textarea>`
-      +   `<div class="td-acts"><button class="mini send" type="button">Responder</button>`
+      +   `<textarea class="rp-t" placeholder="Escribe tu respuesta…  (Enter envía · Mayús+Enter salta de línea)"></textarea>`
+      +   `<div class="td-acts">`
+      +     `<button class="mini guardar" type="button" title="Guarda lo que haya sin guardar y cierra la tarea. Esc hace lo mismo">✓ Guardar y cerrar</button>`
+      +     `<button class="mini send" type="button" title="Enviar la respuesta. Atajos: Enter, y Ctrl+Enter desde cualquier punto de la vista">Responder</button>`
       +     `<button class="mini ok" type="button" title="Responder «Vale» sin escribir — apaga el 🤖 y deja constancia de que lo leíste">👍 Vale</button>`
       +     (it.done ? "" : `<button class="mini okdone" type="button" title="Responder y dar la tarea por hecha, en un gesto — si ya has escrito algo, se manda lo tuyo">👍 Vale y hecha</button>`)
+      +     `<span class="td-teclas">Enter envía · Esc cierra</span>`
       +   `</div>`
       + `</div>`;
 
@@ -7725,7 +7857,17 @@ function bodyTodo(w, el){
     nodo.querySelectorAll(".dq").forEach(b => b.addEventListener("click", () => {
       const d = b.dataset;
       if (b.classList.contains("quitar")){ date.value = ""; time.value = ""; }
-      else if (d.d !== undefined){ const t = new Date(); t.setDate(t.getDate() + +d.d); date.value = isoDe(t); }
+      else if (d.d !== undefined){
+        const t = new Date(); t.setDate(t.getDate() + +d.d); date.value = isoDe(t);
+        /* 0.94.0 — y la hora se SUGIERE. Suya, 15/09: «que el reloj de programación sea a las 16
+           por defecto si selecciono hoy por la mañana, o mañana a las 8 si es mañana».
+           `CONTRATO:` solo cuando la hora está VACÍA. Pisar una hora que él ya puso por pulsar un
+           atajo de día sería cambiarle un dato a traición, que es lo contrario de un atajo. */
+        if (!time.value){
+          const ahora = new Date();
+          time.value = horaSugerida(+d.d, ahora.getHours() * 60 + ahora.getMinutes());
+        }
+      }
       else if (d.h !== undefined){ time.value = d.h; if (!date.value) date.value = hoyIso(); }
       else { const t = new Date(); t.setMinutes(t.getMinutes() + +d.m, 0, 0); time.value = hhmm(t); date.value = isoDe(t); }
       guardarFecha();
@@ -7753,6 +7895,18 @@ function bodyTodo(w, el){
       pintarDetalle();
     };
     $$(".send").addEventListener("click", () => enviar());
+    /* 0.94.0 — ENTER ENVÍA, que es lo canónico en cualquier caja de conversación. Su parte,
+       textual: «no hay una tecla enter». Mayús+Enter salta de línea y Ctrl+Enter sigue valiendo,
+       para no romperle el dedo que ya lo tenía aprendido.
+       `CONTRATO:` solo en ESTA caja. En el título Enter confirma y en la nota hace párrafo, y eso
+       no cambia: una tecla que significa tres cosas según dónde esté el cursor se aprende sola;
+       una que significa «enviar» en un campo de texto largo destroza el texto.
+       Con la caja VACÍA no hace nada: cerrar es un gesto aparte y tiene su botón y su Esc. */
+    ta.addEventListener("keydown", e => {
+      if (e.key !== "Enter" || e.shiftKey || e.ctrlKey || e.metaKey || e.altKey) return;
+      if (!ta.value.trim()) return;
+      e.preventDefault(); enviar();
+    });
     $$(".td-acts .ok").addEventListener("click", () => enviar("Vale"));
     const okdone = $$(".td-acts .okdone");
     if (okdone){
@@ -7852,6 +8006,23 @@ function bodyTodo(w, el){
     const salir = () => { guardarNota(); cerrarDetalle(); };
     $$(".td-x").addEventListener("click", salir);
     $$(".td-back").addEventListener("click", salir);
+    /* 0.94.0 — FITTS, y su parte textual: «tengo que ir a la cruz». La ✕ mide 13 px y está en la
+       esquina contraria a donde tiene las manos: el peor destino de la vista. Esto le pone uno
+       ancho y etiquetado justo debajo de la caja donde escribe.
+       `CONTRATO:` NO es el «Guardar todo» que el diseño de 0.93.0 descartó y que Codex tumbó con
+       razón. No escribe ningún campo: pasa por las MISMAS puertas de mutación que cualquier otro
+       camino —`ponerNota` a través de `guardarNota`, `añadirRespuesta` si hay borrador— y cierra.
+       Una superficie visual única sigue sin implicar una transacción única. */
+    const guardarBtn = $$(".guardar");
+    const guardarYCerrar = () => {
+      const borrador = ta.value.trim();
+      guardarNota();
+      if (borrador){ añadirRespuesta(it, borrador); ta.value = ""; }
+      cerrarDetalle();
+    };
+    guardarBtn.addEventListener("click", guardarYCerrar);
+    // el botón DICE lo que va a hacer: con borrador escrito, cerrar sin mandarlo sería tragarse texto
+    ta.addEventListener("input", () => { guardarBtn.textContent = ta.value.trim() ? "✓ Enviar y cerrar" : "✓ Guardar y cerrar"; });
     nodo.addEventListener("keydown", e => {
       if (e.key === "Escape"){ e.stopPropagation(); salir(); }
       if (e.key === "Enter" && (e.ctrlKey || e.metaKey)){ e.preventDefault(); enviar(); }
@@ -7862,6 +8033,11 @@ function bodyTodo(w, el){
     else if (foco === "fecha") date.focus();
     else if (foco === "nota") nota.focus();
     else if (foco === "responder") ta.focus();
+    /* 0.94.0 — ÚLTIMO, y en un solo sitio: en vista partida la lista sigue delante, así que todo
+       lo que acaba de cambiar aquí tiene que verse también en su fila. Va al final de `pintarDetalle`
+       y no en los diez sitios que mutan, para que no se olvide en el undécimo. Fuera de partida no
+       hace absolutamente nada. */
+    refrescarLista();
   }
   /* 0.93.0 — editItem RETIRADO. Editar el título en la fila era el segundo editor del mismo
      campo, y un campo editable en más de una superficie es el disparador nº 1 de la regla nueva.
@@ -7916,7 +8092,7 @@ function bodyTodo(w, el){
     li.appendChild(pop);
   };
 
-  function paint(){
+  function paint(pedido){
     /* 0.93.0 — REQUISITO DE CICLO DE VIDA. Con la vista de detalle abierta, la lista no se ve y
        reconstruirla no arregla nada: solo puede destruir el nodo que tiene el foco, el borrador a
        medio escribir y la posición de desplazamiento. El sondeo llama aquí cada 4 s.
@@ -7926,8 +8102,15 @@ function bodyTodo(w, el){
        —nada los toca— y no por acordarse de protegerlos uno a uno.
 
        `cerrarDetalle` pone `detalle = null` ANTES de llamar aquí, así que la vuelta a la lista sí
-       repinta. Si esta guarda desaparece, cae una prueba. */
-    if (detalleAbierto()) return;
+       repinta. Si esta guarda desaparece, cae una prueba.
+
+       0.94.0 — `pedido` abre una única excepción, y es la que hace posible la vista partida: ahí
+       la lista sigue delante, así que un cambio hecho dentro del detalle tiene que llegar a su
+       fila. Lo pide `refrescarLista`, que solo actúa en partida; **el sondeo llama a `paint()` sin
+       argumento y por tanto sigue sin poder tocar nada**, que es lo que la guarda promete. Y
+       repintar la lista no alcanza al detalle: `pintar()` solo vacía `ul`, y el nodo del detalle
+       es hermano suyo, nunca hijo. */
+    if (detalleAbierto() && !pedido) return;
     src = fuenteTodo(w);   // ver la nota de arriba: el mapa de pertenencia caduca en cada cambio
     const doneN = src.items.filter(i => i.done).length;
     // 0.50.0 — lo que llegó DESPUÉS de que la dieras por hecha. Es información, no trabajo: por eso
@@ -8311,6 +8494,16 @@ function bodyTodo(w, el){
         if (it.done) playDoneClick();
         paint(); markDirty();
       });
+      /* 0.94.0 — EN VISTA PARTIDA, LA FILA ENTERA ABRE. Fitts: con el panel al lado, el destino
+         deja de ser un botón de 13 px que aparece al pasar el ratón y pasa a ser la fila entera.
+         Fuera de partida NO se activa: allí abrir taparía la lista, y para eso ya están el doble
+         clic y la banda. Se excluye todo lo que ya tiene su propio gesto —la casilla, el asa, los
+         botones y los chips pulsables—, o marcar una tarea hecha abriría además su detalle. */
+      li.addEventListener("click", e => {
+        if (!(detalle && detalle.partida)) return;
+        if (e.target.closest("input, button, a, .it-actions, .it-drag, .orig-chip")) return;
+        abrirDetalle(it, "responder");
+      });
       li.querySelector(".t").addEventListener("dblclick", () => abrirDetalle(it, "titulo"));
       li.querySelector(".it-edit").addEventListener("click", e => { e.stopPropagation(); abrirDetalle(it, "titulo"); });
       /* 0.61.0 — ANCLAR. Su decisión de hoy entre tres opciones para «las encoladas arriba»: la
@@ -8403,10 +8596,15 @@ function bodyTodo(w, el){
      triple— y solo crece, nunca encoge solo (encoger es «Ordenar», gesto suyo). */
   function growAndCount(total){
     if (isMobile() || w.max || w.collapsed || !el.isConnected) return 0;
-    if (ui.view === "pend") growWidgetToContent(w, el);   // el histórico de «Hechas» no agranda la ventana
+    /* 0.94.0 — en vista partida la lista NO ocupa el cuerpo entero: vive en la columna izquierda,
+       con su propio desplazamiento. Medir contra el cuerpo daría páginas de más tareas de las que
+       caben, y agrandar la ventana por lo que no cabe en la columna la haría crecer sin parar,
+       porque el que desborda es un hijo con scroll propio y el cuerpo nunca desborda. */
+    const partido = !!(detalle && detalle.partida);
+    if (ui.view === "pend" && !partido) growWidgetToContent(w, el);   // el histórico de «Hechas» no agranda la ventana
     const lis = [...ul.children].filter(n => n.tagName === "LI");
     if (!lis.length) return 0;
-    const limite = el.getBoundingClientRect().bottom;
+    const limite = (partido ? ul : el).getBoundingClientRect().bottom;
     let caben = 0;
     // 0.60.0 — los subtítulos de grupo ocupan sitio pero NO son tareas: se recorren para saber
     // dónde acaba lo que cabe, y no se cuentan. Contarlos daría páginas de menos tareas de las que
