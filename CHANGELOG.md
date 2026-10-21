@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.96.0] - 2026-10-22 — un archivo más viejo que el tuyo ya no se acepta en silencio
+
+- **Qué pasaba.** Si un equipo con la copia desactualizada —su nube dejó de sincronizar, o llevaba
+  días sin usarse— guardaba encima, la nube le daba la razón por ser el último en escribir, y la
+  pestaña del otro equipo lo aceptaba con un «Actualizado desde otro equipo». Lo que ese archivo no
+  tenía desaparecía sin aviso: escritorios enteros, tareas y conversaciones.
+- **Qué hace ahora.** Antes de aceptar lo que llega de la nube, y también al abrir Cabecera, se
+  comprueba si le faltan **escritorios, ventanas, tareas o respuestas** que este equipo ya había visto
+  y que tampoco están en su papelera. Si falta algo, sale una **barra roja** que dice qué falta y de
+  cuándo es cada lado, y **no se guarda nada hasta que decidas**: «Mantener lo mío» o «Usar lo que
+  llega». Tampoco se intenta combinar: una combinación leería lo que falta como si lo hubieras borrado.
+- **No se fía de la hora de guardado**, que era la idea obvia: el equipo desactualizado pone la hora
+  de ahora, así que su archivo parece el más nuevo. Lo que lo delata es lo que le falta.
+- **Ninguna de las dos opciones puede perder nada.** La versión que descartas se guarda primero como
+  copia junto a `datos.json` (`datos-regresion-…json`), se comprueba releyéndola, y solo entonces se
+  aplica tu elección. El aviso de copias la compara después y te dice si tenía algo que no esté en la
+  otra.
+- **Al abrir**, la comparación es contra lo último que ese mismo equipo vio (se guarda en el
+  navegador solo un esqueleto: identificadores y títulos, sin el texto de las conversaciones). Si la
+  nube aún está bajando la versión buena, espera y la carga sola cuando llega.
+- **Lo que borraste a propósito no hace saltar el aviso**, porque pasa por la papelera. Borrar una
+  respuesta, que no pasa por ella, sí lo hace; se acepta con un clic. No mira el texto de notas ni de
+  markdown, ni enlaces o recortes: eso se reescribe entero y casi toda diferencia ahí es trabajo
+  posterior.
+
 ## [0.95.0] - 2026-09-15 — el aviso de una tarea sale del navegador (tu #204)
 
 - **Lo que decía esa tarea era falso y tenías razón tú.** Estaba anotada como «bloqueada hasta tener

@@ -1,4 +1,4 @@
-﻿// Tests de Cabecera — sin dependencias. Ejecutar:  node tests/test.js
+// Tests de Cabecera — sin dependencias. Ejecutar:  node tests/test.js
 // Valida: sintaxis del script inline, seguridad de mdToHtml (XSS) y
 // saneamiento de packs no confiables en normalizePack.
 
@@ -4528,7 +4528,13 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
        tumba esto. Es R48 aplicada: un guardián no se apaga, se le declara la excepción — y aquí las
        excepciones son las dos escrituras de raíz, que no son subcarpetas y tienen su propio contrato
        (datos.json con CAS por lastSavedText, e inbox). */
-    const AUTORIZADAS = ['escribirVerificado', 'writeDataFile', 'writeInboxRaw'];
+    /* 0.96.0 — cuarta excepción DECLARADA: `guardarCopiaRegresion` escribe en la RAÍZ, junto a
+       datos.json, porque la copia de la versión descartada tiene que verla el aviso de copias, que
+       solo mira la raíz. A cambio se le exige lo mismo que a la puerta: escribir, releer y abortar. */
+    const AUTORIZADAS = ['escribirVerificado', 'writeDataFile', 'writeInboxRaw', 'guardarCopiaRegresion'];
+    const copiaReg = src.match(/async function guardarCopiaRegresion\(texto, sufijo\)\{[\s\S]*?\n\}/)?.[0] || '';
+    if (!(copiaReg.indexOf('createWritable') >= 0 && copiaReg.indexOf('fh.getFile()') > copiaReg.indexOf('createWritable') && /throw new Error/.test(copiaReg)))
+      throw new Error('096: la copia de regresión escribe en la raíz SOLO porque relee y aborta si no cuadra');
     const lineas = src.split('\n');
     for (let i = 0; i < lineas.length; i++){
       if (!/\.createWritable\(/.test(lineas[i])) continue;
@@ -6042,6 +6048,168 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
     console.log('OK 0.95.0 (el aviso sale del navegador por la MISMA puerta que ya decidía, sin relajar la privacidad, con permiso pedido donde se decide y sin insistir si lo deniega)');
     console.log('OK 0.94.1 (el foco no se escapa al enviar, Escape cierra desde fuera del nodo por la misma puerta que la ✕, la hora sigue al día y un enlace de una respuesta se pulsa)');
     console.log('OK 0.94.0 (el reloj sugiere sin pisar, los atajos se agrupan, se sale sin ir a la cruz, Enter envía y la lista se queda al lado)');
+  }
+
+  // ---- 0.96.0: un archivo que llega MÁS VIEJO que el tuyo no se acepta en silencio (incidente 05/10/2026) ----
+  {
+    eval('globalThis.actividadDe = ' + pickFn('actividadDe', 's'));
+    eval('globalThis.regresionDe = ' + pickFn('regresionDe', 'antes, ahora'));
+    eval('globalThis.esqueletoDe = ' + pickFn('esqueletoDe', 's'));
+    eval('globalThis.textoRegresion = ' + pickFn('textoRegresion', 'inf, actAntes, actAhora, enCarga'));
+
+    /* La forma del incidente real: el archivo bueno tiene un escritorio entero, una tarea y una
+       respuesta que el viejo no tiene; y el viejo lleva una hora de guardado MÁS NUEVA, porque el
+       equipo desactualizado sella la hora actual al guardar. Por eso la hora no puede decidir. */
+    const R96 = (by, at, t) => ({ by, at, t });
+    const bueno96 = () => ({ updatedAt: 1000, spaces: [
+      { id: 's_cab', name: 'Cabecera', widgets: [{ id: 'w_b', type: 'todo', t: 'Cabecera . bandeja', data: { items: [
+        { id: 't_1', n: 1, t: 'vieja', created: '2026-09-20', replies: [R96('agente', 100, 'a'), R96('agente', 300, 'TEXTO-PRIVADO-RESPUESTA')] },
+        { id: 't_2', n: 2, t: 'del 28/09', created: '2026-09-28' }
+      ] } }] },
+      { id: 's_par', name: 'Proyecto nuevo', widgets: [{ id: 'w_p', type: 'todo', t: 'Proyecto . bandeja', data: { items: [{ id: 't_p', n: 1, t: 'repo nuevo' }] } }] }
+    ] });
+    const viejo96 = () => ({ updatedAt: 9e12, spaces: [
+      { id: 's_cab', name: 'Cabecera', widgets: [{ id: 'w_b', type: 'todo', t: 'Cabecera . bandeja', data: { items: [
+        { id: 't_1', n: 1, t: 'vieja', created: '2026-09-20', replies: [R96('agente', 100, 'a')] }
+      ] } }] }
+    ] });
+
+    const inf96 = regresionDe(bueno96(), viejo96());
+    if (inf96.escritorios.length !== 1 || inf96.escritorios[0].nombre !== 'Proyecto nuevo')
+      throw new Error('096: el escritorio entero que falta es la señal más clara del incidente y tiene que salir nombrado');
+    if (inf96.ventanas.length !== 1 || inf96.tareas.length !== 2 || inf96.respuestas.length !== 1 || inf96.respuestas[0].faltan !== 1)
+      throw new Error('096: tiene que contar la ventana, las dos tareas y la respuesta que faltan: ' + JSON.stringify(inf96));
+    if (!inf96.total) throw new Error('096: con una hora de guardado MÁS NUEVA el archivo viejo se sigue detectando: la hora no decide');
+    if (regresionDe(viejo96(), bueno96()).total !== 0)
+      throw new Error('096: al revés no hay regresión: recibir MÁS cosas es lo normal');
+
+    // lo borrado de verdad pasa por la papelera, y eso NO es una regresión
+    const sinPar = bueno96(); const par = sinPar.spaces.pop();
+    sinPar.trash = [{ id: 'tr_1', kind: 'space', data: { space: par } }];
+    if (regresionDe(bueno96(), sinPar).total !== 0)
+      throw new Error('096: un escritorio que está en la papelera se borró a propósito: no puede saltar el aviso');
+    const sinT2 = bueno96(); const t2 = sinT2.spaces[0].widgets[0].data.items.pop();
+    sinT2.trash = [{ id: 'tr_2', kind: 'todo', data: { widgetId: 'w_b', item: t2 } }];
+    if (regresionDe(bueno96(), sinT2).total !== 0)
+      throw new Error('096: una tarea en la papelera se borró a propósito');
+    const sinT2b = bueno96(); sinT2b.spaces[0].widgets[0].data.items.pop();
+    if (regresionDe(bueno96(), sinT2b).tareas.length !== 1)
+      throw new Error('096: una tarea que desaparece SIN pasar por la papelera sí cuenta');
+    // él puede editar las respuestas del agente: mismo autor e instante con otro texto no es pérdida
+    const editada = bueno96(); editada.spaces[0].widgets[0].data.items[0].replies[1].t = 'corregida por él';
+    if (regresionDe(bueno96(), editada).total !== 0)
+      throw new Error('096: una respuesta EDITADA no es una respuesta perdida: se identifica por autor + instante');
+    // las ventanas de pack las reemplaza el pack por diseño
+    const conPack = bueno96(); conPack.spaces[0].widgets.push({ id: 'w_pk', type: 'links', source: 'pack:sanitario', data: {} });
+    if (regresionDe(conPack, bueno96()).total !== 0)
+      throw new Error('096: una ventana de pack que desaparece no es una regresión');
+    const nc = regresionDe({ spaces: [] }, { version: 2 });
+    if (nc.comparable !== false || nc.total !== 0)
+      throw new Error('096: sin `spaces` no hay comparación, y no se puede abrir una barra por eso');
+
+    // R47: el veredicto contra el ESQUELETO guardado en el navegador es el mismo que contra el estado entero
+    const esq96 = esqueletoDe(bueno96());
+    const infEsq = regresionDe(esq96, viejo96());
+    if (JSON.stringify(infEsq) !== JSON.stringify(inf96))
+      throw new Error('096: el esqueleto tiene que dar EXACTAMENTE el mismo veredicto que el estado entero');
+    if (/TEXTO-PRIVADO-RESPUESTA/.test(JSON.stringify(esq96)))
+      throw new Error('096: el esqueleto no guarda el texto de las respuestas: solo autor e instante');
+    if (!(actividadDe(bueno96()) > actividadDe(viejo96())) || esq96.act !== actividadDe(bueno96()))
+      throw new Error('096: la última actividad tiene que distinguir los dos lados y viajar en el esqueleto');
+
+    // el texto: qué falta, que no se aplicó, que no se guarda nada y que la otra versión queda como copia
+    const t96 = textoRegresion(inf96, actividadDe(bueno96()), actividadDe(viejo96()), false);
+    for (const frag of ['MÁS VIEJO', '1 escritorio', 'Proyecto nuevo', 'No lo he aplicado', 'no guardo nada', 'queda como copia'])
+      if (!t96.includes(frag)) throw new Error('096: a la barra le falta «' + frag + '»: ' + t96);
+    const tc96 = textoRegresion(inf96, 1, 0, true);
+    if (!/acabas de abrir/.test(tc96) || !/Usar este archivo/.test(tc96) || !/la cargo sola/.test(tc96))
+      throw new Error('096: al abrir, tiene que decir que espera a la buena y cómo aceptarlo si el borrado fue suyo');
+
+    /* EL SONDEO DE VERDAD, no una lectura del fuente (R37): se ejecuta `poll()` con un disco de
+       mentira que entrega el archivo viejo, y se exige que NO lo adopte ni lo fusione. */
+    const pollSrc = 'async ' + pickFn('poll', '');   // pickFn empieza en «function»: el async queda fuera
+    const baseSrc = src.match(/function baseDeRegresion\(\)\{[\s\S]*?\n\}/)[0];
+    const montar96 = (base, remoto, sucio) => new Function('regresionDe', `
+      let backend = "fs", saving = false; const DATA_FILE = "datos.json";
+      let lastMtime = 1, lastSavedText = ${JSON.stringify(JSON.stringify(base))}, dirty = ${!!sucio};
+      let state = JSON.parse(lastSavedText); state.active = 0;
+      let conflictPending = false, pendingMerge = null, regresion = null, baseRegCache = { text: null, obj: null };
+      const log = [];
+      const dirHandle = { getFileHandle: async () => ({ getFile: async () => ({ lastModified: 2, text: async () => ${JSON.stringify(JSON.stringify(remoto))} }) }) };
+      const $ = () => ({ classList: { add(){}, remove(){} } });
+      const setState = (s, why) => { state = s; log.push('setState:' + why); };
+      const marcarNovedades = () => {}, renderAll = () => {}, syncUI = () => {}, renderConflictBar = () => {};
+      const toast = m => log.push('toast:' + m), markDirty = () => log.push('markDirty');
+      const pollInbox = async () => {}, revisarCopias = () => {}, programarVista = () => {}, esqueletoDe = s => s;
+      const mergeStates = () => { log.push('merge'); return { merged: { spaces: [] }, conflicts: [] }; };
+      const localStorage = { setItem(){} };
+      ${baseSrc}
+      function abrirRegresion(r){ regresion = r; log.push('regresion:' + r.inf.total); }
+      function cerrarRegresion(){ regresion = null; log.push('cerrar'); }
+      const poll = ${pollSrc};
+      return { poll, get state(){ return state; }, get regresion(){ return regresion; }, log };
+    `)(regresionDe);
+
+    const p1 = montar96(bueno96(), viejo96(), false);
+    await p1.poll();
+    if (p1.log.some(l => l.startsWith('setState')) || !p1.state.spaces.some(sp => sp.id === 's_par'))
+      throw new Error('096: SIN cambios pendientes, el sondeo NO puede adoptar un archivo más viejo: ' + p1.log.join(' | '));
+    if (!p1.regresion || p1.regresion.enCarga !== false || p1.log.some(l => /Actualizado desde otro equipo/.test(l)))
+      throw new Error('096: tiene que abrir la barra, y jamás decir «Actualizado desde otro equipo»');
+    const p2 = montar96(bueno96(), viejo96(), true);
+    await p2.poll();
+    if (p2.log.includes('merge') || !p2.regresion)
+      throw new Error('096: CON cambios pendientes tampoco se fusiona: la fusión leería lo que falta como borrados');
+    // y lo normal sigue funcionando: un archivo que trae MÁS cosas se adopta como siempre
+    const masNuevo = bueno96(); masNuevo.spaces[0].widgets[0].data.items.push({ id: 't_3', n: 3, t: 'nueva en el otro equipo' });
+    const p3 = montar96(bueno96(), masNuevo, false);
+    await p3.poll();
+    if (!p3.log.includes('setState:poll') || p3.regresion)
+      throw new Error('096: un archivo más nuevo se adopta como siempre, sin barra: ' + p3.log.join(' | '));
+
+    // el cableado que no se puede ejecutar aquí: escritura bloqueada, comprobación al abrir y copia ANTES de descartar
+    const wdf = src.match(/async function writeDataFile\(\)\{[\s\S]*?\n\}/)[0];
+    if (!(wdf.indexOf('if (regresion)') >= 0 && wdf.indexOf('if (regresion)') < wdf.indexOf('createWritable')))
+      throw new Error('096: con un archivo más viejo pendiente no se escribe NADA');
+    /* AL ABRIR, ejecutado de verdad (el primer intento leía el fuente y un mutante que apagaba la
+       comprobación sobrevivía): con una vista guardada del archivo bueno y un disco que entrega el
+       viejo, `startFS` tiene que abrir la barra en modo carga; sin vista, o con la de otra carpeta, no. */
+    const sfsSrc = 'async ' + src.match(/function startFS\(\)\{[\s\S]*?\n\}/)[0].replace('function startFS', 'function');
+    const abrir96 = (vista, carpeta) => new Function('regresionDe', 'esqueletoDe', `
+      let state = null, backend = "local", lastSavedText = null, lastMtime = 0, regresion = null;
+      const log = [], dirHandle = { name: ${JSON.stringify(carpeta)} };
+      const readDataFile = async () => ({ data: ${JSON.stringify(viejo96())}, text: "VIEJO" });
+      const idbGet = async () => (${JSON.stringify(vista)});
+      const setState = s => { state = s; };
+      const localStorage = { getItem(){ return null; }, setItem(){}, removeItem(){} };
+      const toast = () => {}, syncUI = (k, m) => log.push('sync:' + m), $ = () => ({ classList: { add(){}, remove(){} } });
+      const defaultState = () => ({ spaces: [] }), finishStartFS = async () => {};
+      const programarVista = () => log.push('vista');
+      function abrirRegresion(r){ regresion = r; log.push('regresion'); }
+      function cerrarRegresion(){ regresion = null; }
+      const startFS = ${sfsSrc};
+      return { startFS, get regresion(){ return regresion; }, log };
+    `)(regresionDe, esqueletoDe);
+    const vistaBuena = Object.assign(esqueletoDe(bueno96()), { carpeta: 'mis-datos' });
+    const a1 = abrir96(vistaBuena, 'mis-datos'); await a1.startFS();
+    if (!a1.regresion || a1.regresion.enCarga !== true || !a1.log.includes('sync:archivo más viejo'))
+      throw new Error('096: al ABRIR un archivo más viejo que lo último visto en este equipo hay que abrir la barra: ' + a1.log.join(' | '));
+    const a2 = abrir96(null, 'mis-datos'); await a2.startFS();
+    if (a2.regresion || !a2.log.includes('vista'))
+      throw new Error('096: sin vista previa no hay con qué comparar: se abre normal y se guarda la vista');
+    const a3 = abrir96(vistaBuena, 'otra-carpeta'); await a3.startFS();
+    if (a3.regresion)
+      throw new Error('096: la vista de OTRA carpeta no sirve para comparar');
+    const hMio = src.slice(src.indexOf('$("#rg-mio").addEventListener'), src.indexOf('$("#rg-usar").addEventListener'));
+    const hUsar = src.slice(src.indexOf('$("#rg-usar").addEventListener'));
+    if (!(hMio.indexOf('guardarCopiaRegresion') >= 0 && hMio.indexOf('guardarCopiaRegresion') < hMio.indexOf('markDirty')))
+      throw new Error('096: «Mantener lo mío» guarda lo que llegaba como copia ANTES de escribir encima');
+    if (!(hUsar.indexOf('guardarCopiaRegresion') >= 0 && hUsar.indexOf('guardarCopiaRegresion') < hUsar.indexOf('setState(r.remote')))
+      throw new Error('096: «Usar lo que llega» guarda lo tuyo como copia ANTES de sustituirlo');
+    if (!(html.indexOf('id="regresion"') < html.indexOf('id="conflict"')) || !/#regresion\.open ~ #conflict\.open/.test(html))
+      throw new Error('096: la barra de regresión manda sobre las otras dos, por CSS y sin apilarse');
+
+    console.log('OK 0.96.0 (un archivo más viejo no se adopta ni se fusiona en silencio: se detecta por lo que le falta, no por la hora, al sondear y al abrir, y la versión descartada queda como copia)');
   }
 
   console.log('\nTODO EN VERDE');

@@ -468,6 +468,14 @@ textarea.dlg-inp{resize:vertical; min-height:46px}
    decisión ahora, las copias solo informan de algo que lleva días ahí. Mientras haya conflicto,
    «copias» se calla; al resolverse reaparece sola, porque su clase `.open` no se ha tocado. */
 #conflict.open ~ #copias.open{display:none}
+/* 0.96.0 — archivo más viejo que el tuyo. Borde ROJO, no ámbar: lo que está en juego no es qué
+   versión de una ventana gana, sino perder días enteros. Y manda sobre las otras dos por la misma
+   regla de arriba: excluyentes por CSS, nunca apiladas. */
+#regresion{position:fixed; top:12px; left:50%; transform:translateX(-50%); z-index:961; display:none; align-items:center; gap:10px;
+  flex-wrap:wrap; padding:10px 16px; border-radius:12px; background:var(--glass); border:1px solid rgba(243,108,108,.7); font-size:13px;
+  box-shadow:var(--shadow); max-width:min(720px, 92vw)}
+#regresion.open{display:flex}
+#regresion.open ~ #conflict.open, #regresion.open ~ #copias.open{display:none}
 
 /* ---------- contenido de widgets ---------- */
 textarea.notes{width:100%; height:100%; min-height:110px; resize:none; border:none; outline:none; background:transparent;
@@ -1642,6 +1650,12 @@ body.detalle-completa #taskbar{display:none}
   </div>
 </div>
 
+<div id="regresion" role="alert">
+  ⛔ <span id="regresion-msg"></span>
+  <button class="mini warn" id="rg-mio" title="Escribe lo que tienes en esta pestaña; lo que llegaba queda como copia junto a datos.json">Mantener lo mío</button>
+  <button class="mini" id="rg-usar" title="Aplica lo que llega; lo que tenías aquí queda como copia junto a datos.json">Usar lo que llega</button>
+</div>
+
 <div id="conflict">
   ⚠️ <span id="conflict-msg"><b>datos.json</b> cambió en otro equipo mientras editabas aquí.</span>
   <button class="mini" id="cf-reload">Cargar lo remoto</button>
@@ -2289,7 +2303,7 @@ function syncUI(mode, txt){
    reaparece) y si Recargar está activo. El descarte ✕ vive solo en memoria de la sesión.
    Demora asumida: la CDN de Pages puede servir la versión vieja hasta ~10 min aun con
    no-store (gobierna la caché del navegador, no la CDN); para pestañas de días, irrelevante. */
-const APP_VERSION = "0.95.0";
+const APP_VERSION = "0.96.0";
 let newVersionDetected = null;   // versión superior detectada; detiene futuras consultas
 let verDismissed = false;        // ✕: solo esta sesión — nunca persistido en disco
 let verCheckInflight = false;    // sin consultas concurrentes
@@ -3388,6 +3402,129 @@ function textoCopiasInconcluso(){
   return "No he podido comprobar si tu nube dejó copias de datos.json junto al tuyo — no consigo leer la carpeta. "
     + "Esto NO significa que no las haya: significa que no lo sé. Mira la carpeta a mano, o reconecta la carpeta desde el indicador de sincronización.";
 }
+
+/* 0.96.0 — UN ARCHIVO QUE LLEGA MÁS VIEJO QUE EL QUE YA TENÍAS NO SE ACEPTA EN SILENCIO.
+
+   El incidente del 05/10/2026, medido con el historial de versiones de OneDrive: a las 07:35 un
+   equipo cuya copia se había quedado en el 23/09 guardó encima, la nube le dio la razón por ser el
+   último en escribir, y a las 18:12 la pestaña del otro equipo lo adoptó con un «Actualizado desde
+   otro equipo». Se llevó dos escritorios, 10 tareas y 19 respuestas, y nadie lo vio en 16 días.
+
+   POR QUÉ NO BASTA LA HORA (`updatedAt`), que era la idea obvia: el equipo desactualizado sella la
+   hora ACTUAL al guardar, así que lo que llega parece más nuevo que lo que tienes. Lo que delata a
+   un archivo viejo es lo que le FALTA: cosas que este equipo ya había visto y que no aparecen ni
+   vivas ni en su papelera. Borrar de verdad deja rastro en la papelera; no haberlas visto nunca, no.
+
+   LO QUE MIRA, dicho entero para que nadie confíe de más: escritorios, ventanas y tareas por su `id`,
+   y respuestas por autor + instante (no por texto: él puede editar las del agente). NO mira el texto
+   de notas ni de markdown, enlaces, recortes ni posiciones. Las ventanas de pack se excluyen: un pack
+   seguido las reemplaza por diseño. Falso positivo conocido y aceptado: borrar una RESPUESTA en el
+   otro equipo, que no pasa por la papelera; la barra lo dice y se resuelve con un clic.
+
+   PURA (tests). Lo que había en `antes` y ya no está en `ahora`, descontando la papelera de `ahora`.
+   `antes` puede ser un estado entero o su esqueleto (`esqueletoDe`): el veredicto es el mismo. */
+function regresionDe(antes, ahora){
+  const r = { comparable: false, escritorios: [], ventanas: [], tareas: [], respuestas: [], total: 0 };
+  if (!Array.isArray(antes && antes.spaces) || !Array.isArray(ahora && ahora.spaces)) return r;
+  r.comparable = true;
+  const papelera = new Set();
+  for (const x of (Array.isArray(ahora.trash) ? ahora.trash : [])){
+    const d = (x && x.data) || {};
+    for (const o of [d.space, d.widget, d.item]) if (o && o.id) papelera.add(o.id);
+  }
+  const espAhora = new Set(), wAhora = new Set(), tAhora = new Map();
+  for (const sp of ahora.spaces){
+    if (sp && sp.id) espAhora.add(sp.id);
+    for (const w of ((sp && sp.widgets) || [])){
+      if (w && w.id) wAhora.add(w.id);
+      if (w && w.type === "todo") for (const it of ((w.data && w.data.items) || [])) if (it && it.id) tAhora.set(it.id, it);
+    }
+  }
+  for (const sp of antes.spaces){
+    if (!sp) continue;
+    const espTirado = !!sp.id && papelera.has(sp.id);
+    if (sp.id && !espAhora.has(sp.id) && !espTirado) r.escritorios.push({ id: sp.id, nombre: sp.name || "" });
+    for (const w of (sp.widgets || [])){
+      if (!w || espTirado || papelera.has(w.id) || /^pack/.test(String(w.source || ""))) continue;
+      if (w.id && !wAhora.has(w.id)) r.ventanas.push({ id: w.id, esp: sp.name || "", titulo: w.t || w.type || "" });
+      if (w.type !== "todo") continue;
+      for (const it of ((w.data && w.data.items) || [])){
+        if (!it || !it.id || papelera.has(it.id)) continue;
+        const aqui = tAhora.get(it.id);
+        if (!aqui){ r.tareas.push({ id: it.id, esp: sp.name || "", lista: w.t || "", n: it.n || null, texto: it.t || "" }); continue; }
+        const vistas = new Set((aqui.replies || []).map(x => (x && x.by) + "@" + (x && x.at)));
+        const faltan = (it.replies || []).filter(x => x && !vistas.has(x.by + "@" + x.at)).length;
+        if (faltan) r.respuestas.push({ id: it.id, esp: sp.name || "", lista: w.t || "", n: it.n || null, texto: it.t || "", faltan });
+      }
+    }
+  }
+  r.total = r.escritorios.length + r.ventanas.length + r.tareas.length + r.respuestas.reduce((a, x) => a + x.faltan, 0);
+  return r;
+}
+
+// PURA (tests). Lo mínimo que `regresionDe` necesita de lo que este equipo ya vio, para guardarlo
+// en el navegador sin copiar 1 MB: ids, títulos para poder nombrar lo que falte, autor + instante
+// de cada respuesta y la última actividad. Ni el texto de las respuestas ni el de las notas.
+function esqueletoDe(s){
+  return {
+    act: actividadDe(s),
+    spaces: ((s && s.spaces) || []).filter(Boolean).map(sp => ({ id: sp.id, name: sp.name,
+      widgets: (sp.widgets || []).filter(Boolean).map(w => {
+        const o = { id: w.id, type: w.type, t: w.t };
+        if (w.source) o.source = w.source;
+        if (w.type === "todo") o.data = { items: ((w.data && w.data.items) || []).filter(it => it && it.id).map(it => {
+          const x = { id: it.id, t: String(it.t || "").slice(0, 80) };
+          if (it.n) x.n = it.n;
+          if (Array.isArray(it.replies) && it.replies.length) x.replies = it.replies.map(rp => ({ by: rp && rp.by, at: rp && rp.at }));
+          return x;
+        }) };
+        return o;
+      }) }))
+  };
+}
+
+// PURA (tests). El instante más reciente con fecha: tarea cerrada, respuesta o alta. Solo sirve para
+// decirle de cuándo es cada lado; la decisión la toma `regresionDe`, nunca esta fecha.
+function actividadDe(s){
+  if (s && typeof s.act === "number") return s.act;
+  let m = 0;
+  for (const sp of ((s && s.spaces) || [])) for (const w of ((sp && sp.widgets) || [])){
+    if (!w || w.type !== "todo") continue;
+    for (const it of ((w.data && w.data.items) || [])){
+      if (!it) continue;
+      if (typeof it.doneAt === "number" && it.doneAt > m) m = it.doneAt;
+      if (typeof it.created === "string"){ const t = Date.parse(it.created); if (t > m) m = t; }
+      for (const rp of (it.replies || [])) if (rp && typeof rp.at === "number" && rp.at > m) m = rp.at;
+    }
+  }
+  return m;
+}
+
+// PURA (tests). El texto de la barra: qué falta, de cuándo es cada lado, que no se ha guardado nada
+// y qué pasa elija lo que elija. `enCarga` = se detectó al ABRIR, contra lo último visto en este equipo.
+function textoRegresion(inf, actAntes, actAhora, enCarga){
+  const q = [];
+  const cuenta = (k, uno, varios) => { if (k) q.push(k + " " + (k === 1 ? uno : varios)); };
+  cuenta(inf.escritorios.length, "escritorio", "escritorios");
+  cuenta(inf.ventanas.length, "ventana", "ventanas");
+  cuenta(inf.tareas.length, "tarea", "tareas");
+  cuenta(inf.respuestas.reduce((a, x) => a + x.faltan, 0), "respuesta", "respuestas");
+  const lista = q.length > 1 ? q.slice(0, -1).join(", ") + " y " + q[q.length - 1] : (q[0] || "cosas");
+  const ej = inf.escritorios[0] ? "el escritorio «" + inf.escritorios[0].nombre + "»"
+    : inf.ventanas[0] ? "la ventana «" + inf.ventanas[0].titulo + "»"
+    : inf.tareas[0] ? "la tarea «" + String(inf.tareas[0].texto).slice(0, 60) + "»"
+    : inf.respuestas[0] ? "respuestas de «" + String(inf.respuestas[0].texto).slice(0, 60) + "»" : "";
+  const f = t => new Date(t).toLocaleDateString("es-ES", { day: "numeric", month: "short" });
+  const fechas = actAntes && actAhora && actAhora < actAntes ? " Su última actividad es del " + f(actAhora) + "; la tuya, del " + f(actAntes) + "." : "";
+  const falta = ": le faltan " + lista + (ej ? ", como " + ej : "") + "." + fechas;
+  if (enCarga) return "El datos.json que acabas de abrir parece MÁS VIEJO que el último que viste en este equipo" + falta
+    + " Puede que la nube aún esté bajando la versión buena, o que venga de un equipo desactualizado."
+    + " No guardo nada hasta que decidas, y si llega la buena la cargo sola. Si borraste eso a propósito en otro equipo, pulsa «Usar este archivo».";
+  return "Lo que llega de la nube parece MÁS VIEJO que lo que tienes" + falta
+    + " Suele venir de un equipo con la copia desactualizada. No lo he aplicado y no guardo nada hasta que decidas."
+    + " Elijas lo que elijas, la otra versión queda como copia junto a datos.json.";
+}
+
 let copiasRevisadas = 0;      // instante del último escaneo COMPLETADO; 0 = nunca
 let copiasDescartado = false; // ✕ de la sesión, como el aviso de versión: nunca se persiste
 let copiasFallos = 0;         // escaneos seguidos que no pudieron mirar la carpeta
@@ -3482,9 +3619,66 @@ async function readDataFile(){
   return { data: JSON.parse(text), text };   // text crudo → lastSavedText (detección de conflicto)
 }
 
+/* 0.96.0 — archivo más viejo pendiente de decisión (ver `regresionDe`). Mientras exista no se escribe
+   nada, igual que con un conflicto abierto. `enCarga`: se detectó al ABRIR, contra lo último que este
+   equipo vio (guardado en IndexedDB como esqueleto); si no, al sondear, contra lo último leído o
+   escrito aquí (`lastSavedText`). */
+let regresion = null;   // { remote, text, mtime, inf, enCarga, vista }
+let baseRegCache = { text: null, obj: null };
+function baseDeRegresion(){
+  if (regresion && regresion.enCarga) return regresion.vista;
+  if (!lastSavedText) return null;
+  if (baseRegCache.text !== lastSavedText){
+    let obj = null;
+    try{ obj = JSON.parse(lastSavedText); }catch(e){}
+    baseRegCache = { text: lastSavedText, obj };
+  }
+  return baseRegCache.obj;
+}
+function abrirRegresion(r){
+  regresion = r;
+  // un conflicto que estuviera abierto se refería a un archivo que ya no es el que hay en disco
+  conflictPending = false; pendingMerge = null; $("#conflict").classList.remove("open");
+  $("#regresion-msg").textContent = textoRegresion(r.inf, actividadDe(baseDeRegresion()), actividadDe(r.remote || state), r.enCarga);
+  $("#rg-mio").hidden = !!r.enCarga;
+  $("#rg-usar").textContent = r.enCarga ? "Usar este archivo" : "Usar lo que llega";
+  $("#regresion").classList.add("open");
+  syncUI("err", "archivo más viejo");
+}
+function cerrarRegresion(){
+  regresion = null;
+  $("#regresion").classList.remove("open");
+}
+/* Lo último que este equipo ha visto de verdad: lo que acaba de leer, adoptar o escribir. Se toma
+   el esqueleto en el instante en que estado y disco coinciden y se guarda después; una vista algo
+   atrasada solo puede pasar por alto lo más reciente, nunca inventar una pérdida. */
+let vistaTimer = null;
+function programarVista(esq){
+  clearTimeout(vistaTimer);
+  esq.carpeta = (dirHandle && dirHandle.name) || "";
+  vistaTimer = setTimeout(() => { idbSet("vistaEsqueleto", esq).catch(() => {}); }, 3000);
+}
+/* La versión que se descarta al decidir queda como copia junto a datos.json, y se comprueba
+   releyéndola antes de seguir: sin esa red debajo no se aplica ninguna de las dos opciones. El
+   nombre tiene forma de copia (`datos-…json`) a propósito, para que el aviso de copias la compare
+   y diga si contiene algo que ya no esté en el archivo vivo. */
+async function guardarCopiaRegresion(texto, sufijo){
+  const d = new Date(), p = n => String(n).padStart(2, "0");
+  const nombre = "datos-regresion-" + d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + "-"
+    + p(d.getHours()) + p(d.getMinutes()) + p(d.getSeconds()) + sufijo + ".json";
+  const fh = await dirHandle.getFileHandle(nombre, { create: true });
+  const w = await fh.createWritable();
+  await w.write(texto);
+  await w.close();
+  if ((await (await fh.getFile()).text()) !== texto) throw new Error("la copia no se escribió entera");
+  return nombre;
+}
+
 async function writeDataFile(){
   // con un conflicto abierto no se escribe NADA hasta decisión humana
   if (conflictPending){ syncUI("err", "conflicto"); return false; }
+  // ni con un archivo más viejo pendiente: escribir ahora sería consolidar la regresión o pisarla sin preguntar
+  if (regresion){ syncUI("err", "archivo más viejo"); return false; }
   const fh = await dirHandle.getFileHandle(DATA_FILE, { create: true });
   // no pisar cambios remotos más nuevos que lo que tenemos cargado
   const cur = await fh.getFile();
@@ -3505,10 +3699,12 @@ async function writeDataFile(){
   }
   const w = await fh.createWritable();
   const payload = JSON.stringify(state, null, 2);
+  const esq = esqueletoDe(state);   // en este instante estado y lo que se escribe coinciden
   await w.write(payload);
   await w.close();
   lastSavedText = payload;
   lastMtime = (await fh.getFile()).lastModified;
+  programarVista(esq);
   return true;
 }
 
@@ -3610,7 +3806,14 @@ async function poll(){   // devuelve true si completó una lectura válida (haya
         // no es conflicto. Se compara el TEXTO CRUDO, no una reserialización de state ni
         // updatedAt: robusto ante formato y ante ediciones externas que no toquen updatedAt.
         lastMtime = f.lastModified;
+      } else if (remote && regresion && regresion.text === text){
+        // el mismo archivo más viejo que ya está en la barra: nada nuevo que decidir
+      } else if (remote && regresionDe(baseDeRegresion(), remote).total){
+        // 0.96.0: ANTES de adoptar y antes de fusionar. Fusionar tampoco vale: la fusión a tres
+        // bandas leería lo que le falta al archivo viejo como borrados del otro equipo y los aplicaría.
+        abrirRegresion({ remote, text, mtime: f.lastModified, inf: regresionDe(baseDeRegresion(), remote), enCarga: false });
       } else if (remote && !dirty){
+        if (regresion) cerrarRegresion();   // llegó otra versión, y esta no es más vieja
         const viewedId = state && state.spaces[state.active] && state.spaces[state.active].id;
         const antesDeAdoptar = state ? JSON.parse(JSON.stringify(state)) : null;
         setState(remote, "poll");   // adopta remoto (migra si venía v1)
@@ -3620,9 +3823,11 @@ async function poll(){   // devuelve true si completó una lectura válida (haya
         if (viewedId){ const ix = state.spaces.findIndex(sp => sp.id === viewedId); if (ix >= 0) state.active = ix; }
         lastSavedText = text;
         lastMtime = f.lastModified;
+        programarVista(esqueletoDe(state));
         renderAll();
         toast("Actualizado desde otro equipo");
       } else if (remote && dirty){
+        if (regresion) cerrarRegresion();
         // fusión a tres bandas por widget antes de molestar (spec-merge-por-widget)
         if (conflictPending && pendingMerge && pendingMerge.text === text){
           // mismo remoto que ya está en la barra: nada nuevo que calcular
@@ -3767,14 +3972,22 @@ async function startFS(){
   try{
     const loaded = await readDataFile();
     if (loaded){
+      const vista = await idbGet("vistaEsqueleto").catch(() => null);
       setState(loaded.data, "load-fs");   // migra en memoria; NO escribe (migración perezosa)
       lastSavedText = loaded.text;
+      /* 0.96.0: al ABRIR no hay estado previo en memoria con el que comparar, así que se compara
+         con lo último que este equipo vio. Es el caso de abrir Cabecera cuando la nube ya ha
+         entregado un archivo viejo, que el sondeo no puede ver. La vista de otra carpeta no cuenta. */
+      if (regresion) cerrarRegresion();
+      const infCarga = vista && vista.carpeta === ((dirHandle && dirHandle.name) || "") ? regresionDe(vista, state) : null;
+      if (infCarga && infCarga.total) abrirRegresion({ remote: null, text: loaded.text, mtime: lastMtime, inf: infCarga, enCarga: true, vista });
+      else programarVista(esqueletoDe(state));
       if (prev && prev.widgets && localStorage.getItem("cabecera-mode") === "local"){
         localStorage.setItem("cabecera-local-prev", JSON.stringify(prev));
         toast("Cargado el escritorio de la carpeta; tu versión local previa quedó guardada como copia");
       }
       localStorage.removeItem("cabecera-mode");
-      syncUI("ok", "sincronizado");
+      if (regresion) syncUI("err", "archivo más viejo"); else syncUI("ok", "sincronizado");
     } else {
       // sin datos.json: puede ser carpeta nueva, o que la nube aún no la haya bajado.
       // no se escribe nada hasta que el usuario decida (#ov-empty): ver acta 2026-07-08.
@@ -12089,6 +12302,47 @@ function wireUI(){
     lastMtime = Infinity;      // fuerza la siguiente escritura
     await saveNow();
     lastMtime = 0; const fh = await dirHandle.getFileHandle(DATA_FILE); lastMtime = (await fh.getFile()).lastModified;
+  });
+
+  /* 0.96.0 — archivo más viejo. Las dos salidas guardan PRIMERO la versión que se descarta como copia
+     junto a datos.json y la releen; si eso falla, no se aplica nada. Así ninguna de las dos puede
+     perder trabajo, ni siquiera eligiendo mal. */
+  $("#rg-mio").addEventListener("click", async () => {
+    const r = regresion;
+    if (!r || r.enCarga) return;
+    let nombre;
+    try{ nombre = await guardarCopiaRegresion(r.text, ""); }
+    catch(e){ toast("No he podido guardar aparte lo que llegaba (" + e.message + "), así que no sigo: no quiero perder nada", true); return; }
+    cerrarRegresion();
+    lastSavedText = r.text; lastMtime = r.mtime;   // se escribe encima de ESE archivo, a sabiendas
+    markDirty();
+    copiasDescartado = false; revisarCopias(true);
+    toast("Mantengo lo tuyo. Lo que llegaba está en " + nombre);
+  });
+  $("#rg-usar").addEventListener("click", async () => {
+    const r = regresion;
+    if (!r) return;
+    if (r.enCarga){
+      // al abrir no hay otra versión en memoria que guardar: la buena, si existe, está en la nube
+      cerrarRegresion();
+      programarVista(esqueletoDe(state));
+      if (dirty) markDirty(); else syncUI("ok", "sincronizado");
+      return;
+    }
+    let nombre;
+    try{ nombre = await guardarCopiaRegresion(JSON.stringify(state, null, 2), "-este-equipo"); }
+    catch(e){ toast("No he podido guardar aparte lo tuyo (" + e.message + "), así que no sigo: no quiero perder nada", true); return; }
+    cerrarRegresion();
+    clearTimeout(saveTimer); dirty = false;
+    const viewedId = state && state.spaces[state.active] && state.spaces[state.active].id;
+    setState(r.remote, "regresion-usar");
+    if (viewedId){ const ix = state.spaces.findIndex(sp => sp.id === viewedId); if (ix >= 0) state.active = ix; }
+    lastSavedText = r.text; lastMtime = r.mtime;
+    programarVista(esqueletoDe(state));
+    renderAll();
+    syncUI("ok", "sincronizado");
+    copiasDescartado = false; revisarCopias(true);
+    toast("Aplicado lo que llegaba. Lo que tenías aquí está en " + nombre);
   });
 
   // guía
