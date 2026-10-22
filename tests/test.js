@@ -6117,10 +6117,16 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
     if (!(actividadDe(bueno96()) > actividadDe(viejo96())) || esq96.act !== actividadDe(bueno96()))
       throw new Error('096: la última actividad tiene que distinguir los dos lados y viajar en el esqueleto');
 
-    // el texto: qué falta, que no se aplicó, que no se guarda nada y que la otra versión queda como copia
+    /* el texto: qué falta, que no se aplicó, que no se guarda, que la otra versión queda como copia
+       y que NO empuja a «Mantener lo mío»: describe la ausencia sin
+       llamarla «más viejo», admite que puede ser un borrado suyo y avisa de que mantener sustituye el
+       archivo entero. Un texto que da por hecho que el archivo es viejo induce a pisar el bueno. */
     const t96 = textoRegresion(inf96, actividadDe(bueno96()), actividadDe(viejo96()), false);
-    for (const frag of ['MÁS VIEJO', '1 escritorio', 'Proyecto nuevo', 'No lo he aplicado', 'no guardo nada', 'queda como copia'])
+    for (const frag of ['menos elementos', '1 escritorio', 'Proyecto nuevo', 'cambio intencionado', 'No lo he aplicado',
+                        'no guardo tus cambios', 'archivo COMPLETO', 'se guarda y verifica como copia'])
       if (!t96.includes(frag)) throw new Error('096: a la barra le falta «' + frag + '»: ' + t96);
+    if (/MÁS VIEJO|Suele venir de un equipo/.test(t96))
+      throw new Error('096: con la barra abierta por un sondeo no se afirma que el archivo sea viejo: puede ser un borrado legítimo');
     const tc96 = textoRegresion(inf96, 1, 0, true);
     if (!/acabas de abrir/.test(tc96) || !/Usar este archivo/.test(tc96) || !/la cargo sola/.test(tc96))
       throw new Error('096: al abrir, tiene que decir que espera a la buena y cómo aceptarlo si el borrado fue suyo');
@@ -6175,11 +6181,17 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
        comprobación sobrevivía): con una vista guardada del archivo bueno y un disco que entrega el
        viejo, `startFS` tiene que abrir la barra en modo carga; sin vista, o con la de otra carpeta, no. */
     const sfsSrc = 'async ' + src.match(/function startFS\(\)\{[\s\S]*?\n\}/)[0].replace('function startFS', 'function');
-    const abrir96 = (vista, carpeta) => new Function('regresionDe', 'esqueletoDe', `
+    /* La carpeta se identifica por su HANDLE (`isSameEntry`), no por su nombre: dos carpetas
+       distintas que se llaman igual no comparten vista. El doble
+       de handle lleva una identidad `uid` y un nombre independientes para poder probar eso. */
+    const abrir96 = (vista, carpeta, nombre) => new Function('regresionDe', 'esqueletoDe', `
       let state = null, backend = "local", lastSavedText = null, lastMtime = 0, regresion = null;
-      const log = [], dirHandle = { name: ${JSON.stringify(carpeta)} };
+      const handle = (uid, name) => ({ uid, name, isSameEntry: async o => !!o && o.uid === uid });
+      const log = [], dirHandle = handle(${JSON.stringify(carpeta)}, ${JSON.stringify(nombre || carpeta)});
       const readDataFile = async () => ({ data: ${JSON.stringify(viejo96())}, text: "VIEJO" });
-      const idbGet = async () => (${JSON.stringify(vista)});
+      const vistaG = ${JSON.stringify(vista)};
+      if (vistaG && vistaG.carpetaUid) vistaG.carpetaHandle = handle(vistaG.carpetaUid, vistaG.carpeta);
+      const idbGet = async () => vistaG;
       const setState = s => { state = s; };
       const localStorage = { getItem(){ return null; }, setItem(){}, removeItem(){} };
       const toast = () => {}, syncUI = (k, m) => log.push('sync:' + m), $ = () => ({ classList: { add(){}, remove(){} } });
@@ -6190,16 +6202,23 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
       const startFS = ${sfsSrc};
       return { startFS, get regresion(){ return regresion; }, log };
     `)(regresionDe, esqueletoDe);
-    const vistaBuena = Object.assign(esqueletoDe(bueno96()), { carpeta: 'mis-datos' });
-    const a1 = abrir96(vistaBuena, 'mis-datos'); await a1.startFS();
+    const vistaBuena = Object.assign(esqueletoDe(bueno96()), { carpeta: 'mis-datos', carpetaUid: 'A' });
+    const a1 = abrir96(vistaBuena, 'A', 'mis-datos'); await a1.startFS();
     if (!a1.regresion || a1.regresion.enCarga !== true || !a1.log.includes('sync:archivo más viejo'))
       throw new Error('096: al ABRIR un archivo más viejo que lo último visto en este equipo hay que abrir la barra: ' + a1.log.join(' | '));
-    const a2 = abrir96(null, 'mis-datos'); await a2.startFS();
+    const a2 = abrir96(null, 'A', 'mis-datos'); await a2.startFS();
     if (a2.regresion || !a2.log.includes('vista'))
       throw new Error('096: sin vista previa no hay con qué comparar: se abre normal y se guarda la vista');
-    const a3 = abrir96(vistaBuena, 'otra-carpeta'); await a3.startFS();
+    const a3 = abrir96(vistaBuena, 'B', 'otra-carpeta'); await a3.startFS();
     if (a3.regresion)
       throw new Error('096: la vista de OTRA carpeta no sirve para comparar');
+    const a4 = abrir96(vistaBuena, 'B', 'mis-datos'); await a4.startFS();
+    if (a4.regresion)
+      throw new Error('096: otra carpeta con el MISMO nombre no es la misma carpeta: la identidad la da el handle');
+    // una vista de una versión anterior no trae handle: no se compara (límite declarado, no falso positivo)
+    const a5 = abrir96(Object.assign(esqueletoDe(bueno96()), { carpeta: 'mis-datos' }), 'A', 'mis-datos'); await a5.startFS();
+    if (a5.regresion || !a5.log.includes('vista'))
+      throw new Error('096: una vista sin handle no se compara, y se rehace con handle al abrir');
     const hMio = src.slice(src.indexOf('$("#rg-mio").addEventListener'), src.indexOf('$("#rg-usar").addEventListener'));
     const hUsar = src.slice(src.indexOf('$("#rg-usar").addEventListener'));
     if (!(hMio.indexOf('guardarCopiaRegresion') >= 0 && hMio.indexOf('guardarCopiaRegresion') < hMio.indexOf('markDirty')))
@@ -6210,6 +6229,162 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
       throw new Error('096: la barra de regresión manda sobre las otras dos, por CSS y sin apilarse');
 
     console.log('OK 0.96.0 (un archivo más viejo no se adopta ni se fusiona en silencio: se detecta por lo que le falta, no por la hora, al sondear y al abrir, y la versión descartada queda como copia)');
+  }
+
+  /* ---- 0.96.1: SECUENCIAS, no fotos ----
+     Las pruebas de arriba miran un sondeo cada vez. Los fallos de esta barra aparecen en
+     SECUENCIA: una segunda llegada, una edición durante el `await` de la copia, un conflicto
+     abierto antes. Este arnés ejecuta las funciones y
+     los manejadores LITERALES del HTML, y solo el disco, el DOM, los temporizadores y IndexedDB
+     son dobles en memoria. Nada toca un `datos.json` real. */
+  {
+    const fnDe = name => {
+      const m = src.match(new RegExp('(async )?function ' + name + '\\([^)]*\\)\\{[\\s\\S]*?\\n\\}'));
+      if (!m) throw new Error('096r: no encuentro ' + name);
+      return m[0];
+    };
+    const clon = o => JSON.parse(JSON.stringify(o));
+    const base = () => ({ version: 2, active: 0, spaces: [{ id: 's1', name: 'Uno', settings: {}, widgets: [
+      { id: 'w1', type: 'todo', t: 'Bandeja', data: { items: [
+        { id: 't1', t: 'Anterior', replies: [{ by: 'yo', at: 1, t: 'respuesta' }] },
+        { id: 't2', t: 'Reciente' }
+      ] } }, { id: 'wn', type: 'notes', t: 'Nota', data: { text: 'nota inicial' } }
+    ] }, { id: 's2', name: 'Dos', settings: {}, widgets: [] }], trash: [] });
+    const vieja = () => { const b = base(); b.spaces[0].widgets[0].data.items.pop(); return b; };
+    const funciones = ['regresionDe', 'esqueletoDe', 'actividadDe', 'textoRegresion', 'baseDeRegresion',
+      'abrirRegresion', 'cerrarRegresion', 'programarVista', 'guardarCopiaRegresion', 'writeDataFile',
+      'readDataFile', 'poll', 'startFS', 'saveNow', 'canonJSON', 'mergeStates', 'trashLegacyId', 'trashConIds'];
+    const ini = src.indexOf('$("#rg-mio").addEventListener');
+    const fin = src.indexOf('\n  });', src.indexOf('$("#rg-usar").addEventListener')) + '\n  });'.length;
+    const manejadores = src.slice(ini, fin);
+    const app = (inicial = base(), opts = {}) => new Function('initial', 'opts', `
+      let state = initial, backend = 'fs', saving = false, dirty = !!opts.dirty;
+      let lastSavedText = JSON.stringify(initial), lastMtime = 1;
+      let conflictPending = false, pendingMerge = null, regresion = null, baseRegCache = { text: null, obj: null };
+      let vistaTimer = null, saveTimer = null, copiasDescartado = false, freshPending = !!opts.fresh;
+      const bootstrapElementIds = () => {}, renderVersionNotice = () => {};
+      const DATA_FILE = 'datos.json';
+      const files = new Map([[DATA_FILE, { text: lastSavedText, mtime: 1 }]]);
+      const listeners = new Map(), nodes = new Map(), log = [], timers = new Map(), storage = new Map();
+      let timerId = 0, uidCounter = 0;
+      const uid = () => 'id' + (++uidCounter);
+      const $ = key => { if (!nodes.has(key)) nodes.set(key, { classList: { add(){}, remove(){} }, addEventListener(ev, cb){ listeners.set(key, cb); } }); return nodes.get(key); };
+      const setTimeout = cb => { timers.set(++timerId, cb); return timerId; }, clearTimeout = id => timers.delete(id);
+      const idbSet = async (k, v) => storage.set(k, v), idbGet = async k => k === 'vistaEsqueleto'
+        ? (opts.vista ? { ...opts.vista, carpetaHandle: { isSameEntry: async () => opts.mismaCarpeta !== false } } : null) : storage.get(k);
+      const dirHandle = { name: opts.carpeta || 'portada-datos', getFileHandle: async (name, o) => {
+        if (!files.has(name)){ if (!(o && o.create)) throw Error('NotFound'); files.set(name, { text: '', mtime: 1 }); }
+        return { getFile: async () => { const f = files.get(name); return { lastModified: f.mtime, text: async () => f.text }; },
+          createWritable: async () => { let carga; return { write: async t => { carga = t; if (opts.alEscribir) await opts.alEscribir(name, t); },
+            close: async () => { files.set(name, { text: carga, mtime: files.get(name).mtime + 1 }); } }; } };
+      } };
+      const setState = (s, why) => { state = s; log.push('setState:' + why); };
+      const marcarNovedades = () => {}, renderAll = () => {}, renderConflictBar = () => {};
+      const syncUI = (k, m) => log.push('sync:' + m), toast = m => log.push('toast:' + m);
+      const markDirty = () => { dirty = true; log.push('dirty'); };
+      const pollInbox = async () => {}, revisarCopias = () => {}, finishStartFS = async () => {};
+      const defaultState = () => ({ spaces: [] });
+      const localStorage = { getItem: k => storage.get(k), setItem: (k, v) => storage.set(k, v), removeItem: k => storage.delete(k) };
+      const conflictKey = c => c.kind + ':' + c.id;
+      ${funciones.map(fnDe).join('\n')}
+      ${manejadores}
+      return { poll, startFS, saveNow, writeDataFile, guardarCopiaRegresion, storage, log, files, nodes,
+        get state(){ return state; }, get regresion(){ return regresion; }, get conflicto(){ return conflictPending; },
+        get pendiente(){ return pendingMerge; }, get dirty(){ return dirty; }, get lastSaved(){ return lastSavedText; },
+        get fresh(){ return freshPending; },
+        remoto(s, mtime){ files.set(DATA_FILE, { text: JSON.stringify(s), mtime }); },
+        editar(cb){ cb(state); dirty = true; },
+        pulsar(key){ return listeners.get(key)(); } };
+    `)(clon(inicial), opts);
+    const pausa = () => { let soltar, entrar; const dentro = new Promise(r => entrar = r), puerta = new Promise(r => soltar = r);
+      return { dentro, soltar, alEscribir: async name => { if (name !== 'datos.json'){ entrar(); await puerta; } } }; };
+    const textoDe = a => JSON.stringify([...a.files]);
+
+    // al ABRIR, la referencia buena sobrevive a dos llegadas más del archivo incompleto
+    { const a = app(base(), { vista: { ...esqueletoDe(base()), carpeta: 'portada-datos' } });
+      a.remoto(vieja(), 2); await a.startFS();
+      if (!a.regresion || a.regresion.enCarga !== true) throw new Error('096r-2: al abrir el archivo incompleto tiene que salir la barra');
+      const r2 = vieja(); r2.updatedAt = 2; a.remoto(r2, 3); await a.poll();
+      const r3 = vieja(); r3.updatedAt = 3; a.remoto(r3, 4); await a.poll();
+      if (!a.regresion) throw new Error('096r-2: dos guardados del archivo incompleto NO pueden cerrar la barra: la referencia es la vista buena, no lo último leído');
+      if (a.log.includes('setState:poll')) throw new Error('096r-2: y no se adopta en silencio');
+      if (!a.nodes.get('#rg-mio').hidden) throw new Error('096r-2: con solo la vista en memoria no se ofrece «Mantener lo mío»: no hay estado completo que mantener'); }
+
+    // «Usar lo que llega» NO pierde lo tecleado mientras se escribe la copia
+    { const p = pausa(), a = app(base(), { alEscribir: p.alEscribir });
+      a.remoto(vieja(), 2); await a.poll();
+      const decision = a.pulsar('#rg-usar'); await p.dentro;
+      a.editar(s => { s.spaces[0].widgets[1].data.text = 'TECLEADO-DURANTE-COPIA'; }); p.soltar(); await decision;
+      if (!JSON.stringify(a.state).includes('TECLEADO-DURANTE-COPIA') || !a.dirty || !a.regresion)
+        throw new Error('096r-3: lo tecleado durante la copia se queda en la pestaña, sucio y con la barra abierta para volver a elegir'); }
+
+    // y además: «Mantener lo mío» no escribe encima si mientras se copiaba llegó OTRO archivo
+    { const p = pausa(), a = app(base(), { alEscribir: p.alEscribir });
+      a.remoto(vieja(), 2); await a.poll(); const primero = a.regresion;
+      const decision = a.pulsar('#rg-mio'); await p.dentro;
+      const otra = vieja(); otra.updatedAt = 7; a.remoto(otra, 5);
+      const sondeo = a.poll(); p.soltar(); await decision; await sondeo;
+      if (a.regresion === primero || a.lastSaved === primero.text)
+        throw new Error('096r-3b: «Mantener lo mío» decidido sobre un archivo que ya no es el de disco no puede seguir'); }
+
+    // abrir la barra no tira el remoto de un conflicto que estaba abierto
+    { const a = app(base(), { dirty: true }); a.editar(s => { s.spaces[0].widgets[1].data.text = 'local'; });
+      const r1 = base(); r1.spaces[0].widgets[1].data.text = 'REMOTO-PENDIENTE';
+      r1.spaces[0].widgets.push({ id: 'w-remota', type: 'md', t: 'aportación única', data: { text: 'SOLO-REMOTO' } });
+      a.remoto(r1, 2); await a.poll();
+      if (!a.conflicto || !JSON.stringify(a.pendiente).includes('SOLO-REMOTO')) throw new Error('096r-4: preparación: tenía que haber conflicto');
+      a.remoto(vieja(), 3); await a.poll();
+      if (!a.regresion) throw new Error('096r-4: preparación: tenía que abrirse la barra');
+      await a.pulsar('#rg-mio'); await a.writeDataFile();
+      if (!textoDe(a).includes('SOLO-REMOTO'))
+        throw new Error('096r-4: lo que solo existía en el conflicto anterior tiene que quedar en una copia verificada antes de soltarlo'); }
+
+    // y además: si esa copia falla, el conflicto se queda donde estaba
+    { const a = app(base(), { dirty: true, alEscribir: async n => { if (/conflicto-previo/.test(n)) throw Error('disco lleno'); } });
+      a.editar(s => { s.spaces[0].widgets[1].data.text = 'local'; });
+      const r1 = base(); r1.spaces[0].widgets[1].data.text = 'REMOTO-PENDIENTE'; a.remoto(r1, 2); await a.poll();
+      a.remoto(vieja(), 3); await a.poll();
+      if (!a.conflicto || !a.pendiente || a.regresion)
+        throw new Error('096r-4b: sin copia del conflicto anterior no se retira: mejor dos avisos que un remoto perdido'); }
+
+    // fallo al copiar, en los dos botones: no se aplica nada
+    for (const key of ['#rg-mio', '#rg-usar']){
+      const a = app(base(), { alEscribir: async n => { if (n !== 'datos.json') throw Error('fallo simulado'); } });
+      a.remoto(vieja(), 2); await a.poll(); const antes = JSON.stringify(a.state);
+      await a.pulsar(key);
+      if (JSON.stringify(a.state) !== antes || !a.regresion) throw new Error('096r: si falla la copia de ' + key + ' no se toca nada y la barra sigue');
+    }
+
+    // con «guardando…» pendiente y la barra abierta, la escritura sigue bloqueada
+    { const a = app(base(), { fresh: true, dirty: true }); a.remoto(vieja(), 2);
+      const disco = a.files.get('datos.json').text; await a.saveNow();
+      if (!a.regresion || !a.dirty || a.files.get('datos.json').text !== disco) throw new Error('096r: con la barra abierta no se escribe datos.json'); }
+
+    // si vuelve exactamente el archivo bueno, la barra se retira sola
+    { const a = app(); a.remoto(vieja(), 2); await a.poll();
+      if (!a.regresion) throw new Error('096r-7: preparación');
+      a.remoto(base(), 3); await a.poll();
+      if (a.regresion) throw new Error('096r-7: volvió el archivo bueno, con los mismos bytes: la barra sobra'); }
+
+    // dos copias en el mismo segundo no se pisan
+    { const a = app(), RealDate = globalThis.Date;
+      try{
+        globalThis.Date = class extends RealDate { constructor(...x){ super(...(x.length ? x : [1792670400000])); } static now(){ return 1792670400000; } };
+        const n1 = await a.guardarCopiaRegresion('PRIMERA', '-este-equipo'), n2 = await a.guardarCopiaRegresion('SEGUNDA', '-este-equipo');
+        if (n1 === n2 || a.files.get(n1).text !== 'PRIMERA') throw new Error('096r-6: la segunda copia del mismo segundo borró la primera');
+      } finally { globalThis.Date = RealDate; } }
+
+    // otra carpeta con el mismo nombre no hereda la vista
+    { const a = app(base(), { mismaCarpeta: false, vista: { ...esqueletoDe(base()), carpeta: 'portada-datos' } });
+      a.remoto({ version: 2, spaces: [{ id: 'otra', name: 'Otra carpeta', widgets: [] }] }, 2); await a.startFS();
+      if (a.regresion) throw new Error('096r-8: dos carpetas homónimas no son la misma carpeta'); }
+
+    // aviso al cerrar: el manejador no se puede ejecutar aquí, así que se fija su condición
+    const bu = src.match(/addEventListener\("beforeunload", e => \{[\s\S]*?\n  \}\);/);
+    if (!bu || !/if \(regresion && dirty\)\{ e\.preventDefault\(\); e\.returnValue = ""; \}/.test(bu[0]))
+      throw new Error('096r-5: con la barra abierta y cambios sin guardar, cerrar la pestaña tiene que avisar');
+
+    console.log('OK 0.96.1 (secuencias: la referencia buena sobrevive, nada tecleado se pierde durante la copia, el conflicto previo se conserva, la barra se retira si vuelve el bueno, copias sin colisión, carpeta por identidad)');
   }
 
   console.log('\nTODO EN VERDE');

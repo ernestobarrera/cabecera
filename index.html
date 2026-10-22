@@ -2303,7 +2303,7 @@ function syncUI(mode, txt){
    reaparece) y si Recargar está activo. El descarte ✕ vive solo en memoria de la sesión.
    Demora asumida: la CDN de Pages puede servir la versión vieja hasta ~10 min aun con
    no-store (gobierna la caché del navegador, no la CDN); para pestañas de días, irrelevante. */
-const APP_VERSION = "0.96.0";
+const APP_VERSION = "0.96.1";
 let newVersionDetected = null;   // versión superior detectada; detiene futuras consultas
 let verDismissed = false;        // ✕: solo esta sesión — nunca persistido en disco
 let verCheckInflight = false;    // sin consultas concurrentes
@@ -3520,9 +3520,10 @@ function textoRegresion(inf, actAntes, actAhora, enCarga){
   if (enCarga) return "El datos.json que acabas de abrir parece MÁS VIEJO que el último que viste en este equipo" + falta
     + " Puede que la nube aún esté bajando la versión buena, o que venga de un equipo desactualizado."
     + " No guardo nada hasta que decidas, y si llega la buena la cargo sola. Si borraste eso a propósito en otro equipo, pulsa «Usar este archivo».";
-  return "Lo que llega de la nube parece MÁS VIEJO que lo que tienes" + falta
-    + " Suele venir de un equipo con la copia desactualizada. No lo he aplicado y no guardo nada hasta que decidas."
-    + " Elijas lo que elijas, la otra versión queda como copia junto a datos.json.";
+  return "El archivo recibido tiene menos elementos que la referencia de este equipo" + falta
+    + " Puede ser una copia desactualizada o un cambio intencionado: borrar notas, respuestas, aplicar un pack o archivar la papelera también puede producir este aviso."
+    + " No lo he aplicado y no guardo tus cambios hasta que decidas. Mantener lo mío sustituye el archivo COMPLETO por esta pestaña y puede quitar incorporaciones del otro equipo."
+    + " Al elegir, la versión descartada se guarda y verifica como copia junto a datos.json. Si tienes dudas, conserva ambas y compáralas antes de sustituir.";
 }
 
 let copiasRevisadas = 0;      // instante del último escaneo COMPLETADO; 0 = nunca
@@ -3626,7 +3627,7 @@ async function readDataFile(){
 let regresion = null;   // { remote, text, mtime, inf, enCarga, vista }
 let baseRegCache = { text: null, obj: null };
 function baseDeRegresion(){
-  if (regresion && regresion.enCarga) return regresion.vista;
+  if (regresion && regresion.vista) return regresion.vista;
   if (!lastSavedText) return null;
   if (baseRegCache.text !== lastSavedText){
     let obj = null;
@@ -3635,15 +3636,24 @@ function baseDeRegresion(){
   }
   return baseRegCache.obj;
 }
-function abrirRegresion(r){
+async function abrirRegresion(r){
+  const anterior = regresion, pendiente = pendingMerge;
+  if (pendiente){
+    try{ await guardarCopiaRegresion(pendiente.text, "-conflicto-previo"); }
+    catch(e){ toast("No se pudo conservar el archivo del conflicto anterior: " + e.message, true); return false; }
+    if (pendingMerge !== pendiente || regresion !== anterior) return false;
+  }
+  // La referencia buena de la carga sigue vigente aunque lleguen otras copias incompletas.
+  if (anterior && anterior.vista && !r.vista) r = { ...r, vista: anterior.vista };
   regresion = r;
-  // un conflicto que estuviera abierto se refería a un archivo que ya no es el que hay en disco
+  // El remoto del conflicto anterior ya quedó conservado y verificado antes de retirarlo.
   conflictPending = false; pendingMerge = null; $("#conflict").classList.remove("open");
   $("#regresion-msg").textContent = textoRegresion(r.inf, actividadDe(baseDeRegresion()), actividadDe(r.remote || state), r.enCarga);
-  $("#rg-mio").hidden = !!r.enCarga;
+  $("#rg-mio").hidden = !!(r.enCarga || r.vista);
   $("#rg-usar").textContent = r.enCarga ? "Usar este archivo" : "Usar lo que llega";
   $("#regresion").classList.add("open");
   syncUI("err", "archivo más viejo");
+  return true;
 }
 function cerrarRegresion(){
   regresion = null;
@@ -3656,6 +3666,7 @@ let vistaTimer = null;
 function programarVista(esq){
   clearTimeout(vistaTimer);
   esq.carpeta = (dirHandle && dirHandle.name) || "";
+  esq.carpetaHandle = dirHandle;   // IndexedDB conserva FileSystemDirectoryHandle
   vistaTimer = setTimeout(() => { idbSet("vistaEsqueleto", esq).catch(() => {}); }, 3000);
 }
 /* La versión que se descarta al decidir queda como copia junto a datos.json, y se comprueba
@@ -3665,7 +3676,7 @@ function programarVista(esq){
 async function guardarCopiaRegresion(texto, sufijo){
   const d = new Date(), p = n => String(n).padStart(2, "0");
   const nombre = "datos-regresion-" + d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + "-"
-    + p(d.getHours()) + p(d.getMinutes()) + p(d.getSeconds()) + sufijo + ".json";
+    + p(d.getHours()) + p(d.getMinutes()) + p(d.getSeconds()) + "-" + uid() + sufijo + ".json";
   const fh = await dirHandle.getFileHandle(nombre, { create: true });
   const w = await fh.createWritable();
   await w.write(texto);
@@ -3748,8 +3759,9 @@ let freshPending = false, hiddenAt = 0;
        razonable. Cubría un caso estrecho —editar y guardar en los primeros 30 s, con la entrega
        cayendo dentro de esos mismos 30 s— y lo vendía como si cubriera la mañana.
      · COBRABA CARO ESE CASO ESTRECHO. Retenía en memoria un cambio TECLEADO POR ÉL hasta 30 s, y
-       esta app no tiene `beforeunload` ni `pagehide` en ninguna parte: cerrar la pestaña dentro de
-       la ventana lo perdía. Cambiar una bifurcación —que hasta hoy nunca ha costado una tarea— por
+       esta app no tenía entonces `beforeunload` ni `pagehide`: cerrar la pestaña dentro de la
+       ventana lo perdía. (Desde la revisión de 0.96.0 hay UNO, y solo avisa al cerrar mientras la
+       barra de archivo más viejo esté abierta con cambios sin guardar; no recupera nada.) Cambiar una bifurcación —que hasta hoy nunca ha costado una tarea— por
        una pérdida silenciosa de texto suyo es un mal negocio.
    Y la red que lo arreglaría no es barata: un `localStorage` restaurado a la ligera pisaría una
    fusión posterior; hacerlo bien pide diario de borrador, base y refusión. Eso es un proyecto, no
@@ -3806,12 +3818,16 @@ async function poll(){   // devuelve true si completó una lectura válida (haya
         // no es conflicto. Se compara el TEXTO CRUDO, no una reserialización de state ni
         // updatedAt: robusto ante formato y ante ediciones externas que no toquen updatedAt.
         lastMtime = f.lastModified;
+        if (regresion && !regresionDe(baseDeRegresion(), remote).total){
+          cerrarRegresion();
+          if (dirty) markDirty(); else syncUI("ok", "sincronizado");
+        }
       } else if (remote && regresion && regresion.text === text){
         // el mismo archivo más viejo que ya está en la barra: nada nuevo que decidir
       } else if (remote && regresionDe(baseDeRegresion(), remote).total){
         // 0.96.0: ANTES de adoptar y antes de fusionar. Fusionar tampoco vale: la fusión a tres
         // bandas leería lo que le falta al archivo viejo como borrados del otro equipo y los aplicaría.
-        abrirRegresion({ remote, text, mtime: f.lastModified, inf: regresionDe(baseDeRegresion(), remote), enCarga: false });
+        await abrirRegresion({ remote, text, mtime: f.lastModified, inf: regresionDe(baseDeRegresion(), remote), enCarga: false });
       } else if (remote && !dirty){
         if (regresion) cerrarRegresion();   // llegó otra versión, y esta no es más vieja
         const viewedId = state && state.spaces[state.active] && state.spaces[state.active].id;
@@ -3979,8 +3995,10 @@ async function startFS(){
          con lo último que este equipo vio. Es el caso de abrir Cabecera cuando la nube ya ha
          entregado un archivo viejo, que el sondeo no puede ver. La vista de otra carpeta no cuenta. */
       if (regresion) cerrarRegresion();
-      const infCarga = vista && vista.carpeta === ((dirHandle && dirHandle.name) || "") ? regresionDe(vista, state) : null;
-      if (infCarga && infCarga.total) abrirRegresion({ remote: null, text: loaded.text, mtime: lastMtime, inf: infCarga, enCarga: true, vista });
+      const mismaCarpeta = vista && vista.carpetaHandle && dirHandle
+        ? await vista.carpetaHandle.isSameEntry(dirHandle).catch(() => false) : false;
+      const infCarga = mismaCarpeta ? regresionDe(vista, state) : null;
+      if (infCarga && infCarga.total) await abrirRegresion({ remote: null, text: loaded.text, mtime: lastMtime, inf: infCarga, enCarga: true, vista });
       else programarVista(esqueletoDe(state));
       if (prev && prev.widgets && localStorage.getItem("cabecera-mode") === "local"){
         localStorage.setItem("cabecera-local-prev", JSON.stringify(prev));
@@ -12307,12 +12325,16 @@ function wireUI(){
   /* 0.96.0 — archivo más viejo. Las dos salidas guardan PRIMERO la versión que se descarta como copia
      junto a datos.json y la releen; si eso falla, no se aplica nada. Así ninguna de las dos puede
      perder trabajo, ni siquiera eligiendo mal. */
+  window.addEventListener("beforeunload", e => {
+    if (regresion && dirty){ e.preventDefault(); e.returnValue = ""; }
+  });
   $("#rg-mio").addEventListener("click", async () => {
     const r = regresion;
-    if (!r || r.enCarga) return;
+    if (!r || r.enCarga || r.vista) return;
     let nombre;
     try{ nombre = await guardarCopiaRegresion(r.text, ""); }
     catch(e){ toast("No he podido guardar aparte lo que llegaba (" + e.message + "), así que no sigo: no quiero perder nada", true); return; }
+    if (regresion !== r){ toast("El archivo cambió durante la copia: revisa el aviso actual", true); return; }
     cerrarRegresion();
     lastSavedText = r.text; lastMtime = r.mtime;   // se escribe encima de ESE archivo, a sabiendas
     markDirty();
@@ -12330,8 +12352,13 @@ function wireUI(){
       return;
     }
     let nombre;
-    try{ nombre = await guardarCopiaRegresion(JSON.stringify(state, null, 2), "-este-equipo"); }
+    const copiado = JSON.stringify(state, null, 2);
+    try{ nombre = await guardarCopiaRegresion(copiado, "-este-equipo"); }
     catch(e){ toast("No he podido guardar aparte lo tuyo (" + e.message + "), así que no sigo: no quiero perder nada", true); return; }
+    if (regresion !== r || JSON.stringify(state, null, 2) !== copiado){
+      toast("Cambió algo mientras se guardaba la copia: no he sustituido nada. Revisa y vuelve a elegir", true);
+      return;
+    }
     cerrarRegresion();
     clearTimeout(saveTimer); dirty = false;
     const viewedId = state && state.spaces[state.active] && state.spaces[state.active].id;

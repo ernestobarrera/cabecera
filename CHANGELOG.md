@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.96.1] - 2026-10-22 — el aviso de archivo más viejo no pierde nada en el camino
+
+- **Al abrir, la referencia buena aguanta.** Si después del archivo incompleto llegaban otras copias
+  igual de incompletas, la barra acababa cerrándose y se aceptaba. Ahora la referencia es la última
+  versión buena que vio este equipo hasta que decidas o llegue una completa.
+- **Nada tecleado se pierde mientras se guarda la copia.** Si escribes mientras se guarda la copia de
+  la versión que descartas, o llega otro archivo, no se sustituye nada y se te pide volver a elegir.
+- **Un conflicto que estaba abierto no se tira**: lo que solo traía el otro lado se guarda como copia
+  verificada antes de pasar a la barra roja; si esa copia falla, el conflicto se queda.
+- **Si vuelve el archivo bueno, la barra se retira sola.**
+- **Dos copias en el mismo segundo ya no se pisan**, y la carpeta se reconoce por su identidad, no por
+  su nombre: dos carpetas que se llamen igual no se confunden.
+- **La barra no da por hecho que el archivo sea viejo**: dice que tiene menos elementos, que puede ser
+  un cambio intencionado y que «Mantener lo mío» sustituye el archivo entero.
+- **Cerrar la pestaña con la barra abierta y cambios sin guardar pide confirmación.** Avisa; no
+  recupera nada si el navegador se cierra a la fuerza.
+- **Pendiente:** borrar algo que no pasa por la papelera (una nota, por ejemplo) todavía puede hacer
+  saltar el aviso en el otro equipo.
+
 ## [0.96.0] - 2026-10-22 — un archivo más viejo que el tuyo ya no se acepta en silencio
 
 - **Qué pasaba.** Si un equipo con la copia desactualizada —su nube dejó de sincronizar, o llevaba
