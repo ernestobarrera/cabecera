@@ -9,6 +9,7 @@
 <style>
 :root{
   --glass: rgba(22,26,34,.72);
+  --glass-opaco: rgb(22,26,34);
   --glass-soft: rgba(22,26,34,.55);
   --border: rgba(255,255,255,.13);
   --border-soft: rgba(255,255,255,.08);
@@ -46,6 +47,7 @@
   --border-soft: rgba(255,255,255,.20);
   --text-dim: #c3ccdb;
   --glass: rgba(18,22,29,.90);
+  --glass-opaco: rgb(18,22,29);
   --glass-soft: rgba(18,22,29,.80);
 }
 :root.contraste-alto .notes-desc{opacity:.9}
@@ -70,6 +72,15 @@ body{font-family:var(--font); color:var(--text); background:#10131a}
   background:var(--glass); backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px);
   border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow); overflow:hidden}
 .win.active{border-color:rgba(255,255,255,.22)}
+/* 0.96.2 — sin cristal MIENTRAS se arrastra o redimensiona. El difuminado se recalcula en cada
+   fotograma bajo la ventana que se mueve, y en un monitor de 120 Hz eso partía la fluidez por la
+   mitad a ratos. Fondo opaco del mismo tono para que no se vea a través; el color de una ventana
+   (tinte del 16 %) se conserva encima. Al soltar vuelve el cristal. */
+.win.arrastrando{backdrop-filter:none; -webkit-backdrop-filter:none;
+  background-image:linear-gradient(var(--glass-opaco),var(--glass-opaco)) !important}
+.win.arrastrando.has-win-color{background-image:
+  linear-gradient(color-mix(in srgb, var(--win-color) 16%, transparent),color-mix(in srgb, var(--win-color) 16%, transparent)),
+  linear-gradient(var(--glass-opaco),var(--glass-opaco)) !important}
 /* N1: sombra de destino durante el arrastre. pointer-events:none es OBLIGATORIO (no puede
    interceptar el elementFromPoint que detecta pestañas — Codex C1). Va inflada 3 px respecto
    al destino real para que su contorno sobresalga cuando coincide con la ventana. */
@@ -2303,7 +2314,7 @@ function syncUI(mode, txt){
    reaparece) y si Recargar está activo. El descarte ✕ vive solo en memoria de la sesión.
    Demora asumida: la CDN de Pages puede servir la versión vieja hasta ~10 min aun con
    no-store (gobierna la caché del navegador, no la CDN); para pestañas de días, irrelevante. */
-const APP_VERSION = "0.96.1";
+const APP_VERSION = "0.96.2";
 let newVersionDetected = null;   // versión superior detectada; detiene futuras consultas
 let verDismissed = false;        // ✕: solo esta sesión — nunca persistido en disco
 let verCheckInflight = false;    // sin consultas concurrentes
@@ -5609,7 +5620,8 @@ function undoLayout(snap){
       wg.x = it.before.x; wg.y = it.before.y; wg.w = it.before.w; wg.h = it.before.h;
     }
   }
-  renderAll(); markDirty();
+  // 0.96.2: sin renderAll. El rect previo a ESTE cambio es el `after` del gesto que se deshace.
+  repaintLayout(snap.items.map(it => ({ id: it.id, before: it.after }))); markDirty();
 }
 /* «Ordenar» — LA acción única de layout (veredicto Codex 2026-07-18, spec-ordenar-unificado).
    Coloca el escritorio según la política de columnas del espacio (Auto = nº automático por ancho;
@@ -5882,6 +5894,23 @@ function repaintProjection(){
     el.style.left = p.x + "px"; el.style.top = p.y + "px";
     el.style.width = p.w + "px"; el.style.height = p.h + "px";
   });
+}
+/* 0.96.2 — Recolocar SIN reconstruir. Soltar en columna, redimensionar empujando y su Deshacer solo
+   cambian geometría y orden de apilado, así que se repinta eso y solo se rehace el CONTENIDO de las
+   ventanas que cambian de TAMAÑO (una lista de tareas pagina y crece según su ancho y su alto).
+   Antes se llamaba a renderAll, que reconstruía todas: medido con dos listas de 220 y 280 tareas,
+   100–275 ms congelado al soltar, y se perdía el scroll interno de las ventanas que nadie había
+   tocado. `items`: [{ id, before }] con el rect guardado ANTES del cambio. */
+function repaintLayout(items){
+  repaintProjection();
+  for (const it of items){
+    const w = state.widgets.find(x => x.id === it.id);
+    const el = document.querySelector(`.win[data-id="${it.id}"]`);
+    if (!w || !el) continue;   // otro escritorio (Deshacer tras cambiar de pestaña): no hay nada pintado
+    el.style.zIndex = +w.z || 1;
+    if (!it.before || +it.before.w !== +w.w || +it.before.h !== +w.h) refreshWidget(w);
+  }
+  updateDeskHeight();
 }
 function toggleMaximize(w){   // ⛶ ocupa el viewport visible; ❐ restaura el tamaño y posición previos
   if (isMobile()) return;
@@ -6161,6 +6190,7 @@ function buildWindow(w){
       removeEventListener("pointercancel", cancel); removeEventListener("blur", cancel);
       if (af){ cancelAnimationFrame(af); af = null; }
       el.style.pointerEvents = "";
+      el.classList.remove("arrastrando");   // 0.96.2: vuelve el cristal
       if (ghost){ ghost.remove(); ghost = null; }
       removeBands(); clearHints();
       if (overTab){ overTab.classList.remove("drop-target"); overTab = null; }
@@ -6189,6 +6219,7 @@ function buildWindow(w){
         dragRects = projectWidgets(state.widgets.filter(x =>
           x.id !== w.id && !(tagFilter && !(x.tags || []).includes(tagFilter))));
         el.style.pointerEvents = "none";   // para que elementFromPoint vea la barra bajo el cursor
+        el.classList.add("arrastrando");   // 0.96.2: sin cristal mientras se mueve (lo devuelve cleanup)
         ghost = document.createElement("div");
         ghost.className = "drop-ghost";
         ghost.style.zIndex = Math.max(1, (w.z || 2) - 1);   // justo bajo la ventana arrastrada (va inflada: el borde asoma)
@@ -6318,7 +6349,7 @@ function buildWindow(w){
           wg.y = mv.y;
           items.push({ id: wg.id, before, after: rectSnap(wg) });
         }
-        flipLayout(items, () => { renderAll(); markDirty(); });   // §C: animación FLIP breve al soltar
+        flipLayout(items, () => { repaintLayout(items); markDirty(); });   // §C: animación FLIP breve al soltar; sin renderAll (0.96.2)
         const snap = { spaceId: sp.id, items };
         toastAction(moved.length ? "Reubicado en columna (los demás se acomodaron)." : "Reubicado en columna.", "Deshacer", () => undoLayout(snap));
         return;
@@ -6360,6 +6391,7 @@ function buildWindow(w){
     const sx = ev.clientX, sy = ev.clientY;
     let draft = null;   // clic seco (sin move) no debe escribir (revisión Codex 2026-07-10)
     const move = m => {
+      el.classList.add("arrastrando");   // 0.96.2: sin cristal mientras cambia de tamaño (lo devuelve finish)
       draft = resizeRect({ x: proj.x, y: proj.y, w: proj.w, h: proj.h }, dir,
         m.clientX - sx, m.clientY - sy, t.minW || 220, t.minH || 140);
       if (draft.y + draft.h > LAYOUT.worldMax) draft.h = LAYOUT.worldMax - draft.y;   // el lienzo tiene tope
@@ -6369,6 +6401,7 @@ function buildWindow(w){
     const finish = commit => {
       removeEventListener("pointermove", move); removeEventListener("pointerup", up);
       removeEventListener("pointercancel", cancel); removeEventListener("blur", cancel);
+      el.classList.remove("arrastrando");   // 0.96.2: vuelve el cristal, en todas las salidas
       if (!commit || !draft){   // cancelación o clic seco: DOM exacto como al empezar, estado intacto
         el.style.left = proj.x + "px"; el.style.top = proj.y + "px";
         el.style.width = proj.w + "px"; el.style.height = proj.h + "px";
@@ -6394,7 +6427,7 @@ function buildWindow(w){
       if (plan.moved.length){
         const items = [{ id: w.id, before: beforeSnap, after: rectSnap(w) }];
         for (const mv of plan.moved){ const wg = sp.widgets.find(x => x.id === mv.id); if (!wg) continue; const before = rectSnap(wg); wg.y = mv.y; items.push({ id: wg.id, before, after: rectSnap(wg) }); }
-        flipLayout(items, () => { renderAll(); markDirty(); updateDeskHeight(); });
+        flipLayout(items, () => { repaintLayout(items); markDirty(); });   // sin renderAll (0.96.2); repaintLayout ajusta el lienzo
         const snap = { spaceId: sp.id, items };
         toastAction("Redimensionado: los demás hicieron sitio.", "Deshacer", () => undoLayout(snap));
         return;
