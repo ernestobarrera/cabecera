@@ -5620,8 +5620,7 @@ function undoLayout(snap){
       wg.x = it.before.x; wg.y = it.before.y; wg.w = it.before.w; wg.h = it.before.h;
     }
   }
-  // 0.96.2: sin renderAll. El rect previo a ESTE cambio es el `after` del gesto que se deshace.
-  repaintLayout(snap.items.map(it => ({ id: it.id, before: it.after }))); markDirty();
+  repaintLayout(snap.items); markDirty();   // 0.96.2: sin renderAll
 }
 /* «Ordenar» — LA acción única de layout (veredicto Codex 2026-07-18, spec-ordenar-unificado).
    Coloca el escritorio según la política de columnas del espacio (Auto = nº automático por ancho;
@@ -5896,11 +5895,14 @@ function repaintProjection(){
   });
 }
 /* 0.96.2 — Recolocar SIN reconstruir. Soltar en columna, redimensionar empujando y su Deshacer solo
-   cambian geometría y orden de apilado, así que se repinta eso y solo se rehace el CONTENIDO de las
-   ventanas que cambian de TAMAÑO (una lista de tareas pagina y crece según su ancho y su alto).
-   Antes se llamaba a renderAll, que reconstruía todas: medido con dos listas de 220 y 280 tareas,
-   100–275 ms congelado al soltar, y se perdía el scroll interno de las ventanas que nadie había
-   tocado. `items`: [{ id, before }] con el rect guardado ANTES del cambio. */
+   cambian geometría y orden de apilado, así que se repinta eso y nada más. Antes se llamaba a
+   renderAll, que reconstruía todas: medido con dos listas de 220 y 280 tareas, 100–275 ms congelado
+   al soltar, y se perdía el scroll interno de las ventanas que nadie había tocado.
+   El contenido NO se rehace, tampoco el de la que cambia de tamaño, y es deliberado: una lista de
+   tareas que se repinta ya conectada CRECE hasta que le quepa todo (growWidgetToContent), así que
+   rehacerla deshacía en el acto un encogimiento que acabas de hacer tú — renderAll no lo hacía
+   porque pinta cada ventana antes de colgarla. Es lo mismo que ya pasa al redimensionar sin empujar
+   y al cambiar el ancho de la pantalla (repaintProjection): el cuerpo tiene scroll propio. */
 function repaintLayout(items){
   repaintProjection();
   for (const it of items){
@@ -5908,7 +5910,6 @@ function repaintLayout(items){
     const el = document.querySelector(`.win[data-id="${it.id}"]`);
     if (!w || !el) continue;   // otro escritorio (Deshacer tras cambiar de pestaña): no hay nada pintado
     el.style.zIndex = +w.z || 1;
-    if (!it.before || +it.before.w !== +w.w || +it.before.h !== +w.h) refreshWidget(w);
   }
   updateDeskHeight();
 }

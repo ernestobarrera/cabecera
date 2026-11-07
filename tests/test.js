@@ -6390,9 +6390,8 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
   // --- 0.96.2: recolocar sin reconstruir, y sin cristal mientras se arrastra ---
   // Soltar en columna, redimensionar empujando y su Deshacer reconstruían el escritorio entero
   // (renderAll): con dos listas largas, 100–275 ms congelado al soltar, y se perdía el scroll interno
-  // de las ventanas que nadie tocó. La equivalencia con renderAll
-  // (mismo estado, misma geometría, solo se rehace lo que cambia de tamaño) se comprobó en un
-  // navegador real; aquí se fija la forma para que no vuelva.
+  // de las ventanas que nadie tocó. La equivalencia con renderAll (mismo estado guardado, misma
+  // geometría) se comprobó en un navegador real; aquí se fija la forma para que no vuelva.
   {
     const cuerpo = (re, que) => { const m = src.match(re); if (!m) throw new Error('0.96.2: no encuentro ' + que); return m[0]; };
     const rl = cuerpo(/function repaintLayout\(items\)\{[\s\S]*?\n\}/, 'repaintLayout');
@@ -6400,16 +6399,18 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
     if (/renderAll\(\)/.test(rl)) throw new Error('0.96.2: repaintLayout no puede reconstruir el escritorio');
     if (/markDirty\(|saveNow\(/.test(rl)) throw new Error('0.96.2: repaintLayout solo pinta; marcar sucio es de quien cambia el estado');
     if (!/el\.style\.zIndex = \+w\.z \|\| 1/.test(rl)) throw new Error('0.96.2: sin renderAll, el orden de apilado del commit hay que pintarlo aquí');
-    if (!/\+it\.before\.w !== \+w\.w \|\| \+it\.before\.h !== \+w\.h\) refreshWidget\(w\)/.test(rl))
-      throw new Error('0.96.2: solo se rehace el contenido de la ventana que cambia de TAMAÑO (una lista pagina y crece según su ancho y alto)');
+    // rehacer el contenido de una lista YA conectada la hace crecer hasta que le quepa todo, y eso
+    // deshacía en el acto un encogimiento suyo: se comprobó en navegador (el estado guardado cambiaba)
+    if (/refreshWidget\(|renderBody\(|buildWindow\(/.test(rl))
+      throw new Error('0.96.2: recolocar no rehace contenido — una lista repintada ya conectada crece sola y deshace tu encogimiento');
     if (!/updateDeskHeight\(\)/.test(rl)) throw new Error('0.96.2: el alto del lienzo tiene que seguir a la nueva geometría');
     // los tres caminos: soltar en columna, redimensionar con empuje, deshacer
     if ((src.match(/flipLayout\(items, \(\) => \{ repaintLayout\(items\); markDirty\(\); \}\)/g) || []).length !== 2)
       throw new Error('0.96.2: soltar en columna y redimensionar con empuje deben recolocar con repaintLayout');
     if (/flipLayout\(items, \(\) => \{ renderAll\(\)/.test(src)) throw new Error('0.96.2: una transacción de layout vuelve a reconstruir el escritorio entero');
     const ul = cuerpo(/function undoLayout\(snap\)\{[\s\S]*?\n\}/, 'undoLayout');
-    if (/renderAll\(\)/.test(ul) || !/repaintLayout\(snap\.items\.map\(it => \(\{ id: it\.id, before: it\.after \}\)\)\)/.test(ul))
-      throw new Error('0.96.2: Deshacer recoloca sin reconstruir, comparando contra el rect que dejó el gesto (after)');
+    if (/renderAll\(\)/.test(ul) || !/repaintLayout\(snap\.items\)/.test(ul))
+      throw new Error('0.96.2: Deshacer recoloca sin reconstruir');
     // sin cristal durante el gesto, y de vuelta en TODAS las salidas
     if (!/\.win\.arrastrando\{backdrop-filter:none; -webkit-backdrop-filter:none;/.test(html)) throw new Error('0.96.2: falta la regla que quita el cristal al arrastrar');
     if (!/\.win\.arrastrando\.has-win-color\{background-image:[\s\S]{0,200}var\(--win-color\) 16%/.test(html)) throw new Error('0.96.2: una ventana con color tiene que conservar su tinte durante el arrastre');
@@ -6422,7 +6423,7 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
     const fin = rz.match(/const finish = commit => \{[\s\S]*?\n    \};/)[0];
     if (!/^[^\n]*\n[^\n]*\n[^\n]*\n\s*el\.classList\.remove\("arrastrando"\)/.test(fin)) throw new Error('0.96.2: al redimensionar, el cristal vuelve ANTES de cualquier salida temprana de finish');
     if (!/const move = m => \{\s*el\.classList\.add\("arrastrando"\)/.test(rz)) throw new Error('0.96.2: el cristal se quita al mover el asa, no al pulsarla');
-    console.log('OK 0.96.2 (soltar, redimensionar con empuje y deshacer recolocan sin reconstruir; solo se rehace lo que cambia de tamaño; sin cristal durante el gesto, con el tinte de color, y de vuelta en todas las salidas)');
+    console.log('OK 0.96.2 (soltar, redimensionar con empuje y deshacer recolocan sin reconstruir ni rehacer contenido; sin cristal durante el gesto, con el tinte de color, y de vuelta en todas las salidas)');
   }
 
   console.log('\nTODO EN VERDE');

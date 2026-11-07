@@ -5,8 +5,8 @@
 - **Soltar una ventana ya no congela el escritorio.** Al soltarla en una columna, al redimensionar
   empujando a las de abajo y al deshacer, se reconstruían todas las ventanas: con listas de tareas
   largas eran una o dos décimas de segundo con la pantalla parada. Ahora solo se recolocan las que se
-  mueven, y solo se rehace el contenido de la que cambia de tamaño. Dónde queda cada ventana y lo que
-  se guarda no cambia.
+  mueven, sin rehacer su contenido. Dónde queda cada ventana y lo que se guarda no cambia, y una lista
+  que encoges se queda del tamaño que le das.
 - **Las demás ventanas no pierden su sitio**: si estabas a mitad de una lista larga en otra ventana,
   sigue donde la dejaste.
 - **Arrastrar es más suave.** Mientras arrastras o cambias el tamaño de una ventana, esa ventana deja
