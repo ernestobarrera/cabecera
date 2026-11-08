@@ -75,6 +75,7 @@
     <a href="#widgets">Widgets</a>
     <a href="#calendario">Calendario</a>
     <a href="#espacios">Espacios</a>
+    <a href="#dashboard">Dashboard</a>
     <a href="#etiquetas">Etiquetas</a>
     <a href="#buscar">Buscar</a>
     <a href="#papelera">Papelera</a>
@@ -158,6 +159,21 @@
   <p class="note"><b>¿Cuál de los tres archivos necesito?</b> Cabecera maneja tres <code>.json</code> que se parecen por fuera y hacen cosas muy distintas: la <b>copia de seguridad</b> (todos tus escritorios, para ti), el <b>escritorio compartido</b> (uno solo, para otra persona) y el <b>pack</b> (una plantilla reutilizable). Si dudas, abre <b>📦 «Guardar, compartir o reutilizar…»</b> desde Inicio o Ctrl+K: cada uno dice para qué sirve, para qué <i>no</i>, y qué mirar antes de compartir nada en un entorno sanitario. Desde ahí se llega a la acción correcta; los comandos sueltos siguen estando para quien ya sabe cuál quiere.</p>
   <p class="note"><b>Las columnas se adaptan solas a cada pantalla.</b> En un escritorio con un número fijo de columnas (2, 3 o 4), cada ventana encajada en una columna se dibuja al ancho que esa columna tiene <b>en la pantalla que estés usando</b>: cambias de monitor, abres el portátil o estrechas la ventana del navegador, y todo se reajusta al instante, en los dos sentidos, sin pedirte nada. Lo que se guarda es en qué columna está cada ventana, no cuántos píxeles medía en el monitor donde la colocaste — por eso el mismo escritorio encaja en el ordenador de casa y en el del trabajo sin tocar nada, y sin que abrirlo modifique tu archivo de datos. Las ventanas que hayas colocado libres (con <b>Alt</b>) o redimensionado a mano se quedan donde las dejaste: la colocación libre sigue siendo tuya.</p>
   <p class="note">Plegar todo con <b>⊟</b> en la barra deja cada espacio ordenado de un vistazo. Al desplegar, si las ventanas ya no caben donde estaban, se reordenan solas para no solaparse. Una ventana que despliegas con su <b>▾</b> vuelve al alto que tenía, aunque la hubieras dejado plegada al cerrar el navegador; en Tareas, además, se recalcula lo que cabe en la primera página.</p>
+</section>
+
+<section id="dashboard">
+  <h2><span class="ic">📊</span> Dashboard — lo que te espera y el índice de todo</h2>
+  <p class="lead">Una pestaña fija a la izquierda de tus escritorios que cuenta lo que hay, te dice qué hacer ahora y te lleva a cualquier sitio en un clic.</p>
+  <ul class="steps">
+    <li><b>Abrir:</b> la pestaña <b>📊 Dashboard</b> de la barra, la tecla <kbd>D</kbd> (fuera de un campo de texto), el menú <b>⊞ Inicio</b> o «Dashboard» en <kbd>Ctrl</kbd>+<kbd>K</kbd>. <b>Volver:</b> <kbd>Esc</kbd>, otra vez <kbd>D</kbd> o un clic en cualquier pestaña. Al volver con <kbd>D</kbd> lo encuentras en el mismo punto en que lo dejaste.</li>
+    <li><b>Lo siguiente</b>, arriba, es una sola cosa: primero lo vencido; si no hay, la tarea que más tiempo lleva pidiéndote algo; si tampoco, lo que vence hoy. Si no hay nada, dice «Nada te espera».</li>
+    <li><b>Cuatro cifras, todas pulsables:</b> <b>🤖 te piden algo</b> (con la edad de la más antigua), <b>⏰ vencidas u hoy</b>, <b>✅ cerradas hoy</b> (y en la semana) y <b>▤ abiertas</b>. Cada una enseña debajo <b>su lista</b>: cada tarea con su número, cuántos días lleva y en qué escritorio y lista vive. Lo que te piden y lo vencido va siempre entero; las cerradas y las abiertas enseñan las 40 primeras y un botón <b>Mostrar las restantes</b>. Un clic te deja <b>en esa tarea</b>, en su lista y señalada; allí la respondes o la cierras como siempre.</li>
+    <li><b>El índice:</b> una tarjeta por escritorio, con una franja de su fondo para reconocerlo sin leer, y dentro sus ventanas agrupadas por tipo. Las listas de tareas dicen cuántas tienen abiertas y cuántas tienen respuesta del agente (🤖, en ámbar si alguna te pide algo), con el mismo recuento que ves en la propia lista. Un clic en una ventana te lleva a ella; en el nombre del escritorio, a ese escritorio. Los escritorios vacíos van al final, en una línea.</li>
+    <li><b>Filtrar el índice:</b> escribe en la caja y se queda solo lo que casa por título, contenido o escritorio (entiende los mismos sinónimos que el menú: «vacaciones» encuentra Permisos). <kbd>Enter</kbd> abre la primera; <kbd>Esc</kbd> vacía el filtro.</li>
+    <li><b>Movimiento reciente:</b> las últimas altas, cierres y respuestas de tus tareas, con «hace…». Solo tareas, porque son lo único que guarda la fecha de cada cambio.</li>
+  </ul>
+  <p class="note"><b>Solo mirar.</b> Abrir el Dashboard y volver no cambia nada de tu archivo de datos. Se actualiza solo —al cambiar algo o al llegar un cambio del otro equipo— sin moverte el scroll ni quitarte el foco, y con el Dashboard cerrado no calcula nada. Con la <a href="#privacidad">privacidad</a> puesta, los widgets privados no aparecen ni cuentan. Mientras está delante se ocultan ⊟, ▤ y 🧭, que actúan sobre el escritorio de detrás.</p>
+  <p class="note"><b>Con el teclado:</b> <kbd>Tab</kbd> recorre en orden de lectura y <kbd>Enter</kbd> abre lo que tengas seleccionado. En pantallas estrechas, las cifras pasan a dos por fila y el índice a una columna.</p>
 </section>
 
 <section id="configuracion">
@@ -267,6 +283,7 @@
     <tr><th>Atajo</th><th>Qué hace</th></tr>
     <tr><td colspan="2" style="opacity:.75">Los atajos se anuncian ahora <b>junto a la función que evitan</b>, en la paleta y en el menú del clic derecho. La lista completa está también dentro de la app: <b>⌨️ Atajos de teclado</b> en Ctrl+K.</td></tr>
     <tr><td><kbd>Ctrl</kbd>+<kbd>K</kbd> · <kbd>/</kbd></td><td>Abrir la paleta: buscar y ejecutar</td></tr>
+    <tr><td><kbd>D</kbd></td><td>Abrir o cerrar el <a href="#dashboard">Dashboard</a> (fuera de un campo de texto)</td></tr>
     <tr><td>Doble clic en el escritorio</td><td>Abrir la paleta (Ctrl+K); con <kbd>Ctrl</kbd> pulsado, el menú de creación junto al puntero</td></tr>
     <tr><td><kbd>Ctrl</kbd>+clic derecho</td><td>Abrir <b>⊞ Inicio</b> donde tengas el ratón (sin Ctrl, sale el menú del escritorio)</td></tr>
     <tr><td>Doble clic en el título</td><td>Renombrar la ventana</td></tr>
@@ -276,7 +293,7 @@
     <tr><td>Hover en barra · <b>⛶</b> · <b>▾</b> · <b>✕</b></td><td>Etiquetar / maximizar / plegar / cerrar un widget</td></tr>
     <tr><td><b>👁</b> (barra del widget · dock)</td><td>Marcar como privado · ocultar/mostrar todos los privados (pantalla compartida)</td></tr>
     <tr><td><kbd>Alt</kbd> mientras arrastras</td><td>Mover la ventana libre: sin sombra de destino ni imán a los bordes</td></tr>
-    <tr><td><kbd>Esc</kbd></td><td>Cerrar el modal, el tour o el menú abierto</td></tr>
+    <tr><td><kbd>Esc</kbd></td><td>Cerrar el modal, el tour o el menú abierto; con el Dashboard delante, volver al escritorio</td></tr>
     <tr><td>⏰/📌 (barra)</td><td>Ir a la siguiente tarea <b>tuya</b> vencida o que vence hoy. Te deja en la fila concreta —abriendo su página si está en una avanzada— y la señala unos segundos. Solo cuenta lo <b>pendiente</b>: una tarea que ya diste por hecha no es deuda, aunque su fecha llegue después</td></tr>
     <tr><td>⚙ (barra)</td><td>Ir a la siguiente tarea <b>de ejecución agéntica</b> con la fecha ya cumplida, también hasta su fila. Es un aviso aparte a propósito: te pide encender y autorizar, no hacerlo tú. Ninguno de los dos se muestra si no hay nada</td></tr>
     <tr><td>Arrastrar una tarea</td><td>Reordenar manualmente las tareas pendientes</td></tr>

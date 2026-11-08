@@ -1303,12 +1303,109 @@ body.detalle-completa #taskbar{display:none}
 .sub-todo li,.sub-clips li{margin:4px 0; display:flex; gap:6px; align-items:baseline}
 .sub-todo li.done{color:var(--text-dim); text-decoration:line-through}
 .sub-todo .cbx{flex-shrink:0}
+
+/* ---------- 0.97.0 — Dashboard ----------
+   Tres niveles y solo tres, de arriba abajo: una cosa → cuatro cifras → el índice. Opaco, sin
+   cristal (nada se difumina detrás) y sin animaciones propias: lo único que se mueve es el destello
+   al llegar a un destino, que ya existía. Letra mayor que en las ventanas, porque esto se LEE. */
+#tb-dash{display:flex; align-items:center; gap:6px; background:rgba(255,255,255,.045); border:1px solid var(--border-soft); color:#c7d0de; border-radius:9px; padding:5px 10px; cursor:pointer; font-size:12.5px; font-family:var(--font); white-space:nowrap; flex-shrink:0}
+#tb-dash:hover{background:rgba(255,255,255,.06); color:var(--text)}
+#tb-dash.active{background:var(--accent-soft); border-color:var(--accent); color:var(--text)}
+#tb-dash .kbd-hint{opacity:.75}
+/* con el Dashboard delante, la pestaña del escritorio deja de parecer la activa (sigue marcada por
+   dentro: es adonde vuelve Esc) y se apagan los controles que actúan sobre el escritorio de detrás */
+body.dash-on .space-tab.active{background:rgba(255,255,255,.045); border-color:var(--border-soft); color:#c7d0de; box-shadow:inset 0 -2px 0 var(--accent)}
+body.dash-on #btn-fold, body.dash-on #tb-cols, body.dash-on #desk-arrange{visibility:hidden}
+#dashboard{position:fixed; inset:0 0 46px 0; z-index:2; overflow-y:auto; overflow-x:hidden; background:#0b0e14; outline:none}
+.dash-wrap{max-width:1180px; margin:0 auto; padding:26px 24px 72px; font-size:15px; line-height:1.45; color:var(--text)}
+.dash-cab{display:flex; align-items:flex-end; justify-content:space-between; gap:10px 18px; flex-wrap:wrap; margin-bottom:16px}
+.dash-cab h1{font-size:22px; font-weight:600; line-height:1.2}
+.dash-fecha{color:var(--text-dim); font-size:14px; margin-top:2px}
+.dash-fecha::first-letter{text-transform:uppercase}
+.dash-volver{color:var(--text-dim); font-size:13px; display:flex; align-items:center; gap:6px; flex-wrap:wrap}
+.dash-sig{display:flex; align-items:baseline; gap:12px; width:100%; text-align:left; background:var(--glass-opaco); border:1px solid var(--border); border-radius:14px; padding:14px 18px; color:var(--text); font:inherit; font-size:16.5px; cursor:pointer}
+.dash-sig:hover, .dash-sig:focus-visible{border-color:var(--accent); outline:none}
+.dash-sig .et{flex:0 0 auto; font-size:12px; text-transform:uppercase; letter-spacing:.08em; color:var(--text-dim); font-weight:600}
+.dash-sig .tx{flex:1 1 auto; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.dash-sig .num{color:var(--text-dim)}
+.dash-sig .dn{flex:0 1 auto; max-width:40%; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:var(--text-dim); font-size:13.5px}
+.dash-sig .mot{color:var(--warn); font-weight:600; white-space:nowrap}
+.dash-sig .mot.mal{color:var(--danger)}
+.dash-sig.nada{cursor:default; color:var(--text-dim)}
+.dash-sig.nada:hover{border-color:var(--border)}
+.dash-cifras{display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:12px; margin:16px 0 22px}
+.dash-cifra{display:flex; flex-direction:column; align-items:flex-start; text-align:left; background:var(--glass-opaco); border:1px solid var(--border-soft); border-radius:12px; padding:13px 16px; color:var(--text); cursor:pointer; font-family:var(--font); min-width:0}
+.dash-cifra:hover{border-color:var(--border)}
+.dash-cifra:focus-visible{outline:none; box-shadow:0 0 0 2px var(--accent)}
+.dash-cifra[aria-pressed="true"]{border-color:var(--accent); background:linear-gradient(var(--accent-soft), var(--accent-soft)), var(--glass-opaco)}
+.dash-cifra .n{font-size:30px; font-weight:600; line-height:1.15; font-variant-numeric:tabular-nums}
+.dash-cifra .l{font-size:14.5px}
+.dash-cifra .s{font-size:12.5px; color:var(--text-dim); margin-top:2px}
+.dash-cifra.urge .n{color:var(--warn)}
+.dash-cifra.mal .n{color:var(--danger)}
+.dash-sec{background:var(--glass-opaco); border:1px solid var(--border-soft); border-radius:14px; padding:14px 14px 10px; margin-bottom:20px}
+.dash-sec > h2{display:flex; align-items:center; justify-content:space-between; gap:8px 14px; flex-wrap:wrap; font-size:12.5px; font-weight:600; text-transform:uppercase; letter-spacing:.08em; color:var(--text-dim); margin:0 4px 8px}
+.dash-sec > h2 .h2r{text-transform:none; letter-spacing:0; font-weight:400}
+.dash-filas{list-style:none}
+.dash-fila{display:flex; align-items:baseline; gap:12px; width:100%; text-align:left; background:none; border:0; border-radius:8px; padding:7px 8px; color:var(--text); font:inherit; cursor:pointer}
+.dash-fila:hover{background:rgba(255,255,255,.055)}
+.dash-fila:focus-visible{outline:none; background:rgba(255,255,255,.055); box-shadow:0 0 0 2px var(--accent)}
+.dash-fila .ed{flex:0 0 74px; text-align:right; color:var(--text-dim); font-variant-numeric:tabular-nums; white-space:nowrap}
+.dash-fila .ed.urge{color:var(--warn); font-weight:600}
+.dash-fila .ed.mal{color:var(--danger); font-weight:600}
+.dash-fila .que{flex:0 0 auto; color:var(--text-dim); font-size:13px; white-space:nowrap}
+.dash-fila .num{flex:0 0 auto; color:var(--text-dim)}
+.dash-fila .tx{flex:1 1 auto; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.dash-fila.hecha .tx{color:var(--text-dim); text-decoration:line-through}
+.dash-fila .dn{flex:0 1 auto; max-width:36%; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:var(--text-dim); font-size:13px}
+.dash-grupo{font-size:12.5px; color:var(--text-dim); padding:10px 8px 3px; list-style:none}
+.dash-vacio{color:var(--text-dim); padding:6px 8px 10px}
+.dash-q{width:min(340px, 100%); background:rgba(255,255,255,.05); border:1px solid var(--border-soft); border-radius:8px; color:var(--text); padding:6px 10px; font-family:var(--font); font-size:13.5px}
+.dash-q:focus{outline:none; border-color:var(--accent)}
+.dash-tarjetas{display:grid; grid-template-columns:repeat(auto-fill, minmax(270px, 1fr)); gap:12px; align-items:start; margin:4px 2px 6px}
+.dash-card{position:relative; background:rgb(27,32,41); border:1px solid var(--border-soft); border-radius:12px; overflow:hidden; padding:13px 6px 6px}
+.dash-card::before{content:""; position:absolute; left:0; right:0; top:0; height:6px; background:var(--franja, rgba(255,255,255,.12))}
+.dash-card ul{list-style:none}
+.dash-card li.sep{border-top:1px solid var(--border-soft); margin-top:3px; padding-top:3px}
+.dash-esp{display:flex; align-items:baseline; gap:8px; width:100%; text-align:left; background:none; border:0; border-radius:8px; padding:5px 8px 6px; color:var(--text); font-family:var(--font); font-size:15.5px; font-weight:600; cursor:pointer}
+.dash-esp:hover{background:rgba(255,255,255,.055)}
+.dash-esp:focus-visible{outline:none; box-shadow:0 0 0 2px var(--accent)}
+.dash-esp .aqui{font-size:11.5px; font-weight:400; color:var(--accent)}
+.dash-esp .n{margin-left:auto; font-size:12.5px; font-weight:400; color:var(--text-dim); font-variant-numeric:tabular-nums}
+.dash-win{display:flex; align-items:baseline; gap:8px; width:100%; text-align:left; background:none; border:0; border-radius:7px; padding:4px 8px; color:var(--text); font-family:var(--font); font-size:14px; cursor:pointer}
+.dash-win:hover{background:rgba(255,255,255,.055)}
+.dash-win:focus-visible{outline:none; background:rgba(255,255,255,.055); box-shadow:0 0 0 2px var(--accent)}
+.dash-win .ic{flex:0 0 20px; text-align:center}
+.dash-win .t{flex:1 1 auto; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.dash-win .c{flex:0 0 auto; color:var(--text-dim); font-size:13px; font-variant-numeric:tabular-nums}
+.dash-win .bot{flex:0 0 auto; color:var(--text-dim); font-size:13px}
+.dash-win .bot.urge{color:var(--warn); font-weight:600}
+.dash-vacias{color:var(--text-dim); font-size:13.5px; padding:6px 6px 4px}
+.dash-vacias button{background:none; border:0; color:var(--text-dim); font:inherit; cursor:pointer; text-decoration:underline; text-underline-offset:2px; padding:0 2px}
+.dash-vacias button:hover, .dash-vacias button:focus-visible{color:var(--text); outline:none}
+.dash-nada{color:var(--text-dim); padding:6px 8px 10px}
+.dash-mas{margin:6px 8px 4px 94px; background:rgba(255,255,255,.05); border:1px solid var(--border-soft); border-radius:8px; color:var(--text); padding:6px 12px; font-family:var(--font); font-size:13.5px; cursor:pointer}
+.dash-mas:hover{border-color:var(--accent)}
+.dash-mas:focus-visible{outline:none; box-shadow:0 0 0 2px var(--accent)}
+@media (max-width: 700px){
+  .dash-wrap{padding:16px 12px 64px}
+  .dash-cifras{grid-template-columns:repeat(2, minmax(0, 1fr))}
+  .dash-tarjetas{grid-template-columns:1fr}
+  .dash-fila, .dash-sig{flex-wrap:wrap}
+  .dash-fila .tx{flex:1 1 0}
+  .dash-fila .dn, .dash-sig .dn{flex-basis:100%; max-width:none; padding-left:86px}
+  .dash-sig .dn{padding-left:0}
+  #tb-dash .lbl, #tb-dash .kbd-hint{display:none}
+}
 </style>
 </head>
 <body>
 
 <div id="wallpaper"></div>
 <div id="desktop"><div id="desk-end"></div></div>
+<!-- 0.97.0: el Dashboard NO es un escritorio del archivo. Se calcula de lo que ya hay en memoria y
+     se pinta encima del escritorio, que sigue montado detrás: volver con Esc no reconstruye nada. -->
+<div id="dashboard" hidden tabindex="-1" role="region" aria-label="Dashboard"></div>
 <div id="desk-dock" aria-label="Accesos rápidos">
   <button class="dock-btn dock-key" id="desk-palette" title="Abrir paleta de comandos">Ctrl K</button>
   <button class="dock-btn" id="desk-arrange" title="Ordenar el escritorio (según tus columnas)">🧭</button>
@@ -1321,6 +1418,7 @@ body.detalle-completa #taskbar{display:none}
 <div id="taskbar">
   <button id="btn-inicio" title="Añadir widgets y configuración  ·  Ctrl+clic derecho sobre el escritorio lo abre junto al puntero">⊞ Inicio</button>
   <button id="btn-fold" title="Plegar / desplegar todos los widgets">⊟</button>
+  <button id="tb-dash" aria-pressed="false" title="Dashboard: lo que te espera, en cifras, y el índice de todo lo que tienes  ·  tecla D (Esc vuelve al escritorio)">📊 <span class="lbl">Dashboard</span> <span class="kbd-hint">D</span></button>
   <div id="tb-spaces" title="Espacios (escritorios): clic para cambiar, doble clic para renombrar, arrastra para reordenar"></div>
   <button id="space-add" title="Nuevo espacio">＋</button>
   <button id="tb-cols" title="Columnas: Auto, 2, 3 o 4. Elegir una ordena el escritorio al instante (con Deshacer) y rige los carriles al arrastrar">▤ Auto</button>
@@ -1352,6 +1450,7 @@ body.detalle-completa #taskbar{display:none}
   </div>
   <div id="menu-actions">
     <h4 style="width:100%">Configuración</h4>
+    <button class="act" id="act-dash">📊 Dashboard <span class="kbd-hint">D</span></button>
     <button class="act" id="act-config">⚙ Ajustes generales</button>
     <button class="act" id="act-ayuda">❓ Guía</button>
     <button class="act" id="act-packs">🧩 Packs</button>
@@ -2314,7 +2413,7 @@ function syncUI(mode, txt){
    reaparece) y si Recargar está activo. El descarte ✕ vive solo en memoria de la sesión.
    Demora asumida: la CDN de Pages puede servir la versión vieja hasta ~10 min aun con
    no-store (gobierna la caché del navegador, no la CDN); para pestañas de días, irrelevante. */
-const APP_VERSION = "0.96.2";
+const APP_VERSION = "0.97.0";
 let newVersionDetected = null;   // versión superior detectada; detiene futuras consultas
 let verDismissed = false;        // ✕: solo esta sesión — nunca persistido en disco
 let verCheckInflight = false;    // sin consultas concurrentes
@@ -5294,6 +5393,7 @@ function renderTagFilterBar(){
 // cambiar de escritorio CONSERVANDO el filtro: ya ocurría, pero no había forma de provocarlo
 function gotoSpace(si){
   if (!state || si < 0 || si >= state.spaces.length) return;
+  revelarEscritorio();
   state.active = si;
   renderAll();
 }
@@ -5302,13 +5402,14 @@ function gotoSpace(si){
 const TOUR = [
   { sel: "#btn-inicio", pos: "top", title: "Añade widgets", body: "Desde <b>⊞ Inicio</b> agregas notas, enlaces, tareas, calendario… También con <b>Ctrl+K</b> escribiendo «Añadir»." },
   { sel: "#tb-spaces", pos: "top", title: "Espacios (escritorios)", body: "Crea escritorios con <b>＋</b>, uno por especialidad o proyecto. Clic para cambiar, doble clic para renombrar, arrastra una pestaña para reordenarla. Arrastra una ventana <b>sobre otra pestaña</b> para moverla allí. El color de cada pestaña se toma solo del fondo de ese escritorio." },
+  { sel: "#tb-dash", pos: "top", title: "Dashboard", body: "<b>📊 Dashboard</b> (tecla <b>D</b>) te dice lo siguiente que hacer, cuenta lo que te piden, lo vencido y lo cerrado, y es el índice de todas tus ventanas: un clic te lleva a cualquiera. <b>Esc</b> vuelve." },
   { sel: "#btn-fold", pos: "top", title: "Ordena de un vistazo", body: "<b>⊟</b> pliega o despliega todos los widgets; cada uno también se pliega con <b>▾</b> en su barra." },
   { sel: ".win .win-title", pos: "bottom", title: "Cada widget", body: "Arrástralo por su barra: aparecen <b>columnas guía</b> y una <b>sombra</b> te enseña dónde encajará (las de abajo hacen sitio; con <b>Alt</b>, libre). Al pasar el ratón aparecen las etiquetas; <b>▾</b> pliega y <b>✕</b> cierra. <b>Doble clic</b> para renombrarlo." },
   { sel: "#tb-sync", pos: "top", title: "Tus datos son tuyos", body: "Todo se guarda solo, sin cuentas ni servidor. Opcional: «Sincronizar equipos» para tener lo mismo en casa y en el trabajo." },
   { sel: null, pos: "center", title: "¡Listo!", body: "Pulsa <b>Ctrl+K</b> en cualquier momento para buscar y ejecutar. Tienes la guía completa cuando quieras.", cta: { label: "📖 Guía completa", href: "guia.html" } }
 ];
 let tourStep = 0;
-function startTour(){ tourStep = 0; $("#tour").classList.add("open"); showTourStep(); addEventListener("resize", showTourStep); }
+function startTour(){ revelarEscritorio(); tourStep = 0; $("#tour").classList.add("open"); showTourStep(); addEventListener("resize", showTourStep); }
 function endTour(){ $("#tour").classList.remove("open"); removeEventListener("resize", showTourStep); try{ localStorage.setItem("cabecera-tour-done", "1"); }catch(e){} }
 function positionTourCard(card, target, pos, vw, vh){
   const cw = Math.min(330, vw - 24), ch = card.offsetHeight || 170;
@@ -5668,6 +5769,7 @@ function orderSpace(nextCols, opts){
   if (isMobile() || !state) return;
   if (tagFilter){ toast("Quita el filtro de etiqueta para ordenar", true); return; }
   if (state.widgets.some(x => x.max)){ toast("Restaura la ventana maximizada para ordenar", true); return; }
+  revelarEscritorio();   // 0.97.0: ordenar desde la paleta con el Dashboard delante, y que se vea
   const sp = state.spaces[state.active];
   const colsBefore = (state.settings && state.settings.cols) || "auto";
   const colsAfter = nextCols === undefined ? colsBefore : nextCols;
@@ -5974,11 +6076,12 @@ function renderTabs(){
     const accent = spaceAccent(sp);
     return `<button class="space-tab${i === state.active ? " active" : ""}${accent ? " has-accent" : ""}" data-i="${i}" title="${esc(sp.name || "Escritorio")}"${accent ? ` style="--sp-accent:${accent}"` : ""}><span class="st-name">${esc(sp.name || "Escritorio")}</span>${i === state.active && multi ? `<span class="st-del" title="Eliminar este espacio">✕</span>` : ""}</button>`;
   }).join("") + subsHtml;
-  box.querySelectorAll(".sub-tab").forEach(t => t.addEventListener("click", () => openSubscription(t.dataset.sub)));
+  box.querySelectorAll(".sub-tab").forEach(t => t.addEventListener("click", () => { revelarEscritorio(); openSubscription(t.dataset.sub); }));
   const followBtn = box.querySelector(".sub-follow"); if (followBtn) followBtn.addEventListener("click", () => promptFollowUrl());
   box.querySelectorAll(".space-tab").forEach(t => {
     const i = +t.dataset.i;
-    t.addEventListener("click", e => { if (e.target.closest(".st-del")){ deleteSpace(i); return; } setActive(i); });
+    // 0.97.0: pulsar una pestaña quita el Dashboard de delante, también la del escritorio en el que ya estabas
+    t.addEventListener("click", e => { if (e.target.closest(".st-del")){ deleteSpace(i); return; } revelarEscritorio(); setActive(i); });
     t.addEventListener("dblclick", e => { if (!e.target.closest(".st-del")) renameSpace(i, t); });
     if (multi){
       t.draggable = true;
@@ -6879,6 +6982,7 @@ function nextWidgetSpot(ww, hh){   // adaptador impuro (N0)
 }
 
 function addWidget(type){
+  revelarEscritorio();   // 0.97.0: una ventana nueva se ve nacer
   const t = WTYPES[type];
   const spot = nextWidgetSpot(t.w, t.h);
   const w = { id: uid(), type, x: spot.x, y: spot.y,
@@ -7202,7 +7306,16 @@ function focusTask(id, si, it){
   ui.soloBot = false;
   ui.q = "";
   todoJump.set(id, it);
+  const cruza = typeof si === "number" && si !== state.active;
   focusWidget(id, si);   // trae la ventana al frente, la despliega y cambia de escritorio si hace falta
+  /* 0.97.0 — SI SE CAMBIÓ DE ESCRITORIO, el encargo se servía mal, y se midió en navegador: el
+     cambio de escritorio pinta cada ventana ANTES de colgarla (renderAll), así que `paint()` lo
+     servía sobre una lista que aún no estaba en pantalla. Sin medidas, no sabía cuántas filas caben
+     (la página salía con 8 en una ventana donde caben 4) y el desplazamiento hasta la fila no hacía
+     nada: el destello se ponía en una fila FUERA de la vista. Pasaba igual desde la paleta y desde
+     el aviso ⏰; el Dashboard lo destapó porque casi todo lo que enseña está en otro escritorio.
+     Se vuelve a encargar y se repinta ya colgada. El destello no se pierde: lo pone ese repintado. */
+  if (cruza) todoJump.set(id, it);
   /* Y aquí el detalle que se come el destello si se pasa por alto: cambiar de escritorio ya
      re-renderiza todos sus widgets, así que `paint()` puede haber servido el encargo por el camino.
      Repintar «por si acaso» reconstruiría el `li` recién señalado y se llevaría el destello por
@@ -11174,6 +11287,7 @@ const snippet = s => { s = String(s).replace(/\s+/g, " ").trim(); return s.lengt
 // Traer una ventana al frente (cambiando de espacio si hace falta), hacerla visible y destellar
 function focusWidget(id, si){
   closeMenu();
+  revelarEscritorio();   // 0.97.0: llegar a una ventana es verla
   if (typeof si === "number" && si !== state.active) setActive(si);   // salta al espacio del widget y re-renderiza
   const wi = state.widgets.find(x => x.id === id);
   const win = document.querySelector(`.win[data-id="${id}"]`);
@@ -11347,6 +11461,7 @@ function applyCapture(cap, target){
    manejador de teclado están todos declarados. */
 const ATAJOS = {
   palette:  { teclas: "Ctrl+K",      que: "Abrir la paleta de comandos", alt: "/" },
+  dash:     { teclas: "D",           que: "Abrir o cerrar el Dashboard (fuera de un campo de texto; Esc también vuelve)" },
   undo:     { teclas: "Ctrl+Z",      que: "Deshacer la última reescritura de una tarea" },
   escape:   { teclas: "Esc",         que: "Cerrar lo que esté abierto: menú, modal o tour" },
   enviar:   { teclas: "Ctrl+Enter",  que: "Enviar una respuesta o guardar sin soltar el teclado" },
@@ -11529,6 +11644,8 @@ function paletteEntries(terms, dest){
   add("↩️", "Deshacer la última reescritura de tarea", "vuelve el texto anterior", () => { closeMenu(); if (!undoLastTextEdit()) toast("No hay nada que deshacer"); }, "deshacer undo texto tarea reescritura anterior", "undo");
   add("👁", privacyOn ? "Privacidad: mostrar widgets privados" : "Privacidad: ocultar widgets privados", "pantalla compartida",
     () => { closeMenu(); setPrivacy(!privacyOn); }, "privacidad privado ocultar mostrar compartir pantalla presentacion docencia escenica");
+  add("📊", "Dashboard", "lo que te espera, en cifras, y el índice de todo", () => { closeMenu(); abrirDashboard(); },
+    "dashboard panel resumen cifras indice todo pendientes te piden vencidas cerradas abiertas panorama inicio", "dash");
   add("⌨️", "Atajos de teclado", "todos, en una lista", () => { closeMenu(); openAtajos(); }, "atajos teclado teclas shortcuts combinaciones ctrl alt esc", "palette");
   add("📖", "Guía completa", "cómo funciona todo", () => { closeMenu(); window.open("guia.html", "_blank", "noopener"); }, "guia manual ayuda completa como funciona empezar");
   add("📤", "Compartir este escritorio", "exportar a un archivo", () => { closeMenu(); exportSharedSpace(); }, "compartir exportar escritorio archivo publicar seguir enviar compartido");
@@ -11961,7 +12078,10 @@ function wireUI(){
   });
   document.addEventListener("pointerdown", e => { if (!e.target.closest("#ctx-menu")) closeCtx(); }, true);
   window.addEventListener("blur", closeCtx);
-  $("#space-add").addEventListener("click", addSpace);
+  $("#space-add").addEventListener("click", () => { revelarEscritorio(); addSpace(); });
+  // 0.97.0 — el Dashboard: pestaña fija de la barra y entrada en el menú Inicio (R13)
+  $("#tb-dash").addEventListener("click", alternarDashboard);
+  $("#act-dash").addEventListener("click", () => { closeMenu(); abrirDashboard(); });
   $("#tb-cols").addEventListener("click", openColsMenu);
   // barra de espacios: rueda = desplazamiento horizontal; desvanecidos según posición
   const spacesBox = $("#tb-spaces");
@@ -12080,6 +12200,15 @@ function wireUI(){
   document.addEventListener("keydown", e => {
     if ((e.key === "k" || e.key === "K") && (e.ctrlKey || e.metaKey)){ e.preventDefault(); openMenu("palette"); }
     if (e.key === "/" && !e.target.closest("input,textarea")){ e.preventDefault(); openMenu("palette"); }
+    /* 0.97.0 — «D» abre y cierra el Dashboard, fuera de cualquier campo de texto y sin modificadores
+       (Ctrl+D es el marcador del navegador y no se toca). Con un modal, el tour o un menú abiertos no
+       hace nada: la tecla es de lo que tienes delante. */
+    if ((e.key === "d" || e.key === "D") && !e.ctrlKey && !e.metaKey && !e.altKey && !e.repeat
+        && !e.target.closest("input,textarea,select,[contenteditable]") && !e.target.isContentEditable
+        && !$$(".overlay.open").length && !$("#menu").classList.contains("open")
+        && !$("#tour").classList.contains("open") && !$("#ctx-menu").classList.contains("open")){
+      e.preventDefault(); alternarDashboard();
+    }
     // Ctrl+Z = deshacer la última reescritura de tarea (#90). Dentro de un campo CON texto no se
     // toca: ahí manda el deshacer nativo del navegador, que es el que se espera. Pero en un campo
     // VACÍO el nativo no tiene nada que deshacer, y tragarse ahí la pulsación dejaba el atajo
@@ -12099,6 +12228,10 @@ function wireUI(){
       const ov = $$(".overlay.open").filter(x => x.id !== "ov-reconnect").pop();
       if (ov){ if (ov.id === "ov-config") applyFont(); ov.classList.remove("open"); return; }   // ⚙: Esc también revierte la preview
       if ($("#tour").classList.contains("open")){ endTour(); return; }
+      // 0.97.0 — el menú va antes que el Dashboard (es más superficial); y si Esc cierra el Dashboard,
+      // ahí se queda: la vista de detalle que hubiera detrás no tiene que cerrarse con la misma tecla
+      if ($("#menu").classList.contains("open")){ closeMenu(); return; }
+      if (dashAbierto){ e.stopImmediatePropagation(); cerrarDashboard(); return; }
       closeMenu();
     }
   });
@@ -13143,6 +13276,11 @@ function renderTaskChip(){
      entre 0.62.0 y 0.65.0—. Va arriba porque el caso normal es justo el que se escapaba: sin
      tareas suyas vencidas, este `return` se llevaría por delante el aviso agéntico. */
   renderExecChip();
+  /* 0.97.0 — el Dashboard es el TERCER consumidor del mismo reparto y se refresca desde el mismo
+     punto, por la misma razón. Aquí llegan renderAll (sondeo, privacidad, cambio de escritorio),
+     markDirty (cambio propio), markAuto y el pulso de 45 s (medianoche, «hace…»). Cerrado, no hace
+     nada: un Dashboard oculto no se calcula. */
+  programarDashboard();
   const s = dueTaskStats();
   const n = s.overdue.length + s.today.length;
   if (!n){ el.style.display = "none"; return; }
@@ -13184,6 +13322,427 @@ function renderExecChip(){
     + `\nNinguna se ejecuta sola: abre sesión con un agente y autoriza las que quieras.\n\n${lista}`
     + (n > 6 ? `\n… y ${n - 6} más` : "")
     + `\n\nClic para ir a la tarea.`;
+}
+
+/* ============================================================
+   0.97.0 — DASHBOARD
+   ============================================================
+   Una vista que cuenta lo que hay y a la vez sirve de índice enlazado de todo: qué hacer ahora, cuatro
+   cifras con su lista y el índice de escritorios y ventanas. Las peticiones pendientes se ENSEÑAN una
+   a una con su edad (una cifra sola se aprende a ignorar; una lista con nombre y edad se resuelve).
+
+   NO HACÍA FALTA UN MOTOR NUEVO: todo el estado vive en memoria y la app repinta en cada cambio propio
+   y en cada sondeo. El Dashboard es una función estado → vista y nada más.
+
+   `CONTRATO:` NO ES UN ESCRITORIO DEL ARCHIVO. No se guarda en `datos.json`, no cambia su estructura y
+   no viaja al otro equipo: qué cifra miras y dónde dejaste el scroll son de esta pestaña y de este
+   momento (I7, como `todoUI`).
+
+   `CONTRATO:` SOLO LECTURA. Ninguna función de este bloque llama a `markDirty` ni a `saveNow`, y hay
+   prueba que lo fija. Mirar el Dashboard y volver deja el archivo exactamente como estaba. Saltar a una
+   ventana sí hace lo de siempre —traerla al frente—, por la MISMA puerta que la paleta (`focusWidget`).
+
+   `CONTRATO:` LAS MISMAS FUNCIONES QUE LAS FILAS (R47). Las tareas salen de `fuenteTodo` —la misma
+   puerta que la vista «Todas las listas», que ya excluye los widgets privados con la privacidad puesta
+   y no se cuenta a sí misma—; «te piden algo» es `esperaRespuestaSuya`, el 🤖 de cada lista es
+   `hayRobot` (el mismo recuento que enseña la propia lista) y las vencidas, `dueTaskStats`. Cada cifra
+   ES la longitud de su lista: no hay un segundo recuento que pueda divergir.
+
+   POR QUÉ NO CIERRA TAREAS desde aquí, aunque lo habría hecho más rápido: hoy `done` tiene dos puertas
+   (la casilla de la fila y la vista de detalle). Una tercera es justo el disparador (2) de R80 —un
+   campo con más de una puerta de mutación—, que pide diseñar antes de construir. Así que cada fila
+   te deja EN su tarea, con el destello, en un clic; cerrarla sigue siendo la casilla de siempre. */
+let dashAbierto = false;
+let dashVista = "piden";      // qué lista enseña el bloque de debajo de las cifras (memoria, nunca archivo)
+let dashScroll = 0;           // dónde estaba: con «D» se vuelve al mismo sitio
+let dashFocoPrevio = null;
+let dashRefs = [];            // destino de cada elemento pulsable pintado, por su `data-i`
+let dashVentanas = new Map(); // id de ventana → { w, sp }, para el filtro del índice
+let dashHay = new Map();      // texto buscable por ventana, PEREZOSO: solo se calcula al filtrar
+let dashPendiente = false;
+let dashMs = 0;               // lo que costó el último repintado (lo lee el verificador; R42)
+const DASH_MOV_MAX = 8;
+// orden de los tipos dentro de cada tarjeta del índice: primero lo que se trabaja, al final lo de consulta
+const DASH_TIPOS = ["todo", "notes", "md", "links", "clips", "files", "embed", "img", "cal", "year", "leave",
+  "timer", "clock", "search", "calc", "qr", "dictado", "intro"];
+const DASH_VISTAS = ["piden", "vencidas", "cerradas", "abiertas"];
+/* «Te piden algo» y «vencidas» van SIEMPRE enteras: son las que se resuelven, y suelen ser pocas.
+   «Cerradas» y «abiertas» pueden ser cientos, y pintarlas enteras en cada sondeo costaba ~60 ms con
+   300 filas (medido en Chrome, R42) para algo que nadie lee de un tirón: se enseñan las primeras 40 y
+   el resto con un botón. Lo que se pidió ver entero se queda entero mientras dure la sesión. */
+const DASH_FILAS_MAX = 40;
+const dashTodas = new Set();
+
+// días completos transcurridos; el MISMO corte que `diasEsperando` (floor de 24 h), sin su umbral
+const diasDesde = (at, ahora) => Math.max(0, Math.floor((ahora - at) / 86400000));
+function haceTxt(at, ahora){
+  const s = Math.max(0, ahora - at) / 1000;
+  if (s < 60) return "ahora";
+  if (s < 3600) return "hace " + Math.floor(s / 60) + " min";
+  if (s < 86400) return "hace " + Math.floor(s / 3600) + " h";
+  const d0 = new Date(ahora); d0.setHours(0, 0, 0, 0);
+  const d1 = new Date(at); d1.setHours(0, 0, 0, 0);
+  const dias = Math.round((d0 - d1) / 86400000);
+  return dias <= 1 ? "ayer" : "hace " + dias + " d";
+}
+// la franja de cada tarjeta es el FONDO de ese escritorio: se reconoce sin leer (memoria espacial)
+function franjaDe(sp){
+  const wp = (sp && sp.settings && sp.settings.wallpaper) || { type: "preset", value: 0 };
+  if (wp.type !== "preset") return null;
+  return WP_PRESETS[wp.value % WP_PRESETS.length] || null;
+}
+
+/* El modelo: PURO respecto del DOM. Recibe la hora para poder probarlo con un reloj fijo. */
+function modeloDashboard(ahora = Date.now()){
+  const t0 = new Date(ahora); t0.setHours(0, 0, 0, 0);
+  const lunes = +lunesDe(ahora);
+  const src = fuenteTodo({ data: { src: "all" } });   // la vista agregada, sin ser ningún widget
+  const vivo = new Set(src.items);
+  const donde = it => {
+    const o = src.origenDe(it);
+    return { it, wid: o.w.id, si: state.spaces.indexOf(o.sp), esp: o.esp || "Escritorio", lista: o.nombre };
+  };
+  const ultAt = it => +it.replies[it.replies.length - 1].at || 0;
+  // te piden algo: la más ANTIGUA arriba — es la que más se te ha pasado
+  const piden = src.items.filter(it => !it.done && esperaRespuestaSuya(it))
+    .sort((a, b) => ultAt(a) - ultAt(b))
+    .map(it => ({ ...donde(it), dias: diasDesde(ultAt(it), ahora) }));
+  // vencidas y de hoy: el reparto de la barra, recortado a lo que la vista agregada deja ver
+  const s = dueTaskStats();
+  const enVista = h => vivo.has(h.it);
+  const vencidas = s.overdue.filter(enVista).map(h => h.it).sort((a, b) => venceMs(a) - venceMs(b))
+    .map(it => ({ ...donde(it), dias: Math.max(1, diasDesde(venceMs(it), +t0)) }));
+  const hoy = s.today.filter(enVista).map(h => donde(h.it));
+  const cerradas = src.items.filter(it => it.done && +it.doneAt >= lunes)
+    .sort((a, b) => b.doneAt - a.doneAt).map(it => ({ ...donde(it), at: +it.doneAt }));
+  const cerradasHoy = cerradas.filter(f => f.at >= +t0).length;
+  const abiertas = src.items.filter(it => !it.done).map(donde);
+  // lo siguiente: primero lo vencido; si no, lo que más lleva pidiéndote algo; si no, lo de hoy
+  const siguiente = vencidas[0] ? { motivo: "vencida", ...vencidas[0] }
+    : piden[0] ? { motivo: "pide", ...piden[0] }
+    : hoy[0] ? { motivo: "hoy", ...hoy[0] } : null;
+  const rango = tp => { const k = DASH_TIPOS.indexOf(tp); return k < 0 ? DASH_TIPOS.length : k; };
+  const indice = state.spaces.map((sp, si) => {
+    const ventanas = [];
+    for (const w of sp.widgets || []){
+      // privado con la privacidad puesta: ni una fila — su título ya sería una fuga
+      if (privacyOn && w.priv) continue;
+      const t = WTYPES[w.type] || { ico: "❔", name: w.type };
+      const v = { w, si, ico: t.ico, titulo: String(w.t || "").trim() || t.name, tipo: w.type, nombreTipo: t.name };
+      if (w.type === "todo"){
+        if (origenDe(w) === "all") v.agregada = true;
+        else {
+          const items = (w.data && Array.isArray(w.data.items)) ? w.data.items : [];
+          // EXACTAMENTE el recuento de la pestaña «Pendientes» de esa lista (pendN / pendBot / pendUrge)
+          v.abiertas = items.filter(i => !i.done).length;
+          v.bot = items.filter(i => !i.done && hayRobot(i)).length;
+          v.urge = items.some(i => !i.done && esperaRespuestaSuya(i));
+        }
+      }
+      ventanas.push(v);
+    }
+    ventanas.sort((a, b) => rango(a.tipo) - rango(b.tipo));   // estable: dentro de un tipo, su orden
+    return { sp, si, nombre: sp.name || "Escritorio", ventanas, franja: franjaDe(sp), aqui: si === state.active };
+  });
+  // movimiento: solo de TAREAS, porque es lo único que guarda fecha (0 de 18 tipos de ventana la llevan)
+  const mov = [];
+  for (const it of src.items){
+    const a = altaMs(it);
+    if (a) mov.push({ at: a, que: "alta", it, sinHora: !it.createdT });
+    if (it.done && it.doneAt) mov.push({ at: +it.doneAt, que: "cierre", it });
+    for (const r of Array.isArray(it.replies) ? it.replies : [])
+      if (r && r.at) mov.push({ at: +r.at, que: r.by === "agente" ? "agente" : "tuya", it });
+  }
+  mov.sort((a, b) => b.at - a.at);
+  const movimiento = mov.slice(0, DASH_MOV_MAX).map(x => ({ ...donde(x.it), at: x.at, que: x.que, sinHora: x.sinHora }));
+  const listasConAbiertas = new Set(abiertas.map(f => f.wid)).size;
+  return { ahora, piden, vencidas, hoy, cerradas, cerradasHoy, abiertas, listasConAbiertas, siguiente, indice, movimiento };
+}
+
+/* ---- pintado ---- */
+const DASH_QUE = { alta: "anotada", cierre: "cerrada", agente: "respuesta del agente", tuya: "tu respuesta" };
+function dashRef(r){ return dashRefs.push(r) - 1; }
+const textoCorto = it => String((it && it.t) || "").replace(/\s+/g, " ").trim();
+// una fila de tarea: edad · #n · texto en una línea · escritorio · lista. Toda la fila es el enlace.
+function dashTareaHtml(sec, f, ed, edCls, que){
+  const i = dashRef({ tipo: "tarea", wid: f.wid, si: f.si, it: f.it });
+  const n = f.it.n ? "#" + f.it.n : "";
+  const t = textoCorto(f.it);
+  const k = sec + ":" + f.wid + ":" + (f.it.id || n || t.slice(0, 40));
+  return `<li><button type="button" class="dash-fila${f.it.done ? " hecha" : ""}" data-i="${i}" data-k="${esc(k)}"`
+    + ` title="${esc(t)}\n${esc(f.esp)} · ${esc(f.lista)} — clic para ir a la tarea">`
+    + `<span class="ed${edCls ? " " + edCls : ""}">${esc(ed)}</span>`
+    + (que ? `<span class="que">${esc(que)}</span>` : "")
+    + (n ? `<span class="num">${esc(n)}</span>` : "")
+    + `<span class="tx">${esc(t) || "(sin texto)"}</span>`
+    + `<span class="dn">${esc(f.esp)} · ${esc(f.lista)}</span></button></li>`;
+}
+const edadTxt = d => d === 0 ? "hoy" : d + " d";
+const plural = (n, uno, varios) => n + " " + (n === 1 ? uno : varios);
+function dashListaHtml(m){
+  const v = DASH_VISTAS.includes(dashVista) ? dashVista : "piden";
+  let tit, der = "", filas = "", vacio = "";
+  if (v === "piden"){
+    tit = `Te piden algo (${m.piden.length})`;
+    if (m.piden.length > 1) der = "la más antigua arriba";
+    filas = m.piden.map(f => dashTareaHtml("p", f, edadTxt(f.dias), f.dias >= ESPERA_DIAS ? "urge" : "")).join("");
+    vacio = "Nada te espera: ningún agente te ha pedido nada.";
+  } else if (v === "vencidas"){
+    tit = `Vencidas y de hoy (${m.vencidas.length + m.hoy.length})`;
+    if (m.vencidas.length > 1) der = "la más atrasada arriba";
+    if (m.vencidas.length) filas += `<li class="dash-grupo">Vencidas (${m.vencidas.length})</li>`
+      + m.vencidas.map(f => dashTareaHtml("v", f, "hace " + f.dias + " d", "mal")).join("");
+    if (m.hoy.length) filas += `<li class="dash-grupo">Vencen hoy (${m.hoy.length})</li>`
+      + m.hoy.map(f => dashTareaHtml("h", f, "hoy", "urge")).join("");
+    vacio = "Nada vencido ni para hoy.";
+  } else if (v === "cerradas"){
+    tit = `Cerradas esta semana (${m.cerradas.length})`;
+    if (m.cerradas.length > 1) der = "lo último arriba";
+    const nHoy = m.cerradasHoy;
+    filas = dashFilasLargas(v, m.cerradas,
+      (f, k) => k < nHoy ? `Hoy (${nHoy})` : `Antes, esta semana (${m.cerradas.length - nHoy})`,
+      f => dashTareaHtml("c", f, haceTxt(f.at, m.ahora), ""));
+    vacio = "Aún no has cerrado nada esta semana.";
+  } else {
+    tit = `Abiertas (${m.abiertas.length})`;
+    if (m.abiertas.length) der = `${plural(m.listasConAbiertas, "lista", "listas")}, cada una en su orden`;
+    const porLista = new Map();
+    for (const f of m.abiertas) porLista.set(f.wid, (porLista.get(f.wid) || 0) + 1);
+    filas = dashFilasLargas(v, m.abiertas,
+      f => `${esc(f.esp)} · ${esc(f.lista)} (${porLista.get(f.wid)})`,
+      f => { const am = altaMeta(f.it.created, f.it.createdT); return dashTareaHtml("a", f, am ? am.corto : "", ""); });
+    vacio = "No tienes tareas abiertas.";
+  }
+  return `<h2><span>${tit}</span>${der ? `<span class="h2r">${der}</span>` : ""}</h2>`
+    + (filas ? `<ul class="dash-filas">${filas}</ul>` : `<div class="dash-vacio">${vacio}</div>`);
+}
+// una lista larga con sus subtítulos de grupo, cortada en DASH_FILAS_MAX salvo que se pidiera entera;
+// el subtítulo de cada grupo dice el total del grupo, no lo que cabe, porque es lo que se quiere saber
+function dashFilasLargas(v, lista, grupoDe, filaDe){
+  const tope = dashTodas.has(v) ? lista.length : Math.min(lista.length, DASH_FILAS_MAX);
+  let h = "", actual = null;
+  for (let k = 0; k < tope; k++){
+    const g = grupoDe(lista[k], k);
+    if (g !== actual){ actual = g; h += `<li class="dash-grupo">${g}</li>`; }
+    h += filaDe(lista[k]);
+  }
+  if (tope < lista.length) h += `<li><button type="button" class="dash-mas" data-mas="${v}" data-k="mas:${v}">`
+    + `Mostrar ${lista.length - tope === 1 ? "la que falta" : "las " + (lista.length - tope) + " restantes"}</button></li>`;
+  return h;
+}
+function dashCifrasHtml(m){
+  const c = (v, n, l, s, cls) => `<button type="button" class="dash-cifra${cls ? " " + cls : ""}" data-vista="${v}" data-k="c:${v}" aria-pressed="${dashVista === v}"`
+    + ` title="Ver la lista de abajo con estas tareas">`
+    + `<span class="n">${n}</span><span class="l">${l}</span>${s ? `<span class="s">${esc(s)}</span>` : ""}</button>`;
+  const p = m.piden, venc = m.vencidas.length, hoy = m.hoy.length;
+  const masAntigua = p.length ? (p[0].dias === 0 ? "la más antigua, de hoy" : `la más antigua, de hace ${plural(p[0].dias, "día", "días")}`) : "nada pendiente";
+  return c("piden", p.length, "🤖 te piden algo", masAntigua, p.length ? "urge" : "")
+    + c("vencidas", venc + hoy, "⏰ vencidas u hoy", `${venc} vencida${venc === 1 ? "" : "s"} · ${hoy} hoy`, venc ? "mal" : hoy ? "urge" : "")
+    + c("cerradas", m.cerradasHoy, "✅ cerradas hoy", `${m.cerradas.length} esta semana`, "")
+    + c("abiertas", m.abiertas.length, "▤ abiertas", `en ${plural(m.listasConAbiertas, "lista", "listas")}`, "");
+}
+function dashSiguienteHtml(m){
+  const f = m.siguiente;
+  if (!f) return `<div class="dash-sig nada"><span class="et">Lo siguiente</span><span class="tx">Nada te espera.</span></div>`;
+  const i = dashRef({ tipo: "tarea", wid: f.wid, si: f.si, it: f.it });
+  const mot = f.motivo === "vencida" ? `<span class="mot mal">vencida hace ${plural(f.dias, "día", "días")}</span>`
+    : f.motivo === "pide" ? `<span class="mot">te pide algo ${f.dias === 0 ? "desde hoy" : "desde hace " + plural(f.dias, "día", "días")}</span>`
+    : `<span class="mot">vence hoy</span>`;
+  const t = textoCorto(f.it);
+  return `<button type="button" class="dash-sig" data-i="${i}" data-k="sig" title="${esc(t)} — clic para ir a la tarea">`
+    + `<span class="et">Lo siguiente ›</span>${mot}`
+    + `<span class="tx">${f.it.n ? `<span class="num">#${f.it.n}</span> ` : ""}${esc(t) || "(sin texto)"}</span>`
+    + `<span class="dn">${esc(f.esp)} · ${esc(f.lista)}</span></button>`;
+}
+function dashIndiceHtml(m){
+  const llenas = m.indice.filter(e => e.ventanas.length), vacias = m.indice.filter(e => !e.ventanas.length);
+  dashVentanas = new Map();
+  const tarjetas = llenas.map(e => {
+    const iE = dashRef({ tipo: "esp", si: e.si });
+    let prev = null;
+    const filas = e.ventanas.map(v => {
+      dashVentanas.set(v.w.id, { w: v.w, sp: e.sp });
+      const i = dashRef({ tipo: "ventana", wid: v.w.id, si: v.si });
+      // un solo corte: las listas de tareas (lo que se trabaja) y debajo todo lo demás. Una raya por
+      // cada cambio de tipo partía en filas sueltas una tarjeta donde casi cada ventana es de un tipo
+      const sep = prev === "todo" && v.tipo !== "todo" ? ` class="sep"` : "";
+      prev = v.tipo;
+      let extra = "";
+      if (v.tipo === "todo") extra = v.agregada ? `<span class="c">🌐 todas</span>`
+        : `<span class="c" title="${plural(v.abiertas, "abierta", "abiertas")}">${v.abiertas}</span>`
+          + (v.bot ? `<span class="bot${v.urge ? " urge" : ""}" title="${v.bot} con respuesta del agente${v.urge ? ", alguna esperándote" : " — solo te informan"}">🤖 ${v.bot}</span>` : "");
+      return `<li${sep}><button type="button" class="dash-win" data-i="${i}" data-w="${esc(v.w.id)}" data-k="w:${esc(v.w.id)}"`
+        + ` title="${esc(v.titulo)} — ${esc(v.nombreTipo)} · clic para ir a la ventana"><span class="ic">${v.ico}</span>`
+        + `<span class="t">${esc(v.titulo)}</span>${extra}</button></li>`;
+    }).join("");
+    return `<div class="dash-card"${e.franja ? ` style="--franja:${esc(e.franja)}"` : ""}>`
+      + `<button type="button" class="dash-esp" data-i="${iE}" data-k="e:${e.si}" title="Ir al escritorio «${esc(e.nombre)}»">`
+      + `<span>${esc(e.nombre)}</span>${e.aqui ? `<span class="aqui">estás aquí</span>` : ""}<span class="n">${plural(e.ventanas.length, "ventana", "ventanas")}</span></button>`
+      + `<ul>${filas}</ul></div>`;
+  }).join("");
+  const vac = vacias.length ? `<div class="dash-vacias">${vacias.length === 1 ? "Vacío" : "Vacíos"}: `
+    + vacias.map(e => `<button type="button" data-i="${dashRef({ tipo: "esp", si: e.si })}" data-k="e:${e.si}">${esc(e.nombre)}</button>`).join(" · ")
+    + `</div>` : "";
+  return { tarjetas, vac };
+}
+function dashMovHtml(m){
+  const filas = m.movimiento.map(f => dashTareaHtml("m", f,
+    f.sinHora ? new Date(f.at).toLocaleDateString("es-ES", { day: "numeric", month: "short" }) : haceTxt(f.at, m.ahora),
+    "", DASH_QUE[f.que])).join("");
+  return `<h2><span>Movimiento reciente</span><span class="h2r">tareas: altas, cierres y respuestas</span></h2>`
+    + (filas ? `<ul class="dash-filas">${filas}</ul>` : `<div class="dash-vacio">Aún no hay movimiento.</div>`);
+}
+
+/* El texto buscable de una ventana para el filtro del índice: el MISMO de la paleta (`widgetText`),
+   más lo que la paleta busca aparte en los enlaces y los sinónimos del tipo («vacaciones» → Permisos). */
+function textoIndice(w, sp){
+  const t = WTYPES[w.type] || { name: w.type };
+  const enl = w.type === "links" ? ((w.data && w.data.groups) || [])
+    .flatMap(g => [g.name || "", ...(g.links || []).map(l => (l.t || "") + " " + (l.u || ""))]).join(" ") : "";
+  return [w.t || "", t.name, t.busca || "", (sp && sp.name) || "", (w.tags || []).join(" "), widgetText(w), enl].join(" ").toLowerCase();
+}
+function dashFiltrar(){
+  const root = $("#dashboard");
+  if (!root || !root.firstChild) return;
+  const q = root.querySelector(".dash-q");
+  const terms = String((q && q.value) || "").toLowerCase().split(/\s+/).filter(Boolean);
+  let visibles = 0;
+  root.querySelectorAll(".dash-card").forEach(card => {
+    let n = 0;
+    card.querySelectorAll(".dash-win").forEach(b => {
+      let ok = true;
+      if (terms.length){
+        if (!dashHay.has(b.dataset.w)){
+          const r = dashVentanas.get(b.dataset.w);
+          dashHay.set(b.dataset.w, r ? textoIndice(r.w, r.sp) : "");
+        }
+        const hay = dashHay.get(b.dataset.w);
+        ok = terms.every(x => hay.includes(x));
+      }
+      b.parentElement.hidden = !ok;
+      if (ok) n++;
+    });
+    card.hidden = !n;
+    visibles += n;
+  });
+  const vac = root.querySelector(".dash-vacias-box");
+  if (vac) vac.hidden = terms.length > 0;
+  root.querySelector(".dash-nada").hidden = !(terms.length && !visibles);
+}
+
+function dashEsqueleto(root){
+  root.innerHTML = `<div class="dash-wrap">`
+    + `<header class="dash-cab"></header>`
+    + `<div class="dash-sig-box"></div>`
+    + `<div class="dash-cifras" role="group" aria-label="Cifras: cada una enseña su lista debajo"></div>`
+    + `<section class="dash-sec dash-lista" aria-live="polite"></section>`
+    + `<section class="dash-sec dash-indice"><h2><span>Índice</span>`
+    + `<input class="dash-q" type="search" placeholder="Filtrar ventanas: título, contenido o escritorio…" aria-label="Filtrar el índice" autocomplete="off"></h2>`
+    + `<div class="dash-tarjetas"></div><div class="dash-vacias-box"></div><div class="dash-nada" hidden>Ninguna ventana coincide.</div></section>`
+    + `<section class="dash-sec dash-mov"></section></div>`;
+  // UN manejador para todo lo pulsable: el destino se busca en `dashRefs` en el momento del clic,
+  // que se reconstruye en el mismo repintado que el HTML — no pueden quedar desparejados
+  root.addEventListener("click", e => {
+    const c = e.target.closest(".dash-cifra");
+    if (c){ dashVista = c.dataset.vista; pintarDashboard(); return; }
+    const mas = e.target.closest(".dash-mas");
+    if (mas){ dashTodas.add(mas.dataset.mas); pintarDashboard(); return; }
+    const b = e.target.closest("[data-i]");
+    if (b && root.contains(b)) dashIr(dashRefs[+b.dataset.i]);
+  });
+  const q = root.querySelector(".dash-q");
+  q.addEventListener("input", dashFiltrar);
+  q.addEventListener("keydown", e => {
+    // Esc con texto vacía el filtro; sin texto, sube y cierra el Dashboard como en cualquier sitio
+    if (e.key === "Escape" && q.value){ e.stopPropagation(); q.value = ""; dashFiltrar(); }
+    else if (e.key === "Enter"){
+      const b = root.querySelector(".dash-card:not([hidden]) li:not([hidden]) .dash-win");
+      if (b){ e.preventDefault(); b.click(); }
+    }
+  });
+}
+
+function pintarDashboard(){
+  const root = $("#dashboard");
+  if (!dashAbierto || !root || !state) return;   // oculto no se calcula
+  const t = performance.now();
+  if (!root.firstChild) dashEsqueleto(root);
+  // tiempo real SIN ROBAR NADA (lección de 0.96.2): se conserva el scroll y, si el foco estaba en
+  // algo pintado, se devuelve al mismo elemento por su clave estable. El filtro no se repinta nunca.
+  const top = root.scrollTop;
+  const act = document.activeElement;
+  const clave = act && act !== root && root.contains(act) ? act.dataset.k : null;
+  const m = modeloDashboard(Date.now());
+  dashRefs = []; dashHay = new Map();
+  const aqui = state.spaces[state.active];
+  const fecha = new Date(m.ahora).toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long" });
+  root.querySelector(".dash-cab").innerHTML = `<div><h1>📊 Dashboard</h1><div class="dash-fecha">${esc(fecha)}</div></div>`
+    + `<div class="dash-volver"><span class="kbd-hint">Esc</span> vuelve a «${esc((aqui && aqui.name) || "Escritorio")}»`
+    + ` · <span class="kbd-hint">D</span> lo abre y lo cierra · mirar aquí no cambia nada</div>`;
+  root.querySelector(".dash-sig-box").innerHTML = dashSiguienteHtml(m);
+  root.querySelector(".dash-cifras").innerHTML = dashCifrasHtml(m);
+  root.querySelector(".dash-lista").innerHTML = dashListaHtml(m);
+  const ix = dashIndiceHtml(m);
+  root.querySelector(".dash-tarjetas").innerHTML = ix.tarjetas;
+  root.querySelector(".dash-vacias-box").innerHTML = ix.vac;
+  root.querySelector(".dash-mov").innerHTML = dashMovHtml(m);
+  dashFiltrar();
+  root.scrollTop = top;
+  if (clave){
+    const n = [...root.querySelectorAll("[data-k]")].find(x => x.dataset.k === clave);
+    if (n) n.focus({ preventScroll: true }); else root.focus({ preventScroll: true });
+  }
+  dashMs = performance.now() - t;
+}
+// en el siguiente fotograma, una sola vez aunque lleguen varios avisos seguidos
+function programarDashboard(){
+  if (!dashAbierto || dashPendiente) return;
+  dashPendiente = true;
+  requestAnimationFrame(() => { dashPendiente = false; pintarDashboard(); });
+}
+function pintarPestanaDash(){
+  const b = $("#tb-dash");
+  if (b){ b.classList.toggle("active", dashAbierto); b.setAttribute("aria-pressed", String(dashAbierto)); }
+  document.body.classList.toggle("dash-on", dashAbierto);
+}
+function abrirDashboard(){
+  const root = $("#dashboard");
+  if (dashAbierto || !root || !state) return;
+  closeMenu(); closeCtx();
+  dashFocoPrevio = document.activeElement;
+  dashAbierto = true;
+  root.hidden = false;
+  pintarPestanaDash();
+  pintarDashboard();
+  root.scrollTop = dashScroll;
+  // el foco entra en el Dashboard: Tab recorre en orden de lectura, y una tecla no cae en la ventana
+  // que tuviera el foco detrás (la calculadora, por ejemplo, también entiende Esc)
+  root.focus({ preventScroll: true });
+}
+function cerrarDashboard(volverFoco = true){
+  const root = $("#dashboard");
+  if (!dashAbierto || !root) return;
+  dashScroll = root.scrollTop;
+  const dentro = root.contains(document.activeElement);
+  dashAbierto = false;
+  root.hidden = true;
+  pintarPestanaDash();
+  const f = dashFocoPrevio; dashFocoPrevio = null;
+  if (volverFoco && f && f.isConnected && !root.contains(f) && typeof f.focus === "function"){
+    try{ f.focus({ preventScroll: true }); }catch(e){}
+  } else if (dentro && document.activeElement && document.activeElement.blur) document.activeElement.blur();
+}
+// cualquier gesto que lleva a ver el escritorio quita el Dashboard de delante (sin devolver el foco:
+// el foco lo decide el destino)
+function revelarEscritorio(){ if (dashAbierto) cerrarDashboard(false); }
+function alternarDashboard(){ if (dashAbierto) cerrarDashboard(); else abrirDashboard(); }
+// el destino de cada cosa pulsable: las mismas puertas que la paleta y los avisos de la barra
+function dashIr(r){
+  if (!r) return;
+  if (activeView && activeView.kind !== "space") setActiveView({ kind: "space" });   // venías de un seguido
+  if (r.tipo === "tarea") focusTask(r.wid, r.si, r.it);
+  else if (r.tipo === "ventana") focusWidget(r.wid, r.si);
+  else if (r.tipo === "esp"){ revelarEscritorio(); setActive(r.si); }
 }
 
 /* ---------- píldora informativa de la barra ---------- */

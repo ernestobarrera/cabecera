@@ -6426,5 +6426,234 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
     console.log('OK 0.96.2 (soltar, redimensionar con empuje y deshacer recolocan sin reconstruir ni rehacer contenido; sin cristal durante el gesto, con el tinte de color, y de vuelta en todas las salidas)');
   }
 
+  // --- 0.97.0: el Dashboard ---
+  // Se EJECUTAN el modelo y el pintado reales sobre un estado sintético (nunca un datos.json real), y el
+  // manejador de teclado literal con dobles. Lo que necesita un navegador de verdad —que el estado
+  // guardado salga idéntico, que cada enlace aterrice, el coste— lo mide el verificador en Chrome.
+  {
+    const trozo = (re, que) => { const m = src.match(re); if (!m) throw new Error('0.97.0: no encuentro ' + que); return m[0]; };
+    const ini = src.indexOf('let dashAbierto = false;'), fin = src.indexOf('/* ---------- píldora informativa de la barra');
+    if (ini < 0 || fin < ini) throw new Error('0.97.0: no encuentro el bloque del Dashboard');
+    const bloque = src.slice(ini, fin);
+    const piezas = [
+      trozo(/const ESPERA_DIAS = \d+;/, 'ESPERA_DIAS'),
+      trozo(/function esperaRespuestaSuya\(it\)\{[\s\S]*?\n\}/, 'esperaRespuestaSuya'),
+      trozo(/function diasEsperando\(it, ahora = Date\.now\(\)\)\{[\s\S]*?\n\}/, 'diasEsperando'),
+      trozo(/function hayRobot\(it\)\{[\s\S]*?\n\}/, 'hayRobot'),
+      trozo(/function esAgentica\(it\)\{[^\n]*\}/, 'esAgentica'),
+      trozo(/function execLista\(it, t0\)\{[\s\S]*?\n\}/, 'execLista'),
+      trozo(/function claseVencimiento\(due, t0\)\{[\s\S]*?\n\}/, 'claseVencimiento'),
+      trozo(/function parseIsoDate\(ds\)\{[\s\S]*?\n\}/, 'parseIsoDate'),
+      trozo(/function isoDate\(y, m, d\)\{[\s\S]*?\n\}/, 'isoDate'),
+      trozo(/function todayIso\(\)\{[\s\S]*?\n\}/, 'todayIso'),
+      trozo(/function fechaLarga\(iso\)\{[\s\S]*?\n\}/, 'fechaLarga'),
+      trozo(/function altaMeta\(created, hora\)\{[\s\S]*?\n\}/, 'altaMeta'),
+      trozo(/const altaMs = it => \{[\s\S]*?\n\};/, 'altaMs'),
+      trozo(/const venceMs = it => \{[\s\S]*?\n\};/, 'venceMs'),
+      trozo(/const origenDe = [^\n]*/, 'origenDe'),
+      trozo(/function fuenteTodo\(w\)\{[\s\S]*?\n\}/, 'fuenteTodo'),
+      trozo(/function lunesDe\(ms\)\{[\s\S]*?\n\}/, 'lunesDe'),
+      trozo(/function dueTaskStats\(\)\{[\s\S]*?\n\}/, 'dueTaskStats'),
+      trozo(/const WTYPES = \{[\s\S]*?\n\};/, 'WTYPES'),
+      trozo(/const WP_PRESETS = \[[\s\S]*?\n\];/, 'WP_PRESETS'),
+      trozo(/function widgetText\(w\)\{[\s\S]*?\n\}/, 'widgetText')
+    ].join('\n');
+    const montar = (estado, priv) => new Function('state', 'privacyOn', 'esc', piezas + '\n' + bloque
+      + '\nreturn { modeloDashboard, dashListaHtml, dashCifrasHtml, dashIndiceHtml, dashSiguienteHtml, dashMovHtml, textoIndice,'
+      + ' vista: v => { dashVista = v; }, refs: () => dashRefs, programarDashboard, abierto: v => { dashAbierto = v; }, todas: v => dashTodas.add(v) };')(estado, priv, globalThis.esc);
+
+    const DIA = 86400000, ahora = Date.now();
+    const iso = ms => { const d = new Date(ms); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
+    const pide = (dias, extra = {}) => ({ replies: [{ by: 'yo', at: ahora - 40 * DIA, t: 'pregunta' }, { by: 'agente', at: ahora - dias * DIA - 60000, t: '¿lo hago?' }], ...extra });
+    const estado = () => ({ version: 2, active: 0, spaces: [
+      { id: 'sA', name: 'Alfa', settings: { wallpaper: { type: 'preset', value: 3 } }, widgets: [
+        { id: 'L1', type: 'todo', t: 'Bandeja', data: { items: [
+          { id: 't1', n: 1, t: 'Pide hace diez días', done: false, created: iso(ahora - 30 * DIA), ...pide(10) },
+          { id: 't2', n: 2, t: 'Solo informa', done: false, replies: [{ by: 'agente', at: ahora - 5 * DIA, t: 'hecho', info: 1 }] },
+          { id: 't3', n: 3, t: 'Cerrada hoy', done: true, doneAt: ahora - 1000 },
+          { id: 't4', n: 4, t: 'Vencida ayer', done: false, due: iso(ahora - DIA) },
+          { id: 't5', n: 5, t: 'Vence hoy', done: false, due: iso(ahora) },
+          { id: 't6', n: 6, t: 'Agéntica vencida', done: false, exec: true, due: iso(ahora - 2 * DIA) },
+          { id: 't7', n: 7, t: 'Cerrada con petición', done: true, doneAt: ahora - 400 * DIA, ...pide(20) },
+          { id: 't8', n: 8, t: 'Pide hace dos días', done: false, ...pide(2) }
+        ] } },
+        { id: 'LP', type: 'todo', t: 'SECRETO-LISTA', priv: true, data: { items: [
+          { id: 'p1', n: 9, t: 'SECRETO-TAREA', done: false, due: iso(ahora - 5 * DIA), ...pide(30) } ] } },
+        { id: 'N1', type: 'notes', t: 'Apuntes', data: { text: 'texto con vacaciones dentro' } }
+      ] },
+      { id: 'sB', name: 'Beta', settings: {}, widgets: [
+        { id: 'AG', type: 'todo', t: 'Todas', data: { src: 'all', items: [ { id: 'x1', t: 'RESTO-AGREGADA', done: false, ...pide(50) } ] } },
+        { id: 'K1', type: 'links', t: 'Enlaces', data: { groups: [{ name: 'Guías', links: [{ t: 'Fisterra', u: 'https://fisterra.example' }] }] } }
+      ] },
+      { id: 'sC', name: 'Gamma vacío', settings: {}, widgets: [] }
+    ], trash: [] });
+
+    // 1 · SOLO LECTURA: calcular y pintar no tocan el estado
+    { const s = estado(), antes = JSON.stringify(s), d = montar(s, false);
+      const m = d.modeloDashboard(ahora);
+      for (const v of ['piden', 'vencidas', 'cerradas', 'abiertas']){ d.vista(v); d.dashListaHtml(m); }
+      d.dashCifrasHtml(m); d.dashIndiceHtml(m); d.dashSiguienteHtml(m); d.dashMovHtml(m);
+      if (JSON.stringify(s) !== antes) throw new Error('0.97.0: mirar el Dashboard no puede cambiar el estado'); }
+    if (/markDirty\(|saveNow\(|markAuto\(/.test(bloque)) throw new Error('0.97.0: el Dashboard es solo lectura: su bloque no marca ni guarda nada');
+    if (/\.done\s*=[^=]|doneAt\s*=[^=]|\.replies\.push|\.items\.(push|splice|unshift)/.test(bloque))
+      throw new Error('0.97.0: el Dashboard no muta tareas — una tercera puerta para `done` es el disparador (2) de R80');
+
+    // 2 · LAS CIFRAS: cada una ES su lista, con las mismas funciones que las filas (R47)
+    const s0 = estado(), d0 = montar(s0, false), m0 = d0.modeloDashboard(ahora);
+    if (m0.piden.map(f => f.it.id).join() !== 'p1,t1,t8')
+      throw new Error('0.97.0: «te piden algo» son las vivas cuya última palabra pide algo, la más antigua arriba; hay ' + m0.piden.map(f => f.it.id).join());
+    if (m0.piden.some(f => f.it.id === 't2' || f.it.id === 't7' || f.it.id === 'x1'))
+      throw new Error('0.97.0: ni lo informativo, ni lo cerrado, ni los restos de una lista agregada piden nada');
+    { const it = s0.spaces[0].widgets[0].data.items[0];
+      const de = new Function('it', 'ahora', trozo(/const ESPERA_DIAS = \d+;/, '') + trozo(/function esperaRespuestaSuya\(it\)\{[\s\S]*?\n\}/, '')
+        + trozo(/function hayRobot\(it\)\{[\s\S]*?\n\}/, '') + trozo(/function diasEsperando\(it, ahora = Date\.now\(\)\)\{[\s\S]*?\n\}/, '') + 'return diasEsperando(it, ahora);');
+      if (m0.piden[1].dias !== de(it, ahora)) throw new Error('0.97.0: la edad del Dashboard tiene que coincidir con la del 🤖 de la fila (diasEsperando)'); }
+    if (m0.vencidas.map(f => f.it.id).join() !== 'p1,t4') throw new Error('0.97.0: vencidas = las de dueTaskStats, la más atrasada arriba y sin las agénticas; hay ' + m0.vencidas.map(f => f.it.id).join());
+    if (m0.hoy.map(f => f.it.id).join() !== 't5') throw new Error('0.97.0: «hoy» es lo que vence hoy');
+    if (m0.cerradasHoy !== 1 || m0.cerradas.some(f => f.it.id === 't7')) throw new Error('0.97.0: cerradas hoy/semana por la fecha de cierre');
+    if (!m0.siguiente || m0.siguiente.motivo !== 'vencida' || m0.siguiente.it.id !== 'p1') throw new Error('0.97.0: lo siguiente es primero lo vencido, el más atrasado');
+    const cuenta = (h, cls) => (h.match(new RegExp('class="' + cls + '[" ]', 'g')) || []).length;
+    const cifraDe = (h, v) => +(h.match(new RegExp('data-vista="' + v + '"[^>]*>\\s*<span class="n">(\\d+)<'))[1]);
+    const hC = d0.dashCifrasHtml(m0);
+    for (const v of ['piden', 'vencidas', 'cerradas', 'abiertas']){
+      d0.vista(v);
+      const filas = cuenta(d0.dashListaHtml(m0), 'dash-fila');
+      const esperado = v === 'cerradas' ? m0.cerradas.length : cifraDe(hC, v);
+      if (filas !== esperado) throw new Error(`0.97.0: la cifra «${v}» dice ${cifraDe(hC, v)} y su lista enseña ${filas} filas`);
+    }
+    if (cifraDe(hC, 'cerradas') !== m0.cerradasHoy) throw new Error('0.97.0: la cifra de cerradas es la de hoy');
+    // «hoy» y «esta semana» son dos cortes distintos: con reloj fijo en un miércoles, para que haya
+    // días de la semana antes de hoy (con el reloj real, un lunes los confundiría sin que se notara)
+    { const mie = new Date(2026, 10, 11, 12, 0).getTime(), lun = new Date(2026, 10, 9, 10, 0).getTime(), domPrev = new Date(2026, 10, 8, 10, 0).getTime();
+      const s = { version: 2, active: 0, spaces: [{ id: 'sX', name: 'X', settings: {}, widgets: [{ id: 'LX', type: 'todo', t: 'L', data: { items: [
+        { id: 'c1', t: 'hoy', done: true, doneAt: mie - 3600000 }, { id: 'c2', t: 'lunes', done: true, doneAt: lun },
+        { id: 'c3', t: 'semana pasada', done: true, doneAt: domPrev } ] } }] }] };
+      const m = montar(s, false).modeloDashboard(mie);
+      if (m.cerradasHoy !== 1 || m.cerradas.map(f => f.it.id).join() !== 'c1,c2')
+        throw new Error('0.97.0: cerradas hoy = desde medianoche; esta semana = desde el lunes, lo último arriba; hay ' + m.cerradasHoy + ' / ' + m.cerradas.map(f => f.it.id).join()); }
+    // el 🤖 de cada lista del índice = el recuento de la pestaña «Pendientes» de esa lista, con SUS líneas
+    { const paint = trozo(/const pendN = src\.items\.filter\(i => !i\.done\)\.length;\n[\s\S]*?const pendUrge = [^\n]*/, 'los recuentos de la lista');
+      const widget = new Function('src', trozo(/function esperaRespuestaSuya\(it\)\{[\s\S]*?\n\}/, '') + trozo(/function hayRobot\(it\)\{[\s\S]*?\n\}/, '')
+        + paint + '\nreturn { pendN, pendBot, pendUrge };');
+      const L1 = m0.indice[0].ventanas.find(v => v.w.id === 'L1');
+      const r = widget({ items: s0.spaces[0].widgets[0].data.items });
+      if (L1.abiertas !== r.pendN || L1.bot !== r.pendBot || L1.urge !== r.pendUrge)
+        throw new Error('0.97.0: el índice cuenta la lista distinto de como se cuenta ella misma (R47)'); }
+
+    // 2 bis · las listas largas se cortan en 40 y dicen cuántas faltan; lo que se resuelve, nunca
+    { const muchas = (n, f) => Array.from({ length: n }, (_, k) => ({ id: 'm' + k, n: 100 + k, t: 'tarea ' + k, done: false, ...f(k) }));
+      const s = { version: 2, active: 0, spaces: [{ id: 'sM', name: 'M', settings: {}, widgets: [
+        { id: 'LM', type: 'todo', t: 'Larga', data: { items: muchas(45, k => pide(k + 3)).concat(muchas(30, () => ({}))).map((x, k) => ({ ...x, id: 'q' + k })) } }] }] };
+      const d = montar(s, false), m = d.modeloDashboard(ahora);
+      d.vista('piden'); const hp = d.dashListaHtml(m);
+      if (cuenta(hp, 'dash-fila') !== 45 || /dash-mas/.test(hp)) throw new Error('0.97.0: «te piden algo» va siempre entera, aunque sean muchas');
+      d.vista('abiertas'); const ha = d.dashListaHtml(m);
+      if (cuenta(ha, 'dash-fila') !== 40 || !/data-mas="abiertas"[^>]*>Mostrar las 35 restantes</.test(ha)) throw new Error('0.97.0: una lista larga enseña 40 filas y dice cuántas faltan');
+      if (!/Larga \(75\)/.test(ha)) throw new Error('0.97.0: el subtítulo de grupo dice el total del grupo, no lo que cabe');
+      d.todas('abiertas');
+      if (cuenta(d.dashListaHtml(m), 'dash-fila') !== 75) throw new Error('0.97.0: «Mostrar las restantes» las enseña todas');
+      if (!/const mas = e\.target\.closest\("\.dash-mas"\);\s*if \(mas\)\{ dashTodas\.add\(mas\.dataset\.mas\); pintarDashboard\(\); return; \}/.test(bloque))
+        throw new Error('0.97.0: el botón «Mostrar» está cableado'); }
+
+    // 3 · PRIVACIDAD: con ella puesta, un privado no aporta ni fila, ni cifra, ni título
+    { const s = estado(), d = montar(s, true), m = d.modeloDashboard(ahora);
+      let todo = d.dashCifrasHtml(m) + d.dashSiguienteHtml(m) + d.dashIndiceHtml(m).tarjetas + d.dashMovHtml(m);
+      for (const v of ['piden', 'vencidas', 'cerradas', 'abiertas']){ d.vista(v); todo += d.dashListaHtml(m); }
+      if (/SECRETO/.test(todo)) throw new Error('0.97.0: con la privacidad puesta, nada de un widget privado sale en el Dashboard');
+      if (m.piden.length !== 2 || m.vencidas.length !== 1) throw new Error('0.97.0: con la privacidad puesta, un privado tampoco cuenta');
+      if (m.siguiente.it.id !== 't4') throw new Error('0.97.0: lo siguiente no puede ser una tarea privada oculta'); }
+
+    // 4 · EL ÍNDICE: todas las ventanas por escritorio, agrupadas por tipo; vacíos al final; franja de su fondo
+    { const ix = d0.dashIndiceHtml(m0);
+      if (!/data-w="N1"/.test(ix.tarjetas) || !/data-w="K1"/.test(ix.tarjetas) || !/data-w="AG"/.test(ix.tarjetas)) throw new Error('0.97.0: el índice enseña todas las ventanas');
+      if (ix.tarjetas.indexOf('data-w="L1"') > ix.tarjetas.indexOf('data-w="N1"')) throw new Error('0.97.0: dentro de la tarjeta, las listas primero');
+      if (!/Gamma vacío/.test(ix.vac) || /Gamma vacío/.test(ix.tarjetas)) throw new Error('0.97.0: un escritorio vacío va al final, en una línea, no como tarjeta');
+      if (!ix.tarjetas.includes('--franja:linear-gradient(135deg,#42275a')) throw new Error('0.97.0: la franja es el fondo de ese escritorio');
+      if (!/vacaciones/.test(d0.textoIndice(s0.spaces[0].widgets[2], s0.spaces[0])) || !/fisterra/.test(d0.textoIndice(s0.spaces[1].widgets[1], s0.spaces[1])))
+        throw new Error('0.97.0: el filtro del índice busca en el contenido de las notas y en los enlaces'); }
+
+    // 5 · cada cosa pulsable lleva a su destino real (la referencia, no una copia)
+    { d0.vista('piden'); const h = d0.dashListaHtml(m0), refs = d0.refs();
+      const i = +h.match(/class="dash-fila[^"]*" data-i="(\d+)"/)[1];
+      if (refs[i].it !== s0.spaces[0].widgets[1].data.items[0] || refs[i].wid !== 'LP' || refs[i].si !== 0)
+        throw new Error('0.97.0: la fila lleva a la tarea de verdad, en su lista y su escritorio'); }
+
+    // 6 · movimiento: lo último primero, como mucho 8
+    { const mv = m0.movimiento;
+      if (mv.length > 8 || mv.some((x, k) => k && x.at > mv[k - 1].at)) throw new Error('0.97.0: el movimiento va de lo último a lo anterior, y corto');
+      if (mv[0].it.id !== 't3' || mv[0].que !== 'cierre') throw new Error('0.97.0: lo más reciente del ejemplo es el cierre de hace un segundo'); }
+
+    // 7 · cerrado no calcula: programarDashboard no pide ni un fotograma
+    { let pedidos = 0; const raf = globalThis.requestAnimationFrame; globalThis.requestAnimationFrame = () => { pedidos++; };
+      try{ const d = montar(estado(), false); d.programarDashboard(); if (pedidos) throw new Error('0.97.0: con el Dashboard cerrado no se programa nada');
+        d.abierto(true); d.programarDashboard(); d.programarDashboard();
+        if (pedidos !== 1) throw new Error('0.97.0: abierto, varios avisos seguidos se agrupan en un solo repintado'); }
+      finally{ globalThis.requestAnimationFrame = raf; } }
+
+    // 8 · el repintado en tiempo real sale del punto único de los chips, antes de su salida temprana
+    { const tc = trozo(/function renderTaskChip\(\)\{[\s\S]*?\n\}/, 'renderTaskChip');
+      const iP = tc.indexOf('programarDashboard();'), iR = tc.indexOf('if (!n){ el.style.display = "none"; return; }');
+      if (iP < 0 || iP > iR) throw new Error('0.97.0: el Dashboard se refresca desde renderTaskChip y ANTES de su return temprano'); }
+
+    // 9 · el teclado: se ejecuta el manejador GLOBAL literal con dobles
+    { const key = [...src.matchAll(/document\.addEventListener\("keydown", e => \{[\s\S]*?\n  \}\);/g)].map(x => x[0]).find(t => /closeMenu\(\)/.test(t));
+      const cuerpo = key.replace(/^document\.addEventListener\("keydown", /, '').replace(/\);$/, '');
+      const prueba = ({ k, campo = false, ctrl = false, abierto = false, abiertos = [] }) => {
+        const log = [];
+        const nodo = id => ({ classList: { contains: c => c === 'open' && abiertos.includes(id), remove(){ log.push('cierra:' + id); } }, id });
+        const ctx = {
+          $: sel => nodo(sel.slice(1)), $$: sel => sel === '.overlay.open' ? abiertos.filter(x => x.startsWith('ov-')).map(nodo) : [],
+          openMenu: () => log.push('paleta'), closeMenu: () => log.push('closeMenu'), closeCtx: () => log.push('closeCtx'),
+          endTour: () => log.push('endTour'), applyFont(){}, undoLastTextEdit: () => false,
+          alternarDashboard: () => log.push('alternar'), cerrarDashboard: () => log.push('cerrarDash'), dashAbierto: abierto
+        };
+        const h = new Function('ctx', 'with (ctx) { return (' + cuerpo + '); }')(ctx);
+        h({ key: k, ctrlKey: ctrl, metaKey: false, altKey: false, shiftKey: k === 'D', repeat: false,
+            target: { closest: () => campo ? {} : null, isContentEditable: false },
+            preventDefault(){}, stopPropagation(){}, stopImmediatePropagation(){ log.push('sip'); } });
+        return log;
+      };
+      if (!prueba({ k: 'd' }).includes('alternar') || !prueba({ k: 'D' }).includes('alternar')) throw new Error('0.97.0: D abre y cierra el Dashboard');
+      if (prueba({ k: 'd', campo: true }).includes('alternar')) throw new Error('0.97.0: escribiendo una «d» en un campo no se abre nada');
+      if (prueba({ k: 'd', ctrl: true }).includes('alternar')) throw new Error('0.97.0: Ctrl+D es del navegador');
+      for (const a of ['menu', 'tour', 'ctx-menu', 'ov-trash'])
+        if (prueba({ k: 'd', abiertos: [a] }).includes('alternar')) throw new Error('0.97.0: con ' + a + ' abierto, la D es de lo que tienes delante');
+      const esc1 = prueba({ k: 'Escape', abierto: true });
+      if (!esc1.includes('cerrarDash') || !esc1.includes('sip') || esc1.includes('closeMenu'))
+        throw new Error('0.97.0: Esc cierra el Dashboard y ahí se queda (no cierra también lo que haya detrás)');
+      const esc2 = prueba({ k: 'Escape', abierto: true, abiertos: ['menu'] });
+      if (esc2.includes('cerrarDash') || !esc2.includes('closeMenu')) throw new Error('0.97.0: con la paleta encima, Esc cierra primero la paleta');
+      const esc3 = prueba({ k: 'Escape', abierto: true, abiertos: ['ov-trash'] });
+      if (esc3.includes('cerrarDash') || !esc3.includes('cierra:ov-trash')) throw new Error('0.97.0: con un modal encima, Esc cierra primero el modal');
+      if (prueba({ k: 'Escape' }).includes('cerrarDash')) throw new Error('0.97.0: sin Dashboard, Esc sigue como siempre'); }
+
+    // 10 · se llega por los cuatro sitios y el atajo se ve junto a la función (R13, R27)
+    if (!/<button id="tb-dash"[^>]*>📊 <span class="lbl">Dashboard<\/span> <span class="kbd-hint">D<\/span>/.test(html)) throw new Error('0.97.0: la pestaña fija, con su atajo a la vista');
+    if (html.indexOf('id="tb-dash"') > html.indexOf('id="tb-spaces"')) throw new Error('0.97.0: la pestaña va a la izquierda de los escritorios');
+    if (!/id="act-dash">📊 Dashboard <span class="kbd-hint">D<\/span>/.test(html) || !/\$\("#act-dash"\)\.addEventListener\("click", \(\) => \{ closeMenu\(\); abrirDashboard\(\); \}\)/.test(src))
+      throw new Error('0.97.0: el menú Inicio ofrece el Dashboard (R13)');
+    if (!/dash:\s*\{ teclas: "D"/.test(src) || !/add\("📊", "Dashboard",[\s\S]{0,300}"dash"\);/.test(src)) throw new Error('0.97.0: la paleta lo ofrece con su atajo de la tabla única (R27)');
+    if (!/\$\("#tb-dash"\)\.addEventListener\("click", alternarDashboard\)/.test(src)) throw new Error('0.97.0: la pestaña abre y cierra');
+    // y cualquier gesto que lleva al escritorio lo quita de delante
+    for (const [que, re] of [['focusWidget', /function focusWidget\(id, si\)\{\n  closeMenu\(\);\n  revelarEscritorio\(\);/],
+        ['addWidget', /function addWidget\(type\)\{\n  revelarEscritorio\(\);/], ['la pestaña', /revelarEscritorio\(\); setActive\(i\); \}\);/],
+        ['un seguido', /revelarEscritorio\(\); openSubscription\(t\.dataset\.sub\);/], ['＋', /\{ revelarEscritorio\(\); addSpace\(\); \}/],
+        ['el tour', /function startTour\(\)\{ revelarEscritorio\(\);/], ['el filtro de etiqueta', /function gotoSpace\(si\)\{[\s\S]{0,120}revelarEscritorio\(\);/]])
+      if (!re.test(src)) throw new Error('0.97.0: ' + que + ' tiene que quitar el Dashboard de delante');
+    // el salto a una tarea de OTRO escritorio se vuelve a encargar tras cambiar de escritorio: el
+    // cambio pinta cada ventana antes de colgarla, y servido ahí el encargo no medía la página ni
+    // desplazaba hasta la fila (medido en Chrome: el destello caía en una fila fuera de la vista)
+    { const ft = trozo(/function focusTask\(id, si, it\)\{[\s\S]*?\n\}/, 'focusTask');
+      const iC = ft.indexOf('const cruza = typeof si === "number" && si !== state.active;'), iF = ft.indexOf('focusWidget(id, si);', Math.max(0, ft.indexOf('const cruza'))),
+            iR = ft.indexOf('if (cruza) todoJump.set(id, it);'), iH = ft.indexOf('if (!todoJump.has(id)) return;');
+      if (iC < 0 || iF < iC || iR < iF || iH < iR)
+        throw new Error('0.97.0: saltar a otro escritorio vuelve a encargar la fila DESPUÉS de cambiar, y antes de decidir si se repinta'); }
+    // R18: la guía lo explica, con el atajo
+    { const g = fs.readFileSync(path.join(__dirname, '..', 'guia.html'), 'utf8');
+      if (!/<section id="dashboard">/.test(g) || !/href="#dashboard">Dashboard<\/a>/.test(g) || !/<tr><td><kbd>D<\/kbd><\/td>/.test(g))
+        throw new Error('0.97.0: la guía explica el Dashboard y su atajo (R18)'); }
+    console.log('OK 0.97.0 (Dashboard: cada cifra es su lista con las funciones de las filas, solo lectura, sin privados, índice entero, destino real, cerrado no calcula, D y Esc en su orden, cuatro accesos)');
+  }
+
   console.log('\nTODO EN VERDE');
 })().catch(e => { console.error(e && e.stack || e); process.exitCode = 1; });

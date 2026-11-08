@@ -1,5 +1,33 @@
 # Changelog
 
+## [0.97.0] - 2026-11-08 — Dashboard: lo que te espera y el índice de todo
+
+- **Nueva pestaña fija «📊 Dashboard»**, a la izquierda de tus escritorios. También con la tecla
+  **D** (fuera de un campo de texto), desde el menú Inicio y desde la paleta. **Esc** vuelve al
+  escritorio donde estabas, y **D** te devuelve al Dashboard en el mismo punto en que lo dejaste.
+- **Arriba, una sola cosa: lo siguiente.** Primero lo vencido; si no hay, la tarea que más tiempo
+  lleva pidiéndote algo; si tampoco, lo que vence hoy. Si no hay nada, lo dice y no se inventa trabajo.
+- **Cuatro cifras, todas pulsables:** te piden algo (con la edad de la más antigua), vencidas u hoy,
+  cerradas hoy (y en la semana) y abiertas. Cada cifra enseña debajo su lista: cada tarea con su
+  número, su edad y dónde vive. Lo que te piden y lo vencido va siempre entero; las cerradas y las
+  abiertas enseñan las 40 primeras y un botón para ver el resto. Un clic te lleva a esa tarea, en su
+  lista, señalada.
+- **El índice de todo lo que tienes:** una tarjeta por escritorio, con una franja de su fondo para
+  reconocerlo sin leer, y dentro sus ventanas agrupadas por tipo. Las listas de tareas dicen cuántas
+  tienen abiertas y cuántas tienen respuesta del agente, con el mismo recuento que ves en la propia
+  lista. Un filtro arriba lo estrecha mientras escribes (título, contenido o escritorio); Enter abre
+  la primera. Un clic en una ventana te lleva a ella; en el nombre del escritorio, a ese escritorio.
+- **Movimiento reciente:** las últimas altas, cierres y respuestas de tus tareas, con «hace…».
+- **En tiempo real**: se actualiza al cambiar algo aquí o al llegar un cambio de otro equipo, sin
+  moverte el scroll ni quitarte el foco. Con el Dashboard cerrado no calcula nada.
+- **Solo mirar**: abrir el Dashboard y volver no cambia nada de tu archivo de datos. Con la
+  privacidad puesta, los widgets privados no aparecen ni cuentan.
+- **Saltar a una tarea de otro escritorio te la deja a la vista.** Desde la paleta, el aviso ⏰ o el
+  Dashboard, la lista de destino se abría a veces en una página donde la tarea quedaba fuera de la
+  vista, aunque se señalara. Ahora la ventana coge la página correcta y se desplaza hasta la fila.
+- Se maneja con el teclado: Tab recorre en orden de lectura y Enter abre. En pantallas estrechas,
+  las cifras pasan a dos por fila y el índice a una columna.
+
 ## [0.96.2] - 2026-11-07 — mover ventanas sin parones
 
 - **Soltar una ventana ya no congela el escritorio.** Al soltarla en una columna, al redimensionar
