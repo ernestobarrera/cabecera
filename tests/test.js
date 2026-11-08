@@ -1347,7 +1347,16 @@ if (!src.includes('extras.push({ wId:')) throw new Error('regresión: la paleta 
 if (!src.includes('s.id === x.spId')) throw new Error('regresión: el destino de lista nombrada ya no se resuelve en el clic');
 // Clic de tarea completada: suena solo al marcar (nunca al desmarcar) y la paleta/bandeja
 // pasan los conceptos propios a la gramática v.
-if (!src.includes('if (it.done) playDoneClick();')) throw new Error('regresión: falta el clic al completar tarea');
+// 0.98.0 — el clic vive en la puerta única de «hecha» (`marcarHecha`): se EJECUTA y se mira el efecto
+{ const mh = src.match(/function marcarHecha\(it, hecha\)\{[\s\S]*?\n\}/);
+  if (!mh) throw new Error('regresión: falta la puerta única marcarHecha');
+  let clics = 0, sucio = 0;
+  const marcar = new Function('playDoneClick', 'markDirty', mh[0] + '\nreturn marcarHecha;')(() => clics++, () => sucio++);
+  const it = { t: 'x', done: false, alertedAt: 5 };
+  if (!marcar(it, true) || !it.done || !it.doneAt || clics !== 1 || sucio !== 1) throw new Error('regresión: marcar hecha fija done y doneAt, suena y guarda');
+  if (marcar(it, true) || clics !== 1 || sucio !== 1) throw new Error('regresión: marcar lo ya marcado no suena ni guarda');
+  if (!marcar(it, false) || it.done || 'doneAt' in it || 'alertedAt' in it || clics !== 1)
+    throw new Error('regresión: reabrir no suena, quita doneAt y deja que vuelva a avisar (alertedAt fuera)'); }
 if (!src.includes('function playDoneClick()')) throw new Error('regresión: falta playDoneClick');
 // Todos los sonidos usan UN AudioContext compartido que nunca se cierra: crear/cerrar uno por
 // sonido dejaba mudos los tonos cortos cuando el dispositivo de audio tardaba en abrirse.
@@ -4024,7 +4033,9 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
     /* Cierra por LA MISMA puerta que la casilla: dos caminos distintos darían dos «Hechas»
        distintas (R47, un estado escrito en dos sitios). En 0.93.0 esa puerta es `cerrarTarea`, y
        que sea una sola función es más fuerte que comprobar que dos trozos de código coincidan. */
-    if (!/const cerrarTarea = \(it, hecha\) => \{[\s\S]*?it\.done = true; it\.doneAt = Date\.now\(\); playDoneClick\(\);/.test(src))
+    // 0.98.0 — esa puerta es ahora `marcarHecha`, la de toda la app; `cerrarTarea` solo delega en ella
+    if (!/const cerrarTarea = \(it, hecha\) => marcarHecha\(it, hecha\);/.test(src)
+        || !/function marcarHecha\(it, hecha\)\{[\s\S]*?it\.done = true; it\.doneAt = Date\.now\(\); playDoneClick\(\);/.test(src))
       throw new Error('cerrar tiene que fijar done+doneAt en un solo sitio');
     if (!/if \(cerrarla\) cerrarTarea\(it, true\);/.test(src))
       throw new Error('«Vale y hecha» tiene que cerrar por la misma puerta, no a mano');
@@ -6456,11 +6467,14 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
       trozo(/function dueTaskStats\(\)\{[\s\S]*?\n\}/, 'dueTaskStats'),
       trozo(/const WTYPES = \{[\s\S]*?\n\};/, 'WTYPES'),
       trozo(/const WP_PRESETS = \[[\s\S]*?\n\];/, 'WP_PRESETS'),
-      trozo(/function widgetText\(w\)\{[\s\S]*?\n\}/, 'widgetText')
+      trozo(/function widgetText\(w\)\{[\s\S]*?\n\}/, 'widgetText'),
+      trozo(/function gradientAvgHex\(css\)\{[\s\S]*?\n\}/, 'gradientAvgHex'),
+      trozo(/const WP_PRESET_ACCENTS = [^\n]*/, 'WP_PRESET_ACCENTS'),
+      trozo(/function spaceAccent\(sp\)\{[\s\S]*?\n\}/, 'spaceAccent')
     ].join('\n');
-    const montar = (estado, priv) => new Function('state', 'privacyOn', 'esc', piezas + '\n' + bloque
+    const montar = (estado, priv, historia) => new Function('state', 'privacyOn', 'esc', 'history', piezas + '\n' + bloque
       + '\nreturn { modeloDashboard, dashListaHtml, dashCifrasHtml, dashIndiceHtml, dashSiguienteHtml, dashMovHtml, textoIndice,'
-      + ' vista: v => { dashVista = v; }, refs: () => dashRefs, programarDashboard, abierto: v => { dashAbierto = v; }, todas: v => dashTodas.add(v) };')(estado, priv, globalThis.esc);
+      + ' vista: v => { dashVista = v; }, refs: () => dashRefs, programarDashboard, abierto: v => { dashAbierto = v; }, todas: v => dashTodas.add(v), dashMarcarVuelta, dashEsDestino };')(estado, priv, globalThis.esc, historia);
 
     const DIA = 86400000, ahora = Date.now();
     const iso = ms => { const d = new Date(ms); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
@@ -6628,7 +6642,7 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
       if (prueba({ k: 'Escape' }).includes('cerrarDash')) throw new Error('0.97.0: sin Dashboard, Esc sigue como siempre'); }
 
     // 10 · se llega por los cuatro sitios y el atajo se ve junto a la función (R13, R27)
-    if (!/<button id="tb-dash"[^>]*>📊 <span class="lbl">Dashboard<\/span> <span class="kbd-hint">D<\/span>/.test(html)) throw new Error('0.97.0: la pestaña fija, con su atajo a la vista');
+    if (!/<button id="tb-dash"[^>]*>(<span class="vuelta"[^>]*>↩<\/span>)?📊 <span class="lbl">Dashboard<\/span> <span class="kbd-hint">D<\/span>/.test(html)) throw new Error('0.97.0: la pestaña fija, con su atajo a la vista');
     if (html.indexOf('id="tb-dash"') > html.indexOf('id="tb-spaces"')) throw new Error('0.97.0: la pestaña va a la izquierda de los escritorios');
     if (!/id="act-dash">📊 Dashboard <span class="kbd-hint">D<\/span>/.test(html) || !/\$\("#act-dash"\)\.addEventListener\("click", \(\) => \{ closeMenu\(\); abrirDashboard\(\); \}\)/.test(src))
       throw new Error('0.97.0: el menú Inicio ofrece el Dashboard (R13)');
@@ -6652,6 +6666,51 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
     { const g = fs.readFileSync(path.join(__dirname, '..', 'guia.html'), 'utf8');
       if (!/<section id="dashboard">/.test(g) || !/href="#dashboard">Dashboard<\/a>/.test(g) || !/<tr><td><kbd>D<\/kbd><\/td>/.test(g))
         throw new Error('0.97.0: la guía explica el Dashboard y su atajo (R18)'); }
+    // --- 0.98.0 ---
+    // (1) UNA puerta para «hecha»: `it.done` se escribe solo dentro de marcarHecha, y las otras dos delegan
+    { const escr = src.match(/it\.done = [^\n;]*/g) || [];
+      const puerta = trozo(/function marcarHecha\(it, hecha\)\{[\s\S]*?\n\}/, 'marcarHecha');
+      if (escr.length !== 2 || (puerta.match(/it\.done = /g) || []).length !== 2)
+        throw new Error('0.98.0: `it.done` se escribe en ' + escr.length + ' sitios; tiene que ser SOLO dentro de marcarHecha');
+      if (!/li\.querySelector\("input"\)\.addEventListener\("change", e => \{\s*marcarHecha\(it, e\.target\.checked\);/.test(src))
+        throw new Error('0.98.0: la casilla de la fila cierra por la puerta única'); }
+    // (2) el círculo ✓: solo en tareas vivas y en las listas que se resuelven; por la puerta única, con Deshacer
+    { const s = estado(), d = montar(s, false), m = d.modeloDashboard(ahora);
+      for (const v of ['piden', 'vencidas', 'abiertas']){ d.vista(v); const h = d.dashListaHtml(m);
+        if (cuenta(h, 'dash-ok') !== cuenta(h, 'dash-fila')) throw new Error('0.98.0: en «' + v + '» cada tarea viva lleva su círculo para cerrarla'); }
+      d.vista('cerradas'); if (/dash-ok/.test(d.dashListaHtml(m))) throw new Error('0.98.0: una tarea cerrada no ofrece cerrarse');
+      if (/dash-ok/.test(d.dashMovHtml(m))) throw new Error('0.98.0: el movimiento es un registro, no una lista de trabajo');
+      if (!/dash-ok/.test(d.dashSiguienteHtml(m))) throw new Error('0.98.0: «Lo siguiente» también se puede cerrar');
+      d.vista('piden'); const h = d.dashListaHtml(m), refs = d.refs();
+      const iOk = +h.match(/class="dash-ok" data-ok="(\d+)"/)[1];
+      if (refs[iOk].tipo !== 'cerrar' || refs[iOk].it !== s.spaces[0].widgets[1].data.items[0]) throw new Error('0.98.0: el círculo cierra la tarea de verdad, la de su fila');
+      const dc = trozo(/function dashCerrar\(r, boton\)\{[\s\S]*?\n\}/, 'dashCerrar');
+      if (!/if \(!marcarHecha\(it, true\)\) return;\s*repintarListas\(\);/.test(dc) || !/"Deshacer",[\s\S]*?if \(marcarHecha\(it, false\)\) repintarListas\(\);/.test(dc)
+          || !/const repintarListas = \(\) => [\s\S]*?forEach\(refreshWidget\);/.test(dc))
+        throw new Error('0.98.0: cerrar desde el Dashboard va por marcarHecha, ofrece Deshacer y repinta la lista dueña');
+      if (!/const ok = e\.target\.closest\("\.dash-ok"\);\s*if \(ok\)\{ dashCerrar\(dashRefs\[\+ok\.dataset\.ok\], ok\); return; \}/.test(bloque))
+        throw new Error('0.98.0: el círculo está cableado'); }
+    // (3) Atrás vuelve al Dashboard: se EJECUTA con un historial falso
+    { const pila = [{ st: null }]; let pos = 0;
+      const historia = { get state(){ return pila[pos].st; },
+        replaceState(st){ pila[pos] = { st }; }, pushState(st){ pila.splice(pos + 1); pila.push({ st }); pos++; } };
+      const d = montar(estado(), false, historia);
+      d.dashMarcarVuelta();
+      if (pila.length !== 2 || pila[0].st.cabDash !== 'dash' || pila[1].st.cabDash !== 'destino' || !d.dashEsDestino())
+        throw new Error('0.98.0: saltar desde el Dashboard deja detrás una entrada «dash» y abre una «destino»');
+      d.dashMarcarVuelta();
+      if (pila.length !== 2) throw new Error('0.98.0: desde un destino, otro salto no apila: Atrás vuelve siempre en un paso');
+      pos = 0; d.dashMarcarVuelta();
+      if (pila.length !== 2 || pos !== 1) throw new Error('0.98.0: tras volver con Atrás, el siguiente salto sustituye lo de delante');
+      if (!/function dashIr\(r\)\{\n  if \(!r\) return;\n  dashMarcarVuelta\(\);/.test(src) || !/addEventListener\("popstate", dashAlVolver\)/.test(src)
+          || !/if \(st\.cabDash === "dash"\) abrirDashboard\(\);\s*else if \(dashAbierto\) cerrarDashboard\(false\);/.test(src))
+        throw new Error('0.98.0: el salto marca la vuelta y Atrás abre el Dashboard en su entrada'); }
+    // (4) el escritorio, destacado: su tono en la tarjeta y su punto + nombre en cada fila
+    { const s = estado(), d = montar(s, false), m = d.modeloDashboard(ahora); const ix = d.dashIndiceHtml(m).tarjetas;
+      if (!/class="dash-card" style="--franja:[^"]*; --acento:#[0-9a-f]{6}"/.test(ix)) throw new Error('0.98.0: cada tarjeta lleva el tono de su escritorio');
+      d.vista('piden'); if (!/<span class="dash-pt" style="--acento:#[0-9a-f]{6}"><\/span><b>Alfa<\/b> · /.test(d.dashListaHtml(m)))
+        throw new Error('0.98.0: cada fila dice su escritorio destacado y con su punto de color'); }
+    console.log('OK 0.98.0 (una sola puerta para «hecha», cerrar desde el Dashboard con Deshacer, Atrás vuelve al Dashboard, el escritorio con su color)');
     console.log('OK 0.97.0 (Dashboard: cada cifra es su lista con las funciones de las filas, solo lectura, sin privados, índice entero, destino real, cerrado no calcula, D y Esc en su orden, cuatro accesos)');
   }
 

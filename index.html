@@ -1363,15 +1363,33 @@ body.dash-on #btn-fold, body.dash-on #tb-cols, body.dash-on #desk-arrange{visibi
 .dash-q{width:min(340px, 100%); background:rgba(255,255,255,.05); border:1px solid var(--border-soft); border-radius:8px; color:var(--text); padding:6px 10px; font-family:var(--font); font-size:13.5px}
 .dash-q:focus{outline:none; border-color:var(--accent)}
 .dash-tarjetas{display:grid; grid-template-columns:repeat(auto-fill, minmax(270px, 1fr)); gap:12px; align-items:start; margin:4px 2px 6px}
-.dash-card{position:relative; background:rgb(27,32,41); border:1px solid var(--border-soft); border-radius:12px; overflow:hidden; padding:13px 6px 6px}
+.dash-card{position:relative; background:rgb(27,32,41); border:1px solid var(--border-soft); border-radius:12px; overflow:hidden; padding:12px 6px 6px}
 .dash-card::before{content:""; position:absolute; left:0; right:0; top:0; height:6px; background:var(--franja, rgba(255,255,255,.12))}
 .dash-card ul{list-style:none}
 .dash-card li.sep{border-top:1px solid var(--border-soft); margin-top:3px; padding-top:3px}
-.dash-esp{display:flex; align-items:baseline; gap:8px; width:100%; text-align:left; background:none; border:0; border-radius:8px; padding:5px 8px 6px; color:var(--text); font-family:var(--font); font-size:15.5px; font-weight:600; cursor:pointer}
-.dash-esp:hover{background:rgba(255,255,255,.055)}
+/* 0.98.0 — el nombre del escritorio, que se destacaba poco: el tono de cada escritorio es la media
+   de su fondo y casi siempre es oscuro, así que aquí se ACLARA (mezcla con blanco) para pintarlo. */
+.dash-esp{display:flex; align-items:baseline; gap:8px; width:100%; text-align:left; border:0; border-left:5px solid color-mix(in oklab, var(--acento, #5aa9f7) 45%, #fff);
+  background:linear-gradient(90deg, color-mix(in oklab, var(--acento, #5aa9f7) 60%, transparent), transparent 92%); border-radius:8px; padding:7px 10px 8px; margin-bottom:4px;
+  color:#fff; font-family:var(--font); font-size:17.5px; font-weight:700; letter-spacing:.01em; cursor:pointer}
+.dash-esp:hover{filter:brightness(1.15)}
+.dash-pt{display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:6px; vertical-align:middle; flex:0 0 auto;
+  background:color-mix(in oklab, var(--acento, #5aa9f7) 45%, #fff)}
+.dash-fila .dn b, .dash-sig .dn b, .dash-grupo b{color:var(--text); font-weight:600}
+/* 0.98.0 — cerrar desde el Dashboard: el círculo de la izquierda, como en cualquier lista de tareas */
+.dash-li{display:flex; align-items:center; gap:2px}
+.dash-li > .dash-fila{flex:1 1 auto; min-width:0}
+.dash-ok{flex:0 0 24px; width:24px; height:24px; margin-left:4px; border-radius:50%; border:1.5px solid rgba(255,255,255,.28); background:none;
+  color:transparent; font-size:13px; line-height:1; cursor:pointer; font-family:var(--font)}
+.dash-ok:hover, .dash-ok:focus-visible{border-color:var(--ok); color:var(--ok); outline:none}
+.dash-ok:focus-visible{box-shadow:0 0 0 2px var(--accent)}
+.dash-sig-fila{display:flex; align-items:center; gap:6px}
+.dash-sig-fila > .dash-sig{flex:1 1 auto; min-width:0}
+#tb-dash .vuelta{display:none; color:var(--accent); font-weight:700}
+#tb-dash.vuelta .vuelta{display:inline}
 .dash-esp:focus-visible{outline:none; box-shadow:0 0 0 2px var(--accent)}
-.dash-esp .aqui{font-size:11.5px; font-weight:400; color:var(--accent)}
-.dash-esp .n{margin-left:auto; font-size:12.5px; font-weight:400; color:var(--text-dim); font-variant-numeric:tabular-nums}
+.dash-esp .aqui{font-size:11.5px; font-weight:600; color:#fff; background:rgba(255,255,255,.14); border-radius:6px; padding:1px 6px; letter-spacing:0}
+.dash-esp .n{margin-left:auto; font-size:12.5px; font-weight:400; color:rgba(255,255,255,.75); font-variant-numeric:tabular-nums}
 .dash-win{display:flex; align-items:baseline; gap:8px; width:100%; text-align:left; background:none; border:0; border-radius:7px; padding:4px 8px; color:var(--text); font-family:var(--font); font-size:14px; cursor:pointer}
 .dash-win:hover{background:rgba(255,255,255,.055)}
 .dash-win:focus-visible{outline:none; background:rgba(255,255,255,.055); box-shadow:0 0 0 2px var(--accent)}
@@ -1418,7 +1436,7 @@ body.dash-on #btn-fold, body.dash-on #tb-cols, body.dash-on #desk-arrange{visibi
 <div id="taskbar">
   <button id="btn-inicio" title="Añadir widgets y configuración  ·  Ctrl+clic derecho sobre el escritorio lo abre junto al puntero">⊞ Inicio</button>
   <button id="btn-fold" title="Plegar / desplegar todos los widgets">⊟</button>
-  <button id="tb-dash" aria-pressed="false" title="Dashboard: lo que te espera, en cifras, y el índice de todo lo que tienes  ·  tecla D (Esc vuelve al escritorio)">📊 <span class="lbl">Dashboard</span> <span class="kbd-hint">D</span></button>
+  <button id="tb-dash" aria-pressed="false" title="Dashboard: lo que te espera, en cifras, y el índice de todo lo que tienes  ·  tecla D (Esc vuelve al escritorio)"><span class="vuelta" aria-hidden="true">↩</span>📊 <span class="lbl">Dashboard</span> <span class="kbd-hint">D</span></button>
   <div id="tb-spaces" title="Espacios (escritorios): clic para cambiar, doble clic para renombrar, arrastra para reordenar"></div>
   <button id="space-add" title="Nuevo espacio">＋</button>
   <button id="tb-cols" title="Columnas: Auto, 2, 3 o 4. Elegir una ordena el escritorio al instante (con Deshacer) y rige los carriles al arrastrar">▤ Auto</button>
@@ -2413,7 +2431,7 @@ function syncUI(mode, txt){
    reaparece) y si Recargar está activo. El descarte ✕ vive solo en memoria de la sesión.
    Demora asumida: la CDN de Pages puede servir la versión vieja hasta ~10 min aun con
    no-store (gobierna la caché del navegador, no la CDN); para pestañas de días, irrelevante. */
-const APP_VERSION = "0.97.0";
+const APP_VERSION = "0.98.0";
 let newVersionDetected = null;   // versión superior detectada; detiene futuras consultas
 let verDismissed = false;        // ✕: solo esta sesión — nunca persistido en disco
 let verCheckInflight = false;    // sin consultas concurrentes
@@ -2864,6 +2882,20 @@ function ponerNota(it, v){
   const t = String(v == null ? "" : v).trim().slice(0, NOTA_MAX);
   if (t === (it.note || "")) return false;
   if (t) it.note = t; else delete it.note;
+  markDirty(); return true;
+}
+/* 0.98.0 — LA PUERTA ÚNICA DE «HECHA». Hasta aquí `done` tenía DOS puertas que no hacían lo mismo:
+   la casilla de la fila borraba el aviso ya sonado al reabrir (`alertedAt`) y dejaba `doneAt` como
+   `undefined`; la vista de detalle no tocaba el aviso y borraba `doneAt`. Reabrir desde el detalle
+   dejaba una tarea que ya no volvía a avisar. Querer cerrar también desde el Dashboard habría sido
+   la TERCERA: justo lo que pide diseñar antes de construir (un campo con más de una puerta de
+   mutación). Así que primero se unifican las dos que había, con el comportamiento correcto de cada
+   una, y después el Dashboard usa la misma. Mismo patrón que `ponerNota`.
+   `CONTRATO:` `it.done` solo se escribe aquí; hay prueba que cuenta las escrituras. */
+function marcarHecha(it, hecha){
+  if (!it || !!it.done === !!hecha) return false;
+  if (hecha){ it.done = true; it.doneAt = Date.now(); playDoneClick(); }
+  else { it.done = false; delete it.doneAt; delete it.alertedAt; }   // reabierta: puede volver a avisar
   markDirty(); return true;
 }
 const ADJ_TEXTO_MAX = 400 * 1024;   // más que esto no cabe legible en un panel: se ofrece abrir fuera
@@ -8015,12 +8047,7 @@ function bodyTodo(w, el){
     if (it.replies.length > RESP_HILO_MAX) it.replies.splice(0, it.replies.length - RESP_HILO_MAX);
     markDirty(); return true;
   };
-  const cerrarTarea = (it, hecha) => {
-    if (!!it.done === !!hecha) return false;
-    if (hecha){ it.done = true; it.doneAt = Date.now(); playDoneClick(); }
-    else { it.done = false; delete it.doneAt; }
-    markDirty(); return true;
-  };
+  const cerrarTarea = (it, hecha) => marcarHecha(it, hecha);   // 0.98.0: la puerta única, la de toda la app
 
   /* ── LA VISTA ──────────────────────────────────────────────────────────────────────────────── */
   let detalle = null;          // { it, nodo } — su existencia es lo que congela `paint()`
@@ -8946,11 +8973,8 @@ function bodyTodo(w, el){
       });
       li.addEventListener("dragend", () => { dragItem = null; ul.querySelectorAll(".drag-over").forEach(x => x.classList.remove("drag-over", "drop-after")); });
       li.querySelector("input").addEventListener("change", e => {
-        it.done = e.target.checked;
-        it.doneAt = it.done ? Date.now() : undefined;
-        if (!it.done) delete it.alertedAt;
-        if (it.done) playDoneClick();
-        paint(); markDirty();
+        marcarHecha(it, e.target.checked);   // 0.98.0: la misma puerta que el detalle y el Dashboard
+        paint();
       });
       /* 0.94.0 — EN VISTA PARTIDA, LA FILA ENTERA ABRE. Fitts: con el panel al lado, el destino
          deja de ser un botón de 13 px que aparece al pasar el ratón y pasa a ser la fila entera.
@@ -12081,6 +12105,8 @@ function wireUI(){
   $("#space-add").addEventListener("click", () => { revelarEscritorio(); addSpace(); });
   // 0.97.0 — el Dashboard: pestaña fija de la barra y entrada en el menú Inicio (R13)
   $("#tb-dash").addEventListener("click", alternarDashboard);
+  addEventListener("popstate", dashAlVolver);   // 0.98.0: Atrás tras saltar desde el Dashboard
+  pintarPestanaDash();
   $("#act-dash").addEventListener("click", () => { closeMenu(); abrirDashboard(); });
   $("#tb-cols").addEventListener("click", openColsMenu);
   // barra de espacios: rueda = desplazamiento horizontal; desvanecidos según posición
@@ -13361,6 +13387,7 @@ let dashVentanas = new Map(); // id de ventana → { w, sp }, para el filtro del
 let dashHay = new Map();      // texto buscable por ventana, PEREZOSO: solo se calcula al filtrar
 let dashPendiente = false;
 let dashMs = 0;               // lo que costó el último repintado (lo lee el verificador; R42)
+let dashFocoTras = null;      // a qué círculo pasa el foco tras cerrar una tarea con el teclado
 const DASH_MOV_MAX = 8;
 // orden de los tipos dentro de cada tarjeta del índice: primero lo que se trabaja, al final lo de consulta
 const DASH_TIPOS = ["todo", "notes", "md", "links", "clips", "files", "embed", "img", "cal", "year", "leave",
@@ -13400,7 +13427,7 @@ function modeloDashboard(ahora = Date.now()){
   const vivo = new Set(src.items);
   const donde = it => {
     const o = src.origenDe(it);
-    return { it, wid: o.w.id, si: state.spaces.indexOf(o.sp), esp: o.esp || "Escritorio", lista: o.nombre };
+    return { it, wid: o.w.id, si: state.spaces.indexOf(o.sp), esp: o.esp || "Escritorio", lista: o.nombre, acento: spaceAccent(o.sp) };
   };
   const ultAt = it => +it.replies[it.replies.length - 1].at || 0;
   // te piden algo: la más ANTIGUA arriba — es la que más se te ha pasado
@@ -13442,7 +13469,7 @@ function modeloDashboard(ahora = Date.now()){
       ventanas.push(v);
     }
     ventanas.sort((a, b) => rango(a.tipo) - rango(b.tipo));   // estable: dentro de un tipo, su orden
-    return { sp, si, nombre: sp.name || "Escritorio", ventanas, franja: franjaDe(sp), aqui: si === state.active };
+    return { sp, si, nombre: sp.name || "Escritorio", ventanas, franja: franjaDe(sp), acento: spaceAccent(sp), aqui: si === state.active };
   });
   // movimiento: solo de TAREAS, porque es lo único que guarda fecha (0 de 18 tipos de ventana la llevan)
   const mov = [];
@@ -13463,19 +13490,29 @@ function modeloDashboard(ahora = Date.now()){
 const DASH_QUE = { alta: "anotada", cierre: "cerrada", agente: "respuesta del agente", tuya: "tu respuesta" };
 function dashRef(r){ return dashRefs.push(r) - 1; }
 const textoCorto = it => String((it && it.t) || "").replace(/\s+/g, " ").trim();
+// el escritorio, con su punto de color: lo que se reconoce sin leer
+const dashPunto = acento => `<span class="dash-pt"${acento ? ` style="--acento:${esc(acento)}"` : ""}></span>`;
+const dashDonde = f => `${dashPunto(f.acento)}<b>${esc(f.esp)}</b> · ${esc(f.lista)}`;
+/* el círculo de la izquierda: marcar hecha por la PUERTA ÚNICA (`marcarHecha`), con Deshacer. Va
+   FUERA del botón de la fila —un botón no puede anidar otro— y solo en tareas vivas. */
+function dashOkHtml(f, k){
+  const i = dashRef({ tipo: "cerrar", wid: f.wid, si: f.si, it: f.it });
+  return `<button type="button" class="dash-ok" data-ok="${i}" data-k="ok:${esc(k)}" title="Marcar hecha (con Deshacer)" aria-label="Marcar hecha: ${esc(textoCorto(f.it).slice(0, 80))}">✓</button>`;
+}
 // una fila de tarea: edad · #n · texto en una línea · escritorio · lista. Toda la fila es el enlace.
-function dashTareaHtml(sec, f, ed, edCls, que){
-  const i = dashRef({ tipo: "tarea", wid: f.wid, si: f.si, it: f.it });
+function dashTareaHtml(sec, f, ed, edCls, que, cerrable){
   const n = f.it.n ? "#" + f.it.n : "";
   const t = textoCorto(f.it);
   const k = sec + ":" + f.wid + ":" + (f.it.id || n || t.slice(0, 40));
-  return `<li><button type="button" class="dash-fila${f.it.done ? " hecha" : ""}" data-i="${i}" data-k="${esc(k)}"`
+  const ok = cerrable && !f.it.done ? dashOkHtml(f, k) : "";
+  const i = dashRef({ tipo: "tarea", wid: f.wid, si: f.si, it: f.it });
+  return `<li${ok ? ` class="dash-li"` : ""}>${ok}<button type="button" class="dash-fila${f.it.done ? " hecha" : ""}" data-i="${i}" data-k="${esc(k)}"`
     + ` title="${esc(t)}\n${esc(f.esp)} · ${esc(f.lista)} — clic para ir a la tarea">`
     + `<span class="ed${edCls ? " " + edCls : ""}">${esc(ed)}</span>`
     + (que ? `<span class="que">${esc(que)}</span>` : "")
     + (n ? `<span class="num">${esc(n)}</span>` : "")
     + `<span class="tx">${esc(t) || "(sin texto)"}</span>`
-    + `<span class="dn">${esc(f.esp)} · ${esc(f.lista)}</span></button></li>`;
+    + `<span class="dn">${dashDonde(f)}</span></button></li>`;
 }
 const edadTxt = d => d === 0 ? "hoy" : d + " d";
 const plural = (n, uno, varios) => n + " " + (n === 1 ? uno : varios);
@@ -13485,15 +13522,15 @@ function dashListaHtml(m){
   if (v === "piden"){
     tit = `Te piden algo (${m.piden.length})`;
     if (m.piden.length > 1) der = "la más antigua arriba";
-    filas = m.piden.map(f => dashTareaHtml("p", f, edadTxt(f.dias), f.dias >= ESPERA_DIAS ? "urge" : "")).join("");
+    filas = m.piden.map(f => dashTareaHtml("p", f, edadTxt(f.dias), f.dias >= ESPERA_DIAS ? "urge" : "", "", true)).join("");
     vacio = "Nada te espera: ningún agente te ha pedido nada.";
   } else if (v === "vencidas"){
     tit = `Vencidas y de hoy (${m.vencidas.length + m.hoy.length})`;
     if (m.vencidas.length > 1) der = "la más atrasada arriba";
     if (m.vencidas.length) filas += `<li class="dash-grupo">Vencidas (${m.vencidas.length})</li>`
-      + m.vencidas.map(f => dashTareaHtml("v", f, "hace " + f.dias + " d", "mal")).join("");
+      + m.vencidas.map(f => dashTareaHtml("v", f, "hace " + f.dias + " d", "mal", "", true)).join("");
     if (m.hoy.length) filas += `<li class="dash-grupo">Vencen hoy (${m.hoy.length})</li>`
-      + m.hoy.map(f => dashTareaHtml("h", f, "hoy", "urge")).join("");
+      + m.hoy.map(f => dashTareaHtml("h", f, "hoy", "urge", "", true)).join("");
     vacio = "Nada vencido ni para hoy.";
   } else if (v === "cerradas"){
     tit = `Cerradas esta semana (${m.cerradas.length})`;
@@ -13509,8 +13546,8 @@ function dashListaHtml(m){
     const porLista = new Map();
     for (const f of m.abiertas) porLista.set(f.wid, (porLista.get(f.wid) || 0) + 1);
     filas = dashFilasLargas(v, m.abiertas,
-      f => `${esc(f.esp)} · ${esc(f.lista)} (${porLista.get(f.wid)})`,
-      f => { const am = altaMeta(f.it.created, f.it.createdT); return dashTareaHtml("a", f, am ? am.corto : "", ""); });
+      f => `${dashDonde(f)} (${porLista.get(f.wid)})`,
+      f => { const am = altaMeta(f.it.created, f.it.createdT); return dashTareaHtml("a", f, am ? am.corto : "", "", "", true); });
     vacio = "No tienes tareas abiertas.";
   }
   return `<h2><span>${tit}</span>${der ? `<span class="h2r">${der}</span>` : ""}</h2>`
@@ -13549,10 +13586,11 @@ function dashSiguienteHtml(m){
     : f.motivo === "pide" ? `<span class="mot">te pide algo ${f.dias === 0 ? "desde hoy" : "desde hace " + plural(f.dias, "día", "días")}</span>`
     : `<span class="mot">vence hoy</span>`;
   const t = textoCorto(f.it);
-  return `<button type="button" class="dash-sig" data-i="${i}" data-k="sig" title="${esc(t)} — clic para ir a la tarea">`
+  return `<div class="dash-sig-fila">${dashOkHtml(f, "sig")}`
+    + `<button type="button" class="dash-sig" data-i="${i}" data-k="sig" title="${esc(t)} — clic para ir a la tarea">`
     + `<span class="et">Lo siguiente ›</span>${mot}`
     + `<span class="tx">${f.it.n ? `<span class="num">#${f.it.n}</span> ` : ""}${esc(t) || "(sin texto)"}</span>`
-    + `<span class="dn">${esc(f.esp)} · ${esc(f.lista)}</span></button>`;
+    + `<span class="dn">${dashDonde(f)}</span></button></div>`;
 }
 function dashIndiceHtml(m){
   const llenas = m.indice.filter(e => e.ventanas.length), vacias = m.indice.filter(e => !e.ventanas.length);
@@ -13575,7 +13613,8 @@ function dashIndiceHtml(m){
         + ` title="${esc(v.titulo)} — ${esc(v.nombreTipo)} · clic para ir a la ventana"><span class="ic">${v.ico}</span>`
         + `<span class="t">${esc(v.titulo)}</span>${extra}</button></li>`;
     }).join("");
-    return `<div class="dash-card"${e.franja ? ` style="--franja:${esc(e.franja)}"` : ""}>`
+    const estilo = [e.franja ? `--franja:${esc(e.franja)}` : "", e.acento ? `--acento:${esc(e.acento)}` : ""].filter(Boolean).join("; ");
+    return `<div class="dash-card"${estilo ? ` style="${estilo}"` : ""}>`
       + `<button type="button" class="dash-esp" data-i="${iE}" data-k="e:${e.si}" title="Ir al escritorio «${esc(e.nombre)}»">`
       + `<span>${esc(e.nombre)}</span>${e.aqui ? `<span class="aqui">estás aquí</span>` : ""}<span class="n">${plural(e.ventanas.length, "ventana", "ventanas")}</span></button>`
       + `<ul>${filas}</ul></div>`;
@@ -13647,6 +13686,8 @@ function dashEsqueleto(root){
     if (c){ dashVista = c.dataset.vista; pintarDashboard(); return; }
     const mas = e.target.closest(".dash-mas");
     if (mas){ dashTodas.add(mas.dataset.mas); pintarDashboard(); return; }
+    const ok = e.target.closest(".dash-ok");
+    if (ok){ dashCerrar(dashRefs[+ok.dataset.ok], ok); return; }
     const b = e.target.closest("[data-i]");
     if (b && root.contains(b)) dashIr(dashRefs[+b.dataset.i]);
   });
@@ -13671,7 +13712,10 @@ function pintarDashboard(){
   // algo pintado, se devuelve al mismo elemento por su clave estable. El filtro no se repinta nunca.
   const top = root.scrollTop;
   const act = document.activeElement;
-  const clave = act && act !== root && root.contains(act) ? act.dataset.k : null;
+  // tras cerrar una tarea con su círculo, el foco va al de la SIGUIENTE (se apuntó antes de que esta
+  // desapareciera): con el teclado se pueden despachar varias seguidas
+  const clave = dashFocoTras || (act && act !== root && root.contains(act) ? act.dataset.k : null);
+  dashFocoTras = null;
   const m = modeloDashboard(Date.now());
   dashRefs = []; dashHay = new Map();
   const aqui = state.spaces[state.active];
@@ -13702,8 +13746,55 @@ function programarDashboard(){
 }
 function pintarPestanaDash(){
   const b = $("#tb-dash");
-  if (b){ b.classList.toggle("active", dashAbierto); b.setAttribute("aria-pressed", String(dashAbierto)); }
+  if (b){
+    b.classList.toggle("active", dashAbierto); b.setAttribute("aria-pressed", String(dashAbierto));
+    // ↩ = «Atrás te devuelve al Dashboard»: se ve mientras estés en un sitio al que llegaste desde él
+    const vuelta = !dashAbierto && dashEsDestino();
+    b.classList.toggle("vuelta", vuelta);
+    b.title = "Dashboard: lo que te espera, en cifras, y el índice de todo lo que tienes  ·  tecla D (Esc vuelve al escritorio)"
+      + (vuelta ? " · Has llegado aquí desde el Dashboard: Atrás (navegador, ratón o Alt+←) te devuelve a él" : "");
+  }
   document.body.classList.toggle("dash-on", dashAbierto);
+}
+/* 0.98.0 — VOLVER CON «ATRÁS». Saltar del Dashboard a una tarea o una ventana es navegar, y lo que se
+   espera de navegar es poder volver con el botón Atrás del navegador o del ratón (o Alt+←). Se usa el
+   historial del navegador sin cambiar la dirección: la entrada desde la que saltaste queda marcada
+   como «Dashboard» y se apila una para el destino. Si ya estabas en un destino al que llegaste desde
+   el Dashboard, se SUSTITUYE en vez de apilar otra: así Atrás siempre lleva al Dashboard en un paso y
+   el historial no crece con cada salto.
+   Nada de esto se guarda en `datos.json`: es estado de la pestaña. Y no cambia lo que hacía Atrás
+   fuera de este caso. */
+function dashEsDestino(){ try{ return !!(history.state && history.state.cabDash === "destino"); }catch(e){ return false; } }
+function dashMarcarVuelta(){
+  try{
+    const st = history.state && typeof history.state === "object" ? history.state : {};
+    if (st.cabDash === "destino") return;   // ya hay un Dashboard justo detrás: no se apila otro
+    history.replaceState({ ...st, cabDash: "dash" }, "");
+    history.pushState({ cabDash: "destino" }, "");
+  }catch(e){ /* sin historial disponible: se navega igual, solo que Atrás no vuelve */ }
+}
+function dashAlVolver(e){
+  const st = (e && e.state) || {};
+  if (st.cabDash === "dash") abrirDashboard();
+  else if (dashAbierto) cerrarDashboard(false);
+  pintarPestanaDash();
+}
+/* Cerrar desde el Dashboard: la MISMA puerta que la casilla y la vista de detalle, con Deshacer.
+   La lista de esa tarea (y la vista «Todas las listas», si la hay) se repinta para que, al volver al
+   escritorio, no enseñe la tarea como si siguiera abierta. */
+function dashCerrar(r, boton){
+  if (!r || !r.it || r.it.done) return;
+  const li = boton && boton.closest(".dash-li, .dash-sig-fila");
+  let sig = li && li.nextElementSibling;
+  while (sig && !sig.querySelector(".dash-ok")) sig = sig.nextElementSibling;
+  dashFocoTras = sig ? sig.querySelector(".dash-ok").dataset.k : null;
+  const it = r.it;
+  const repintarListas = () => (state.widgets || [])
+    .filter(w => w.type === "todo" && (w.id === r.wid || origenDe(w) === "all")).forEach(refreshWidget);
+  if (!marcarHecha(it, true)) return;
+  repintarListas();
+  toastAction(`Hecha${it.n ? " #" + it.n : ""}: «${textoCorto(it).slice(0, 60)}»`, "Deshacer",
+    () => { if (marcarHecha(it, false)) repintarListas(); });
 }
 function abrirDashboard(){
   const root = $("#dashboard");
@@ -13739,6 +13830,7 @@ function alternarDashboard(){ if (dashAbierto) cerrarDashboard(); else abrirDash
 // el destino de cada cosa pulsable: las mismas puertas que la paleta y los avisos de la barra
 function dashIr(r){
   if (!r) return;
+  dashMarcarVuelta();   // antes de salir: así Atrás vuelve aquí
   if (activeView && activeView.kind !== "space") setActiveView({ kind: "space" });   // venías de un seguido
   if (r.tipo === "tarea") focusTask(r.wid, r.si, r.it);
   else if (r.tipo === "ventana") focusWidget(r.wid, r.si);

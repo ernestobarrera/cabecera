@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.98.0] - 2026-11-08 — Dashboard: cerrar tareas, volver atrás y escritorios que se reconocen
+
+- **Cerrar tareas desde el Dashboard.** Cada tarea viva lleva un círculo a la izquierda: un clic la
+  marca hecha, con **Deshacer** en el aviso que aparece. También en «Lo siguiente». Con el teclado,
+  tras cerrar una el foco pasa a la siguiente, así que puedes despachar varias seguidas. Si la tarea
+  tenía una pregunta del agente sin contestar, queda avisada en «Hechas», igual que al cerrarla con
+  su casilla.
+- **Una sola forma de marcar «hecha» en toda la app.** La casilla de la lista, la vista de detalle y
+  el Dashboard pasan por el mismo sitio. De paso se corrige una diferencia: una tarea reabierta desde
+  la vista de detalle no volvía a avisar en su fecha; ahora sí, como al reabrirla desde la lista.
+- **Volver con Atrás.** Si saltas del Dashboard a una tarea, una ventana o un escritorio, el botón
+  Atrás del navegador o del ratón (o Alt+←) te devuelve al Dashboard, en el mismo punto. Mientras
+  estés en un sitio al que llegaste así, la pestaña lo indica con ↩.
+- **El nombre de cada escritorio se ve mucho más.** Cada tarjeta del índice lleva una cabecera con el
+  color de ese escritorio, y en las listas cada tarea muestra un punto de ese color junto al nombre
+  de su escritorio, destacado.
+
 ## [0.97.0] - 2026-11-08 — Dashboard: lo que te espera y el índice de todo
 
 - **Nueva pestaña fija «📊 Dashboard»**, a la izquierda de tus escritorios. También con la tecla
