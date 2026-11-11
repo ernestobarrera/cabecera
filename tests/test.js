@@ -4429,6 +4429,24 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
     if (/it\.due =|it\.remind =/.test(chips))
       throw new Error('los atajos rellenan el formulario, no escriben en la tarea: una sola puerta de escritura');
 
+    // 0.99.0 (#31) — guardar la fecha NO reconstruye el detalle: el campo moría a medio teclear
+    { const gf = setDue.match(/const guardarFecha = \(\) => \{[^\n]*\};/);
+      if (!gf || /pintarDetalle/.test(gf[0]) || !/refrescarFecha\(\)/.test(gf[0]))
+        throw new Error('0.99.0: guardar la fecha repinta solo lo que depende de ella; repintar el detalle mata el campo con el cursor dentro');
+      const rf = setDue.match(/const refrescarFecha = \(\) => \{[\s\S]*?\n    \};/)[0];
+      if (/pintarDetalle/.test(rf) || !/document\.activeElement !== date/.test(rf)) throw new Error('0.99.0: el refresco no pisa el campo que tiene el cursor');
+      if (!/date\.addEventListener\("change", \(\) => \{ if \(!fechaAMedias\(\)\) guardarFecha\(\); \}\);/.test(setDue)
+          || !/badInput/.test(setDue) || !/< 1900/.test(setDue))
+        throw new Error('0.99.0: una fecha a medias (año 0002 mientras se teclea 2027) no se guarda');
+      for (const [u, n] of [['d', '-1'], ['d', '1'], ['d', '7'], ['m', '1'], ['y', '1']])
+        if (!new RegExp('class="dm" type="button" data-u="' + u + '" data-n="' + n + '"').test(setDue)) throw new Error('0.99.0: falta mover ' + n + ' ' + u);
+      eval('globalThis.sumarFecha = ' + src.match(/function sumarFecha\(iso, unidad, n, hoy = new Date\(\)\)\{[\s\S]*?\n\}/)[0]);
+      const hoy = new Date(2026, 10, 11, 9);
+      const casos = [['2026-11-11', 'd', 1, '2026-11-12'], ['2026-12-31', 'd', 1, '2027-01-01'], ['2026-03-01', 'd', -1, '2026-02-28'],
+        ['2026-01-31', 'm', 1, '2026-02-28'], ['2028-01-31', 'm', 1, '2028-02-29'], ['2026-12-15', 'm', 1, '2027-01-15'],
+        ['2028-02-29', 'y', 1, '2029-02-28'], ['2026-11-11', 'y', 1, '2027-11-11'], ['', 'd', 1, '2026-11-12'], ['0002-11-11', 'y', 1, '2027-11-11']];
+      for (const [a, u, n, esp] of casos){ const r = sumarFecha(a, u, n, hoy);
+        if (r !== esp) throw new Error(`0.99.0: ${a || '(vacía)'} ${n > 0 ? '+' : ''}${n} ${u} = ${esp}, no ${r}`); } }
     console.log('OK 0.85.0 (la alarma se retira y su uso real pasa al reloj de la tarea: rueda, siembra y atajos)');
   }
 
@@ -5822,9 +5840,11 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
       if (!det.includes('data-m="' + m + '"')) throw new Error('094: falta el atajo de +' + m + ' min');
     for (const d of [0, 1, 7])
       if (!det.includes('data-d="' + d + '"')) throw new Error('094: falta el atajo de día ' + d);
+    // 0.99.0 (#31): TRES filas — fijar el día (desde hoy), MOVERLO (desde la fecha puesta) y fijar la
+    // hora. Sigue siendo elegir entre pocas cada vez: lo que se compara es lo de una misma fila
     const filas = (det.match(/class="qf"/g) || []).length;
-    if (filas !== 2) throw new Error('094: los atajos van en DOS filas rotuladas (día y aviso); hay ' + filas);
-    if ((det.match(/class="qet"/g) || []).length !== 2)
+    if (filas !== 3) throw new Error('094/099: los atajos van en TRES filas rotuladas (día, mover y aviso); hay ' + filas);
+    if ((det.match(/class="qet"/g) || []).length !== 3)
       throw new Error('094: cada fila lleva su rótulo, o agrupar no reduce nada: solo mueve los botones de sitio');
     if (det.includes('class="dq-sep"'))
       throw new Error('094: el separador suelto sobra donde ya hay filas rotuladas: dos señales para lo mismo');
@@ -6473,7 +6493,7 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
       trozo(/function spaceAccent\(sp\)\{[\s\S]*?\n\}/, 'spaceAccent')
     ].join('\n');
     const montar = (estado, priv, historia) => new Function('state', 'privacyOn', 'esc', 'history', piezas + '\n' + bloque
-      + '\nreturn { modeloDashboard, dashListaHtml, dashCifrasHtml, dashIndiceHtml, dashSiguienteHtml, dashMovHtml, textoIndice,'
+      + '\nreturn { modeloDashboard, dashListaHtml, dashCifrasHtml, dashIndiceHtml, dashSiguienteHtml, dashMovHtml, textoIndice, dashProxHtml, prox: v => { dashProx = v; },'
       + ' vista: v => { dashVista = v; }, refs: () => dashRefs, programarDashboard, abierto: v => { dashAbierto = v; }, todas: v => dashTodas.add(v), dashMarcarVuelta, dashEsDestino };')(estado, priv, globalThis.esc, historia);
 
     const DIA = 86400000, ahora = Date.now();
@@ -6710,6 +6730,39 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
       if (!/class="dash-card" style="--franja:[^"]*; --acento:#[0-9a-f]{6}"/.test(ix)) throw new Error('0.98.0: cada tarjeta lleva el tono de su escritorio');
       d.vista('piden'); if (!/<span class="dash-pt" style="--acento:#[0-9a-f]{6}"><\/span><b>Alfa<\/b> · /.test(d.dashListaHtml(m)))
         throw new Error('0.98.0: cada fila dice su escritorio destacado y con su punto de color'); }
+    // --- 0.99.0 ---
+    // (#30) PRÓXIMAS: desplegable propio, con la regla del chip de la fila, sin ⚙ ni cerradas, sin romper R47
+    { const s = { version: 2, active: 0, spaces: [{ id: 'sP', name: 'P', settings: {}, widgets: [{ id: 'LP2', type: 'todo', t: 'L', data: { items: [
+        { id: 'f9', n: 9, t: 'en nueve días', done: false, due: iso(ahora + 9 * DIA) },
+        { id: 'f1', n: 1, t: 'mañana', done: false, due: iso(ahora + DIA) },
+        { id: 'f3', n: 3, t: 'en tres días', done: false, due: iso(ahora + 3 * DIA) },
+        { id: 'fx', t: 'agéntica futura', done: false, exec: true, due: iso(ahora + 2 * DIA) },
+        { id: 'fd', t: 'cerrada futura', done: true, doneAt: ahora - 1000, due: iso(ahora + 2 * DIA) },
+        { id: 'fh', t: 'hoy', done: false, due: iso(ahora) },
+        { id: 'fs', t: 'sin fecha', done: false } ] } }] }] };
+      const d = montar(s, false), m = d.modeloDashboard(ahora);
+      if (m.proximas.map(f => f.it.id).join() !== 'f1,f3,f9') throw new Error('0.99.0: próximas = fecha futura, sin ⚙ ni cerradas, la más cercana arriba; hay ' + m.proximas.map(f => f.it.id).join());
+      if (m.proximas[0].dias !== 1 || m.proximas[2].dias !== 9) throw new Error('0.99.0: los días hasta la fecha se cuentan desde hoy a medianoche');
+      d.prox(false); const pl = d.dashProxHtml(m);
+      if (/dash-fila/.test(pl) || !/aria-expanded="false"/.test(pl) || !/Próximas \(3\)/.test(pl) || !/la primera, mañana/.test(pl))
+        throw new Error('0.99.0: plegada dice cuántas hay y cuándo llega la primera, sin filas');
+      d.prox(true); const ab = d.dashProxHtml(m);
+      if (cuenta(ab, 'dash-fila') !== 3 || cuenta(ab, 'dash-ok') !== 3 || !/aria-expanded="true"/.test(ab)) throw new Error('0.99.0: desplegada enseña cada una, cerrable con su círculo');
+      if (!/Mañana \(1\)/.test(ab) || !/Próximos 7 días \(1\)/.test(ab) || !/Más adelante \(1\)/.test(ab)) throw new Error('0.99.0: agrupadas por cercanía, con el total de cada grupo');
+      // R47: la cifra de vencidas sigue siendo la longitud de SU lista — las próximas no se cuelan ahí
+      d.vista('vencidas'); const hv = d.dashListaHtml(m), hc = d.dashCifrasHtml(m);
+      if (cuenta(hv, 'dash-fila') !== cifraDe(hc, 'vencidas') || /en tres días/.test(hv)) throw new Error('0.99.0: las próximas no entran en «vencidas u hoy» (R47)');
+      const vacio = montar({ version: 2, active: 0, spaces: [{ id: 'z', name: 'Z', settings: {}, widgets: [] }] }, false);
+      if (!/disabled/.test(vacio.dashProxHtml(vacio.modeloDashboard(ahora)))) throw new Error('0.99.0: sin próximas, el desplegable no ofrece abrir nada');
+      if (!/const px = e\.target\.closest\("\.dash-prox-tg"\);\s*if \(px\)\{ dashProx = !dashProx; pintarDashboard\(\); return; \}/.test(bloque)
+          || !/\.dash-prox"\)\.innerHTML = dashProxHtml\(m\);/.test(bloque))
+        throw new Error('0.99.0: el desplegable está cableado y se repinta con el resto'); }
+    // el doble clic en el FONDO del Dashboard abre la paleta, como en los escritorios; sobre contenido, no
+    { const dbl = trozo(/document\.addEventListener\("dblclick", e => \{[\s\S]*?\n  \}\);/, 'el doble clic del fondo');
+      const guarda = dbl.match(/if \(e\.target\.closest\("#dashboard"\)\)\{\s*if \(e\.target\.closest\("([^"]+)"\)\) return;\s*\}\s*else if \(!e\.target\.closest\("#desktop"\)/);
+      if (!guarda) throw new Error('0.99.0: el fondo del Dashboard cuenta como fondo para el doble clic');
+      for (const x of ['button', 'input', 'h2', 'li']) if (!guarda[1].split(',').includes(x)) throw new Error('0.99.0: el doble clic sobre ' + x + ' del Dashboard no abre la paleta'); }
+    console.log('OK 0.99.0 (Dashboard: próximas en desplegable propio sin romper R47; doble clic en su fondo abre la paleta)');
     console.log('OK 0.98.0 (una sola puerta para «hecha», cerrar desde el Dashboard con Deshacer, Atrás vuelve al Dashboard, el escritorio con su color)');
     console.log('OK 0.97.0 (Dashboard: cada cifra es su lista con las funciones de las filas, solo lectura, sin privados, índice entero, destino real, cerrado no calcula, D y Esc en su orden, cuatro accesos)');
   }

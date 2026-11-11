@@ -713,9 +713,15 @@ body.detalle-completa #taskbar{display:none}
 .td-aviso-perm{display:flex; align-items:center; gap:6px; flex-wrap:wrap; font-size:11.5px; color:var(--text-dim)}
 .td-aviso-perm .pedir{background:var(--warn); border-color:var(--warn); color:#1b1205; font-weight:600}
 .td-aviso-perm.bloqueado{color:var(--text-dim)}
-.td-quick .dq{background:rgba(255,255,255,.06); border:1px solid var(--border-soft); border-radius:7px;
+.td-quick .dq, .td-quick .dm{background:rgba(255,255,255,.06); border:1px solid var(--border-soft); border-radius:7px;
   color:var(--text-dim); font-family:var(--font); font-size:11px; padding:3px 7px; cursor:pointer}
-.td-quick .dq:hover{color:var(--text); border-color:var(--accent)}
+.td-quick .dq:hover, .td-quick .dm:hover{color:var(--text); border-color:var(--accent)}
+/* 0.99.0 (#31) — la fecha dicha en palabras, con el año: el campo nativo enseña «12/11/2026» y no
+   dice si es mañana o el año que viene, que es justo lo que se quiere comprobar al moverla */
+.td-fecha-dice{width:100%; font-size:12px; color:var(--text)}
+.td-fecha-dice:empty{display:none}
+.td-fecha-dice.pasada{color:var(--danger)}
+.td-aviso-box:empty{display:none}
 .dq-sep{width:1px; height:14px; background:var(--border-soft); margin:0 2px}
 /* Los adjuntos van SIEMPRE visibles, con su botón al lado. Su prevalencia es baja (0,4 % de sus
    tareas) pero son material de ENTRADA: no descubrirlos cuesta mucho más que el sitio que ocupan. */
@@ -1385,6 +1391,14 @@ body.dash-on #btn-fold, body.dash-on #tb-cols, body.dash-on #desk-arrange{visibi
 .dash-ok:focus-visible{box-shadow:0 0 0 2px var(--accent)}
 .dash-sig-fila{display:flex; align-items:center; gap:6px}
 .dash-sig-fila > .dash-sig{flex:1 1 auto; min-width:0}
+/* 0.99.0 (#30) — el desplegable de Próximas: el título de la sección ES el botón */
+.dash-prox-tg{background:none; border:0; padding:2px 4px; margin:-2px -4px; border-radius:6px; color:inherit; font:inherit;
+  text-transform:inherit; letter-spacing:inherit; cursor:pointer; display:inline-flex; align-items:center; gap:6px}
+.dash-prox-tg:hover:not(:disabled){color:var(--text)}
+.dash-prox-tg:focus-visible{outline:none; box-shadow:0 0 0 2px var(--accent)}
+.dash-prox-tg:disabled{cursor:default}
+.dash-prox-tg .fl{display:inline-block; width:1em; text-align:center}
+.dash-prox > h2:only-child{margin-bottom:0}
 #tb-dash .vuelta{display:none; color:var(--accent); font-weight:700}
 #tb-dash.vuelta .vuelta{display:inline}
 .dash-esp:focus-visible{outline:none; box-shadow:0 0 0 2px var(--accent)}
@@ -2431,7 +2445,7 @@ function syncUI(mode, txt){
    reaparece) y si Recargar está activo. El descarte ✕ vive solo en memoria de la sesión.
    Demora asumida: la CDN de Pages puede servir la versión vieja hasta ~10 min aun con
    no-store (gobierna la caché del navegador, no la CDN); para pestañas de días, irrelevante. */
-const APP_VERSION = "0.98.0";
+const APP_VERSION = "0.99.0";
 let newVersionDetected = null;   // versión superior detectada; detiene futuras consultas
 let verDismissed = false;        // ✕: solo esta sesión — nunca persistido en disco
 let verCheckInflight = false;    // sin consultas concurrentes
@@ -7539,6 +7553,22 @@ function claseVencimiento(due, t0){
   if (+d === +t0) return "today";
   return "future";
 }
+/* 0.99.0 — mover una fecha ISO por días, meses o años (#31). PURA: recibe la fecha y «hoy» para poder probarla con reloj fijo. Sin fecha válida parte
+   de hoy. Un mes o un año más NO se desborda: 31 ene + 1 mes = 28 (o 29) feb, nunca 3 mar; y
+   29 feb + 1 año = 28 feb. Es lo que se espera al decir «el mes que viene», y lo que `setMonth`
+   a secas no hace. */
+function sumarFecha(iso, unidad, n, hoy = new Date()){
+  const p = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso || ""));
+  const valida = p && +p[1] >= 1900;
+  let y = valida ? +p[1] : hoy.getFullYear(), m = valida ? +p[2] - 1 : hoy.getMonth(), d = valida ? +p[3] : hoy.getDate();
+  if (unidad === "d"){ const x = new Date(y, m, d + n, 12); y = x.getFullYear(); m = x.getMonth(); d = x.getDate(); }
+  else {
+    const meses = y * 12 + m + (unidad === "y" ? 12 * n : n);
+    y = Math.floor(meses / 12); m = meses - 12 * y;
+    d = Math.min(d, new Date(y, m + 1, 0).getDate());
+  }
+  return y + "-" + String(m + 1).padStart(2, "0") + "-" + String(d).padStart(2, "0");
+}
 
 /* 0.53.0 — ORDENACIÓN de las tareas pendientes.
    Nace de su parte de fallo del 07/08: una lista de 168 ítems donde lo nuevo nace al final es
@@ -8199,8 +8229,16 @@ function bodyTodo(w, el){
       +       `<div class="qf"><span class="qet">📅 Día</span>`
       +         `<button class="dq" type="button" data-d="0" title="Hoy. Si aún no has puesto hora, se pone la de la tarde (${HORA_HOY}:00); si ya ha pasado, la siguiente hora en punto">Hoy</button>`
       +         `<button class="dq" type="button" data-d="1" title="Mañana. Si aún no has puesto hora, se pone a las 0${HORA_MANANA}:00">Mañana</button>`
-      +         `<button class="dq" type="button" data-d="7" title="Dentro de una semana, a las 0${HORA_MANANA}:00 si aún no has puesto hora">+1 sem</button>`
+      +         `<button class="dq" type="button" data-d="7" title="Dentro de una semana, contando desde hoy, a las 0${HORA_MANANA}:00 si aún no has puesto hora">En 1 sem</button>`
       +         `<button class="dq quitar" type="button" title="Quitar fecha y aviso">Sin fecha</button></div>`
+      /* 0.99.0 (#31) — MOVER la fecha que ya tiene, no ponerla desde hoy. Es la mitad que faltaba:
+         la fila de arriba cuenta desde hoy; esta, desde la fecha puesta. La hora no se toca. */
+      +       `<div class="qf"><span class="qet">↔ Mover</span>`
+      +         `<button class="dm" type="button" data-u="d" data-n="-1" title="Un día antes que la fecha puesta">−1 día</button>`
+      +         `<button class="dm" type="button" data-u="d" data-n="1" title="Un día después de la fecha puesta (sin fecha, desde hoy)">+1 día</button>`
+      +         `<button class="dm" type="button" data-u="d" data-n="7" title="Una semana después de la fecha puesta">+1 sem</button>`
+      +         `<button class="dm" type="button" data-u="m" data-n="1" title="Un mes después de la fecha puesta. El 31 pasa al último día del mes siguiente">+1 mes</button>`
+      +         `<button class="dm" type="button" data-u="y" data-n="1" title="Un año después de la fecha puesta">+1 año</button></div>`
       +       `<div class="qf"><span class="qet">⏰ Aviso</span>`
       +         `<button class="dq" type="button" data-m="15">+15 min</button>`
       +         `<button class="dq" type="button" data-m="60">+1 h</button>`
@@ -8209,7 +8247,8 @@ function bodyTodo(w, el){
       +         `<button class="dq" type="button" data-m="360">+6 h</button>`
       +         `<button class="dq" type="button" data-h="08:00" title="Fijar el aviso a las 08:00 del día que tenga puesto">08:00</button></div>`
       +     `</div>`
-      +     `${avisoHtml()}`
+      +     `<div class="td-fecha-dice" aria-live="polite"></div>`
+      +     `<div class="td-aviso-box">${avisoHtml()}</div>`
       +   `</div>`
       +   `<div class="td-adj"><div class="td-adj-lista">${adj || `<span class="td-vacio">Sin adjuntos</span>`}</div><button class="mini adj" type="button" title="Colgar un PDF, una captura o un texto: se guarda en tu carpeta, no dentro de datos.json">📎 Adjuntar</button></div>`
       +   `<div class="td-doc" hidden></div>`
@@ -8242,14 +8281,16 @@ function bodyTodo(w, el){
     /* 0.95.0 — el permiso se ofrece SOLO si esta tarea tiene aviso puesto y aún no está concedido.
        Concedido, no se pinta nada: un control que ya no sirve es ruido permanente. Denegado, una
        línea que dice dónde se cambia y no se vuelve a insistir — el navegador tampoco preguntaría. */
-    const permAviso = $$(".td-aviso-perm");
-    if (permAviso){
+    const cablearAviso = () => {
+      const permAviso = $$(".td-aviso-perm");
+      if (!permAviso) return;
       const b = permAviso.querySelector(".pedir");
       if (b) b.addEventListener("click", async () => {
         await pedirAvisoSistema();
         pintarDetalle("fecha");   // el bloque se repinta con el estado nuevo: concedido, desaparece
       });
-    }
+    };
+    cablearAviso();
     const date = $$(".dd"), time = $$(".hh"), ta = $$(".rp-t");
     const exec = $$(".xx"), fill = $$(".ff"), doc = $$(".td-doc");
 
@@ -8295,7 +8336,41 @@ function bodyTodo(w, el){
     const hoyIso = () => new Date().toISOString().slice(0, 10);
     const isoDe = d => new Date(d.getTime() - d.getTimezoneOffset() * 6e4).toISOString().slice(0, 10);
     const hhmm = d => String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
-    const guardarFecha = () => { if (ponerFecha(it, { due: date.value, remind: time.value })) pintarDetalle(); };
+    /* 0.99.0 (#31) — GUARDAR LA FECHA YA NO REPINTA EL DETALLE, y esa era la avería entera. El
+       campo de fecha avisa de un cambio en cuanto la fecha es válida, también A MEDIO TECLEAR: al
+       escribir el día «15», el «1» ya forma una fecha; al escribir el año «2027», el «2» forma el
+       año 0002. Guardar llamaba a `pintarDetalle()`, que reconstruye el nodo: el campo moría con el
+       cursor dentro y la segunda cifra caía en el vacío. Ahora solo se repinta lo que depende de la fecha: la frase que la dice, la fila del
+       permiso de aviso y la lista de detrás. Los campos y los botones siguen vivos.
+       `CONTRATO:` un año de menos de cuatro cifras o una fecha a medias (`badInput`) no se guarda:
+       se espera a que termine; si se va del campo así, vuelve lo que había. */
+    const fechaAMedias = () => (date.validity && date.validity.badInput) || (!!date.value && +date.value.slice(0, 4) < 1900);
+    const decirFecha = () => {
+      const caja = $$(".td-fecha-dice");
+      if (!caja) return;
+      const p = /^(\d{4})-(\d{2})-(\d{2})$/.exec(it.due || "");
+      if (!p){ caja.textContent = ""; return; }
+      const f = new Date(+p[1], +p[2] - 1, +p[3]);
+      const t0 = new Date(); t0.setHours(0, 0, 0, 0);
+      const dias = Math.round((f - t0) / 86400000);
+      const rel = dias === 0 ? "hoy" : dias === 1 ? "mañana" : dias === -1 ? "ayer"
+        : dias > 0 ? `dentro de ${dias} días` : `hace ${-dias} días`;
+      caja.textContent = f.toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long", year: "numeric" })
+        + " · " + rel + (it.remind ? " · aviso a las " + it.remind : "");
+      caja.classList.toggle("pasada", dias < 0);
+    };
+    const refrescarFecha = () => {
+      const caja = $$(".td-aviso-box");
+      if (caja){ caja.innerHTML = avisoHtml(); cablearAviso(); }
+      // lo que `ponerFecha` normaliza (una hora sin día pone hoy; sin día se va la hora) vuelve a
+      // los campos, salvo al que tiene el cursor: ese es suyo mientras escribe
+      if (document.activeElement !== date) date.value = it.due || "";
+      if (document.activeElement !== time) time.value = it.remind || "";
+      decirFecha();
+      refrescarLista();
+    };
+    const guardarFecha = () => { if (ponerFecha(it, { due: date.value, remind: time.value })) refrescarFecha(); };
+    decirFecha();
     const moverDia = paso => {
       const base = date.value ? new Date(date.value + "T12:00:00") : new Date();
       if (date.value) base.setDate(base.getDate() + paso);
@@ -8319,8 +8394,13 @@ function bodyTodo(w, el){
     };
     bindPaso(date, moverDia, 1);
     bindPaso(time, moverMin, 5);
-    date.addEventListener("change", guardarFecha);
+    date.addEventListener("change", () => { if (!fechaAMedias()) guardarFecha(); });
+    date.addEventListener("blur", () => { if (fechaAMedias()) date.value = it.due || ""; });
     time.addEventListener("change", () => { detalle.horaAuto = false; guardarFecha(); });
+    nodo.querySelectorAll(".dm").forEach(b => b.addEventListener("click", () => {
+      date.value = sumarFecha(fechaAMedias() ? it.due : date.value, b.dataset.u, +b.dataset.n);
+      guardarFecha();
+    }));
     nodo.querySelectorAll(".dq").forEach(b => b.addEventListener("click", () => {
       const d = b.dataset;
       if (b.classList.contains("quitar")){ date.value = ""; time.value = ""; detalle.horaAuto = false; }
@@ -12188,7 +12268,14 @@ function wireUI(){
   $("#info-close").addEventListener("click", () => $("#ov-info").classList.remove("open"));
   document.addEventListener("dblclick", e => {
     if (e.target.closest(".win,#menu,#taskbar,.overlay")) return;
-    if (!e.target.closest("#desktop") && e.target !== document.body && e.target !== $("#wallpaper")) return;
+    /* 0.99.0 — el Dashboard también tiene FONDO: el doble clic abre la paleta, como en los
+       escritorios. Vive fuera de `#desktop`, así que la guarda de
+       abajo lo descartaba entero. Dentro de él cuenta como fondo lo que no es contenido: ni lo
+       pulsable, ni el texto que se puede querer seleccionar con doble clic (títulos, filas). */
+    if (e.target.closest("#dashboard")){
+      if (e.target.closest("button,input,textarea,select,a,label,h1,h2,li,.dash-fecha,.dash-volver,.dash-vacio,.dash-nada,.dash-vacias")) return;
+    }
+    else if (!e.target.closest("#desktop") && e.target !== document.body && e.target !== $("#wallpaper")) return;
     e.preventDefault(); e.stopPropagation();
     // doble clic = paleta (el centro de todo); con Ctrl = menú de creación junto al puntero
     if (e.ctrlKey) openMenu("start", { x: e.clientX, y: e.clientY });
@@ -13440,6 +13527,14 @@ function modeloDashboard(ahora = Date.now()){
   const vencidas = s.overdue.filter(enVista).map(h => h.it).sort((a, b) => venceMs(a) - venceMs(b))
     .map(it => ({ ...donde(it), dias: Math.max(1, diasDesde(venceMs(it), +t0)) }));
   const hoy = s.today.filter(enVista).map(h => donde(h.it));
+  /* 0.99.0 (#30) — PRÓXIMAS: lo que tiene fecha y aún no ha llegado. Hasta ahora no salía en ningún
+     sitio del Dashboard, porque `dueTaskStats` (el reparto de la barra) las descarta a propósito: la
+     barra avisa, y lo futuro no es un aviso. Se calculan aquí con la MISMA regla que pinta el chip
+     de la fila (`claseVencimiento`). Las ⚙ quedan fuera: en ellas la fecha significa «no antes de»,
+     no un vencimiento, y ya tienen su propio reparto. */
+  const proximas = src.items.filter(it => !it.done && !esAgentica(it) && claseVencimiento(it.due, t0) === "future")
+    .sort((a, b) => venceMs(a) - venceMs(b))
+    .map(it => ({ ...donde(it), dias: Math.round((new Date(it.due + "T00:00:00") - t0) / 86400000) }));
   const cerradas = src.items.filter(it => it.done && +it.doneAt >= lunes)
     .sort((a, b) => b.doneAt - a.doneAt).map(it => ({ ...donde(it), at: +it.doneAt }));
   const cerradasHoy = cerradas.filter(f => f.at >= +t0).length;
@@ -13483,7 +13578,7 @@ function modeloDashboard(ahora = Date.now()){
   mov.sort((a, b) => b.at - a.at);
   const movimiento = mov.slice(0, DASH_MOV_MAX).map(x => ({ ...donde(x.it), at: x.at, que: x.que, sinHora: x.sinHora }));
   const listasConAbiertas = new Set(abiertas.map(f => f.wid)).size;
-  return { ahora, piden, vencidas, hoy, cerradas, cerradasHoy, abiertas, listasConAbiertas, siguiente, indice, movimiento };
+  return { ahora, piden, vencidas, hoy, proximas, cerradas, cerradasHoy, abiertas, listasConAbiertas, siguiente, indice, movimiento };
 }
 
 /* ---- pintado ---- */
@@ -13624,6 +13719,31 @@ function dashIndiceHtml(m){
     + `</div>` : "";
   return { tarjetas, vac };
 }
+/* 0.99.0 (#30) — PRÓXIMAS, como DESPLEGABLE propio y no como un grupo más de «Vencidas y de hoy»:
+   ahí rompería R47 —la cifra «⏰ vencidas u hoy» dejaría de ser la longitud de su lista— y
+   mezclaría lo que urge con lo que solo se planifica. Plegada por defecto: dice cuántas hay y
+   cuándo llega la primera, que es lo que se mira de pasada. Si está abierta o no es memoria de la
+   pestaña (I7), como `dashVista`: no se guarda ni viaja. */
+let dashProx = false;
+const proxEd = d => d === 1 ? "mañana" : d < 7 ? "en " + d + " d" : null;
+function dashProxHtml(m){
+  const p = m.proximas, n = p.length;
+  const primera = n ? (p[0].dias === 1 ? "la primera, mañana" : `la primera, dentro de ${plural(p[0].dias, "día", "días")}`) : "";
+  const cab = `<h2><button type="button" class="dash-prox-tg" data-k="prox" aria-expanded="${dashProx && n ? "true" : "false"}"${n ? "" : " disabled"}`
+    + ` title="${n ? (dashProx ? "Plegar" : "Desplegar") + " las tareas con fecha futura" : "Ninguna tarea tiene fecha futura"}">`
+    + `<span class="fl" aria-hidden="true">${dashProx && n ? "▾" : "▸"}</span> 📅 Próximas (${n})</button>`
+    + (primera ? `<span class="h2r">${primera}</span>` : "") + `</h2>`;
+  if (!n) return cab + `<div class="dash-vacio">Ninguna tarea tiene fecha futura.</div>`;
+  if (!dashProx) return cab;
+  const grupo = f => f.dias === 1 ? "Mañana" : f.dias <= 7 ? "Próximos 7 días" : "Más adelante";
+  const cuantas = new Map();
+  for (const f of p) cuantas.set(grupo(f), (cuantas.get(grupo(f)) || 0) + 1);
+  const filas = dashFilasLargas("proximas", p, f => `${grupo(f)} (${cuantas.get(grupo(f))})`, f => {
+    const fecha = new Date(f.it.due + "T00:00:00").toLocaleDateString("es-ES", { day: "numeric", month: "short", year: f.dias > 300 ? "2-digit" : undefined });
+    return dashTareaHtml("x", f, proxEd(f.dias) || fecha, f.dias === 1 ? "urge" : "", "", true);
+  });
+  return cab + `<ul class="dash-filas">${filas}</ul>`;
+}
 function dashMovHtml(m){
   const filas = m.movimiento.map(f => dashTareaHtml("m", f,
     f.sinHora ? new Date(f.at).toLocaleDateString("es-ES", { day: "numeric", month: "short" }) : haceTxt(f.at, m.ahora),
@@ -13675,6 +13795,7 @@ function dashEsqueleto(root){
     + `<div class="dash-sig-box"></div>`
     + `<div class="dash-cifras" role="group" aria-label="Cifras: cada una enseña su lista debajo"></div>`
     + `<section class="dash-sec dash-lista" aria-live="polite"></section>`
+    + `<section class="dash-sec dash-prox"></section>`
     + `<section class="dash-sec dash-indice"><h2><span>Índice</span>`
     + `<input class="dash-q" type="search" placeholder="Filtrar ventanas: título, contenido o escritorio…" aria-label="Filtrar el índice" autocomplete="off"></h2>`
     + `<div class="dash-tarjetas"></div><div class="dash-vacias-box"></div><div class="dash-nada" hidden>Ninguna ventana coincide.</div></section>`
@@ -13686,6 +13807,8 @@ function dashEsqueleto(root){
     if (c){ dashVista = c.dataset.vista; pintarDashboard(); return; }
     const mas = e.target.closest(".dash-mas");
     if (mas){ dashTodas.add(mas.dataset.mas); pintarDashboard(); return; }
+    const px = e.target.closest(".dash-prox-tg");
+    if (px){ dashProx = !dashProx; pintarDashboard(); return; }
     const ok = e.target.closest(".dash-ok");
     if (ok){ dashCerrar(dashRefs[+ok.dataset.ok], ok); return; }
     const b = e.target.closest("[data-i]");
@@ -13726,6 +13849,7 @@ function pintarDashboard(){
   root.querySelector(".dash-sig-box").innerHTML = dashSiguienteHtml(m);
   root.querySelector(".dash-cifras").innerHTML = dashCifrasHtml(m);
   root.querySelector(".dash-lista").innerHTML = dashListaHtml(m);
+  root.querySelector(".dash-prox").innerHTML = dashProxHtml(m);
   const ix = dashIndiceHtml(m);
   root.querySelector(".dash-tarjetas").innerHTML = ix.tarjetas;
   root.querySelector(".dash-vacias-box").innerHTML = ix.vac;

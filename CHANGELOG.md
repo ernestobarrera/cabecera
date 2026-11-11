@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.99.0] - 2026-11-11 — Fechas que se dejan teclear, próximas en el Dashboard y doble clic en su fondo
+
+- **El editor de fecha de las tareas ya deja teclear.** Al escribir la fecha cifra a cifra, el campo
+  se reconstruía con la primera cifra válida y la segunda se perdía: escribir el día «15» dejaba un
+  1, y el año «2027» acababa en otra fecha. Ahora el campo no se toca mientras escribes, una fecha a
+  medias no se guarda, y si sales del campo sin terminarla vuelve la que había.
+- **Nueva fila «↔ Mover»** en el editor de fecha: −1 día, +1 día, +1 sem, +1 mes y +1 año, contando
+  desde la fecha que ya tiene la tarea y sin tocar la hora. Un 31 más un mes pasa al último día del
+  mes siguiente. El atajo de la fila de arriba, que cuenta desde hoy, se llama ahora «En 1 sem» para
+  no confundirse con este.
+- **La fecha, dicha en palabras** debajo de los campos, con el año y cuánto falta: «lunes, 15 de
+  enero de 2029 · dentro de 65 días». En rojo si ya pasó.
+- **Dashboard: «📅 Próximas»**, un desplegable con las tareas cuya fecha aún no ha llegado. Plegado
+  dice cuántas hay y cuándo llega la primera; abierto, las agrupa en Mañana, Próximos 7 días y Más
+  adelante, y cada una se abre o se cierra como en el resto del Dashboard.
+- **Dashboard: doble clic en el fondo abre el buscador**, como en los escritorios (con Ctrl, el menú
+  de crear). Sobre una fila o un título no hace nada.
+
 ## [0.98.0] - 2026-11-08 — Dashboard: cerrar tareas, volver atrás y escritorios que se reconocen
 
 - **Cerrar tareas desde el Dashboard.** Cada tarea viva lleva un círculo a la izquierda: un clic la
