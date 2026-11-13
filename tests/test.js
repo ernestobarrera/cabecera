@@ -685,6 +685,18 @@ if (!src.includes('maxRect(deskViewW(), innerHeight, deskEl().scrollTop)')) thro
 if (!src.match(/scroll-lock/) || !src.includes('function updateScrollLock(')) throw new Error('regresión: una ventana maximizada ya no bloquea el scroll del escritorio (riesgo 3 del gate)');
 console.log('OK contrato cliente↔mundo (conversiones, tope, arrastre en mundo, autoscroll con recálculo, maximizar bloquea scroll)');
 
+// 0.99.1 (#222) — solo bloquea la maximizada que TAPA el viewport: no la plegada ni la filtrada
+eval('globalThis.bloqueaScroll = ' + pickFn('bloqueaScroll', 'widgets, filtro'));
+const MX = { x: 0, y: 0, w: 400, h: 300 };
+if (!bloqueaScroll([{ max: MX }], null)) throw new Error('bloqueaScroll: una maximizada abierta ya no bloquea el scroll');
+if (bloqueaScroll([{ max: MX, collapsed: true }, { y: 1500, h: 400 }], null)) throw new Error('bloqueaScroll (#222): una maximizada PLEGADA sigue bloqueando la rueda');
+if (bloqueaScroll([{ max: MX, tags: ['a'] }], 'b')) throw new Error('bloqueaScroll: una maximizada escondida por el filtro sigue bloqueando la rueda');
+if (!bloqueaScroll([{ max: MX, tags: ['b'] }], 'b')) throw new Error('bloqueaScroll: una maximizada visible con el filtro activo ya no bloquea');
+if (bloqueaScroll([{}, { collapsed: true }], null)) throw new Error('bloqueaScroll: bloquea sin ninguna maximizada');
+if (!src.includes('bloqueaScroll(state.widgets, tagFilter)')) throw new Error('regresión: updateScrollLock ya no usa bloqueaScroll');
+if (!/w\.collapsed = !w\.collapsed;[\s\S]{0,1600}?updateScrollLock\(\);[^\n]*\n\s*markDirty\(\);/.test(src)) throw new Error('regresión (#222): plegar una ventana ya no recalcula el bloqueo de scroll');
+console.log('OK bloqueo de scroll solo con maximizada visible (plegada o filtrada no bloquea, #222)');
+
 // --- N2 hito 2: planificadores puros de columnas guiadas (spec v1.1, gate de Codex) ---
 eval('globalThis.columnGuides = ' + pickFn('columnGuides', 'vw, opts'));
 eval('globalThis.ownerLane = ' + pickFn('ownerLane', 'rect, guides'));   // N3: pertenencia ÚNICA (mayor solape)

@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.99.1] - 2026-11-13 — La rueda del ratón vuelve a mover el escritorio
+
+- **Con una ventana maximizada y plegada, el escritorio no se desplazaba con la rueda.** Una ventana
+  maximizada bloquea el desplazamiento porque tapa la pantalla, pero el bloqueo seguía puesto aunque
+  la ventana estuviera plegada o escondida por el filtro de etiqueta, y las ventanas de debajo
+  quedaban fuera de alcance. Ahora solo bloquea la maximizada que se ve; al desplegarla vuelve a
+  bloquear, como antes.
+
 ## [0.99.0] - 2026-11-11 — Fechas que se dejan teclear, próximas en el Dashboard y doble clic en su fondo
 
 - **El editor de fecha de las tareas ya deja teclear.** Al escribir la fecha cifra a cifra, el campo

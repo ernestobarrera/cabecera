@@ -2445,7 +2445,7 @@ function syncUI(mode, txt){
    reaparece) y si Recargar está activo. El descarte ✕ vive solo en memoria de la sesión.
    Demora asumida: la CDN de Pages puede servir la versión vieja hasta ~10 min aun con
    no-store (gobierna la caché del navegador, no la CDN); para pestañas de días, irrelevante. */
-const APP_VERSION = "0.99.0";
+const APP_VERSION = "0.99.1";
 let newVersionDetected = null;   // versión superior detectada; detiene futuras consultas
 let verDismissed = false;        // ✕: solo esta sesión — nunca persistido en disco
 let verCheckInflight = false;    // sin consultas concurrentes
@@ -5580,9 +5580,17 @@ function pickLane(guides, x, prev){
 }
 function updateDeskHeight(){ if (isMobile()) return; setDeskHeight(desktopWorldHeight()); }   // móvil: scroll propio por flex
 // Con una ventana maximizada el scroll del escritorio se bloquea (maximizar = viewport visible).
+/* 0.99.1 — el bloqueo existe porque una maximizada TAPA el viewport. Una maximizada PLEGADA (o
+   escondida por el filtro de etiqueta) no tapa nada, y bloquear el scroll entonces dejaba el
+   escritorio sin rueda con ventanas por debajo del pliegue (#222: una ventana de imagen
+   maximizada y plegada). Plegar no quita la maximización a propósito: al desplegar vuelve a cubrir
+   el viewport, y el bloqueo con ella. PURA, para poder probar el caso. */
+function bloqueaScroll(widgets, filtro){
+  return (widgets || []).some(w => w.max && !w.collapsed && !(filtro && !(w.tags || []).includes(filtro)));
+}
 function updateScrollLock(){
   const d = deskEl(); if (!d) return;
-  d.classList.toggle("scroll-lock", !isMobile() && !!state && state.widgets.some(w => w.max));
+  d.classList.toggle("scroll-lock", !isMobile() && !!state && bloqueaScroll(state.widgets, tagFilter));
 }
 function anyOverlap(){   // ¿hay solape real (más de unos px) entre las ventanas del espacio activo?
   const rs = state.widgets.map(widgetRect);
@@ -6258,6 +6266,7 @@ function buildWindow(w){
       if (proj) el.style.height = proj.h + "px";
       refreshWidget(w);
     }
+    updateScrollLock();   // 0.99.1 (#222): plegar una maximizada devuelve la rueda; desplegarla la vuelve a bloquear
     markDirty();
   });
   if (w.type === "notes" && state.dictTargetId === w.id) el.classList.add("dict-recv");
