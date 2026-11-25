@@ -1391,6 +1391,47 @@ body.dash-on #btn-fold, body.dash-on #tb-cols, body.dash-on #desk-arrange{visibi
 .dash-ok:focus-visible{box-shadow:0 0 0 2px var(--accent)}
 .dash-sig-fila{display:flex; align-items:center; gap:6px}
 .dash-sig-fila > .dash-sig{flex:1 1 auto; min-width:0}
+/* 0.100.0 — REPASO. Una capa opaca encima del Dashboard, como él: una sola cosa a la vista. Un único
+   scroll —el de la capa— y la barra de respuesta pegada abajo, para que los botones estén siempre a
+   mano sin meter un segundo scroll dentro del mensaje (disparador 4 de R80). */
+.dash-sec > h2 .h2r{display:inline-flex; align-items:center; gap:6px 12px; flex-wrap:wrap}
+.dash-repaso-btn{background:var(--accent-soft); border:1px solid var(--accent); color:var(--text); border-radius:999px; padding:4px 12px;
+  font-family:var(--font); font-size:13px; font-weight:600; cursor:pointer; white-space:nowrap}
+.dash-repaso-btn:hover, .dash-repaso-btn:focus-visible{filter:brightness(1.2); outline:none}
+.dash-repaso-btn:focus-visible{box-shadow:0 0 0 2px var(--accent)}
+#repaso{position:fixed; inset:0 0 46px 0; z-index:5; overflow-y:auto; overflow-x:hidden; background:#0b0e14; outline:none}
+.rep-wrap{max-width:780px; margin:0 auto; padding:26px 20px 0; font-size:15.5px; line-height:1.5; color:var(--text)}
+.rep-cab{display:flex; justify-content:space-between; align-items:baseline; gap:6px 16px; flex-wrap:wrap; color:var(--text-dim); font-size:13.5px}
+.rep-cab b{color:var(--text); font-size:16px; font-variant-numeric:tabular-nums}
+.rep-barra{height:4px; background:rgba(255,255,255,.08); border-radius:3px; margin:10px 0 18px; overflow:hidden}
+.rep-barra i{display:block; height:100%; width:var(--p, 0%); background:var(--accent); border-radius:3px}
+@media (prefers-reduced-motion:no-preference){ .rep-barra i{transition:width .25s ease} }
+.rep-card{background:var(--glass-opaco); border:1px solid var(--border); border-radius:16px; padding:16px 20px 18px}
+.rep-donde{display:flex; align-items:center; flex-wrap:wrap; gap:4px 12px; font-size:13.5px; color:var(--text-dim)}
+.rep-donde b{color:var(--text); font-weight:600}
+.rep-donde .num{color:var(--text-dim)}
+.rep-edad{color:var(--warn); font-weight:600; margin-left:auto}
+.rep-tit{font-size:19px; font-weight:600; line-height:1.35; margin:10px 0 6px; overflow-wrap:anywhere; white-space:pre-wrap}
+.rep-msg{margin-top:10px; padding:10px 14px; border-left:3px solid var(--warn); border-radius:0 10px 10px 0; background:rgba(255,255,255,.035);
+  white-space:pre-wrap; overflow-wrap:anywhere}
+.rep-msg .q{display:block; white-space:normal; font-size:12px; color:var(--text-dim); margin-bottom:3px}
+.rep-msg.tuya{border-left-color:rgba(255,255,255,.2); background:none; color:var(--text-dim); font-size:14px}
+.rep-pie{position:sticky; bottom:0; background:#0b0e14; padding:12px 0 calc(18px + env(safe-area-inset-bottom, 0px)); margin-top:6px}
+.rep-t{width:100%; box-sizing:border-box; min-height:44px; resize:vertical; padding:8px 11px; border-radius:10px; border:1px solid var(--border-soft);
+  background:rgba(255,255,255,.04); color:var(--text); font-family:var(--font); font-size:14px}
+.rep-t:focus{border-color:var(--accent); outline:none}
+.rep-acts{display:flex; flex-wrap:wrap; gap:10px; margin-top:10px}
+.rep-acts button{flex:1 1 140px; display:inline-flex; align-items:center; justify-content:center; gap:7px; padding:11px 14px; border-radius:11px;
+  border:1px solid var(--border); background:rgba(255,255,255,.05); color:var(--text); font-family:var(--font); font-size:15px; cursor:pointer}
+.rep-acts button:hover{background:rgba(255,255,255,.09)}
+.rep-acts button:focus-visible{outline:none; border-color:var(--accent); box-shadow:0 0 0 2px var(--accent)}
+.rep-acts button.ok{background:var(--accent-soft); border-color:var(--accent); font-weight:600}
+.rep-acts .kbd-hint{opacity:.75}
+.rep-fin{padding-top:12vh; text-align:center}
+.rep-fin h2{font-size:24px; font-weight:600}
+.rep-suma{font-size:17px; margin-top:12px}
+.rep-queda{color:var(--text-dim); margin-top:6px}
+.rep-fin .rep-acts{max-width:520px; margin:22px auto 0}
 /* 0.99.0 (#30) — el desplegable de Próximas: el título de la sección ES el botón */
 .dash-prox-tg{background:none; border:0; padding:2px 4px; margin:-2px -4px; border-radius:6px; color:inherit; font:inherit;
   text-transform:inherit; letter-spacing:inherit; cursor:pointer; display:inline-flex; align-items:center; gap:6px}
@@ -2422,6 +2463,7 @@ function toastAction(msg, label, fn){
   el.appendChild(b);
   $("#toasts").appendChild(el);
   setTimeout(() => el.remove(), 20000);
+  return el;   // 0.100.0: quien encadena gestos (el Repaso) sustituye su aviso en vez de apilarlos
 }
 function syncUI(mode, txt){
   const dot = $("#tb-sync .dot");
@@ -2445,7 +2487,7 @@ function syncUI(mode, txt){
    reaparece) y si Recargar está activo. El descarte ✕ vive solo en memoria de la sesión.
    Demora asumida: la CDN de Pages puede servir la versión vieja hasta ~10 min aun con
    no-store (gobierna la caché del navegador, no la CDN); para pestañas de días, irrelevante. */
-const APP_VERSION = "0.99.1";
+const APP_VERSION = "0.100.0";
 let newVersionDetected = null;   // versión superior detectada; detiene futuras consultas
 let verDismissed = false;        // ✕: solo esta sesión — nunca persistido en disco
 let verCheckInflight = false;    // sin consultas concurrentes
@@ -2911,6 +2953,33 @@ function marcarHecha(it, hecha){
   if (hecha){ it.done = true; it.doneAt = Date.now(); playDoneClick(); }
   else { it.done = false; delete it.doneAt; delete it.alertedAt; }   // reabierta: puede volver a avisar
   markDirty(); return true;
+}
+/* 0.100.0 — LA PUERTA ÚNICA DE «RESPONDER», sacada de la lista por la misma razón que `marcarHecha`
+   en 0.98.0: el Repaso del Dashboard también contesta, y una segunda copia de esto sería la segunda
+   puerta de mutación de `replies` (disparador 2 de R80). La de la lista (`añadirRespuesta`) delega
+   aquí. Devuelve la entrada creada —o `null` si no había nada que decir—, para poder deshacerla.
+   `CONTRATO:` una respuesta solo se AÑADE aquí; hay prueba que cuenta las escrituras. */
+function responderTarea(it, texto){
+  const t = String(texto || "").trim();
+  if (!it || !t) return null;
+  if (!Array.isArray(it.replies)) it.replies = [];
+  it.replies.push({ at: Date.now(), by: "yo", t: t.slice(0, RESP_MAX) });
+  const r = it.replies[it.replies.length - 1];
+  if (it.replies.length > RESP_HILO_MAX) it.replies.splice(0, it.replies.length - RESP_HILO_MAX);
+  markDirty(); return r;
+}
+/* Y su contraria: quitar UNA entrada y devolver cómo ponerla otra vez en su sitio. La usan el ✕ del
+   hilo y el Deshacer del Repaso: una sola forma de borrar, con su deshacer, en vez de dos. */
+function borrarRespuesta(it, i){
+  if (!it || !Array.isArray(it.replies) || !it.replies[i]) return null;
+  const borrada = it.replies.splice(i, 1)[0];
+  if (!it.replies.length) delete it.replies;
+  markDirty();
+  return () => {
+    if (!Array.isArray(it.replies)) it.replies = [];
+    it.replies.splice(Math.min(i, it.replies.length), 0, borrada);
+    markDirty();
+  };
 }
 const ADJ_TEXTO_MAX = 400 * 1024;   // más que esto no cabe legible en un panel: se ofrece abrir fuera
 const ADJ_MD_RE  = /\.(md|markdown|mdown)$/i;
@@ -5448,7 +5517,7 @@ function gotoSpace(si){
 const TOUR = [
   { sel: "#btn-inicio", pos: "top", title: "Añade widgets", body: "Desde <b>⊞ Inicio</b> agregas notas, enlaces, tareas, calendario… También con <b>Ctrl+K</b> escribiendo «Añadir»." },
   { sel: "#tb-spaces", pos: "top", title: "Espacios (escritorios)", body: "Crea escritorios con <b>＋</b>, uno por especialidad o proyecto. Clic para cambiar, doble clic para renombrar, arrastra una pestaña para reordenarla. Arrastra una ventana <b>sobre otra pestaña</b> para moverla allí. El color de cada pestaña se toma solo del fondo de ese escritorio." },
-  { sel: "#tb-dash", pos: "top", title: "Dashboard", body: "<b>📊 Dashboard</b> (tecla <b>D</b>) te dice lo siguiente que hacer, cuenta lo que te piden, lo vencido y lo cerrado, y es el índice de todas tus ventanas: un clic te lleva a cualquiera. <b>Esc</b> vuelve." },
+  { sel: "#tb-dash", pos: "top", title: "Dashboard", body: "<b>📊 Dashboard</b> (tecla <b>D</b>) te dice lo siguiente que hacer, cuenta lo que te piden, lo vencido y lo cerrado, y es el índice de todas tus ventanas: un clic te lleva a cualquiera. Con <b>R</b> repasas una a una lo que te piden. <b>Esc</b> vuelve." },
   { sel: "#btn-fold", pos: "top", title: "Ordena de un vistazo", body: "<b>⊟</b> pliega o despliega todos los widgets; cada uno también se pliega con <b>▾</b> en su barra." },
   { sel: ".win .win-title", pos: "bottom", title: "Cada widget", body: "Arrástralo por su barra: aparecen <b>columnas guía</b> y una <b>sombra</b> te enseña dónde encajará (las de abajo hacen sitio; con <b>Alt</b>, libre). Al pasar el ratón aparecen las etiquetas; <b>▾</b> pliega y <b>✕</b> cierra. <b>Doble clic</b> para renombrarlo." },
   { sel: "#tb-sync", pos: "top", title: "Tus datos son tuyos", body: "Todo se guarda solo, sin cuentas ni servidor. Opcional: «Sincronizar equipos» para tener lo mismo en casa y en el trabajo." },
@@ -8078,14 +8147,7 @@ function bodyTodo(w, el){
     if (c) it.color = c; else delete it.color;
     markDirty(); return true;
   };
-  const añadirRespuesta = (it, texto) => {
-    const t = String(texto || "").trim();
-    if (!t) return false;
-    if (!Array.isArray(it.replies)) it.replies = [];
-    it.replies.push({ at: Date.now(), by: "yo", t: t.slice(0, RESP_MAX) });
-    if (it.replies.length > RESP_HILO_MAX) it.replies.splice(0, it.replies.length - RESP_HILO_MAX);
-    markDirty(); return true;
-  };
+  const añadirRespuesta = (it, texto) => !!responderTarea(it, texto);   // 0.100.0: la puerta única, la de toda la app
   const cerrarTarea = (it, hecha) => marcarHecha(it, hecha);   // 0.98.0: la puerta única, la de toda la app
 
   /* ── LA VISTA ──────────────────────────────────────────────────────────────────────────────── */
@@ -8488,15 +8550,10 @@ function bodyTodo(w, el){
     }
     nodo.querySelectorAll(".rp-del").forEach(b => b.addEventListener("click", e => {
       e.stopPropagation();
-      const i = +b.closest(".rp").dataset.i, borrada = it.replies[i];
-      it.replies.splice(i, 1);
-      if (!it.replies.length) delete it.replies;
-      markDirty(); pintarDetalle();
-      toastAction("Respuesta borrada.", "Deshacer", () => {
-        if (!Array.isArray(it.replies)) it.replies = [];
-        it.replies.splice(Math.min(i, it.replies.length), 0, borrada);
-        markDirty(); pintarDetalle();
-      });
+      const deshacer = borrarRespuesta(it, +b.closest(".rp").dataset.i);   // 0.100.0: la puerta única
+      if (!deshacer) return;
+      pintarDetalle();
+      toastAction("Respuesta borrada.", "Deshacer", () => { deshacer(); pintarDetalle(); });
     }));
     nodo.querySelectorAll(".rp-ed").forEach(b => b.addEventListener("click", e => {
       e.stopPropagation();
@@ -11575,6 +11632,7 @@ function applyCapture(cap, target){
 const ATAJOS = {
   palette:  { teclas: "Ctrl+K",      que: "Abrir la paleta de comandos", alt: "/" },
   dash:     { teclas: "D",           que: "Abrir o cerrar el Dashboard (fuera de un campo de texto; Esc también vuelve)" },
+  repaso:   { teclas: "R",           que: "En el Dashboard: repasar una a una lo que te piden — V Vale · H Vale y hecha · → saltar · A abrir la tarea · Esc salir" },
   undo:     { teclas: "Ctrl+Z",      que: "Deshacer la última reescritura de una tarea" },
   escape:   { teclas: "Esc",         que: "Cerrar lo que esté abierto: menú, modal o tour" },
   enviar:   { teclas: "Ctrl+Enter",  que: "Enviar una respuesta o guardar sin soltar el teclado" },
@@ -11759,6 +11817,8 @@ function paletteEntries(terms, dest){
     () => { closeMenu(); setPrivacy(!privacyOn); }, "privacidad privado ocultar mostrar compartir pantalla presentacion docencia escenica");
   add("📊", "Dashboard", "lo que te espera, en cifras, y el índice de todo", () => { closeMenu(); abrirDashboard(); },
     "dashboard panel resumen cifras indice todo pendientes te piden vencidas cerradas abiertas panorama inicio", "dash");
+  add("🗂️", "Repasar lo que te piden", "una a una: Vale, hecha o saltar", () => { closeMenu(); abrirRepaso(); },
+    "repasar repaso peticiones te piden agente agentes vale responder contestar pendientes bandeja una a una", "repaso");
   add("⌨️", "Atajos de teclado", "todos, en una lista", () => { closeMenu(); openAtajos(); }, "atajos teclado teclas shortcuts combinaciones ctrl alt esc", "palette");
   add("📖", "Guía completa", "cómo funciona todo", () => { closeMenu(); window.open("guia.html", "_blank", "noopener"); }, "guia manual ayuda completa como funciona empezar");
   add("📤", "Compartir este escritorio", "exportar a un archivo", () => { closeMenu(); exportSharedSpace(); }, "compartir exportar escritorio archivo publicar seguir enviar compartido");
@@ -12282,7 +12342,7 @@ function wireUI(){
        abajo lo descartaba entero. Dentro de él cuenta como fondo lo que no es contenido: ni lo
        pulsable, ni el texto que se puede querer seleccionar con doble clic (títulos, filas). */
     if (e.target.closest("#dashboard")){
-      if (e.target.closest("button,input,textarea,select,a,label,h1,h2,li,.dash-fecha,.dash-volver,.dash-vacio,.dash-nada,.dash-vacias")) return;
+      if (e.target.closest("button,input,textarea,select,a,label,h1,h2,li,.dash-fecha,.dash-volver,.dash-vacio,.dash-nada,.dash-vacias,#repaso")) return;
     }
     else if (!e.target.closest("#desktop") && e.target !== document.body && e.target !== $("#wallpaper")) return;
     e.preventDefault(); e.stopPropagation();
@@ -13515,16 +13575,18 @@ function franjaDe(sp){
   return WP_PRESETS[wp.value % WP_PRESETS.length] || null;
 }
 
+// dónde vive una tarea de la vista agregada: lo que pinta cada fila (lo comparten el modelo y el Repaso)
+function dashDondeDe(src, it){
+  const o = src.origenDe(it);
+  return { it, wid: o.w.id, si: state.spaces.indexOf(o.sp), esp: o.esp || "Escritorio", lista: o.nombre, acento: spaceAccent(o.sp) };
+}
 /* El modelo: PURO respecto del DOM. Recibe la hora para poder probarlo con un reloj fijo. */
 function modeloDashboard(ahora = Date.now()){
   const t0 = new Date(ahora); t0.setHours(0, 0, 0, 0);
   const lunes = +lunesDe(ahora);
   const src = fuenteTodo({ data: { src: "all" } });   // la vista agregada, sin ser ningún widget
   const vivo = new Set(src.items);
-  const donde = it => {
-    const o = src.origenDe(it);
-    return { it, wid: o.w.id, si: state.spaces.indexOf(o.sp), esp: o.esp || "Escritorio", lista: o.nombre, acento: spaceAccent(o.sp) };
-  };
+  const donde = it => dashDondeDe(src, it);
   const ultAt = it => +it.replies[it.replies.length - 1].at || 0;
   // te piden algo: la más ANTIGUA arriba — es la que más se te ha pasado
   const piden = src.items.filter(it => !it.done && esperaRespuestaSuya(it))
@@ -13626,6 +13688,9 @@ function dashListaHtml(m){
   if (v === "piden"){
     tit = `Te piden algo (${m.piden.length})`;
     if (m.piden.length > 1) der = "la más antigua arriba";
+    // 0.100.0 — la entrada al Repaso vive donde está lo que repasa, con su tecla a la vista (R27)
+    if (m.piden.length) der = (der ? `<span>${der}</span>` : "")
+      + `<button type="button" class="dash-repaso-btn" title="Repasarlas una a una: Vale, hecha o saltar, sin salir de aquí">▶ Repasar una a una${kbd("repaso")}</button>`;
     filas = m.piden.map(f => dashTareaHtml("p", f, edadTxt(f.dias), f.dias >= ESPERA_DIAS ? "urge" : "", "", true)).join("");
     vacio = "Nada te espera: ningún agente te ha pedido nada.";
   } else if (v === "vencidas"){
@@ -13812,6 +13877,7 @@ function dashEsqueleto(root){
   // UN manejador para todo lo pulsable: el destino se busca en `dashRefs` en el momento del clic,
   // que se reconstruye en el mismo repintado que el HTML — no pueden quedar desparejados
   root.addEventListener("click", e => {
+    if (e.target.closest("#repaso")) return;   // 0.100.0: el Repaso tiene su propio manejador
     const c = e.target.closest(".dash-cifra");
     if (c){ dashVista = c.dataset.vista; pintarDashboard(); return; }
     const mas = e.target.closest(".dash-mas");
@@ -13820,8 +13886,14 @@ function dashEsqueleto(root){
     if (px){ dashProx = !dashProx; pintarDashboard(); return; }
     const ok = e.target.closest(".dash-ok");
     if (ok){ dashCerrar(dashRefs[+ok.dataset.ok], ok); return; }
+    if (e.target.closest(".dash-repaso-btn")){ abrirRepaso(); return; }
     const b = e.target.closest("[data-i]");
     if (b && root.contains(b)) dashIr(dashRefs[+b.dataset.i]);
+  });
+  // 0.100.0 — «R» abre el Repaso desde cualquier sitio del Dashboard que no sea un campo de texto
+  root.addEventListener("keydown", e => {
+    if ((e.key === "r" || e.key === "R") && !e.ctrlKey && !e.metaKey && !e.altKey && !e.repeat && !repaso
+        && !e.target.closest("input,textarea,select,[contenteditable]")){ e.preventDefault(); abrirRepaso(); }
   });
   const q = root.querySelector(".dash-q");
   q.addEventListener("input", dashFiltrar);
@@ -13912,6 +13984,11 @@ function dashAlVolver(e){
   else if (dashAbierto) cerrarDashboard(false);
   pintarPestanaDash();
 }
+/* tras cambiar una tarea desde aquí, su lista (y las vistas «Todas las listas») se repintan para que,
+   al volver al escritorio, no la enseñen como estaba */
+function dashRepintarListas(wid){
+  (state.widgets || []).filter(w => w.type === "todo" && (w.id === wid || origenDe(w) === "all")).forEach(refreshWidget);
+}
 /* Cerrar desde el Dashboard: la MISMA puerta que la casilla y la vista de detalle, con Deshacer.
    La lista de esa tarea (y la vista «Todas las listas», si la hay) se repinta para que, al volver al
    escritorio, no enseñe la tarea como si siguiera abierta. */
@@ -13922,12 +13999,234 @@ function dashCerrar(r, boton){
   while (sig && !sig.querySelector(".dash-ok")) sig = sig.nextElementSibling;
   dashFocoTras = sig ? sig.querySelector(".dash-ok").dataset.k : null;
   const it = r.it;
-  const repintarListas = () => (state.widgets || [])
-    .filter(w => w.type === "todo" && (w.id === r.wid || origenDe(w) === "all")).forEach(refreshWidget);
+  const repintarListas = () => dashRepintarListas(r.wid);
   if (!marcarHecha(it, true)) return;
   repintarListas();
   toastAction(`Hecha${it.n ? " #" + it.n : ""}: «${textoCorto(it).slice(0, 60)}»`, "Deshacer",
     () => { if (marcarHecha(it, false)) repintarListas(); });
+}
+
+/* ============================================================
+   0.100.0 — REPASO: lo que te piden, UNA A UNA
+   ============================================================
+   Cuando las peticiones se acumulan, contestarlas cuesta más que dejarlas: el 👍 Vale de un clic ya
+   existía, pero dentro de la vista de detalle de cada tarea —abrir, buscar, pulsar, y otra vez en otro
+   escritorio—. Aquí se ven de una en una, enteras, y se despachan con una tecla.
+
+   `CONTRATO:` NO DECIDE NADA POR ÉL. No apaga ni duerme peticiones por su edad —lo viejo no se apaga
+   solo (`esperaRespuestaSuya`)— y no cierra sin su tecla. Lo único que cambia es lo que cuesta
+   decidir: V Vale · H Vale y hecha · → saltar · A abrir la tarea · o escribir algo y Enter.
+
+   `CONTRATO:` LAS MISMAS PUERTAS que el resto de la app —`responderTarea` y `marcarHecha`—, con
+   Deshacer. Este bloque sigue sin marcar ni guardar nada por su cuenta.
+
+   `CONTRATO:` SE DIRECCIONA POR `id` EN CADA GESTO, no por la referencia de cuando se abrió. Un
+   sondeo puede adoptar el archivo del otro equipo mientras repasas y dejar muerto el objeto de antes:
+   escribir en él se perdería sin aviso. Y se actúa sobre la petición que estás VIENDO: si se resolvió
+   por detrás, se dice y no se toca otra en su lugar.
+
+   `CONTRATO:` EL SONDEO NO LO REPINTA. Una capa que se reconstruye cada 4 s destruye lo que estés
+   escribiendo (disparador 5 de R80). Se pinta al abrir y tras cada gesto tuyo, y nada más; lo que
+   cambie por detrás se descubre al llegar a esa petición: si ya no espera nada, se salta y se cuenta.
+
+   Memoria de la pestaña (I7): la cola, por dónde vas y el recuento no se guardan ni viajan. */
+let repaso = null;   // { cola: [clave], i, mostrada, cuenta: { vale, resp, hecha, salto, fuera }, nodo }
+let repasoAviso = null;   // el aviso con Deshacer del último gesto (sobrevive a cerrar el Repaso)
+const repasoClave = it => it.id || it;   // sin id (recién creada, aún sin guardar): su referencia
+// una tarea VIVA por su clave, con su ubicación, en la misma fuente que el Dashboard (privados fuera)
+function repasoBuscar(clave){
+  const src = fuenteTodo({ data: { src: "all" } });
+  const it = typeof clave === "string" ? src.items.find(x => x.id === clave) : src.items.find(x => x === clave);
+  return it ? dashDondeDe(src, it) : null;
+}
+// la petición que toca: se saltan, y se cuentan, las que se resolvieron en otro sitio mientras tanto
+function repasoActual(){
+  while (repaso && repaso.i < repaso.cola.length){
+    const f = repasoBuscar(repaso.cola[repaso.i]);
+    if (f && !f.it.done && esperaRespuestaSuya(f.it)) return f;
+    repaso.cuenta.fuera++; repaso.i++;
+  }
+  return null;
+}
+/* PURO respecto del DOM (recibe la hora): UNA petición. Arriba, dónde vive y cuánto lleva esperando;
+   el título de la tarea; lo último que dijiste tú, apagado y recortado, para recordar de qué iba; y
+   ENTERO lo que te ha dicho el agente desde entonces, que es lo que hay que leer para decidir. */
+const REPASO_SUYA_MAX = 400;
+function repasoHtml(f, pos, total, ahora){
+  const it = f.it, reps = Array.isArray(it.replies) ? it.replies : [];
+  let k = reps.length;
+  while (k > 0 && reps[k - 1].by === "agente") k--;
+  const suya = k > 0 ? reps[k - 1] : null;
+  const dias = diasDesde(+(reps[reps.length - 1] || {}).at || 0, ahora);
+  const cuando = at => { const d = new Date(+at || 0); return isNaN(d) ? "" : d.toLocaleString("es-ES", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }); };
+  const msg = (r, cls, quien, t) => `<div class="rep-msg${cls}"><span class="q">${esc(quien)} · ${esc(cuando(r.at))}</span>${linkifyEsc(t)}</div>`;
+  const tSuya = suya ? String(suya.t || "") : "";
+  const pct = total ? Math.round(pos / total * 100) : 0;
+  return `<div class="rep-wrap">`
+    + `<div class="rep-cab"><span>Repaso de lo que te piden · <b>${pos + 1} de ${total}</b></span>`
+    + `<span><span class="kbd-hint">Esc</span> vuelve al Dashboard</span></div>`
+    + `<div class="rep-barra" aria-hidden="true"><i style="--p:${pct}%"></i></div>`
+    + `<article class="rep-card" aria-label="Petición ${pos + 1} de ${total}">`
+    + `<div class="rep-donde">${dashDonde(f)}${it.n ? `<span class="num">#${esc(it.n)}</span>` : ""}`
+    + `<span class="rep-edad">te pide algo ${dias === 0 ? "desde hoy" : "desde hace " + plural(dias, "día", "días")}</span></div>`
+    + `<div class="rep-tit">${linkifyEsc(String(it.t || "")) || "(sin texto)"}</div>`
+    + (suya ? msg(suya, " tuya", "Tú", tSuya.length > REPASO_SUYA_MAX ? tSuya.slice(0, REPASO_SUYA_MAX) + "…" : tSuya) : "")
+    + reps.slice(k).map(r => msg(r, "", r.ag ? "Agente " + r.ag : "Agente", String(r.t || ""))).join("")
+    + `</article>`
+    + `<div class="rep-pie">`
+    + `<textarea class="rep-t" rows="2" placeholder="O escribe tu respuesta…  (Enter la envía y pasa a la siguiente · Mayús+Enter salta de línea)" aria-label="Tu respuesta"></textarea>`
+    + `<div class="rep-acts">`
+    + `<button type="button" class="ok" data-rep="vale" title="Responder «Vale» —o lo que hayas escrito— y pasar a la siguiente. Apaga el ámbar">👍 <span class="lbl">Vale</span> <span class="kbd-hint">V</span></button>`
+    + `<button type="button" data-rep="hecha" title="Responder y dar la tarea por hecha, en un gesto">✓ <span class="lbl">Vale y hecha</span> <span class="kbd-hint">H</span></button>`
+    + `<button type="button" data-rep="saltar" title="Dejarla como está y pasar a la siguiente">Saltar <span class="kbd-hint">→</span></button>`
+    + `<button type="button" data-rep="abrir" title="Ir a la tarea en su lista (Atrás vuelve al Dashboard)">Abrir la tarea <span class="kbd-hint">A</span></button>`
+    + `</div></div></div>`;
+}
+// PURO: el final. Lo que hiciste, contado —cada cierre se ve— y lo que sigue esperando
+function repasoFinHtml(c, quedan){
+  const partes = [
+    c.vale ? `👍 ${c.vale} con Vale` : "",
+    c.resp ? `✍ ${plural(c.resp, "respondida", "respondidas")}` : "",
+    c.hecha ? `✓ ${plural(c.hecha, "cerrada", "cerradas")}` : "",
+    c.salto ? `→ ${plural(c.salto, "saltada", "saltadas")}` : "",
+    c.fuera ? `${plural(c.fuera, "ya resuelta", "ya resueltas")} en otro sitio` : ""
+  ].filter(Boolean);
+  return `<div class="rep-wrap rep-fin">`
+    + `<h2>${quedan ? "Repaso terminado" : "Nada te espera"}</h2>`
+    + `<p class="rep-suma">${partes.length ? partes.join(" · ") : "No has tocado ninguna."}</p>`
+    + `<p class="rep-queda">${quedan ? `Siguen esperándote ${quedan}: las que saltaste y las que hayan llegado mientras.` : "Ningún agente espera nada de ti ahora mismo."}</p>`
+    + `<div class="rep-acts"><button type="button" class="ok" data-rep="salir">Volver al Dashboard <span class="kbd-hint">Esc</span></button>`
+    + (quedan ? `<button type="button" data-rep="otra">Repasar otra vez <span class="kbd-hint">R</span></button>` : "")
+    + `</div></div>`;
+}
+function abrirRepaso(){
+  if (!state) return;
+  if (!dashAbierto) abrirDashboard();
+  const root = $("#dashboard");
+  if (!root || !dashAbierto) return;
+  const cola = modeloDashboard(Date.now()).piden.map(f => repasoClave(f.it));
+  if (!cola.length){ toast("Nada que repasar: ningún agente te ha pedido nada."); return; }
+  let nodo = root.querySelector("#repaso");
+  if (!nodo){
+    nodo = document.createElement("div");
+    nodo.id = "repaso"; nodo.tabIndex = -1;
+    nodo.setAttribute("role", "dialog"); nodo.setAttribute("aria-modal", "true");
+    nodo.setAttribute("aria-label", "Repaso de lo que te piden");
+    nodo.addEventListener("click", repasoClic);
+    nodo.addEventListener("keydown", repasoTecla);
+    nodo.addEventListener("input", repasoEscribe);
+    root.appendChild(nodo);
+  }
+  nodo.hidden = false;
+  repaso = { cola, i: 0, mostrada: null, cuenta: { vale: 0, resp: 0, hecha: 0, salto: 0, fuera: 0 }, nodo };
+  pintarRepaso();
+}
+function pintarRepaso(){
+  if (!repaso) return;
+  const f = repasoActual();
+  repaso.mostrada = f ? repasoClave(f.it) : null;
+  repaso.nodo.innerHTML = f ? repasoHtml(f, repaso.i, repaso.cola.length, Date.now())
+    : repasoFinHtml(repaso.cuenta, modeloDashboard(Date.now()).piden.length);
+  repaso.nodo.scrollTop = 0;
+  repaso.nodo.focus({ preventScroll: true });
+}
+// quitar la capa sin más; también cuando se cierra el Dashboard entero por detrás
+function repasoQuitar(){
+  if (!repaso) return;
+  repaso.nodo.hidden = true; repaso.nodo.innerHTML = "";
+  repaso = null;
+}
+function cerrarRepaso(){
+  if (!repaso) return;
+  repasoQuitar();
+  pintarDashboard();
+  const root = $("#dashboard"), c = root && root.querySelector('[data-k="c:piden"]');
+  if (c) c.focus({ preventScroll: true }); else if (root) root.focus({ preventScroll: true });
+}
+const repasoBorrador = () => { const ta = repaso && repaso.nodo.querySelector(".rep-t"); return ta ? ta.value.trim() : ""; };
+function repasoAccion(que){
+  if (!repaso) return;
+  // una respuesta a medias no se tira por pulsar otra cosa: se envía o se borra, a la vista
+  if (["saltar", "abrir", "salir"].includes(que) && repasoBorrador()){
+    toast("Tienes una respuesta a medias: envíala con Enter o bórrala antes de seguir.");
+    const ta = repaso.nodo.querySelector(".rep-t"); if (ta) ta.focus();
+    return;
+  }
+  if (que === "salir"){ cerrarRepaso(); return; }
+  if (que === "otra"){ repasoQuitar(); abrirRepaso(); return; }
+  const f = repaso.mostrada != null ? repasoBuscar(repaso.mostrada) : null;
+  if (!f || f.it.done || !esperaRespuestaSuya(f.it)){
+    toast("Esa ya no espera nada: se contestó o se cerró en otro sitio.");
+    pintarRepaso(); return;
+  }
+  if (que === "saltar"){ repaso.cuenta.salto++; repaso.i++; pintarRepaso(); return; }
+  if (que === "abrir"){ const destino = { tipo: "tarea", wid: f.wid, si: f.si, it: f.it }; repasoQuitar(); dashIr(destino); return; }
+  const propio = repasoBorrador();
+  const r = responderTarea(f.it, propio || "Vale");
+  if (!r) return;
+  const cerro = que === "hecha" && marcarHecha(f.it, true);
+  const cat = cerro ? "hecha" : propio ? "resp" : "vale";
+  repaso.cuenta[cat]++;
+  dashRepintarListas(f.wid);
+  const clave = repasoClave(f.it), i0 = repaso.i, wid = f.wid;
+  repaso.i++;
+  pintarRepaso();
+  /* UN aviso, el del último gesto: cada uno dura 20 s y despachando veinte seguidas se apilaban hasta
+     tapar los botones en una ventana estrecha (medido a 400 px). Deshacer es del último, como en el correo. */
+  if (repasoAviso && repasoAviso.isConnected) repasoAviso.remove();
+  repasoAviso = toastAction(`${cerro ? "Hecha" : "Contestada"}${f.it.n ? " #" + f.it.n : ""}: «${textoCorto(f.it).slice(0, 60)}»`, "Deshacer", () => {
+    const vivo = (repasoBuscar(clave) || f).it;   // tras un sondeo, el objeto de ahora
+    if (cerro) marcarHecha(vivo, false);
+    const k = (vivo.replies || []).findIndex(x => x.by === "yo" && x.at === r.at && x.t === r.t);
+    if (k >= 0) borrarRespuesta(vivo, k);
+    dashRepintarListas(wid);
+    if (!repaso) return;
+    repaso.cuenta[cat]--;
+    // justo después, vuelves a ella; si ya ibas más allá, va al final de la cola para que no se pierda
+    if (repaso.i === i0 + 1) repaso.i = i0; else repaso.cola.push(clave);
+    pintarRepaso();
+  });
+}
+function repasoClic(e){
+  const b = e.target.closest("[data-rep]");
+  if (!b) return;
+  e.stopPropagation();
+  repasoAccion(b.dataset.rep);
+}
+// con texto escrito, «Vale» pasa a ser «Responder»: lo que se manda es lo tuyo (como en el detalle)
+function repasoEscribe(e){
+  if (!repaso || !e.target.classList.contains("rep-t")) return;
+  const hay = !!e.target.value.trim();
+  for (const [que, si, no] of [["vale", "Responder", "Vale"], ["hecha", "Responder y hecha", "Vale y hecha"]]){
+    const l = repaso.nodo.querySelector(`[data-rep="${que}"] .lbl`);
+    if (l) l.textContent = hay ? si : no;
+  }
+}
+/* EL TECLADO. Esta capa manda mientras está abierta: ni la D ni el Esc del Dashboard llegan a lo de
+   detrás. Las combinaciones con Ctrl siguen siendo de la app (Ctrl+K abre la paleta como siempre). */
+function repasoTecla(e){
+  if (!repaso) return;
+  const enTexto = !!(e.target.classList && e.target.classList.contains("rep-t"));
+  if (enTexto && e.key === "Enter" && (e.ctrlKey || e.metaKey)){
+    e.stopPropagation();
+    if (repasoBorrador()){ e.preventDefault(); repasoAccion("vale"); }
+    return;
+  }
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  e.stopPropagation();
+  if (enTexto){
+    const hay = !!repasoBorrador();
+    if (e.key === "Enter" && !e.shiftKey){ if (hay){ e.preventDefault(); repasoAccion("vale"); } return; }
+    // Esc con texto suelta el campo sin perder nada; sin texto, sale como desde cualquier otro sitio
+    if (e.key === "Escape"){ e.preventDefault(); if (hay) repaso.nodo.focus({ preventScroll: true }); else repasoAccion("salir"); }
+    return;
+  }
+  const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+  const que = { v: "vale", h: "hecha", ArrowRight: "saltar", a: "abrir", Escape: "salir", r: "otra" }[k];
+  if (!que || e.repeat) return;
+  if (que === "otra" && repaso.mostrada != null) return;   // «R» solo vuelve a empezar desde el final
+  e.preventDefault();
+  repasoAccion(que);
 }
 function abrirDashboard(){
   const root = $("#dashboard");
@@ -13946,6 +14245,7 @@ function abrirDashboard(){
 function cerrarDashboard(volverFoco = true){
   const root = $("#dashboard");
   if (!dashAbierto || !root) return;
+  repasoQuitar();   // 0.100.0: el Repaso vive dentro; al volver no puede seguir delante
   dashScroll = root.scrollTop;
   const dentro = root.contains(document.activeElement);
   dashAbierto = false;

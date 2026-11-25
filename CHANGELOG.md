@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.100.0] - 2026-11-25 — Repasar una a una lo que te piden
+
+- **Dashboard: «▶ Repasar una a una».** Junto a «Te piden algo» (o con la tecla **R** dentro del
+  Dashboard, o «Repasar lo que te piden» en Ctrl+K), las peticiones de los agentes salen de una en una,
+  la más antigua primero: dónde vive, cuánto lleva esperándote, el título, lo último que dijiste tú
+  (recortado) y entero lo que te ha contestado el agente. Decides con una tecla: **V** Vale, **H** Vale
+  y hecha, **→** saltar, **A** abrir la tarea. Si prefieres contestar otra cosa, la escribes y **Enter**
+  la manda y pasa a la siguiente. El aviso trae **Deshacer** para el último gesto, y al terminar ves lo
+  que hiciste y cuántas siguen esperando. **Esc** vuelve al Dashboard.
+- **Nada se decide solo.** Ninguna petición se apaga ni se cierra por su edad: solo cambia lo que cuesta
+  contestarla. Si una se contesta en el otro equipo mientras repasas, al llegar a ella se salta y se
+  cuenta, y nunca se contesta otra en su lugar. Una respuesta a medias no se pierde por saltar o salir:
+  se avisa.
+- **Una sola forma de responder y de borrar una respuesta en toda la app.** La vista de la tarea y el
+  Repaso pasan por el mismo sitio, con los mismos topes de siempre.
+
 ## [0.99.1] - 2026-11-13 — La rueda del ratón vuelve a mover el escritorio
 
 - **Con una ventana maximizada y plegada, el escritorio no se desplazaba con la rueda.** Una ventana

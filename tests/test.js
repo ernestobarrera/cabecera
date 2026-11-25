@@ -6502,7 +6502,11 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
       trozo(/function widgetText\(w\)\{[\s\S]*?\n\}/, 'widgetText'),
       trozo(/function gradientAvgHex\(css\)\{[\s\S]*?\n\}/, 'gradientAvgHex'),
       trozo(/const WP_PRESET_ACCENTS = [^\n]*/, 'WP_PRESET_ACCENTS'),
-      trozo(/function spaceAccent\(sp\)\{[\s\S]*?\n\}/, 'spaceAccent')
+      trozo(/function spaceAccent\(sp\)\{[\s\S]*?\n\}/, 'spaceAccent'),
+      // 0.100.0 — la entrada al Repaso enseña su tecla desde la tabla única, y el Repaso enlaza como el hilo
+      trozo(/const ATAJOS = \{[\s\S]*?\n\};/, 'ATAJOS'),
+      trozo(/const kbd = k => \{[\s\S]*?\n\};/, 'kbd'),
+      trozo(/function linkifyEsc\(t\)\{[\s\S]*?\n\}/, 'linkifyEsc')
     ].join('\n');
     const montar = (estado, priv, historia) => new Function('state', 'privacyOn', 'esc', 'history', piezas + '\n' + bloque
       + '\nreturn { modeloDashboard, dashListaHtml, dashCifrasHtml, dashIndiceHtml, dashSiguienteHtml, dashMovHtml, textoIndice, dashProxHtml, prox: v => { dashProx = v; },'
@@ -6718,7 +6722,9 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
       if (refs[iOk].tipo !== 'cerrar' || refs[iOk].it !== s.spaces[0].widgets[1].data.items[0]) throw new Error('0.98.0: el círculo cierra la tarea de verdad, la de su fila');
       const dc = trozo(/function dashCerrar\(r, boton\)\{[\s\S]*?\n\}/, 'dashCerrar');
       if (!/if \(!marcarHecha\(it, true\)\) return;\s*repintarListas\(\);/.test(dc) || !/"Deshacer",[\s\S]*?if \(marcarHecha\(it, false\)\) repintarListas\(\);/.test(dc)
-          || !/const repintarListas = \(\) => [\s\S]*?forEach\(refreshWidget\);/.test(dc))
+          || !/const repintarListas = \(\) => dashRepintarListas\(r\.wid\);/.test(dc)
+          // 0.100.0 — el repintado de la lista dueña es compartido con el Repaso: se exige allí
+          || !/function dashRepintarListas\(wid\)\{\s*\(state\.widgets \|\| \[\]\)\.filter\(w => w\.type === "todo" && \(w\.id === wid \|\| origenDe\(w\) === "all"\)\)\.forEach\(refreshWidget\);/.test(bloque))
         throw new Error('0.98.0: cerrar desde el Dashboard va por marcarHecha, ofrece Deshacer y repinta la lista dueña');
       if (!/const ok = e\.target\.closest\("\.dash-ok"\);\s*if \(ok\)\{ dashCerrar\(dashRefs\[\+ok\.dataset\.ok\], ok\); return; \}/.test(bloque))
         throw new Error('0.98.0: el círculo está cableado'); }
@@ -6774,6 +6780,164 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
       const guarda = dbl.match(/if \(e\.target\.closest\("#dashboard"\)\)\{\s*if \(e\.target\.closest\("([^"]+)"\)\) return;\s*\}\s*else if \(!e\.target\.closest\("#desktop"\)/);
       if (!guarda) throw new Error('0.99.0: el fondo del Dashboard cuenta como fondo para el doble clic');
       for (const x of ['button', 'input', 'h2', 'li']) if (!guarda[1].split(',').includes(x)) throw new Error('0.99.0: el doble clic sobre ' + x + ' del Dashboard no abre la paleta'); }
+    // --- 0.100.0: el Repaso de lo que te piden ---
+    // Se EJECUTAN las puertas reales (`responderTarea`, `marcarHecha`, `borrarRespuesta`) y el flujo real
+    // de teclas sobre un estado sintético, con una capa falsa que se comporta como el DOM al repintar
+    // (repintar vacía la caja de texto). Lo que pide un navegador —foco, scroll, el pie pegado— va aparte.
+    {
+      // (1) UNA puerta para añadir respuestas; la de la lista delega; el ✕ del hilo borra por la otra
+      const pRes = trozo(/function responderTarea\(it, texto\)\{[\s\S]*?\n\}/, 'responderTarea');
+      const pBor = trozo(/function borrarRespuesta\(it, i\)\{[\s\S]*?\n\}/, 'borrarRespuesta');
+      const pHecha = trozo(/function marcarHecha\(it, hecha\)\{[\s\S]*?\n\}/, 'marcarHecha');
+      if ((src.match(/replies\.push\(/g) || []).length !== 1 || !/replies\.push\(/.test(pRes))
+        throw new Error('0.100.0: una respuesta se añade en UN sitio, dentro de responderTarea (disparador 2 de R80)');
+      if (!/const añadirRespuesta = \(it, texto\) => !!responderTarea\(it, texto\);/.test(src))
+        throw new Error('0.100.0: la puerta de la lista delega en la única');
+      if (!/const deshacer = borrarRespuesta\(it, \+b\.closest\("\.rp"\)\.dataset\.i\);/.test(detalleDe(src)))
+        throw new Error('0.100.0: el ✕ del hilo borra por la puerta única, con su deshacer');
+      const RESP = 'const RESP_MAX = 2000; const RESP_HILO_MAX = 50;';
+      { let sucias = 0; const p = new Function('markDirty', RESP + pRes + pBor + '; return { responderTarea, borrarRespuesta };')(() => { sucias++; });
+        const it = { replies: [{ by: 'agente', at: 1, t: 'a' }] };
+        if (p.responderTarea(it, '   ') !== null || sucias) throw new Error('0.100.0: sin nada que decir no se escribe ni se marca nada');
+        const r = p.responderTarea(it, '  vale  ');
+        if (!r || r !== it.replies[1] || r.by !== 'yo' || r.t !== 'vale' || !r.at || sucias !== 1) throw new Error('0.100.0: responder sella autor e instante y devuelve la entrada creada');
+        if (p.responderTarea({}, 'x'.repeat(2500)).t.length !== 2000) throw new Error('0.100.0: el tope de una respuesta sigue siendo el de siempre');
+        const largo = { replies: Array.from({ length: 50 }, (_, k) => ({ by: 'agente', at: k, t: 'r' + k })) };
+        const ult = p.responderTarea(largo, 'la 51');
+        if (largo.replies.length !== 50 || largo.replies[49] !== ult || largo.replies[0].t !== 'r1') throw new Error('0.100.0: el hilo conserva las 50 últimas y la nueva no se pierde');
+        const d = p.borrarRespuesta(it, 0);
+        if (it.replies.length !== 1 || it.replies[0] !== r) throw new Error('0.100.0: borrar quita esa y solo esa');
+        d(); if (it.replies.length !== 2 || it.replies[0].t !== 'a') throw new Error('0.100.0: el deshacer la devuelve a su sitio');
+        if (p.borrarRespuesta(it, 9) !== null) throw new Error('0.100.0: borrar una que no existe no hace nada'); }
+
+      // el montaje del Dashboard con las puertas reales y dobles de lo que toca el DOM
+      // `state.widgets` es el accesor al escritorio activo que pone la app al cargar: el real, no una copia
+      const bindSpace = new Function(trozo(/function bindSpace\(s\)\{[\s\S]*?\n\}/, 'bindSpace') + '; return bindSpace;')();
+      const montarR = (estado, priv = false) => {
+        bindSpace(estado);
+        const log = { sucias: 0, toasts: [], deshacer: [], repintadas: [], fuera: [] };
+        const fn = new Function('state', 'privacyOn', 'esc', 'history', 'markDirty', 'playDoneClick', 'toast', 'toastAction', 'refreshWidget', '$', 'dashIr',
+          // la `dashIr` real taparía el doble (una declaración gana al parámetro): se aparta solo aquí
+          RESP + pRes + pBor + pHecha + piezas + '\n' + bloque.replace('function dashIr(r){', 'function dashIrReal(r){')
+          + '\nreturn { modeloDashboard, dashListaHtml, vista: v => { dashVista = v; }, repasoHtml, repasoFinHtml, repasoTecla, repasoAccion, pintarRepaso,'
+          + ' poner: r => { repaso = r; }, actual: () => repaso, adoptar: s => { state = s; }, dashCerrar, abrirRepaso };');
+        const d = fn(estado, priv, globalThis.esc, null, () => { log.sucias++; }, () => {}, t => log.toasts.push(t),
+          (t, b, f) => { log.toasts.push(t); log.deshacer.push(f); }, w => log.repintadas.push(w.id), () => null, r => log.fuera.push(r));
+        const ta = { value: '', focus(){ log.focoTexto = true; }, classList: { contains: c => c === 'rep-t' } };
+        const nodo = { html: '', scrollTop: 0, focus(){ log.focoCapa = true; }, querySelector: s => s === '.rep-t' ? ta : null, classList: { contains: () => false } };
+        Object.defineProperty(nodo, 'innerHTML', { get(){ return nodo.html; }, set(v){ nodo.html = v; ta.value = ''; } });
+        const abrir = () => { d.poner({ cola: d.modeloDashboard(Date.now()).piden.map(f => f.it.id || f.it), i: 0, mostrada: null,
+          cuenta: { vale: 0, resp: 0, hecha: 0, salto: 0, fuera: 0 }, nodo }); d.pintarRepaso(); };
+        const tecla = (key, { texto = false, shift = false, ctrl = false } = {}) => {
+          const ev = { key, shiftKey: shift, ctrlKey: ctrl, metaKey: false, altKey: false, repeat: false, target: texto ? ta : nodo,
+            parado: false, frenado: false, stopPropagation(){ ev.parado = true; }, preventDefault(){ ev.frenado = true; } };
+          d.repasoTecla(ev); return ev;
+        };
+        return { d, log, ta, nodo, abrir, tecla };
+      };
+      const tarea = (s, id) => s.spaces.flatMap(sp => sp.widgets).flatMap(w => (w.data && w.data.items) || []).find(x => x.id === id);
+
+      // (2) lo que se pinta de UNA petición: dónde, edad, título, lo tuyo recortado, lo del agente ENTERO
+      { const s = estado(), R = montarR(s);
+        const it = tarea(s, 't1'); const largo = 'L'.repeat(900);
+        it.replies = [{ by: 'yo', at: ahora - 40 * DIA, t: 'T'.repeat(600) }, { by: 'agente', ag: 'B', at: ahora - 11 * DIA, t: 'primero ' + largo },
+          { by: 'agente', at: ahora - 10 * DIA - 60000, t: '<img src=x onerror=alert(1)> mira https://ejemplo.org/a.' }];
+        const f = R.d.modeloDashboard(ahora).piden.find(x => x.it === it);
+        const h = R.d.repasoHtml(f, 1, 3, ahora);
+        if (!/<b>2 de 3<\/b>/.test(h) || !/--p:33%/.test(h)) throw new Error('0.100.0: dice por dónde vas, y la barra avanza con lo hecho');
+        if (!/<b>Alfa<\/b> · Bandeja/.test(h) || !/#1/.test(h) || !/te pide algo desde hace 10 días/.test(h)) throw new Error('0.100.0: dónde vive, su número y cuánto lleva esperándote');
+        if (!h.includes('primero ' + largo)) throw new Error('0.100.0: lo que dice el agente va ENTERO: es lo que hay que leer para decidir');
+        if (!/Agente B/.test(h) || (h.match(/class="rep-msg"/g) || []).length !== 2) throw new Error('0.100.0: van todas las del agente desde tu última palabra, con su autor');
+        if (!h.includes('T'.repeat(400) + '…') || h.includes('T'.repeat(401))) throw new Error('0.100.0: lo tuyo, recortado: solo recuerda de qué iba');
+        if (/<img/.test(h) || !/<a href="https:\/\/ejemplo\.org\/a"/.test(h)) throw new Error('0.100.0: se escapa como el hilo (sin HTML del agente) y los enlaces se pulsan');
+        for (const [que, k] of [['vale', 'V'], ['hecha', 'H'], ['saltar', '→'], ['abrir', 'A']])
+          if (!new RegExp('data-rep="' + que + '"[^>]*>[\\s\\S]*?<span class="kbd-hint">' + k + '</span></button>').test(h)) throw new Error('0.100.0: el botón «' + que + '» lleva su tecla a la vista (R27)'); }
+
+      // (3) EL FLUJO: V, H, Deshacer, escribir + Enter, saltar con borrador (no), saltar, final
+      { const s = estado(), R = montarR(s); const antes = JSON.parse(JSON.stringify(s));
+        R.abrir();
+        if (R.d.actual().cola.join() !== 'p1,t1,t8') throw new Error('0.100.0: la cola es «te piden algo», en su orden: la más antigua primero');
+        if (!/SECRETO-TAREA/.test(R.nodo.html)) throw new Error('0.100.0: empieza por la primera');
+        const v = R.tecla('v');
+        const p1 = tarea(s, 'p1');
+        if (p1.replies.length !== 3 || p1.replies[2].by !== 'yo' || p1.replies[2].t !== 'Vale' || p1.done) throw new Error('0.100.0: V contesta «Vale» sin cerrar');
+        if (!v.parado || !v.frenado || R.log.sucias < 1 || !R.log.repintadas.includes('LP')) throw new Error('0.100.0: la tecla es de la capa, se guarda y la lista dueña se repinta');
+        if (R.d.actual().i !== 1 || !/Pide hace diez días/.test(R.nodo.html)) throw new Error('0.100.0: tras contestar pasa a la siguiente');
+        R.tecla('h'); const t1 = tarea(s, 't1');
+        if (!t1.done || !t1.doneAt || t1.replies[t1.replies.length - 1].t !== 'Vale') throw new Error('0.100.0: H contesta y cierra, en un gesto');
+        R.log.deshacer[R.log.deshacer.length - 1]();
+        if (t1.done || t1.replies.length !== 2 || R.d.actual().i !== 1 || !/Pide hace diez días/.test(R.nodo.html) || R.d.actual().cuenta.hecha !== 0)
+          throw new Error('0.100.0: Deshacer reabre, quita tu respuesta y te devuelve a ella');
+        R.ta.value = 'mejor la opción b'; const en = R.tecla('Enter', { texto: true });
+        if (!en.frenado || t1.replies[2].t !== 'mejor la opción b' || t1.done || R.d.actual().cuenta.resp !== 1) throw new Error('0.100.0: con texto, Enter manda LO TUYO y pasa a la siguiente');
+        R.ta.value = 'a medias'; R.tecla('ArrowRight');
+        if (R.d.actual().i !== 2 || R.ta.value !== 'a medias' || !/a medias/.test(R.log.toasts.join('|'))) throw new Error('0.100.0: con una respuesta a medias no se salta: se avisa y no se pierde');
+        R.ta.value = ''; R.tecla('ArrowRight');
+        if (!/Repaso terminado/.test(R.nodo.html) || !/👍 1 con Vale/.test(R.nodo.html) || !/✍ 1 respondida/.test(R.nodo.html) || !/→ 1 saltada/.test(R.nodo.html) || !/Siguen esperándote 1/.test(R.nodo.html))
+          throw new Error('0.100.0: el final cuenta lo hecho y lo que sigue esperando');
+        R.tecla('Escape'); if (R.d.actual() !== null) throw new Error('0.100.0: Esc sale del Repaso');
+        // UN aviso con Deshacer, el del último gesto: apilados tapaban los botones en una ventana estrecha
+        if (!/if \(repasoAviso && repasoAviso\.isConnected\) repasoAviso\.remove\(\);\s*repasoAviso = toastAction\(/.test(bloque)
+            || !/setTimeout\(\(\) => el\.remove\(\), 20000\);\s*return el;/.test(trozo(/function toastAction\(msg, label, fn\)\{[\s\S]*?\n\}/, 'toastAction')))
+          throw new Error('0.100.0: cada gesto del Repaso sustituye su aviso en vez de apilarlo');
+        // lo único que cambió: dos respuestas suyas; nada más en todo el archivo
+        p1.replies.pop(); t1.replies.pop();
+        if (JSON.stringify(s) !== JSON.stringify(antes)) throw new Error('0.100.0: el Repaso no toca nada más que lo que contestas');
+        if (tarea(s, 't8').replies.length !== 2) throw new Error('0.100.0: saltar no escribe'); }
+
+      // (4) POR id, NO POR REFERENCIA: si un sondeo adopta otro archivo a mitad, se escribe en el vivo
+      { const s = estado(), R = montarR(s); R.abrir();
+        const nuevo = bindSpace(estado()); R.d.adoptar(nuevo);
+        R.tecla('v');
+        if (tarea(nuevo, 'p1').replies.length !== 3 || tarea(s, 'p1').replies.length !== 2)
+          throw new Error('0.100.0: la respuesta va al objeto VIVO por su id, no al de cuando se abrió (se perdería sin aviso)'); }
+
+      // (5) lo que estás viendo se resolvió por detrás: se dice, y no se contesta otra en su lugar
+      { const s = estado(), R = montarR(s); R.abrir();
+        tarea(s, 'p1').replies.push({ by: 'yo', at: ahora, t: 'contestada en el otro equipo' });
+        const antes = JSON.stringify(s);
+        R.tecla('v');
+        if (JSON.stringify(s) !== antes) throw new Error('0.100.0: si la que ves ya no espera nada, no se escribe en ninguna');
+        if (!/ya no espera nada/.test(R.log.toasts.join('|')) || R.d.actual().i !== 1 || R.d.actual().cuenta.fuera !== 1)
+          throw new Error('0.100.0: se avisa, se salta y se cuenta como resuelta en otro sitio'); }
+
+      // (6) EL TECLADO: la capa manda (ni la D ni el Esc llegan detrás), Ctrl sigue siendo de la app,
+      //     y Esc dentro del texto escrito suelta el campo sin perder nada
+      { const s = estado(), R = montarR(s); R.abrir();
+        if (!R.tecla('d').parado) throw new Error('0.100.0: la D no cierra el Dashboard de detrás mientras repasas');
+        if (R.tecla('k', { ctrl: true }).parado) throw new Error('0.100.0: Ctrl+K sigue abriendo la paleta');
+        R.ta.value = 'algo'; R.tecla('Escape', { texto: true });
+        if (!R.d.actual() || R.ta.value !== 'algo' || !R.log.focoCapa) throw new Error('0.100.0: Esc con texto suelta el campo, no sale ni lo tira');
+        R.tecla('Enter', { texto: true, shift: true });
+        if (tarea(s, 'p1').replies.length !== 2) throw new Error('0.100.0: Mayús+Enter salta de línea, no envía');
+        R.ta.value = 'por ctrl'; R.tecla('Enter', { texto: true, ctrl: true });
+        if (tarea(s, 'p1').replies[2].t !== 'por ctrl') throw new Error('0.100.0: Ctrl+Enter también envía, como en toda la app (ATAJOS.enviar)');
+        R.tecla('a');
+        if (R.log.fuera.length !== 1 || R.log.fuera[0].tipo !== 'tarea' || R.log.fuera[0].it !== tarea(s, 't1') || R.d.actual() !== null)
+          throw new Error('0.100.0: A lleva a la tarea que estás viendo, por la puerta de siempre, y quita el Repaso'); }
+
+      // (7) privacidad: con ella puesta, un privado ni entra en la cola ni se pinta
+      { const s = estado(), R = montarR(s, true); R.abrir();
+        if (R.d.actual().cola.join() !== 't1,t8' || /SECRETO/.test(R.nodo.html)) throw new Error('0.100.0: con la privacidad puesta, nada privado en el Repaso'); }
+
+      // (8) NO LO REPINTA EL SONDEO y no sobrevive al Dashboard
+      { const pd = trozo(/function pintarDashboard\(\)\{[\s\S]*?\n\}/, 'pintarDashboard'), pg = trozo(/function programarDashboard\(\)\{[\s\S]*?\n\}/, 'programarDashboard');
+        if (/repaso|Repaso/.test(pd + pg)) throw new Error('0.100.0: el repintado del Dashboard no toca el Repaso: se reconstruiría cada 4 s con tu texto dentro (R80, 5)');
+        if (!/if \(!dashAbierto \|\| !root\) return;\s*repasoQuitar\(\);/.test(trozo(/function cerrarDashboard\(volverFoco = true\)\{[\s\S]*?\n\}/, 'cerrarDashboard')))
+          throw new Error('0.100.0: cerrar el Dashboard quita el Repaso'); }
+
+      // (9) SE LLEGA por cuatro sitios, con la tecla a la vista (R13, R27, R18)
+      { const s = estado(), d = montar(s, false), m = d.modeloDashboard(ahora); d.vista('piden');
+        if (!/class="dash-repaso-btn"[^>]*>▶ Repasar una a una <span class="kbd-hint">R<\/span><\/button>/.test(d.dashListaHtml(m))) throw new Error('0.100.0: «Te piden algo» ofrece el Repaso, con su tecla');
+        const vacio = montar({ version: 2, active: 0, spaces: [{ id: 'z', name: 'Z', settings: {}, widgets: [] }] }, false);
+        vacio.vista('piden'); if (/dash-repaso-btn/.test(vacio.dashListaHtml(vacio.modeloDashboard(ahora)))) throw new Error('0.100.0: sin nada que repasar no se ofrece');
+        if (!/if \(e\.target\.closest\("\.dash-repaso-btn"\)\)\{ abrirRepaso\(\); return; \}/.test(bloque)) throw new Error('0.100.0: el botón está cableado');
+        if (!/\(e\.key === "r" \|\| e\.key === "R"\) && !e\.ctrlKey && !e\.metaKey && !e\.altKey && !e\.repeat && !repaso\s*&& !e\.target\.closest\("input,textarea,select,\[contenteditable\]"\)\)\{ e\.preventDefault\(\); abrirRepaso\(\); \}/.test(bloque)) throw new Error('0.100.0: R lo abre desde el Dashboard');
+        if (!/repaso:\s*\{ teclas: "R"/.test(src) || !/add\("🗂️", "Repasar lo que te piden",[\s\S]{0,300}"repaso"\);/.test(src)) throw new Error('0.100.0: la paleta lo ofrece con su atajo de la tabla única');
+        const g = fs.readFileSync(path.join(__dirname, '..', 'guia.html'), 'utf8');
+        if (!/id="repaso"/.test(g) || !/<tr><td><kbd>R<\/kbd><\/td>/.test(g)) throw new Error('0.100.0: la guía explica el Repaso y su tecla (R18)'); }
+      console.log('OK 0.100.0 (Repaso: una puerta para responder, lo del agente entero, V/H/→/A con Deshacer, por id sobre el archivo vivo, no actúa sobre otra si la tuya se resolvió, la capa manda en el teclado, sin privados, el sondeo no la repinta, cuatro accesos)');
+    }
     console.log('OK 0.99.0 (Dashboard: próximas en desplegable propio sin romper R47; doble clic en su fondo abre la paleta)');
     console.log('OK 0.98.0 (una sola puerta para «hecha», cerrar desde el Dashboard con Deshacer, Atrás vuelve al Dashboard, el escritorio con su color)');
     console.log('OK 0.97.0 (Dashboard: cada cifra es su lista con las funciones de las filas, solo lectura, sin privados, índice entero, destino real, cerrado no calcula, D y Esc en su orden, cuatro accesos)');
