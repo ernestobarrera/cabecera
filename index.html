@@ -1432,6 +1432,13 @@ body.dash-on #btn-fold, body.dash-on #tb-cols, body.dash-on #desk-arrange{visibi
 .rep-suma{font-size:17px; margin-top:12px}
 .rep-queda{color:var(--text-dim); margin-top:6px}
 .rep-fin .rep-acts{max-width:520px; margin:22px auto 0}
+.rep-hechos-t{font-size:12.5px; font-weight:600; text-transform:uppercase; letter-spacing:.08em; color:var(--text-dim); margin:30px 0 6px; text-align:left}
+.rep-hechos{list-style:none; text-align:left; border:1px solid var(--border-soft); border-radius:12px; padding:6px 4px}
+.rep-hechos li{display:flex; align-items:baseline; gap:10px; padding:5px 8px; font-size:14px}
+.rep-hechos .que{flex:0 0 108px; color:var(--text-dim); white-space:nowrap}
+.rep-hechos .num{color:var(--text-dim)}
+.rep-hechos .tx{flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.rep-hechos .dn{flex:0 1 auto; max-width:30%; color:var(--text-dim); font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
 /* 0.99.0 (#30) — el desplegable de Próximas: el título de la sección ES el botón */
 .dash-prox-tg{background:none; border:0; padding:2px 4px; margin:-2px -4px; border-radius:6px; color:inherit; font:inherit;
   text-transform:inherit; letter-spacing:inherit; cursor:pointer; display:inline-flex; align-items:center; gap:6px}
@@ -2487,7 +2494,7 @@ function syncUI(mode, txt){
    reaparece) y si Recargar está activo. El descarte ✕ vive solo en memoria de la sesión.
    Demora asumida: la CDN de Pages puede servir la versión vieja hasta ~10 min aun con
    no-store (gobierna la caché del navegador, no la CDN); para pestañas de días, irrelevante. */
-const APP_VERSION = "0.100.0";
+const APP_VERSION = "0.101.0";
 let newVersionDetected = null;   // versión superior detectada; detiene futuras consultas
 let verDismissed = false;        // ✕: solo esta sesión — nunca persistido en disco
 let verCheckInflight = false;    // sin consultas concurrentes
@@ -13690,7 +13697,9 @@ function dashListaHtml(m){
     if (m.piden.length > 1) der = "la más antigua arriba";
     // 0.100.0 — la entrada al Repaso vive donde está lo que repasa, con su tecla a la vista (R27)
     if (m.piden.length) der = (der ? `<span>${der}</span>` : "")
-      + `<button type="button" class="dash-repaso-btn" title="Repasarlas una a una: Vale, hecha o saltar, sin salir de aquí">▶ Repasar una a una${kbd("repaso")}</button>`;
+      + (repasoSigue()
+        ? `<button type="button" class="dash-repaso-btn" title="Seguir donde lo dejaste, con lo que llevas hecho en esta sesión">▶ Seguir el repaso · ${Math.min(repasoSesion.i + 1, repasoSesion.cola.length)} de ${repasoSesion.cola.length}${kbd("repaso")}</button>`
+        : `<button type="button" class="dash-repaso-btn" title="Repasarlas una a una: Vale, hecha o saltar, sin salir de aquí">▶ Repasar una a una${kbd("repaso")}</button>`);
     filas = m.piden.map(f => dashTareaHtml("p", f, edadTxt(f.dias), f.dias >= ESPERA_DIAS ? "urge" : "", "", true)).join("");
     vacio = "Nada te espera: ningún agente te ha pedido nada.";
   } else if (v === "vencidas"){
@@ -14032,6 +14041,13 @@ function dashCerrar(r, boton){
    Memoria de la pestaña (I7): la cola, por dónde vas y el recuento no se guardan ni viajan. */
 let repaso = null;   // { cola: [clave], i, mostrada, cuenta: { vale, resp, hecha, salto, fuera }, nodo }
 let repasoAviso = null;   // el aviso con Deshacer del último gesto (sobrevive a cerrar el Repaso)
+/* 0.101.0 — SALIR ES PAUSAR. Al cambiar de pestaña se perdía el Repaso, y con él por dónde ibas y lo
+   que llevabas hecho. Ahora Esc, una pestaña, «Abrir la tarea» o cualquier cosa que quite el Dashboard
+   lo PAUSAN aquí: R sigue en la misma petición, con lo que estuvieras escribiendo, y el recuento y la
+   lista de lo hecho valen para toda la sesión de la pestaña (I7: nada se guarda en el archivo ni
+   viaja). Solo empieza de cero una pasada cuando la anterior se terminó. */
+let repasoSesion = null;  // { cola, i, cuenta, hechos, borrador, mostrada } mientras está en pausa
+const repasoSigue = () => !!(repasoSesion && repasoSesion.i < repasoSesion.cola.length);
 const repasoClave = it => it.id || it;   // sin id (recién creada, aún sin guardar): su referencia
 // una tarea VIVA por su clave, con su ubicación, en la misma fuente que el Dashboard (privados fuera)
 function repasoBuscar(clave){
@@ -14082,8 +14098,8 @@ function repasoHtml(f, pos, total, ahora){
     + `<button type="button" data-rep="abrir" title="Ir a la tarea en su lista (Atrás vuelve al Dashboard)">Abrir la tarea <span class="kbd-hint">A</span></button>`
     + `</div></div></div>`;
 }
-// PURO: el final. Lo que hiciste, contado —cada cierre se ve— y lo que sigue esperando
-function repasoFinHtml(c, quedan){
+// PURO: el final. Lo que hiciste en la sesión, contado y con nombre —cada cierre se ve— y lo que sigue esperando
+function repasoFinHtml(c, quedan, hechos = []){
   const partes = [
     c.vale ? `👍 ${c.vale} con Vale` : "",
     c.resp ? `✍ ${plural(c.resp, "respondida", "respondidas")}` : "",
@@ -14095,17 +14111,29 @@ function repasoFinHtml(c, quedan){
     + `<h2>${quedan ? "Repaso terminado" : "Nada te espera"}</h2>`
     + `<p class="rep-suma">${partes.length ? partes.join(" · ") : "No has tocado ninguna."}</p>`
     + `<p class="rep-queda">${quedan ? `Siguen esperándote ${quedan}: las que saltaste y las que hayan llegado mientras.` : "Ningún agente espera nada de ti ahora mismo."}</p>`
+    + (hechos.length ? `<h3 class="rep-hechos-t">En esta sesión</h3><ul class="rep-hechos">`
+      + hechos.map(h => `<li><span class="que">${h.que === "hecha" ? "✓ hecha" : h.que === "resp" ? "✍ respondida" : "👍 Vale"}</span>`
+        + `${h.n ? `<span class="num">#${esc(h.n)}</span>` : ""}<span class="tx">${esc(h.t) || "(sin texto)"}</span><span class="dn">${esc(h.esp)}</span></li>`).join("")
+      + `</ul>` : "")
     + `<div class="rep-acts"><button type="button" class="ok" data-rep="salir">Volver al Dashboard <span class="kbd-hint">Esc</span></button>`
     + (quedan ? `<button type="button" data-rep="otra">Repasar otra vez <span class="kbd-hint">R</span></button>` : "")
     + `</div></div>`;
+}
+/* PURO: con qué arranca el Repaso. En pausa, sigue donde ibas (con tu borrador) y lo que haya llegado
+   mientras va al final; terminada la pasada, una nueva. El recuento y lo hecho son de la sesión. */
+function repasoInicial(piden, s){
+  const sigue = !!(s && s.i < s.cola.length);
+  return { cola: sigue ? s.cola.concat(piden.filter(c => !s.cola.includes(c))) : piden, i: sigue ? s.i : 0, mostrada: null,
+    cuenta: s ? s.cuenta : { vale: 0, resp: 0, hecha: 0, salto: 0, fuera: 0 }, hechos: s ? s.hechos : [],
+    borrador: sigue ? s.borrador : "", borradorDe: sigue ? s.mostrada : null };
 }
 function abrirRepaso(){
   if (!state) return;
   if (!dashAbierto) abrirDashboard();
   const root = $("#dashboard");
   if (!root || !dashAbierto) return;
-  const cola = modeloDashboard(Date.now()).piden.map(f => repasoClave(f.it));
-  if (!cola.length){ toast("Nada que repasar: ningún agente te ha pedido nada."); return; }
+  const ini = repasoInicial(modeloDashboard(Date.now()).piden.map(f => repasoClave(f.it)), repasoSesion);
+  if (!ini.cola.length){ toast("Nada que repasar: ningún agente te ha pedido nada."); return; }
   let nodo = root.querySelector("#repaso");
   if (!nodo){
     nodo = document.createElement("div");
@@ -14118,7 +14146,8 @@ function abrirRepaso(){
     root.appendChild(nodo);
   }
   nodo.hidden = false;
-  repaso = { cola, i: 0, mostrada: null, cuenta: { vale: 0, resp: 0, hecha: 0, salto: 0, fuera: 0 }, nodo };
+  repaso = { ...ini, nodo };
+  repasoSesion = null;
   pintarRepaso();
 }
 function pintarRepaso(){
@@ -14126,13 +14155,22 @@ function pintarRepaso(){
   const f = repasoActual();
   repaso.mostrada = f ? repasoClave(f.it) : null;
   repaso.nodo.innerHTML = f ? repasoHtml(f, repaso.i, repaso.cola.length, Date.now())
-    : repasoFinHtml(repaso.cuenta, modeloDashboard(Date.now()).piden.length);
+    : repasoFinHtml(repaso.cuenta, modeloDashboard(Date.now()).piden.length, repaso.hechos);
+  // lo que estabas escribiendo al pausar vuelve, solo si es la misma petición
+  if (repaso.borrador && f && repaso.mostrada === repaso.borradorDe){
+    const ta = repaso.nodo.querySelector(".rep-t");
+    if (ta){ ta.value = repaso.borrador; repasoEscribe({ target: ta }); }
+  }
+  repaso.borrador = ""; repaso.borradorDe = null;
   repaso.nodo.scrollTop = 0;
   repaso.nodo.focus({ preventScroll: true });
 }
-// quitar la capa sin más; también cuando se cierra el Dashboard entero por detrás
+// quitar la capa PAUSANDO (0.101.0): Esc, «Abrir la tarea» o cerrar el Dashboard entero por detrás
 function repasoQuitar(){
   if (!repaso) return;
+  const ta = repaso.nodo.querySelector(".rep-t");
+  repasoSesion = { cola: repaso.cola, i: repaso.i, cuenta: repaso.cuenta, hechos: repaso.hechos,
+    borrador: ta ? ta.value : "", mostrada: repaso.mostrada };
   repaso.nodo.hidden = true; repaso.nodo.innerHTML = "";
   repaso = null;
 }
@@ -14147,7 +14185,7 @@ const repasoBorrador = () => { const ta = repaso && repaso.nodo.querySelector(".
 function repasoAccion(que){
   if (!repaso) return;
   // una respuesta a medias no se tira por pulsar otra cosa: se envía o se borra, a la vista
-  if (["saltar", "abrir", "salir"].includes(que) && repasoBorrador()){
+  if (que === "saltar" && repasoBorrador()){   // al salir o abrir se conserva en la pausa (0.101.0)
     toast("Tienes una respuesta a medias: envíala con Enter o bórrala antes de seguir.");
     const ta = repaso.nodo.querySelector(".rep-t"); if (ta) ta.focus();
     return;
@@ -14167,8 +14205,9 @@ function repasoAccion(que){
   const cerro = que === "hecha" && marcarHecha(f.it, true);
   const cat = cerro ? "hecha" : propio ? "resp" : "vale";
   repaso.cuenta[cat]++;
-  dashRepintarListas(f.wid);
   const clave = repasoClave(f.it), i0 = repaso.i, wid = f.wid;
+  repaso.hechos.push({ clave, n: f.it.n, t: textoCorto(f.it).slice(0, 90), esp: f.esp, que: cat });
+  dashRepintarListas(f.wid);
   repaso.i++;
   pintarRepaso();
   /* UN aviso, el del último gesto: cada uno dura 20 s y despachando veinte seguidas se apilaban hasta
@@ -14180,11 +14219,14 @@ function repasoAccion(que){
     const k = (vivo.replies || []).findIndex(x => x.by === "yo" && x.at === r.at && x.t === r.t);
     if (k >= 0) borrarRespuesta(vivo, k);
     dashRepintarListas(wid);
-    if (!repaso) return;
-    repaso.cuenta[cat]--;
+    const ses = repaso || repasoSesion;   // también en pausa: el recuento de la sesión no puede mentir
+    if (!ses) return;
+    ses.cuenta[cat]--;
+    const kh = ses.hechos.map(h => h.clave).lastIndexOf(clave);
+    if (kh >= 0) ses.hechos.splice(kh, 1);
     // justo después, vuelves a ella; si ya ibas más allá, va al final de la cola para que no se pierda
-    if (repaso.i === i0 + 1) repaso.i = i0; else repaso.cola.push(clave);
-    pintarRepaso();
+    if (ses.i === i0 + 1) ses.i = i0; else ses.cola.push(clave);
+    if (repaso) pintarRepaso(); else programarDashboard();
   });
 }
 function repasoClic(e){

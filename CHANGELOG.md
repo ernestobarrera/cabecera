@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.101.0] - 2026-11-26 — El Repaso se pausa en vez de perderse
+
+- **Salir del Repaso ya no lo tira.** Con Esc, al cambiar de pestaña o al abrir una tarea queda en pausa:
+  al volver al Dashboard, el botón dice «Seguir el repaso · 5 de 20» y R sigue en la misma petición, con
+  lo que estuvieras escribiendo. Lo que haya llegado mientras se añade al final.
+- **«En esta sesión».** El final del Repaso lista cada petición que has contestado o cerrado, con su
+  número y su escritorio, y el recuento vale para toda la sesión (mientras no recargues la página).
+
 ## [0.100.0] - 2026-11-25 — Repasar una a una lo que te piden
 
 - **Dashboard: «▶ Repasar una a una».** Junto a «Te piden algo» (o con la tecla **R** dentro del

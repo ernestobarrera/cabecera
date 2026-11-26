@@ -6820,14 +6820,15 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
           // la `dashIr` real taparía el doble (una declaración gana al parámetro): se aparta solo aquí
           RESP + pRes + pBor + pHecha + piezas + '\n' + bloque.replace('function dashIr(r){', 'function dashIrReal(r){')
           + '\nreturn { modeloDashboard, dashListaHtml, vista: v => { dashVista = v; }, repasoHtml, repasoFinHtml, repasoTecla, repasoAccion, pintarRepaso,'
-          + ' poner: r => { repaso = r; }, actual: () => repaso, adoptar: s => { state = s; }, dashCerrar, abrirRepaso };');
+          + ' poner: r => { repaso = r; }, actual: () => repaso, adoptar: s => { state = s; }, dashCerrar, abrirRepaso, repasoInicial, repasoQuitar,'
+          + ' sesion: () => repasoSesion, sinSesion: () => { repasoSesion = null; } };');
         const d = fn(estado, priv, globalThis.esc, null, () => { log.sucias++; }, () => {}, t => log.toasts.push(t),
           (t, b, f) => { log.toasts.push(t); log.deshacer.push(f); }, w => log.repintadas.push(w.id), () => null, r => log.fuera.push(r));
         const ta = { value: '', focus(){ log.focoTexto = true; }, classList: { contains: c => c === 'rep-t' } };
         const nodo = { html: '', scrollTop: 0, focus(){ log.focoCapa = true; }, querySelector: s => s === '.rep-t' ? ta : null, classList: { contains: () => false } };
         Object.defineProperty(nodo, 'innerHTML', { get(){ return nodo.html; }, set(v){ nodo.html = v; ta.value = ''; } });
-        const abrir = () => { d.poner({ cola: d.modeloDashboard(Date.now()).piden.map(f => f.it.id || f.it), i: 0, mostrada: null,
-          cuenta: { vale: 0, resp: 0, hecha: 0, salto: 0, fuera: 0 }, nodo }); d.pintarRepaso(); };
+        // el arranque REAL (repasoInicial), con la sesión en pausa si la hay
+        const abrir = () => { d.poner({ ...d.repasoInicial(d.modeloDashboard(Date.now()).piden.map(f => f.it.id || f.it), d.sesion()), nodo }); d.sinSesion(); d.pintarRepaso(); };
         const tecla = (key, { texto = false, shift = false, ctrl = false } = {}) => {
           const ev = { key, shiftKey: shift, ctrlKey: ctrl, metaKey: false, altKey: false, repeat: false, target: texto ? ta : nodo,
             parado: false, frenado: false, stopPropagation(){ ev.parado = true; }, preventDefault(){ ev.frenado = true; } };
@@ -6915,6 +6916,32 @@ console.log('OK D5b rebanada A (activeView efímera, guard en choke-points, runt
         R.tecla('a');
         if (R.log.fuera.length !== 1 || R.log.fuera[0].tipo !== 'tarea' || R.log.fuera[0].it !== tarea(s, 't1') || R.d.actual() !== null)
           throw new Error('0.100.0: A lleva a la tarea que estás viendo, por la puerta de siempre, y quita el Repaso'); }
+
+      // (6b) 0.101.0 — SALIR ES PAUSAR: Esc (o cerrar el Dashboard) guarda por dónde ibas, tu borrador y lo
+      //      hecho; R sigue ahí; lo que llegó mientras va al final; el final lista lo hecho en la sesión
+      { const s = estado(), R = montarR(s); R.abrir();
+        R.tecla('v');                                   // p1 con Vale → ahora en t1
+        R.ta.value = 'a medio escribir'; R.d.repasoQuitar();   // como al cambiar de pestaña
+        if (R.d.actual() !== null || !R.d.sesion() || R.d.sesion().i !== 1 || R.d.sesion().borrador !== 'a medio escribir')
+          throw new Error('0.101.0: quitar el Repaso lo PAUSA: por dónde ibas y lo que escribías');
+        R.d.vista('piden');
+        if (!/▶ Seguir el repaso · 2 de 3/.test(R.d.dashListaHtml(R.d.modeloDashboard(ahora)))) throw new Error('0.101.0: en pausa, el botón dice «Seguir el repaso» y por dónde vas');
+        tarea(s, 'p1').replies.push({ by: 'agente', at: ahora, t: '¿y esto otro?' });   // llega otra petición mientras
+        R.abrir();
+        if (R.d.actual().i !== 1 || !/Pide hace diez días/.test(R.nodo.html) || R.ta.value !== 'a medio escribir')
+          throw new Error('0.101.0: R sigue en la misma petición, con tu borrador');
+        if (R.d.actual().cola.join() !== 'p1,t1,t8') throw new Error('0.101.0: lo ya en cola no se duplica (p1 volvió a pedir, pero ya pasó por ella)');
+        R.tecla('Enter', { texto: true }); R.tecla('ArrowRight');
+        if (!/En esta sesión/.test(R.nodo.html) || !R.nodo.html.includes('👍 Vale</span><span class="num">#9</span>') || !R.nodo.html.includes('✍ respondida</span><span class="num">#1</span>'))
+          throw new Error('0.101.0: el final lista lo hecho en la sesión, con su número');
+        R.tecla('Escape');                              // terminada: la próxima vez, pasada nueva con lo hecho
+        R.abrir();
+        if (R.d.actual().i !== 0 || R.d.actual().hechos.length !== 2 || R.d.actual().cuenta.vale !== 1) throw new Error('0.101.0: terminada, se empieza de cero pero lo hecho en la sesión se conserva');
+        if (R.d.actual().cola.join() !== 't8,p1') throw new Error('0.101.0: la pasada nueva recoge lo que pide ahora, la más antigua primero (p1 volvió a pedir hoy); hay ' + R.d.actual().cola.join());
+        // y el Deshacer en pausa corrige el recuento de la sesión
+        R.tecla('v'); const n = R.d.actual().hechos.length; R.d.repasoQuitar();
+        R.log.deshacer[R.log.deshacer.length - 1]();
+        if (R.d.sesion().hechos.length !== n - 1 || R.d.sesion().cuenta.vale !== 1) throw new Error('0.101.0: Deshacer en pausa quita lo hecho de la sesión'); }
 
       // (7) privacidad: con ella puesta, un privado ni entra en la cola ni se pinta
       { const s = estado(), R = montarR(s, true); R.abrir();
